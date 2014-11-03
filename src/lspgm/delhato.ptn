@@ -1,0 +1,298 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      delhat  PHIS PHI DEL OUTPUT
+*
+*
+*     DESCRIPTION...
+*      delhato - COMPUTES DELTA-HAT FROM OBSERVED HEIGHTS
+*
+*
+*     AUTHOR   - J.D.Henderson, NOV 24/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/delhato.ptn,v 4.10 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     PURPOSE  - COMPUTES DELTA-HAT FOR SETS OF GEOPOTENTIAL PHI AND SURFACE
+*                GEOPOTENTIAL PHIS. DELTA-HAT IS 1.0 AT EVERY POINT ABOVE THE 
+*                MOUNTAIN(S) AND 0.0 BELOW IT.
+*                   
+*
+*     INPUT FILES...
+*      PHIS = SURFACE GEOPOTENTIAL FIELD
+*      PHI  = GEOPOTENTIAL HEIGHTS GRID SETS ON PRESSURE LEVEL
+*
+*     OUTPUT FILE...
+*      DEL  = OUTPUT SET OF THE DELTA-HAT FUNCTION
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ MONTAIN FILE
+*       2 PREMATURE EOF ON GEOPOTENTIAL FILE 
+*       3 MONTAINS AND GEOPOTENTIAL NOT THE SAME SIZE
+*       4 FOUND WRONG VARIABLES
+*       5 VERTICAL COORDINATE IS NOT PRESSURE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM delhato
+*     PROGRAM DELHATO (PHIS,       PHI,       DEL,       OUTPUT,
+*    1           TAPE1=PHIS, TAPE2=PHI, TAPE3=DEL, TAPE6=OUTPUT)
+*     ----------------------------------------------------------
+
+*     $Log: delhato.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2009/09/08 20:47:23  dugas
+*     Verifier presence de coordonnee pression avec fichiers SQ.
+*
+*     Revision 4.8  2008/11/24 21:57:53  dugas
+*     Meilleur support des fichiers SQ98.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.4  1998/07/03 02:26:22  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1998/05/21  20:20:46  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.2  1997/04/17  18:15:13  armnrbd
+*     IBUF(2) et IBUF(4) ne sont plus consultes dans la recherche de PHIS.
+*
+*     Revision 4.1  1996/11/12  19:29:22  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*     Ajouter le support des fichiers SQI.
+*
+*     Revision 4.0  1994/11/17  14:19:47  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/08/16  21:00:46  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.1  93/10/21  23:31:02  armnrbd
+*     BugFix avec allocation HPALLOC.
+*     
+*     Revision 3.0  93/10/13  13:55:50  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/09/13  15:09:28  armnrbd
+*     Allocation de memoire dynamique.
+*     
+*     Revision 1.0  92/04/06  10:17:40  armnrbd
+*     Initial revision
+*     
+
+*     MAY 06/83 - R.LAPRISE.
+*     NOV 24/81 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      LOGICAL     OK
+      CHARACTER*4 DELO,CPHI,CPHIS
+      REAL        PHI,PHICON,MTCON
+      INTEGER     I,J,K,IER,LEV(MAXLEV),NLEV,VKIND,
+     +            KBUF(HEAD),LEN1,KPAK,MAXW1,NFF,NR,
+     +            JBUF(HEAD),LEN,JPAK,MAXW,NWDS
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: X,PHIS
+
+      CHARACTER*4 PKTYP,GETYP
+      INTEGER     GETSIZ2,GETSIZ,GETKIND
+      EXTERNAL    JCLPNT,GETFLD2,CMPLBL,PUTFLD2,PRECEDE,
+     +            GETSIZ2,GETSIZ,GETYP,GETKIND
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/delhato.ptn,v $'
+
+*----------------------------------------------------------------
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+      CALL SETRABT( '&NON' )
+
+      NR = 0
+
+      PKTYP = GETYP( 1 )
+
+***    GET THE SIZE AND NUMBER OF LEVELS FOR PHI.
+
+  050 CALL PRECEDE( 1,-1 )
+      MAXW  = GETSIZ2( 2, JBUF,LEN ,NWDS,JPAK, LEV,NLEV )
+      MAXW1 = GETSIZ ( 1, KBUF,LEN1,NWDS,KPAK )
+
+      WRITE(CPHIS,0004) KBUF(3)
+      WRITE(CPHI, 0004) JBUF(3)
+
+      IF (PKTYP.EQ.'SQ89')                                     THEN
+
+          IF ((CPHIS.NE.'ME' .AND.
+     +         CPHIS.NE.'MT').OR.
+     +         CPHI .NE.'GZ' ) CALL                XIT(' Delhato',-4 ) 
+
+          DELO   = 'DO'
+          PHICON = 98.0665
+
+          IF (CPHIS == 'MT')                                   THEN
+              MTCON = 1.0
+          ELSE
+              MTCON = 9.80665
+          ENDIF
+
+      ELSE
+
+          IF ((CPHIS.EQ.'MT'  .OR.
+     +         CPHIS.EQ.'ME') .AND.
+     +         CPHI .EQ.'GZ')                                  THEN
+              DELO   = 'DELO'
+              PHICON = 98.0665
+              IF (CPHIS == 'MT')                               THEN
+                  MTCON = 1.0
+              ELSE
+                  MTCON = 9.80665
+              ENDIF
+          ELSE
+     +    IF (CPHIS.EQ.'PHIS' .AND.
+     +        CPHI .EQ.'PHI')                                  THEN
+              DELO   = 'DELO'
+              MTCON  = 1.0
+              PHICON = 1.0
+          ELSE
+              WRITE(6,6004) CPHIS,CPHI
+              CALL                                 XIT(' Delhato',-4 ) 
+          END IF
+
+      END IF
+
+      MAXW = MAX( MAXW,MAXW1 )
+      LEN  = MAX( LEN ,LEN1  )
+
+      CALL CMPLBL( 0,JBUF, 0,KBUF, OK )
+
+      IF (.NOT.OK)                                             THEN
+          CALL PRTLAB( JBUF ) ; CALL PRTLAB( KBUF )
+          CALL                                     XIT(' Delhato',-3 )
+      END IF
+
+      IF (PKTYP(1:2) == 'SQ')                                  THEN
+
+***        CHECK THAT WE HAVE A PRESSURE VERTICAL COORDINATE.
+
+          VKIND = GETKIND()
+
+          IF (VKIND /= 2)                                      THEN
+              WRITE(6,6005)
+              CALL                                 XIT(' Delhato',-5 )
+          END IF
+
+      END IF
+
+***    ALLOCATE NECESSARY MEMORY.
+
+      ALLOCATE(IBUF(LEN),X(NWDS),PHIS(NWDS) )
+
+***    GET THE MOUNTAINS.
+
+      CALL GETFLD2( 1, PHIS, 'GRID'//'SUBA',-1,CPHIS,-1, IBUF,MAXW,OK )
+
+      IF (.NOT.OK) CALL                            XIT(' Delhato',-1 )
+
+      CALL PRTLAB( IBUF )
+
+      DO  I=1,HEAD
+          JBUF(I) = IBUF(I)
+      END DO
+
+      PHIS(:) = PHIS(:) * MTCON
+
+***    READ PHI ONE LEVEL AT A TIME.
+
+  150 CALL GETFLD2(  2, X, 'GRID'//'SUBA',-1,CPHI,-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( IBUF,X,PHIS )
+              IF (MAXW.EQ.0) GOTO 050
+              WRITE(6,6010)  NR
+              IF (NR  .EQ.0) CALL                  XIT(' Delhato',-2 )
+              CALL                                 XIT(' Delhato', 0 )
+          END IF
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+              CALL                                 XIT(' Delhato',-3 )
+          END IF
+
+          IF (NR.LE.NLEV) CALL PRTLAB( IBUF )
+
+**         COMPUTE DELTA-HAT FOR EACH POINT ON THIS LEVEL
+
+          DO 200 I=1,NWDS
+              PHI = X(I)*PHICON
+              IF (PHI.GE.PHIS(I))                              THEN
+                  X(I) = 1.0
+              ELSE
+                  X(I) = 0.0
+              END IF
+  200     CONTINUE
+
+***        PUT THIS LEVEL OF DELTA-HAT ON FILE 3 (PACKED 2 TO 1).
+
+          READ(DELO,4) IBUF(3)
+          IBUF(8)= -32
+
+          CALL PUTFLD2( 3, X, IBUF,MAXW )
+
+          IF (NR.LE.NLEV) CALL PRTLAB( IBUF )
+
+      NR = NR+1
+      GOTO 150
+*----------------------------------------------------------
+
+    4 FORMAT(A4)
+
+ 6004 FORMAT(/' PHIS,PHI= ',A,1X,A,', not recognized or of mixed type.')
+ 6005 FORMAT(/' Only pressure vertical coordinate is supported.')
+ 6010 FORMAT(1X,I6,' records read.')
+
+      END
+#     endif

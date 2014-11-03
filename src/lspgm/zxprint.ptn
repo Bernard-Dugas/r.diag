@@ -1,0 +1,385 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxprint  INZX INPUT OUTPUT [ -name VAL1 -kind VAL2 -label VAL3 ]
+*
+*
+*     DESCRIPTION...
+*      zxprint - PRINTS VALUES OF A CROSS SECTION FILE
+*
+*
+*     AUTHOR   - M.Lazare, JUN 13/84.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxprint.ptn,v 4.9 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     PURPOSE  - PRINT ON LINE PRINTER THE VALUES IN A CROSS-SECTION FILE.
+*                THESE CAN BE ZONAL OR MERIDIONAL AS DETERMINED FROM THE
+*                INPUT DIRECTIVES(S).
+*
+*     NOTE     - MAXIMUM LEVELS IS 999 AND MAXIMUM LATITUDES IS 999.
+*
+*
+*     INPUT FILE...
+*      INZX = FILE OF TYPE 'ZONL' OR 'CMPL' CONTAINING THE DATA
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NAME (name) = NAME OF CROSS SECTION FOR WHICH VALUES ARE TO BE PRINTED
+*      ISW         = OMIT THE NAME CHECK IF ISW.GT.0. THIS IS INCLUDED FOR
+*                    COMPATIBILITY WITH A PREVIOUS VERSION.
+*      KZM  (kind) = 0 FOR ZONAL CROSS SECTION
+*                    1 FOR MERIDIONAL CROSS-SECTION
+*      LABEL       = 80 CHARACTER LABEL PRINTED IF WE ARE NOT IN SKIP MODE
+*
+*      READ( 5,5010 ) NAME,ISW,KZM
+*      READ( 5,5012 ) LABEL
+*5010  FORMAT(10X,1X,A4,2I5)
+*5012  FORMAT(A80)
+*
+*
+*     EXAMPLE OF INPUT CARD(S)...
+*
+* ZXPRINT  TEMP    0    0
+*  TEMPERATURE ZONAL CROSS SECTION
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS/NO MORE DIRECTIVES
+*
+*     NON-FATAL CONDITIONS...
+*     101 EOF LOOKING FOR NAMED VARIABLE
+*     102 READ LAST RECORD SET OR TOO MANY VERTICAL LEVELS
+*     103 LAST DIRECTIVE SET INCOMPLETE
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zxprint
+*     PROGRAM ZXPRINT (INZX,       INPUT,       OUTPUT,
+*    1           TAPE1=INZX, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -------------------------------------------------
+*     $Log: zxprint.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2013/10/17 11:28:50  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2005/03/10 21:24:03  dugas
+*     Modifier les appels a HPALLOC.
+*
+*     Revision 4.4  1999/07/13 18:58:30  armnrbd
+*     Ajouter le parametre "-label" sur la ligne de commamde.
+*
+*     Revision 4.3  1998/10/19 15:24:43  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.2  1998/07/03  02:26:51  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:59  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:23:10  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:46  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  93/06/03  22:55:27  armnrbd
+*     Corriger les appels a XIT.
+*     
+*     Revision 1.1  92/11/21  12:54:53  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.0  92/03/22  15:02:20  armnrbd
+*     Initial revision
+*     
+
+*     MAR 21/92 - B.DUGAS  - VERSION CY910/IRIX f77
+*     JUN 13/84 - M.LAZARE.
+*
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale , MAXLEV = 99
+      INTEGER, PARAMETER :: HEAD = taille_entete , MAXW = 2*MAXLEV*MAXJ
+
+      REAL        GX,XS,CX,CG
+      CHARACTER*4 TYPE,NAME,NOM
+      LOGICAL     OK,LINEIO,CMPL
+      CHARACTER   LIGNE*80,LABEL*80
+      REAL*8      SL(MAXJ),CL(MAXJ),WL(MAXJ),
+     +            WOSSL(MAXJ),RAD(MAXJ),ANG(MAXJ)
+      INTEGER     LEV(MAXLEV),IPR(MAXLEV),NFF,ISW,
+     +            KZM,IER,IO,IBUF,NLAT,NLEV,NHEM,
+     +            I,J,K,L,JJ,ILATH,M,N,LL,LR,LI
+
+      POINTER   ( IB, IBUF(8) )
+      POINTER   ( PX, XS(MAXLEV,1) )
+      POINTER   ( PG, GX(1) )
+      POINTER   ( PX, CX(2,MAXLEV,1) )
+      POINTER   ( PG, CG(2,1) )
+
+      LOGICAL     RPBLOC
+      EXTERNAL    RPBLOC,HPALLOC,JCLPNT,GETLIGN,FIND,
+     +            BURNF,GETSET2,XIT,GAUSSG,TRIGL
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxprint.ptn,v $'
+
+*---------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,0 )
+      CALL HPALLOC( PG,      MAXW, IER,0 )
+      CALL HPALLOC( PX,      MAXW, IER,0 )
+
+      NFF = 3
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+   50 CONTINUE
+
+          IF (RPBLOC( ' ',LIGNE ))                             THEN
+
+              LINEIO = .FALSE.
+
+***            CHECK PARAMETRE BLOCK.
+
+              NAME  = ' '
+              KZM   =  0
+              ISW   =  0
+              LABEL = ' '
+
+              OK = RPBLOC('KIND',LIGNE)
+              IF (OK) READ(LIGNE,0005,END=900,ERR=900,IOSTAT=IO) KZM
+
+              OK = RPBLOC('NAME',LIGNE)
+              IF (OK) NAME = LIGNE
+
+              OK = RPBLOC('LABEL',LIGNE)
+              IF (OK) LABEL = LIGNE
+
+          ELSE
+
+***            READ THE CONTROL CARDS.
+***            KZM=(0,1) FOR (ZONAL,MERIDIONAL) CROSS-SECTION.
+***            LABEL IS SIMPLY PRINTED AFTER THE CROSS-SECTION OUTPUT.
+***            NO LABEL CARD IS READ IF WE ARE SKIPPING (NAME=4HSKIP).
+
+              LINEIO = .TRUE.
+
+              CALL GETLIGN( 5, LIGNE,80, OK)
+
+              IF (.NOT.OK)                                     THEN
+                  GOTO 900
+              ELSE
+                  READ( LIGNE, 5010,END=900,ERR=900,IOSTAT=IO) 
+     +            NAME,ISW,KZM
+              END IF  
+
+              IF (NAME.NE.'SKIP') CALL GETLIGN( 5, LABEL,80, OK)
+              IF (.NOT.OK) GOTO 902
+
+          END IF
+
+          IF (NAME.NE.' ') CALL LEADBLK( NAME )
+
+          IF (KZM.NE.0) KZM=1
+          
+***        GET THE NEXT REQUESTED CROSS-SECTION.
+***        OMIT THE NAME CHECK IF ISW.GT.0. THIS IS INCLUDED
+***        FOR COMPATIBILITY WITH A PREVIOUS VERSION.
+
+          NOM = NAME
+
+          IF (NAME.EQ.'SKIP' .OR.
+     +        NAME.EQ.'-1'   .OR.
+     +        NAME.EQ.'  '   ) NOM = 'NEXT'
+          IF (ISW .GT.  0    ) NOM = 'NEXT'
+
+          CALL FIND( 1, ' ',-1,NOM,-1, OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6010) NOM
+              CALL BURNF
+              CALL                                 XIT(' ZxPrint',-101)
+          END IF
+
+  100     CALL GETSET2( 1, GX, LEV,NLEV, IBUF,MAXW,OK )
+
+          IF (NLEV.LT.1 .OR. NLEV.GT.MAXLEV)                   THEN
+              CALL BURNF
+              CALL                                 XIT( 'ZxPrint',-102)
+          END IF
+
+          WRITE(TYPE,4) IBUF(1)
+          NLAT = IBUF(5)
+          NHEM = IBUF(7)
+
+          IF (TYPE.NE.'ZONL' .AND.
+     +       (TYPE.NE.'CMPL' .OR. IBUF(6).NE.1)) GOTO 100
+
+          IF (NAME.EQ.'SKIP') GOTO 050
+
+                              CMPL = .FALSE.
+          IF (TYPE.EQ.'CMPL') CMPL = .TRUE.
+
+***        PUT GX(NLAT,NLEV) INTO XS(NLEV,NLAT) WITH LEVELS REVERSED,
+***        AND ROWS REVERSED IF MERIDIONAL. NLAT IS (LATITUDE,LONGITUDE)
+***        AS KZM IS (0,1). GX(1,1) CONTAINS (SOUTH,TOP) OR (WEST,TOP).
+***        XS(1,1) CONTAINS (BOTTOM,SOUTH) OR (BOTTOM,EAST).
+
+          IF (CMPL)                                            THEN
+              DO  150 L=1,NLEV
+                  K      = NLEV+1-L
+                  IPR(K) = LEV(L)
+                  DO  J=1,NLAT
+                                    JJ = (L-1)*NLAT+J
+                      IF (KZM.EQ.1) JJ =  L   *NLAT-J+1
+                      CX(1,K,J) = CG(1,JJ)
+                      CX(2,K,J) = CG(2,JJ)
+                  END DO
+  150         CONTINUE
+           ELSE
+              DO  200 L=1,NLEV
+                  K      = NLEV+1-L
+                  IPR(K) = LEV(L)
+                  DO  J=1,NLAT
+                                    JJ = (L-1)*NLAT+J
+                      IF (KZM.EQ.1) JJ =  L   *NLAT-J+1
+                      XS(K,J) = GX(JJ)
+                  END DO
+  200         CONTINUE
+           END IF
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          IF (KZM.EQ.0)                                        THEN
+
+***            COMPUTE LATITUDES FOR ZONAL CROSS-SECTION (KZM=0).
+***            GAUSSG COMPUTES THE VALUE OF THE GAUSSIAN LATITUDES AND 
+***            THEIR SINES AND COSINES. TRIGL MAKES THEM GLOBAL (S TO N).
+***            NLAT MUST BE GLOBAL AND A MULTIPLE OF 2.
+
+                             ILATH = NLAT/2
+              IF (NHEM.NE.0) ILATH = NLAT
+
+              CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL )
+              CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL,NHEM )
+              DO  J=1,NLAT
+                  ANG(J)= RAD(J)*45./ATAN(1.0)
+              END DO
+
+          ELSE
+
+***            COMPUTE LONGITUDES FOR MERIDIONAL CROSS-SECTION (KZM=1).
+
+              DO  I=1,NLAT
+                  N=NLAT+1-I
+                  ANG(N)=FLOAT(I-1)*360./FLOAT(NLAT-1)
+              END DO
+
+          END IF
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***        PRINT OUT THE CROSS-SECTION.
+***        N TO S IF KZM=0, E TO W IF KZM=1.
+***        MAX LEVELS PRINTED PER PAGE IS 10.
+
+                    LI = 9
+          IF (CMPL) LI = 4
+
+          LL = 1
+  250     LR = LL+LI
+
+              IF (LR.GT.NLEV) LR=NLEV
+
+              IF (CMPL)                                        THEN
+                  IF (KZM.EQ.0) WRITE(6,6030) (IPR(L),L=LL,LR)
+                  IF (KZM.EQ.1) WRITE(6,6031) (IPR(L),L=LL,LR)
+
+                  DO  M=1,NLAT
+                                    J = NLAT+1-M
+                                    K = M
+                      IF (KZM.EQ.0) K = NLAT+1-M
+                      WRITE(6,6032) K, ANG(J),
+     +               (CX(1,L,J),CX(2,L,J),L=LL,LR)
+                  END DO
+              ELSE
+                  IF (KZM.EQ.0) WRITE(6,6033) (IPR(L),L=LL,LR)
+                  IF (KZM.EQ.1) WRITE(6,6034) (IPR(L),L=LL,LR)
+
+                  DO  M=1,NLAT
+                                    J = NLAT+1-M
+                                    K = M
+                      IF (KZM.EQ.0) K = NLAT+1-M
+                     WRITE(6,6032) K, ANG(J),(XS(L,J),L=LL,LR)
+                 END DO
+              END IF
+
+              LL = LR+1
+
+          IF (LL.LE.NLEV) GOTO 250
+
+          WRITE(6,6040) LABEL
+          CALL PRTLAB( IBUF )
+
+      IF (LINEIO) GOTO 050
+                  GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  900 CALL                                         XIT(' ZxPrint', 0 )
+  902 CALL                                         XIT(' ZxPrint',-103)
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+
+ 5010 FORMAT(10X,1X,A4,2I5)
+
+ 6010 FORMAT('0..Zxprint eof looking for',2X,A4)
+
+ 6030 FORMAT('1Row   lat  ',5(I12,12X))
+ 6031 FORMAT('1Row   lon  ',5(I12,12X))
+ 6032 FORMAT(1X,I3,F6.1,1P10E12.4)
+ 6033 FORMAT('1Row   lat',10I12)
+ 6034 FORMAT('1Row   lon',10I12)
+
+ 6040 FORMAT('0 Cross-section...',A80)
+
+      END
+#     endif

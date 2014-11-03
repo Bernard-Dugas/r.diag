@@ -1,0 +1,493 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      corpar  IN FOUT OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, aout 20/86.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/corpar.ptn,v 4.10 2014/09/25 19:53:18 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CORPAR PRODUIT UNE SERIE DE CHAMPS F=2*OMEGA*SIN(LAT) 
+*      DE MEME TYPE QUE LE CHAMPS D'ENTREE, TOUT EN CONSERVANT
+*      L'ORGANISATION VERTICALE/TEMPORELLE DU FICHIER D'ENTREE
+*
+*
+*     FICHIERS D'E/S REQUIS...
+*      IN   = CHAMPS SPECTRAL, GRILLE LAT-LON OU ZONALE 
+*      FOUT = PARAMETRE DE CORIOLIS DU MEME TYPE QUE LES
+*             DONNEES CONTENUES DANS LE FICHIER IN
+*
+*
+*     EXIT CONDITIONS...
+*       0 PAS DE PROBLEMES
+*       1 ERREUR DE LECTURE SUR IN
+*       2 FIN PREMATUREE DU FICHIER IN
+*       3 TYPE DE GRILLE NON RECONNU
+*
+*     101 TRAVAIL INTERROMPU AVANT LA FIN DU FICHIER IN
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM corpar
+*    +             (      IN,       FOUT,       OUTPUT,
+*    +              TAPE1=IN, TAPE2=FOUT, TAPE6=OUTPUT)
+  
+*     $Log: corpar.ptn,v $
+*     Revision 4.10  2014/09/25 19:53:18  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG et enlever l'appel a MACSPE.
+*
+*     Revision 4.9  2013/03/21 21:26:13  bernard
+*     - Remplacer l'appel a GETZDES par un nouvel appel a GETZDES2.
+*     - Enlever le code d'erreur -4 (pris en charge par GETZDES2).
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2005/04/14 17:50:34  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*     - Ajouter le support explicite des grilles A,B,L et Z.
+*
+*     Revision 4.4  2003/07/05 14:49:05  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1998/05/21 20:20:46  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.2  1996/02/01  20:02:42  armnrbd
+*     Modifier la procedure d'initialisation de IBUF.
+*
+*     Revision 4.1  1995/06/12  16:23:43  armnrbd
+*     Correction pour fichiers zonaux de type SQI.
+*
+*     Revision 4.0  94/11/17  14:19:40  14:19:40  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.0  93/10/13  13:55:46  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  93/08/19  15:19:59  15:19:59  armnrbd (Bernard Dugas)
+*     Modifications cosmetiques.
+*     
+*     Revision 1.3  93/03/09  12:39:05  armnrbd
+*     Remplacer MEMOIR par HPALLOC/HPDEALLC. Simplifier le code.
+*     
+*     Revision 1.2  92/11/06  16:27:13  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/03/18  12:01:52  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:37  armnrbd
+*     Initial revision
+*     
+***    HISTOIRIQUE DES MODIFICATIONS:
+***      28 NOV 1990 PAR B. DUGAS, RPN ...
+***        ... VERSION CY920/IRIX F77.
+***      16 MAI 1989 PAR B. DUGAS ...
+***        ... UTILISER L'ALLOCATION DE MEMOIRE DYNAMIQUE.
+  
+***    AOUT 20/86 - B. DUGAS 
+
+*--------------------------------------------------------------
+      IMPLICIT      none
+  
+      INTEGER       MAXI
+      PARAMETER   ( MAXI = longitude_maximale )
+      INTEGER       MAXJ
+      PARAMETER   ( MAXJ = latitude_maximale )
+      INTEGER       HEAD
+      PARAMETER   ( HEAD = taille_entete )
+      INTEGER       MAXLEV
+      PARAMETER   ( MAXLEV = 999 )
+
+      LOGICAL       OK,SPEC
+      CHARACTER     GRTYP,RTYP
+      CHARACTER*4   KIND,CVORT,NAME,PKTYP
+      REAL*8        CONS1,CONS2,CONS3, PI,CO,
+     +              LAT1,LATSPAN,DELTA,OFFSET
+      REAL          ZERO,ALON(MAXI),ALAT(MAXJ), XLAT0,XLON0,
+     +              DLAT0,DLON0, DLAT1,DLON1, DLAT2,DLON2
+      REAL*8        SL(MAXJ),WL(MAXJ),CL(MAXJ),RAD(MAXJ),WOSSL(MAXJ)
+      INTEGER       LEV(MAXLEV),HEAD2,KBUF(HEAD),TYPE,NS,
+     +              NF,MAXW,LEN,NWDS,KPAK,NLEV,LA,LA0,IHEM,ILAT,
+     +              ILAT0,ILATH,NLEV0,MEM,I,J,L,IJ,LOUF,IER,
+     +              IG1R,IG2R,IG3R,IG4R,IG1,IG2,IG3,IG4
+
+      INTEGER,      ALLOCATABLE, DIMENSION(:) :: IBUF,JBUF
+      REAL,         ALLOCATABLE, DIMENSION(:) :: F,LONR,LATR
+
+      CHARACTER(4), EXTERNAL :: GETHIC,GETYP
+      INTEGER,      EXTERNAL :: GETSIZ,GETHIGH
+
+      EXTERNAL      MACSPE,JCLPNT,
+     +              GAUSSG,TRIGL2,RECPK2,GETZX2,PUTZX2,RECGET,
+     +              XIT,RECPUT,CIGAXG,GETZREF,GETZDES2,D_ROTA
+  
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+      DATA          CVORT / 'VORT' /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/corpar.ptn,v $'
+
+*--------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      CALL JCLPNT( NF, 1,2, 6 )
+  
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      IF (PKTYP.EQ.'SQ') CVORT = 'QQ'
+
+      CALL SETRABT( '&NON' )
+
+***    DEFINIR D'AUTRES CONSTANTES.
+  
+      PI    = 4.D0*ATAN(1.D0)
+      CO    = PI/180.
+
+      CONS1 = PI/21600.D0
+      CONS2 = CONS1*SQRT(2.D0/3.D0)
+
+      NS    = 0
+  
+***    QUELLE TYPE DE DONNEES DANS IN ?
+  
+  050 MAXW = GETSIZ( 1, KBUF,LEN,NWDS,KPAK )
+      IF (MAXW.EQ.0) GOTO 999
+
+      TYPE  = KBUF(1)
+      LA0   = KBUF(5)
+      ILAT0 = KBUF(6)
+      IHEM  = KBUF(7)
+
+      WRITE(KIND,4) TYPE
+
+      IF (KIND .NE.'FOUR' .AND.
+     +    KIND .NE.'GRID' .AND.
+     +    KIND .NE.'SPEC' .AND.
+     +    KIND .NE.'SUBA' .AND.
+     +    KIND .NE.'ZONL') GOTO 050
+
+      SPEC = (KIND.EQ.'SPEC' .OR. KIND.EQ.'FOUR') 
+
+      IF (KIND.EQ.'ZONL')                                      THEN
+          ILAT =  LA0
+          LA   = ILAT0
+      ELSE
+          ILAT = ILAT0
+          LA   =  LA0
+      END IF
+  
+***    DEMANDER LA MEMOIRE NECESSAIRE.
+***    DEFINIR LES POINTEURS D'E/S ET DE CHAMPS DE TRAVAIL.
+  
+      MEM = MAX( MAXW,NWDS )*2
+
+      ALLOCATE( IBUF(LEN),JBUF(LEN),F(MEM), STAT=IER )
+      
+                         GRTYP  = 'G'
+      IF (PKTYP.EQ.'SQ') GRTYP  = GETHIC('GRTYP',KBUF )
+
+***    PREPARER F EN CONSEQUENCE ...
+  
+      IF (.NOT.SPEC)                                           THEN
+
+          IF (GRTYP.EQ.' ' .OR.
+     +        GRTYP.EQ.'G' )                                   THEN
+
+***            GAUSSG COMPUTES GAUSSIAN LATITUDES, COSINES, ETC.
+***            (NORTH HEMISPHERE, N TO S). TRIGL2 CONVERTS THESE
+***            VECTORS TO GLOBAL OR HEMISPHERIC (S TO N).
+
+              ILATH = ILAT/2
+              IF (IHEM.NE.0) ILATH = ILAT
+              CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL )
+              CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL,IHEM )
+
+          ELSE IF (GRTYP.EQ.'A' .OR. GRTYP.EQ.'B')             THEN
+
+              IG2    = GETHIGH('IG2',KBUF )
+
+***            DEFINE THE STARTING LATITUDE.
+
+              IF (IG2.EQ.0)                                    THEN
+                 IF (IHEM.EQ.0 .OR. IHEM.EQ.2)                 THEN
+                     LAT1 = -PI/2.0
+                 ELSE IF (IHEM.EQ.1)                           THEN
+                     LAT1 =  0.0
+                 END IF
+              ELSE IF (IG2.EQ.1)                               THEN
+                 IF (IHEM.EQ.0 .OR. IHEM.EQ.1)                 THEN
+                     LAT1 = +PI/2.0
+                 ELSE IF (IHEM.EQ.2)                           THEN
+                     LAT1 =  0.0
+                 END IF
+              END IF
+
+              IF (IG2.EQ.1) IG2 = -1
+              IF (IG2.EQ.0) IG2 = +1
+                      
+***            ACCOUNT FOR THE DIFFERENT 'A' AND 'B' GRID
+***            OFFSETS AND DEFINE THE LATITUDE DELTA.                      
+
+                             LATSPAN =     PI
+              IF (IHEM.NE.0) LATSPAN = 0.5*PI
+
+              IF (GRTYP.EQ.'A')                                THEN
+                  OFFSET = 0.5
+                  DELTA  = LATSPAN/ILAT
+              ELSE IF (GRTYP.EQ.'B')                           THEN
+                  OFFSET = 0.0
+                  DELTA  = LATSPAN/(ILAT-1)
+              END IF
+
+***            DEFINE THE LATITUDES IN RADIANS. CALCULATE SL.
+
+              RAD(1)     = LAT1 + OFFSET*IG2*DELTA
+
+              DO  J=2,ILAT
+                  RAD(J) = RAD(J-1) + IG2*DELTA
+              END DO
+                      
+              DO  J =1,ILAT
+                  SL(J)  = SIN( RAD(J) )
+              END DO
+
+          ELSE IF (GRTYP.EQ.'L')                               THEN
+
+***            RETREIVE GENERALIZED LAT-LON GRID DESCRIPTORS.
+
+              IG1    = GETHIGH('IG2',KBUF )
+              IG2    = GETHIGH('IG2',KBUF )
+              IG3    = GETHIGH('IG3',KBUF )
+              IG4    = GETHIGH('IG4',KBUF )
+
+              CALL CIGAXG( GRTYP, XLAT0,XLON0,DLAT0,DLON0,
+     +                            IG1,  IG2,  IG3,  IG4  )
+
+              DO  J=1,ILAT
+                  RAD(J) = (XLAT0+(J-1)*DBLE( DLAT0 ))*CO
+                  SL(J)  = SIN( RAD(J) )
+              END DO
+
+          ELSE IF (GRTYP.EQ.'Z')                               THEN
+
+***            RETRIEVE THE X- AND Y-DIRECTIONAL INFO FOR GEM GRID.
+
+              CALL GETZREF( 1, '>>',ALON )
+              CALL GETZREF( 1, '^^',ALAT )
+
+***            ALLOCATE LONR AND LATR.
+
+              ALLOCATE( LONR((LA+1)*ILAT),LATR((LA+1)*ILAT) )
+
+***            RETRIEVE ASSOCIATED ROTATION AND POLE INFO
+***            FOR LAST READ Z-GRID.
+
+              CALL GETZDES2( RTYP, IG1R,IG2R,IG3R,IG4R, LA,ILAT )
+
+              CALL CIGAXG(  RTYP, DLAT1,DLON1,DLAT2,DLON2,
+     +                            IG1R,IG2R,IG3R,IG4R )
+
+              CALL D_ROTA( LONR,LATR, ALON,ALAT,
+     +                     DLON1,DLAT1,DLON2,DLAT2,
+     +                     XLON0,XLAT0, LA,ILAT )
+
+              DO  J=1,ILAT*LA
+                  LATR(J) = SIN( LATR(J)*CO )
+              END DO
+                  
+          ELSE
+
+***            GRID TYPE NOT RECOGNIZED.
+
+             WRITE(6,6004) GRTYP
+             CALL                                 XIT(' Corpar ',-3 )
+
+          END IF
+
+***        DEFINE F ONCE AND FOR ALL.
+
+          IF (KIND.EQ.'ZONL' .AND. LA.NE.1)                    THEN
+
+              DO  L=1,LA
+                  LOUF = (L-1)*ILAT
+                  DO  J=1,ILAT
+                      CONS3     = SL(J)
+                      CONS3     = CONS1*CONS3
+                      F(LOUF+J) = CONS3
+                  END DO
+              END DO
+
+          ELSE IF (GRTYP.EQ.'Z')                               THEN
+
+              DO  J=1,ILAT*LA
+                  CONS3     = LATR(J)
+                  CONS3     = CONS1*CONS3
+                  F(J) = CONS3
+              END DO
+
+          ELSE
+
+              DO  J=1,ILAT
+                  CONS3 = SL(J)
+                  CONS3 = CONS1*CONS3
+                  IJ    = (J-1)*LA
+                  DO  I=1,LA
+                      F(IJ+I) = CONS3
+                  END DO
+              END DO
+
+          END IF
+
+      ELSE
+
+***        DEFINIR F DANS LE CAS SPECTRAL.
+
+          DO  I=1,LA*2
+              F(I) = ZERO
+          END DO
+          F(3) = CONS2
+
+      END IF
+  
+***    ET LE COMPACTER DANS IBUF.
+  
+      DO  I=1,HEAD
+          IBUF(I) = KBUF(I)
+      END DO
+  
+      CALL RECPK2( IBUF,MAXW, F )
+  
+***    LIRE IN POUR DETERMINER LA VALEUR DE TIME (I.E. JBUF(2)).
+
+  100 IF (KIND.EQ.'ZONL' .AND. LA.NE.1 .AND. NS.EQ.0)          THEN
+
+***        TRAITEMENT SPECIAL DU PREMIER CHAMPS ZONAL MULTI-NIVEAUX.
+
+          CALL GETZX2( 1, F(NWDS+1),ILAT,LEV,LA, JBUF,MAXW,OK )
+          READ(CVORT,4) JBUF(3)
+          CALL PUTZX2( 2, F,LEV, JBUF,MAXW )
+          IBUF(4) = 1
+          NLEV0   = 1
+          LEV(1)  = 1
+
+      ELSE
+
+***        LIRE LE PROCHAIN JEUX DE NLEV0.
+
+  150     CALL RECGET( 1, ' ',-1,' ',-1, JBUF,MAXW,OK )
+          IF (.NOT.OK) GOTO 200
+
+***        ERREUR DE POSITIONNEMENT. PASSER PAR-DESSUS LES '++'
+***        IGNORER LES ENREGISTREMENTS DE TYPE LABL/CARACTERES.
+
+          WRITE( KIND,4 ) JBUF(1)
+          WRITE( NAME,4 ) JBUF(3)
+
+          IF ((NAME.EQ.'++'   .AND. L   .EQ.  1   ) .OR.
+     +         KIND.EQ.'LABL' .OR.  KIND.EQ.'CHAR') GOTO 150
+
+
+  200     IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+
+                  DEALLOCATE( IBUF,JBUF,F )
+                  IF (GRTYP.EQ.'Z') DEALLOCATE( LONR,LATR )
+
+                  GOTO 050
+
+              END IF
+
+              WRITE(6,6020) NS
+              CALL PRTLAB2(' Last record out : ',JBUF )
+
+              IF (NS.EQ.0) CALL                    XIT(' Corpar ',-1 )
+              CALL                                 XIT(' Corpar ', 0 )
+
+          END IF
+
+***        VERIFIER TYPE ET DIMENSIONS.
+  
+          IF (JBUF(1).NE.TYPE .OR.
+     +        JBUF(5).NE.LA0  .OR.
+     +        JBUF(6).NE.ILAT0.OR.
+     +        JBUF(7).NE.IHEM     )                            THEN
+
+              DEALLOCATE( IBUF,JBUF,F )
+              IF (GRTYP.EQ.'Z') DEALLOCATE( LONR,LATR )
+
+              GOTO 050
+
+          END IF
+
+***        ON ECRIT F (PRE-COMPACTE DANS IDAT) SUR L'UNITE 2 EN
+***        CONSERVANT TOUS LES DESCRIPTEURS DE JBUF SAUF LE NOM
+  
+          DO  I=1,HEAD
+              IBUF(I) = JBUF(I)
+          END DO
+              
+          READ(CVORT,4) IBUF(3)
+          CALL RECPUT( 2, IBUF )
+
+      END IF
+
+      NS = NS+1
+      GOTO 100
+  
+***    FIN PREMATUREE DES DONNEES SUR L'UNITE 1. 
+  
+  999 IF (NS.EQ.0) CALL                           XIT(' Corpar ',-2 )
+
+      WRITE(6,6020) NS
+      CALL                                        XIT(' Corpar ',-101 )
+
+*-----------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6004 FORMAT(' Unsupported array type ',A)
+
+ 6020 FORMAT('0Corpar produced ',I5,' records.')
+
+      END 
+#     endif
+

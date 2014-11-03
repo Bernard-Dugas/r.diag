@@ -1,0 +1,317 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCES...
+*      gpvtat  GHUM GVT GTEMP OUTPUT (1)
+*      gptavt  GHUM GTEMP GVT OUTPUT (2)
+*
+*
+*     DESCRIPTIONS...
+*      (1) gpvtat  - COMPUTES TEMPERATURE FROM VT AND SHUM
+*      (2) gpvtat  - COMPUTES VIRTUAL TEMPERATURE FROM TEMP AND SHUM
+*
+*
+*     AUTHOR  - B.Dugas, RPN: mar 1999.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gpvtat.ptn,v 4.10 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE - (1) CONVERTS GRIDS OF SPECIFIC HUMIDITY
+*                   AND VIRTUAL TEMPERATURE TO TEMPERATURE
+*               (2) CONVERTS GRIDS OF SPECIFIC HUMIDITY
+*                   AND TEMPERATURE TO VIRTUAL TEMPERATURE
+*
+*
+*     INPUT FILES...
+*      GHUM      = SPECIFIC HUMIDITY   (VARIABLE NAME 'SHUM' OR 'HU')
+*      (1) GVT   = VIRTUAL TEMPERATURE (VARIABLE NAME 'VT')
+*      (2) GTEMP = TEMPERATURE         (VARIABLE NAME 'TEMP' OR 'TT')
+*
+*     OUTPUT FILE...
+*      (1) GTEMP = TEMPERATURE.
+*      (2) GVT   = VIRTUAL TEMPERATURE.
+*
+*
+*     NOTES: 1) USES THE RPN PHYSIC'S SET OF THERMODYNAMIC
+*               CONVERSION FUNCTIONS (I.E. FINTERN). THE
+*               FUNCTION USED HERE IS INDEPENDANT OF
+*               THE TYPE OF VERTICAL COORDINATE
+*            2) THE ASSUMED UNITS FOR GVT ARE EITHER CENTIGRADES
+*               (FOR RPN/CMC FILES) OR KELVINS (FOR CCCma FILES).
+*            3) WORKS AS WELL ON MODEL LEVELS.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST RECORDS IN INPUT FILES
+*       2 FOUND DATA OTHER THAN TYPE 'GRID' OR 'SUBA'
+*       3 HUMIDITY FILE IS NOT SHUM
+*       4 PREMATURE EOF ON HUMIDITY FILE 
+*       5 PREMATURE EOF ON INPUT TEMPERATURE FILE 
+*       6 HUMIDITY AND TEMPERATURE ARRAYS NOT THE SAME SIZE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM gpvtat
+*     PROGRAM GPVTAT (GPHUM,       GPVT,       GPTEMP,      INPUT,
+*    1                                                      OUTPUT,
+*    2         TAPE11=GPHUM,TAPE12=GPVT,TAPE13=GPTEMP,TAPE5=INPUT,
+*    3                                                TAPE6=OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: gpvtat.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2014/01/09 19:32:00  dugas
+*     Faire un UP2LOW sur le resultat de l'appel a GETVERB.
+*
+*     Revision 4.8  2010/02/15 22:40:47  dugas
+*     Corriger la doc pour l'erreur 1.
+*
+*     Revision 4.7  2008/11/24 22:02:27  dugas
+*     Correction aux declarations des variables primaires F,G.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2004/12/10 00:43:40  dugas
+*     1) Corriger l'appel a WRITLEV2.
+*     2) Modifier le traitement des noms I/O de variables.
+*     3) Mise-a-jour de la documentation.
+*
+*     Revision 4.3  2002/02/02 00:44:22  dugas
+*     Appeller WRITLEV2 plutot que WRITLEV
+*
+*     Revision 4.2  2000/03/16 15:14:50  armnrbd
+*     Modifier la documentation interne.
+*
+*     Revision 4.1  1999/03/16 18:14:07  armnrbd
+*     Corriger la sortie d'erreur -3.
+*
+*     Revision 4.0  1999/03/16 15:33:32  armnrbd
+*     Version initiale.
+*
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      CHARACTER   VERBE*8
+      LOGICAL     OK,MODE
+      REAL        T,Q,VT
+      INTEGER     I,L,IER,TYPE,NFF,NRECS,NWDS,
+     +            LEV(MAXLEV),NLEV,NLEV2,MAX1,MAX2,LEN1,LEN2,
+     +            LEN,HUM,MAXW,KBUF(taille_entete),LBUF(taille_entete),KPAK,LPAK
+      CHARACTER*4 KIND,NAME,INOMT,ONOMT,PKTYP*2
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+      REAL*4,     DIMENSION(:), ALLOCATABLE :: F,G
+
+      CHARACTER*4 GETYP
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2,JCLPNT,XIT,WRITLEV2,
+     +            GETFLD2,CMPLBL,PUTFLD2,GETYP,
+     +            INCTDIA,GETVERB
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+#     include "consdia.cdk"
+#     include "dintern.cdk"
+#     include "fintern.cdk"
+      DATA        MODE / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gpvtat.ptn,v $'
+
+*---------------------------------------------------------------------
+      NFF = 4
+      CALL JCLPNT( NFF, 11,12,13, 6 )
+      CALL INCTDIA
+
+      PKTYP = GETYP( 11 )
+
+***    WHAT OPERATING MODE: VT --> T, T --> VT ?
+
+      CALL GETVERB( VERBE ) ; CALL up2low( VERBE,VERBE )
+
+      IF (VERBE.EQ.'gpvtat' ) MODE = .TRUE.
+      IF (VERBE.EQ.'gptavt' ) MODE = .FALSE.
+
+***    GET SIZES FROM GPHUM AND GPVT FILES. STOP IF NOT GRID/SUBA.
+
+      MAX1 = GETSIZ2( 11, KBUF,LEN1,NWDS,KPAK, LEV,NLEV )
+      MAX2 = GETSIZ2( 12, LBUF,LEN2,NWDS,LPAK, LEV,NLEV2 )
+
+      MAXW = MAX( MAX1,MAX2 )
+      LEN  = HEAD+MAXW
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+
+      IF (NLEV.LT.1 .OR. NLEV.NE.NLEV2  .OR.                           
+     +    .NOT.OK   .OR. NLEV.GT.MAXLEV .OR.
+     +    MAX1.EQ.0 .OR. MAX2.EQ.0      ) CALL     XIT( VERBE ,-1 )
+
+      CALL WRITLEV2( LEV,NLEV,LBUF )
+
+      TYPE = KBUF(1)
+      HUM  = KBUF(3)
+      WRITE(KIND,4) TYPE
+      WRITE(NAME,4) HUM
+
+      IF (NAME.NE.'HU' .AND. NAME.NE.'SHUM')
+     +    CALL                                     XIT( VERBE ,-4 )
+
+      IF (KIND.NE.'GRID' .AND.
+     +    KIND.NE.'SUBA') CALL                     XIT( VERBE ,-2 )
+
+***    ALLOCATE WORK SPACE.
+
+      ALLOCATE( IBUF(2*LEN) , F(MAXW) ,
+     +          JBUF(2*LEN) , G(MAXW) )
+
+***    TEMP NAME DEPENDS ON FILE TYPE.
+
+      IF (MODE)                                                THEN
+          WRITE(INOMT,4) LBUF(3)
+          IF (INOMT.NE.'VT')
+     +        CALL                                 XIT( VERBE ,-5 )
+          IF (PKTYP.NE.'SQ')                                   THEN
+              ONOMT = 'TEMP'
+          ELSE
+              ONOMT = 'TT'
+          END IF
+      ELSE
+          WRITE(INOMT,4) LBUF(3)
+          IF (INOMT.NE.'TT' .AND. INOMT.NE.'TEMP')
+     +        CALL                                 XIT( VERBE ,-5 )
+          ONOMT = 'VT'
+      END IF
+
+***    CHECK THAT THE MOISTURE VARIABLE IS SUPPORTED.
+
+      IF (NAME.NE.'SHUM' .AND. NAME.NE.'HU')
+     +    CALL                                     XIT( VERBE ,-3 )
+
+***    LEVEL LOOP OVER ALL MOISTURE LEVELS.
+
+      NRECS = 0
+  100 CONTINUE
+
+          DO 300 L=1,NLEV
+
+***            GET THE NEXT PAIR OF HUM,T FIELDS.
+
+              CALL GETFLD2( 11, F, 'GRID'//'SUBA',-1,NAME,LEV(L), 
+     +                             IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6010) NRECS
+                  IF (NRECS.EQ.0)                              THEN
+                      CALL                         XIT( VERBE ,-4 )
+                  ELSE
+                      CALL                         XIT( VERBE , 0 )
+                  END IF
+              END IF
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+              CALL GETFLD2( 12, G, 'GRID'//'SUBA',IBUF(2),INOMT,LEV(L), 
+     +                             JBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6010) NRECS
+                  CALL                             XIT( VERBE ,-5 )
+              END IF
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+***            CHECK THAT FIELDS ARE SAME SIZE.
+
+              CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+              IF (.NOT.OK)                                     THEN
+                  CALL PRTLAB( IBUF )
+                  CALL PRTLAB( JBUF )
+                  CALL                             XIT( VERBE ,-6 )
+              END IF
+
+***            ACCOUNT FOR TEMPERATURES IN DEGREES C.
+
+              IF (INOMT.EQ.'TT' .OR.
+     +           (INOMT.EQ.'VT' .AND. PKTYP.EQ.'SQ'))          THEN
+                  DO  I=1,NWDS
+                      G(I) = G(I)+TCDK
+                  END DO
+              END IF
+
+***            USE FOTTV OR FOTVT FOR THE CONVERSIONNS.
+
+              DO 200 I=1,NWDS
+
+                  Q          = F(I)
+
+                  IF (MODE)                                    THEN
+                      VT     = G(I)
+                      T      = FOTTV( VT,Q )
+                      F(I)   = T
+                  ELSE
+                      T      = G(I)
+                      VT     = FOTVT( T,Q )
+                      F(I)   = VT
+                  END IF
+
+  200         CONTINUE
+
+***            (AGAIN) ACCOUNT FOR TEMPERATURES IN DEGREES C.
+
+              IF (ONOMT.EQ.'TT' .OR.
+     +           (ONOMT.EQ.'VT' .AND. PKTYP.EQ.'SQ'))          THEN
+                  DO  I=1,NWDS
+                      F(I) = F(I)-TCDK
+                  END DO
+              END IF
+
+***            SAVE OUTPUT TEMPERATURE ON FILE GPTEMP.
+
+              READ(ONOMT,4) IBUF(3)
+              CALL PUTFLD2( 13, F, IBUF,MAXW )
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+              NRECS = NRECS+1
+
+  300     CONTINUE
+
+      GOTO 100
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6000 FORMAT(' Water and ice phases are considered.'/)
+ 6010 FORMAT(1X,I6,' records read.')
+
+      END
+#     endif

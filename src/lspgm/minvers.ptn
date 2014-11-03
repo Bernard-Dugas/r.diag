@@ -1,0 +1,567 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      minvers  A AINV INPUT OUTPUT [-kind VAL1]
+*
+*
+*     AUTHOR - B.Dugas, mars 17/94.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/minvers.ptn,v 4.8 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      MINVERS calcule l'inverse multiplicatif de la matrice
+*      que contient le fichier A. Les enregistrements des matrices
+*      correspondents aux colonnes des matrices. Il doit donc y
+*      avoir autant d'echantillons que de variables.
+*
+*
+*     PARAMETRES...
+*       KIND = 0,1 SI LA MATRICE A EST GENERALE (DEFAUT)
+*              2,     "     "     "    SYMMETRIQUE
+*              3,     "     "     "    SYMMETRIQUE DEFINIE POSITIVE
+*
+*       SI KIND EST NEGATIF LE PROGRAMME EVALUERA LA 
+*       PRECISION DU CALCUL ET TENTERA DE L'AMELIORER.
+*
+*       READ(5,5000) KIND
+*5000   FORMAT(10X,I5)
+*
+*
+*     EXEMPLE DE CARTE DE DIRECTIVE...
+*
+* MINVERS     0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*    EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST SET IN FILE A
+*       2 NUMBER OF VARIABLES AND NUMBER OF SETS DIFFER IN A
+*       3 MEMORY ALLOCATION PROBLEMS
+*       4 UNABLE TO READ A COLUMN FROM A
+*       5 MORE THAN ONE SIZE IN FILE
+*       6 UNABLE TO PERFORM FACTORIZATION
+*       7 UNABLE TO PERFORM INVERSION
+*       8 ERROR DURING OPTIMIZATION
+*       9 ERROR READING ACCROSS FILE A
+*      10 ERROR READING DIRECTIVES
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM minvers
+*    1             (      A,       AINV,       INPUT,       OUTPUT, 
+*    2              TAPE1=A, TAPE2=AINV, TAPE5=INPUT, TAPE6=OUTPUT)
+
+*     $Log: minvers.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/05/23 21:13:05  dugas
+*     Ajouter le support de IO64B
+*
+*     Revision 4.3  2000/04/07 20:50:59  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.2  1998/07/03 02:26:33  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:51  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:21:06  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/04/05  21:42:07  armnrbd
+*     Version a plusieurs niveaux et/ou variables.
+*     
+*     Revision 3.1  94/03/31  15:42:23  armnrbd
+*     Faire la distinction entre matrices generales et symmetriques.
+*     
+*     Revision 3.0  94/03/17  14:24:54  armnrbd
+*     Premiere version.
+*     
+*
+***   Premiere version: 17 mars 1994 - B. Dugas. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      INTEGER,    PARAMETER :: MAXVAR = 256
+      INTEGER,    PARAMETER :: MAXLEV = 999
+
+      LOGICAL     OK,ERROR,RFS
+      CHARACTER*4 TYPE,VARIAB(MAXVAR)
+      CHARACTER   LIGNE*80,MATRIX*10,PKTYP*2
+      INTEGER     JBUF(HEAD),MEM,NWDS,JPAK,
+     +            LEN,NF,COL,I,J,ERR,COL2,IO,NPAS,
+     +            NPAS0,LEV(MAXLEV),STEP(MAXVAR),
+     +            TIME,MAXW,NV,NVAR,NLEV,MEM8,
+     +            KIND, ERR1,ERR2,ERR3,ERR4
+
+      REAL(8),    ALLOCATABLE :: A(:), B(:), X(:), W(:)
+      REAL(8),    ALLOCATABLE :: AFAC(:), AINI(:), FERR(:), BERR(:)
+      INTEGER,    ALLOCATABLE :: IPIV(:), IWORK(:), IBUF(:)
+
+      CHARACTER,  EXTERNAL :: GETYP*4
+      LOGICAL,    EXTERNAL :: RPBLOC,SETIO64
+      INTEGER,    EXTERNAL :: GETSIZ3,GETHIGH
+      EXTERNAL    SUIVANT,PRECEDE,JCLPNT,WRITLEV2,BURNF,
+     +            GETLIGN,XIT,GETMSET,PUTMSET,PUTHIGH
+
+      EXTERNAL    DGETRF,DGETRI,DGERFS
+      EXTERNAL    DSYTRF,DSYTRI,DSYRFS
+      EXTERNAL    DPOTRF,DPOTRI,DPORFS
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     IJ ! Fonction "in-line" qui sera utilisee
+      IJ(I,J) = (J-1)*COL+I !  pour calculer les indices
+
+      DATA        ERR1,ERR2,ERR3,ERR4 / 4*0 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/minvers.ptn,v $'
+
+*---------------------------------------------------------------------
+***    PHASE PREPARATOIRE. 
+ 
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          KIND   = 0
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) KIND
+
+      ELSE
+
+***        READ KIND FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 999
+          ELSE
+              READ( LIGNE, 5000,ERR=999,END=999,IOSTAT=IO) KIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+                     RFS = .FALSE.
+      IF (KIND.LT.0) RFS = .TRUE.
+      KIND = ABS( KIND )
+
+      IF (KIND.EQ.1) MATRIX = '  GENERAL '
+      IF (KIND.EQ.2) MATRIX = ' SYMMETRIC'
+      IF (KIND.EQ.3) MATRIX = 'P-DEFINITE'
+
+      IF (RFS)                                                 THEN
+          WRITE(6,6100) MATRIX
+      ELSE
+          WRITE(6,6101) MATRIX
+      END IF
+
+***    DETERMINER LA TAILLE DES COLONNES DE LA MATRICE A.
+
+      MAXW = GETSIZ3( 1, JBUF, LEN,NWDS,JPAK, .TRUE.,
+     +                   LEV,NLEV, VARIAB,NVAR, MAXVAR )
+
+      IF (MAXW .LE. 0) CALL                        XIT(' Minvers',-1 )
+
+      WRITE(6,6150) ; CALL PRTLAB( JBUF )
+
+      NV = NLEV*NVAR
+
+***    LIRE TOUS LES ENREGISTREMENTS DE A POUR VERIFIER
+***    QUE LE PROBLEME MATRICIEL EST BIEN POSE.
+ 
+      COL   =  0
+      NPAS0 =  0 
+      NPAS  = -1
+      TIME  = -1
+  050 CALL SUIVANT( 1, JBUF, ERROR,OK )
+          IF (.NOT.OK) GOTO 100
+          IF (ERROR)   GOTO 998
+          IF (PKTYP == 'SQ') NPAS0 = GETHIGH('NPAS',JBUF )
+          IF (TIME /= JBUF(2) .OR. NPAS /= NPAS0)              THEN
+              TIME  = JBUF(2)
+              NPAS  = NPAS0
+              COL   = COL+1 
+          END IF
+      GOTO 050 
+ 
+  100 IF (COL.EQ.0) GOTO 998
+      CALL PRECEDE( 1,-1 )
+ 
+      WRITE(TYPE,4) JBUF(1) 
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      IF (NV*NWDS.NE.COL)                                      THEN
+          WRITE(6,6002) NV,NWDS,COL
+          CALL                                     XIT(' Minvers',-2 )
+      END IF
+
+***    DETERMINONS LA MEMOIRE DONT ON A BESOIN ...
+ 
+      MEM  =  COL +   LEN 
+      MEM8 =  COL * ( COL + 4)
+      COL2 =  COL *   COL
+
+      IF (RFS) MEM  = MEM  + COL
+      IF (RFS) MEM8 = MEM8 + COL * (  3 * COL + 2 )
+
+***    ... ET DEMANDONS-LA.
+
+      ALLOCATE( IPIV(COL),IBUF(LEN),      STAT=ERR1 )
+      ALLOCATE( A(COL),X(COL2),W(3*COL),  STAT=ERR2 )
+
+      IF (RFS)                                                 THEN
+         ALLOCATE( IWORK(COL),            STAT=ERR3 )
+         ALLOCATE( AFAC(COL2),AINI(COL2),
+     +       B(COL2),FERR(COL),BERR(COL), STAT=ERR4 )
+      END IF
+
+      ERR = MAX( ERR1,ERR2,ERR3,ERR4 )
+
+      IF (ERR /= 0 .OR.   LOC(  X   ) == 0 .OR.
+     +   (RFS      .AND. (LOC(  B   ) == 0 .OR.
+     +                    LOC( AFAC ) == 0 .OR.
+     +                    LOC( AINI ) == 0) ) )                THEN
+          WRITE(6,6003) MEM,MEM8
+          CALL                                     XIT(' Minvers',-3 )
+      END IF
+
+      IF (RFS)                                                 THEN
+
+***        INITIALISER B.
+
+          B(1:COL2) = 0.0
+          DO  I=1,COL
+              B(IJ(I,I)) = 1.0
+          END DO
+
+       END IF
+
+***    ANNONCER CE QUI VA SUIVRE.
+
+      WRITE(6,6200) (VARIAB(I),I=1,NVAR)
+      CALL WRITLEV2( LEV,NLEV,JBUF )
+
+*---------------------------------------------------------------------- 
+***    CONTRUIRE LA MATRICE B.
+ 
+      DO  150 J=1,COL 
+ 
+***        LIRE LA J-IEME COLONNE DE A.
+ 
+          CALL GETMSET( 1, A, LEV,NLEV, STEP,.TRUE.,
+     +                     VARIAB,NVAR, IBUF,MAXW,OK )
+ 
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6004) J 
+              CALL                                 XIT(' Minvers',-4 ) 
+          END IF 
+
+***        S'ASSURER DE LA CONSISTANCE DES DIMENSIONS DE A.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6005) ; CALL PRTLAB2(' First IBUF : ',JBUF )
+                              CALL PRTLAB2(' Last  IBUF : ',IBUF )
+              CALL                                 XIT(' Minvers',-5 )
+          END IF
+
+          IF (RFS)                                             THEN
+              DO  I=1,COL
+                  AFAC(IJ(I,J)) = A(I)
+                  AINI(IJ(I,J)) = A(I)
+              END DO
+          ELSE
+              DO  I=1,COL
+                  X(IJ(I,J)) = A(I)
+              END DO
+          END IF
+
+  150 CONTINUE
+
+      IF (KIND.EQ.0 .OR.KIND.EQ.1)                             THEN
+
+***        INVERSER LA MATRICE X AVEC LES ROUTINES DGETRF
+***        (FACTORISATION LU) ET DGETRI (INVERSION D'UNE
+***        MATRICE LU) DE LAPACK (CAS DE MATRICE GENERALE).
+
+          IF (.NOT.RFS) CALL DGETRF( COL,COL, X,    COL, IPIV, ERR )
+          IF (     RFS) CALL DGETRF( COL,COL, AFAC, COL, IPIV, ERR )
+
+          IF (ERR.NE.0)                                        THEN
+
+***            LA MATRICE EST SINGULIERE.
+
+              WRITE(6,6006) ERR
+              CALL                                 XIT(' Minvers',-6 )
+
+          END IF
+
+          IF (RFS) X(1:COL2) = AFAC(1:COL2)
+
+***        INVERSER LA MATRICE FACTORISEE. AU RETOUR,
+***        X CONTIENT LA MATRICE INVERSE RECHERCHEE.
+
+          CALL DGETRI( COL, X,COL, IPIV, W,COL*3, ERR )
+
+          IF (ERR.NE.0)                                        THEN
+              WRITE(6,6007) ERR
+              CALL                                 XIT(' Minvers',-7 )
+          END IF
+
+          IF (RFS)                                             THEN
+
+***           EVALUER/AMELIORER LA PRECISION DU CALCUL.
+
+             CALL DGERFS( 'N',COL,COL, AINI,COL, AFAC,COL, IPIV,
+     +                                 B,COL, X,COL, FERR,BERR, 
+     +                                 W,IWORK, ERR )
+
+              IF (ERR.NE.0)                                    THEN
+                  WRITE(6,6007) ERR
+                  CALL                             XIT(' Minvers',-8 )
+              END IF
+
+***            ECRIRE LES VECTEURS D'INFORMATIONS.
+
+              WRITE(6,6250) (FERR(I),I=1,COL)
+              WRITE(6,6300) (BERR(I),I=1,COL)
+
+          END IF
+
+      ELSE IF (KIND.EQ.2)                                      THEN
+
+***        INVERSER LA MATRICE B AVEC LES ROUTINES DSYTRF (FACT-
+***        ORISATION PAR PIVOTAGE DIAGONAL) ET DSYTRI (INVERSION
+***        D'UNE MATRICE TRAITEE PAR DSYTRF) DE LAPACK (CAS DE
+***        MATRICE SYMMETRIQUE).
+
+          IF (.NOT.RFS) CALL DSYTRF( 'U',COL, X,   COL,
+     +                                IPIV, W,COL*3, ERR )
+          IF (     RFS) CALL DSYTRF( 'U',COL, AFAC,COL,
+     +                                IPIV, W,COL*3, ERR )
+
+          IF (ERR.NE.0)                                        THEN
+
+***            LA MATRICE EST SINGULIERE.
+
+              WRITE(6,6006) ERR
+              CALL                                 XIT(' Minvers',-6 )
+
+          END IF
+
+          IF (RFS) X(1:COL2) = AFAC(1:COL2)
+
+***        INVERSER LA MATRICE FACTORISEE. AU RETOUR,
+***        LA SECTION 'U' DE X CONTIENT LA MATRICE
+***        INVERSE RECHERCHEE.
+
+          CALL DSYTRI( 'U',COL, X,COL, IPIV,W, ERR )
+
+          IF (ERR.NE.0)                                        THEN
+              WRITE(6,6007) ERR
+              CALL                                 XIT(' Minvers',-7 )
+          END IF
+
+          IF (RFS)                                             THEN
+
+***            EVALUER/AMELIORER LA PRECISION DU CALCUL.
+
+              CALL DSYRFS( 'U',COL,COL, AINI,COL, AFAC,COL,IPIV,
+     +                                  B,COL, X,COL, FERR,BERR, 
+     +                                  W,IWORK, ERR )
+
+              IF (ERR.NE.0)                                    THEN
+                  WRITE(6,6007) ERR
+                  CALL                             XIT(' Minvers',-8 )
+              END IF
+
+***            ECRIRE LES VECTEURS D'INFORMATIONS.
+
+              WRITE(6,6250) (FERR(I),I=1,COL)
+              WRITE(6,6300) (BERR(I),I=1,COL)
+
+          END IF
+
+***        REMPLIR X AVEC LA MATRICE INVERSE.
+
+          DO  J=1,COL
+              DO  I=J+1,COL
+                  X(IJ(I,J)) = X(IJ(J,I))
+              END DO
+          END DO
+
+      ELSE IF (KIND.EQ.3)                                      THEN
+
+***        INVERSER LA MATRICE B AVEC LES ROUTINES DPOTRF (FACT-
+***        ORISATION CHOLESKY) ET DPOTRI (INVERSION D'UNE MATRICE
+***        TRAITEE PAR DPOTRF) DE LAPACK (CAS DE MATRICE SYMMETRIQUE
+***        DEFINIE POSITIVE).
+
+          IF (.NOT.RFS) CALL DPOTRF( 'U',COL, X,    COL, ERR )
+          IF (     RFS) CALL DPOTRF( 'U',COL, AFAC, COL, ERR )
+
+          IF (ERR.NE.0)                                        THEN
+
+***            LA MATRICE N'EST PAS DEFINIE POSITIVE.
+
+              WRITE(6,6006) ERR
+              CALL                                 XIT(' Minvers',-6 )
+
+          END IF
+
+          IF (RFS)                                             THEN
+              DO  I=1,COL*COL
+                  X(I) = AFAC(I)
+              END DO
+          END IF
+
+***        INVERSER LA MATRICE FACTORISEE. AU RETOUR,
+***        LA SECTION 'U' DE X CONTIENT LA MATRICE
+***        INVERSE RECHERCHEE.
+
+          CALL DPOTRI( 'U',COL, X,COL, ERR )
+
+          IF (ERR.NE.0)                                        THEN
+              WRITE(6,6007) ERR
+              CALL                                 XIT(' Minvers',-7 )
+          END IF
+
+          IF (RFS)                                             THEN
+
+***            EVALUER/AMELIORER LA PRECISION DU CALCUL.
+
+              CALL DPORFS( 'U',COL,COL, AINI,COL, AFAC,COL,
+     +                                  B,COL, X,COL, FERR,BERR, 
+     +                                  W,IWORK, ERR )
+
+              IF (ERR.NE.0)                                   THEN
+                  WRITE(6,6007) ERR
+                  CALL                             XIT(' Minvers',-8 )
+              END IF
+
+***            ECRIRE LES VECTEURS D'INFORMATIONS.
+
+              WRITE(6,6250) (FERR(I),I=1,COL)
+              WRITE(6,6300) (BERR(I),I=1,COL)
+
+          END IF
+
+***        REMPLIR X AVEC LA MATRICE INVERSE.
+
+          DO  J=1,COL
+              DO  I=J+1,COL
+                  X(IJ(I,J)) = X(IJ(J,I))
+              END DO
+          END DO
+
+      END IF
+
+***    SAUVER LE RESULTAT DANS LE FICHIER AINV.
+
+      DO  200 J=1,COL 
+ 
+           IBUF(2) = J
+           IF (PKTYP == 'SQ') CALL PUTHIGH( J,'NPAS',IBUF )
+
+***        ECRIRE LA J-IEME COLONNE DE X.
+ 
+          DO  I=1,COL
+              A(I) = X(IJ(I,J))
+          END DO
+
+          CALL PUTMSET( 2, A, LEV,NLEV, 
+     +                  VARIAB,NVAR, IBUF,MAXW )
+
+  200 CONTINUE
+ 
+*---------------------------------------------------------------------- 
+***    FIN NORMALE. 
+ 
+      CALL                                         XIT(' Minvers', 0 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR A. 
+ 
+  998 CALL                                         XIT(' Minvers',-9 ) 
+
+***    FIN PREMATUREE DE L'INFORMATION SUR STDIN 
+ 
+  999 IF (IO.NE.0) WRITE(6,6010) IO
+      CALL                                         XIT(' Minvers',-10 ) 
+
+*---------------------------------------------------------------------- 
+
+    4 FORMAT(A4) 
+
+ 5000 FORMAT(10X,I5)
+
+ 6002 FORMAT(/' In file A, NVAR*NLEV,NWDS,COL = ',3I6/)
+ 6003 FORMAT(/' Unable to allocate enough working memory'/
+     +        ' Requesting ',2I10,' real/real(8) words.')
+ 6004 FORMAT(/' Error reading A after ',I5,'record(s).'/) 
+ 6005 FORMAT(/' More than one size in file. ')
+ 6006 FORMAT(/' Input matrix A factorization returns INFO = ',I6/)
+ 6007 FORMAT(/' Matrix A cannot be inverted, INFO = ',I6/)
+ 6008 FORMAT(/' Matrix A cannot be optimized, INFO = ',I6/)
+ 6010 FORMAT(/' Minvers reports I/O error number ',I3,' on unit 5.')
+
+ 6100 FORMAT(/' Minvers with ',A10,' matrix.'/
+     +        ' Will attempt to increase precision.'/)
+ 6101 FORMAT(/' Minvers with ',A10,' matrix.'/
+     +        ' Will not attempt to increase precision.'/)
+ 6150 FORMAT(/' First record set in A:')
+ 6200 FORMAT(/' In file A, variable(s) = ',16(A4,1X))
+ 6250 FORMAT(/' From optimization, FERR ...'/(1X,8D15.8))
+ 6300 FORMAT(/' From optimization, BERR ...'/(1X,8D15.8))
+ 
+      END 
+#     endif

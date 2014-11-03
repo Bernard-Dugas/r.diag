@@ -1,0 +1,958 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      addf    X1 X2 [ ... X78 ] Z OUTPUT [ -name 1 / 2 / ... / 78 ] [-def]
+*      subf    X1 X2 Z OUTPUT [ -name 1 / 2 ] [-def]
+*      mltf    X1 X2 Z OUTPUT [ -name 1 / 2 ] [-def]
+*      divf    X1 X2 Z OUTPUT [ -name 1 / 2 ] [-def]
+*      cmlt    X1 X2 Z OUTPUT [ -name 1 / 2 ] [-def]
+*      cdiv    X1 X2 Z OUTPUT [ -name 1 / 2 ] [-def]
+*      conjmlt X1 X2 Z OUTPUT [ -name 1 / 2 ] [-def]
+*
+*
+*     AUTHOR - J.D.Henderson,  01 JAN 1981.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/addf.ptn,v 4.32 2014/09/25 20:20:45 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A SET OF CCC FILE ARITHMETIC PROGRAMS WHICH...
+*
+*      ... PRODUCES FILE Z = X1 + X2 [ + X3 + [ ... + X78 ] ] (addf)
+*      ... PRODUCES FILE Z = X1 - X2                          (subf)
+*          ( WHERE ALL Xi MAY CONTAIN REAL OR COMPLEX DATA TYPES )
+*
+*      ... PRODUCES FILE Z = X1 * X2                          (mltf)
+*      ... PRODUCES FILE Z = X1 / X2                          (divf)
+*          ( WHERE 1) X1 AND X2 MAY ONLY CONTAIN REAL DATA TYPES
+*            AND   2) X1/ZERO RETURNS ZERO )
+*
+*      ... PRODUCES FILE Z = X1 * X2                          (cmlt)
+*      ... PRODUCES FILE Z = X1 * CONJG(Y2)                   (conjmlt)
+*      ... PRODUCES FILE Z = X1 / X2                          (cdiv)
+*          ( WHERE 1) X1 AND X2 MAY ONLY CONTAIN COMPLEX DATA TYPES
+*            AND   2) X1/(0,0) RETURNS ZERO )
+*
+*
+*     Notes:
+*     1) WHEN THE THE NAMES OF CORRESPONDING VARIABLES IN X1 AND X2 ARE
+*        DIFFERENT, THE PROGRAM WILL REPLACE THEM BY A CHARACTER SEQUENCE
+*        THAT INDICATES WHAT OPERATION WAS PERFORMED. THIS DEFAULT BEHAVIOR
+*        CAN BE AVOIDED BY SPECIFYING THE "-name" COMMAND-LINE ARGUMENT WITH
+*        A VALUE OF THE ORDINAL OF THE INPUT FILE WHOSE NAMES SHOULD BE KEPT.
+*     2) ADDF CAN ADD UP TO N=78 INPUT FILES. THE (N+1)th FILENAME 
+*        CORRESPONDS TO THAT OF THE OUTPUT FILE Z.
+*     3) Operations on arrays that have the same size but different grid
+*        descriptor sets (GRTYP,IGi) is possible if using the "-na" argument.
+*     4) MISSING VALUE TREATMENT IS SUPPORTED VIA EITHER THE "MISSING_VALUE"
+*        ENVIRONMENT VARIABLE OR THE "-mvalue" COMMAND-LINE ARGUMENT.
+*        TWO PROCESSING OPTIONS ARE SUPPORTED HERE, DEPENDING ON THE "-def"
+*        COMMAND-LINE ARGUMENT. THE DEFAULT OPTION, WHICH HOLDS WHEN THE
+*        ARGUMENT IS NOT SPECIFIED, IS AS FOLLOWS :
+*
+*           X1 (not missing) & X2 (not missing) => Z = X1 (operand) X2
+*           X1 (    missing) & X2 (not missing) => Z = u  (operand) X2
+*           X1 (not missing) & X2 (    missing) => Z = X1
+*           X1 (    missing) & X2 (    missing) => Z = Missing value
+*
+*         where 1) (operand) is "+" "*" or "/"; note that these rules
+*                  also apply to the complex versions of these operands;
+*               2) u is the operand unit, such that: u (operand) v = v.
+*
+*        OTHERWISE, WHEN "-def" IS SPECIFIED, ANY OPERATION THAT MAKES
+*        USE OF A MISSING VALUE WILL GENERATE A MISSING VALUE RESULT.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 FEWER RECORDS IN FILE X2 THAN IN FILE X1
+*       2 RECORDS NOT THE SAME SIZE
+*       3 PREMATURE EOF ON FILE X1
+*       4 PREMATURE EOF ON FILE X2
+*       5 MLT OR DIV FOUND COMPLEX DATA. USE CDIV OR CMLT
+*       6 CMLT, CDIV OR CONJMLT FOUND NON-COMPLEX DATA
+*       7 LESS THAN 2 INPUT FILES or MORE THAN 2 AND MODE.NE.ADDF
+*       8 ERROR IN COMMAND-LINE PARAMETRE FORMAT
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM addf
+
+*     $Log: addf.ptn,v $
+*     Revision 4.32  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.31  2014/07/08 20:24:14  dugas
+*      - Implanter une seconde option de traitement des valeurs manquantes,
+*        via l'argument de la ligne de commande "-def". Lorsque celui-ci est
+*        specifie, toute operation impliquant une valeur manquante aura aussi
+*        comme   resultat une valeur manquante, contrairement au comportement
+*        par defaut. Voir la documentation pour plus de details.
+*
+*     Revision 4.30  2013/11/28 22:24:33  dugas
+*     Faire des appels a MISPAR apres chaque lecture.
+*
+*     Revision 4.29  2011/08/04 19:21:11  dugas
+*     Meilleur traitement des donnees complexes.
+*
+*     Revision 4.28  2011/07/15 20:10:47  dugas
+*     Mise-a-jour de la documentation concernant la cle -na.
+*
+*     Revision 4.27  2011/06/06 18:28:59  dugas
+*     Traiter KEEPNAM apres l'avoir lu, et no pas avant.
+*
+*     Revision 4.26  2011/02/10 16:52:04  dugas
+*     - La gestion de la memoire utilise ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Permettre des enregistrement de tailles differentes dans un meme fichier.
+*
+*     Revision 4.25  2008/11/24 21:55:03  dugas
+*     Meilleure verification du format des parametres de la ligne de commande.
+*
+*     Revision 4.24  2008/07/24 19:42:59  dugas
+*     Utiliser CALCEPS8 plutot que CALCEPS.
+*
+*     Revision 4.23  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.22  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.21  2006/07/04 17:53:21  dugas
+*     Ajouter le support des donnees manquantes par le biais soit
+*      du parametre "-mvalue valeur [epsilon]", soit de la variable
+*      d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*      nombre reel denotant une valeur manquante et "epsilon" est
+*      le facteur de precision utilise dans les comparaisons. La
+*      valeur par defaut de epsilon est 1%. La seconde methode a
+*      preseance sur la premiere.
+*
+*     Revision 4.20  2005/11/22 21:17:49  dugas
+*     Using the "-name" command-line arguments now implies that the program
+*      will try to save other parametres from a given file, such as variable
+*      types (TYPVAR), internal labels (ETIKET) and vertical level types.
+*
+*     Revision 4.19  2005/04/12 18:10:46  dugas
+*     Pas de comparaisons si KIND='CHAR'.
+*
+*     Revision 4.18  2004/11/12 16:37:08  dugas
+*     Usage explicite des fonctions de conversions de donnees complexes.
+*
+*     Revision 4.17  2003/07/05 14:43:09  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.16  2002/12/06 16:17:31  dugas
+*     CALCEPS est utilise seulement si le champs est compacte (JPAK.GE.-16)
+*
+*     Revision 4.15  2001/12/14 15:22:15  dugas
+*     Ajouter la cle -na pour traiter les differences de descripteurs de grilles
+*
+*     Revision 4.14  2001/11/20 23:01:16  armnrbd
+*     Corriger l'appel a GETYP.
+*
+*     Revision 4.13  2001/10/23 15:07:00  armnrbd
+*     Etendre l'option KEEPNAM a tous les fichiers d'entrees.
+*
+*     Revision 4.12  2001/10/11 11:22:18  armnrbd
+*     Possibilite d'additionner jusqu'a 78 fichiers d'un seul coup.
+*
+*     Revision 4.11  2001/09/24 14:36:26  armnrbd
+*     Utilser CALCEPS dans la section de division par zero (DIV).
+*
+*     Revision 4.10  2001/05/14 14:42:25  armnrbd
+*     Ajouter le parametre de ligne de commande "-name".
+*
+*     Revision 4.9  2001/03/16 22:04:56  armnrbd
+*     Utiliser les routines PUTHIGH/GETHIGH associees aux IBUFs.
+*
+*     Revision 4.8  2000/03/22 19:29:20  armnrbd
+*     Ajouter un include pour definir le macro AIMAG (f77 vs f90).
+*
+*     Revision 4.7  2000/03/20 19:51:12  armnrbd
+*     Remplacer les appels a IMAG par des appels a AIMAG.
+*
+*     Revision 4.6  1998/09/18 01:20:54  armnrbd
+*     Comparer les XGi plutot que les IGi.
+*
+*     Revision 4.5  1998/07/23  03:24:16  armnrbd
+*     Renverser l'ordre des latitudes pour une grille Lat-Long
+*      si IG2 n'est pas le meme pour les deux fichiers standards.
+*
+*     Revision 4.4  1998/07/03  02:26:19  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1997/09/26  17:38:43  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/09/23  16:00:02  armnrbd
+*     Incorporer la fonctionnalite des modules suivants:
+*            CDIV,CMLT,CONJMLT,DIVF,MLTF et SUBF.
+*     Passer en mode de calcul a 64 bits.
+*     Utiliser HPALLOC plutot que MEMOIR pour allouer la memoire de travail.
+*
+*     Revision 4.1  1996/02/26  18:10:49  armnrbd
+*     Modifier le traitement des enregistrements de type LABL.
+*
+*     Revision 4.0  1994/11/17  14:19:13  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:30  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.6  92/11/30  11:26:52  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.5  92/11/12  16:17:37  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.4  92/03/17  10:26:22  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.3  92/03/09  15:12:32  armnrbd
+*     Modification a la procedure de documentation.
+*     
+*     Revision 1.2  92/03/06  22:21:34  armnrbd
+*     Correction a la documentation automatique.
+*     
+*     Revision 1.1  92/03/06  22:12:05  armnrbd
+*     Implanter documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:33  armnrbd
+*     Initial revision
+*     
+*     * 04 AVR 1991 - B.Dugas, RPN : VERSION CY920/IRIX F77.
+
+*---------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+
+      COMPLEX*16   CA,CB,CZERO
+      CHARACTER*4  KIND,NOM,PKTYP
+      CHARACTER*8  CHAINE*256,VERBE,IOPAR
+      REAL*8       EPSI,MISFLAG,MISEPS,EPSILON
+      LOGICAL      OK,SPEC,ROTAT,NA,MVALUE,CURRENT_MVALUE,DEF
+      INTEGER      KBUF(taille_entete),KPAK,LBUF(taille_entete),
+     +             LPAK,NF,NR,MAXW,IER,NWDS,NWDSA,LEN,
+     +             I,J,K,L,NLEV,NLEVA,NLEVB,MAXW1,MAXW2,
+     +             ENTETE(taille_entete,78),LEV(MAXLEV,78),
+     +             LEN1,LEN2,LENLAB,KEEPNAM,POS1,CMPL,
+     +             POS2,CORR,JPAK,NFI,NFR,MEM,IO
+
+      INTEGER      NI,NJ,DATYP
+      CHARACTER    GRTYP,GRTYP2
+      INTEGER      IG1, IG2, IG3, IG4
+      REAL         XG1, XG2, XG3, XG4,
+     +             XG12,XG22,XG32,XG42
+
+      integer, allocatable, dimension(:) :: MA,MB
+      integer, allocatable, dimension(:) :: IBUF,JBUF
+      real(8), allocatable, dimension(:) :: A,B,TP
+
+      COMMON      /ZZABORT/ NA
+
+      REAL*8       CALCEPS8
+      CHARACTER*4  GETHIC,GETYP
+      LOGICAL      SETIO64,RPBLOC
+      INTEGER      GETHIGH,GETSIZ2
+      EXTERNAL     GETSIZ2,GETSET2,PUTSET2,PUTLAB,
+     +             CMPLBL,XIT,SETIO64,PRECEDE,LOW2UP,
+     +             ROWORD,GETHIC,GETHIGH,GETYP,CIGAXG,
+     +             RPBLOC,CALCEPS8,GETNAM,MISPAR
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/addf.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 80
+      CALL JCLPNT( NF, 11,12,13,14,15,16,17,18,19,20,
+     +                 21,22,23,24,25,26,27,28,29,30,
+     +                 31,32,33,34,35,36,37,38,39,40,
+     +                 41,42,43,44,45,46,47,48,49,50,
+     +                 51,52,53,54,55,56,57,58,59,60,
+     +                 61,62,63,64,65,66,67,68,69,70,
+     +                 71,72,73,74,75,76,77,78,79,80,
+     +                 81,82,83,84,85,86,87,88,89, 6 )
+
+      ROTAT  =.FALSE. ; DEF = .FALSE.
+      CZERO  = DCMPLX( 0.0, 0.0 )
+      CALL SETRABT( '&NON' )
+
+      KEEPNAM = 0
+      CORR    = 0
+
+***    WHAT OPERATING MODE: ADD OR SUB, MLT OR DIV, CMLT OR CDIV ?
+
+      CALL GETVERB( VERBE )
+      CALL LOW2UP( VERBE,VERBE )
+
+      IF (VERBE.EQ.'ADDF') VERBE = 'ADD'
+      IF (VERBE.EQ.'SUBF') VERBE = 'SUB'
+      IF (VERBE.EQ.'MLTF') VERBE = 'MLT'
+      IF (VERBE.EQ.'DIVF') VERBE = 'DIV'
+
+      IF ((NF.LT.3) .OR.
+     +    (NF.GT.3 .AND. VERBE.NE.'ADD'))                      THEN
+          WRITE(6,6007)  VERBE,NF-1
+          CALL                                     XIT( VERBE ,-7 ) 
+      END IF
+
+      IF (RPBLOC( ' ',IOPAR ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('NAME',IOPAR )
+          IF (OK) READ(IOPAR,'(BN,I5)',ERR=908,IOSTAT=IO ) KEEPNAM
+
+          DEF = RPBLOC('DEFAUT',IOPAR )
+
+      END IF
+
+      IF (KEEPNAM > NF-1) KEEPNAM = 0
+
+      IF (KEEPNAM /= 0)                                        THEN
+          CALL GETNAM( KEEPNAM+10,CHAINE )
+          LEN1 = INDEX( CHAINE // ' ' , ' ' )-1
+          WRITE(6,6300) CHAINE(1:LEN1)
+      END IF
+
+      PKTYP = GETYP( 11 )
+      PKTYP = PKTYP(1:2)
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      NR    = 0
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF DATA INFO BUFFERS.
+
+  100 MAXW2 = GETSIZ2( 12, LBUF,LEN2,NWDS,LPAK, LEV(1,2),NLEVB )
+      IF (MAXW2.EQ.0) GOTO 904
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+          GRTYP2 = GETHIC ('GRTYP',LBUF )
+          IG1    = GETHIGH('IG1'  ,LBUF )
+          IG2    = GETHIGH('IG2'  ,LBUF )
+          IG3    = GETHIGH('IG3'  ,LBUF )
+          IG4    = GETHIGH('IG4'  ,LBUF )
+
+***        RETREIVE THE GRID DESCRIPTORS FOR THE SECOND FILE.
+
+          IF (GRTYP2.EQ.'L' .OR.
+     +        GRTYP2.EQ.'N' .OR.
+     +        GRTYP2.EQ.'S')                                   THEN
+              CALL CIGAXG( GRTYP2, XG12,XG22,XG32,XG42,
+     +                             IG1, IG2, IG3, IG4 )
+          ELSE
+              XG12 = IG1
+              XG22 = IG2
+              XG32 = IG3
+              XG42 = IG4
+          END IF
+
+      END IF
+
+      MAXW1 = GETSIZ2( 11, KBUF,LEN1,NWDS,KPAK, LEV,NLEV )
+      IF (MAXW1.EQ.0) GOTO 903
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+          GRTYP = GETHIC ('GRTYP',KBUF )
+          IG1   = GETHIGH('IG1'  ,KBUF )
+          IG2   = GETHIGH('IG2'  ,KBUF )
+          IG3   = GETHIGH('IG3'  ,KBUF )
+          IG4   = GETHIGH('IG4'  ,KBUF )
+
+***        RETREIVE THE GRID DESCRIPTORS FOR THE FIRST FILE.
+
+          IF (GRTYP.EQ.'L' .OR.
+     +        GRTYP.EQ.'N' .OR.
+     +        GRTYP.EQ.'S')                                    THEN
+              CALL CIGAXG( GRTYP, XG1,XG2,XG3,XG4,
+     +                            IG1,IG2,IG3,IG4 )
+          ELSE
+              XG1 = IG1
+              XG2 = IG2
+              XG3 = IG3
+              XG4 = IG4
+          END IF
+
+***        COMPARE GRID DESCRIPTORS.
+
+          IF (GRTYP.NE.GRTYP2)                                 THEN
+
+              WRITE(6,6101) GRTYP, XG1, XG2, XG3, XG4,
+     +                      GRTYP2,XG12,XG22,XG32,XG42
+              IF (.NOT.NA)  CALL                   XIT( VERBE ,-2 )
+
+          END IF
+          IF      (XG1.NE.XG12   .OR.
+     +             XG2.NE.XG22   .OR.
+     +             XG3.NE.XG32   .OR.
+     +             XG4.NE.XG42)                                THEN
+
+              IF ((GRTYP.EQ.'G'  .OR.
+     +             GRTYP.EQ.'B'  .OR.
+     +             GRTYP.EQ.'A') .AND.
+     +            (XG1  .EQ.XG12 .AND.
+     +             XG3  .EQ.XG32 .AND.
+     +             XG4  .EQ.XG42).AND.
+     +            (XG2  .EQ. 0.  .OR.
+     +             XG2  .EQ. 1.  .OR.
+     +             XG22 .EQ. 0.  .OR.
+     +             XG22 .EQ. 1.))                              THEN
+
+***                XG2 INDICATES A ROTATED GRID.
+***                ALL OTHER DESCRIPTORS IDENTICAL.
+
+                  ROTAT = .TRUE.
+
+                  write(6,6666)
+
+              ELSE
+
+                  WRITE(6,6101) GRTYP, XG1, XG2, XG3, XG4,
+     +                          GRTYP2,XG12,XG22,XG32,XG42
+                  IF (.NOT.NA) CALL                XIT( VERBE ,-2 )
+
+              END IF
+
+          END IF
+
+      END IF
+
+      CALL CMPLBL( 0,LBUF, 0,KBUF, OK ) 
+
+      IF (.NOT.OK .OR. NLEV.NE.NLEVB)                          THEN
+          CALL PRTLAB( LBUF ) ; CALL PRTLAB( KBUF )
+          CALL                                     XIT( VERBE ,-2 ) 
+      END IF
+
+      LEN  = MAX( LEN1, LEN2  )
+      MAXW = MAX( MAXW1,MAXW2 )
+
+      MEM = MAX( MAXW,NWDS*NLEV )
+
+      ALLOCATE( A(MEM),B(MEM),TP(NWDS),IBUF(LEN),JBUF(LEN), STAT=IER )
+
+***    READ THE NEXT SET OF FIELDS. START WITH FIRST INPUT FILE.
+
+  140 CALL GETSET2( 11, A,LEV,NLEVA, IBUF,MAXW,OK )
+
+      IF (.NOT.OK)                                             THEN
+
+          DEALLOCATE( A,B,TP, IBUF,JBUF, STAT=IER )
+          IF (ALLOCATED( MA )) DEALLOCATE( MA,MB, STAT=IER )
+          IF (MAXW.EQ.0) GOTO 100
+          IF (CORR.NE.0) WRITE(6,6200) CORR
+          WRITE(6,6000) NR
+          CALL                                     XIT( VERBE , 0 )
+
+      END IF
+
+***    CHECK CURRENT MISSING VALUE PARAMETRES.
+
+      CALL MISPAR( CURRENT_MVALUE,MISFLAG,MISEPS )
+
+      IF (CURRENT_MVALUE)                                              THEN
+          EPSILON = ABS( MISFLAG )*MISEPS
+          IF (.NOT.ALLOCATED( MA )) ALLOCATE( MA(MEM),MB(MEM), STAT=IER )
+      ELSE IF (ALLOCATED( MA ))                                THEN
+          DEALLOCATE( MA,MB, STAT=IER )
+      END IF
+
+      MVALUE = CURRENT_MVALUE
+
+      WRITE(KIND,4) IBUF(1)
+
+      SPEC = (KIND.EQ.'SPEC' .OR.
+     +        KIND.EQ.'FOUR' .OR.
+     +        KIND.EQ.'CMPL')
+
+      CMPL = 1 ; IF (SPEC) CMPL = 2
+
+      NI   = IBUF(5)
+      NJ   = IBUF(6)
+
+      NWDSA = CMPL*NI*NJ
+
+      IF (KIND.EQ.'ZONL')                                      THEN
+          NWDSA = NI
+          NJ   = NI
+          NI   = 1
+      END IF
+
+      IF (NLEV*NWDS < NLEVA*NWDSA)                             THEN
+          DEALLOCATE( A,B,TP, IBUF,JBUF, STAT=IER )
+          IF (ALLOCATED( MA )) DEALLOCATE( MA,MB, STAT=IER )
+          CALL PRECEDE( 11,NLEVA )
+          GOTO 100
+       END IF
+
+      IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      ENTETE(1:taille_entete,1) = IBUF(1:taille_entete)
+
+      IF (MVALUE         .AND.
+     +    KIND.NE.'LABL' .AND. KIND.NE.'CHAR')                 THEN
+
+***        CHECK FOR MISSING VALUES in A. TRACK THEM IN MA.
+
+          DO  I=1,NLEVA*NWDSA
+                                                  MA(I) = 1
+              IF (ABS( A(I)-MISFLAG ).LE.EPSILON) MA(I) = 0
+          END DO
+
+      END IF
+
+***    READ ALL OTHER INPUT FILES.
+
+***   ------------------
+      DO  NFI=2,NF-1
+***   ------------------
+
+      CALL GETSET2( NFI+10, B,LEV(1,NFI),NLEVB, JBUF,MAXW,OK )
+
+      IF (.NOT.OK)                                             THEN
+          IF ((KIND.NE.'CHAR' .AND.
+     +         KIND.NE.'LABL').OR.
+     +         MAXW.EQ.  0   )                                 THEN
+
+              DEALLOCATE( A,B,TP, IBUF,JBUF, STAT=IER )
+              IF (ALLOCATED( MA )) DEALLOCATE( MA,MB, STAT=IER )
+              IF (MAXW.EQ.0)                                   THEN
+                  DO  NFR=11,NFI+9
+                      CALL PRECEDE( NFR,NLEVA )
+                  END DO
+                  GOTO 100
+              END IF
+              CALL                                 XIT( VERBE ,-1 )
+          ELSE 
+              JBUF = IBUF
+          END IF
+      END IF
+
+      IF (.NOT.MVALUE)                                        THEN
+
+***        CHECK MISSING VALUE PARAMETRES FOR THE CURRENT FILE.
+
+          CALL MISPAR( CURRENT_MVALUE,MISFLAG,MISEPS )
+
+          IF (CURRENT_MVALUE)                                 THEN
+              EPSILON = ABS( MISFLAG )*MISEPS
+              IF (.NOT.ALLOCATED( MA ))                       THEN
+                  ALLOCATE( MA(MEM),MB(MEM), STAT=IER )
+                  MA(1:NLEVA*NWDSA) = 1
+              END IF
+          END IF
+
+          MVALUE = CURRENT_MVALUE
+
+      END IF
+
+      JPAK = JBUF(8)
+
+      ENTETE(1:taille_entete,NFI) = JBUF(1:taille_entete)
+
+      IF (NR.EQ.0) CALL PRTLAB( JBUF )
+
+***    MAKE SURE THAT THE FIELDS ARE STILL THE SAME KIND AND SIZE. 
+      
+      IF ((KIND   .NE.'CHAR' .AND.
+     +     KIND   .NE.'LABL') .OR.
+     +     IBUF(1).NE.JBUF(1) )                                THEN
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK ) 
+
+          IF (.NOT.OK .OR. NLEVB.NE.NLEVA)                     THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+              CALL                                 XIT( VERBE ,-2 ) 
+          END IF
+
+      END IF
+
+      IF (SPEC .AND.
+     +   (VERBE.EQ.'MLT' .OR. VERBE.EQ.'DIV'))                 THEN
+
+***        ABORT IF DATA IS COMPLEX.
+
+          WRITE(6,6005) VERBE
+          CALL                                     XIT( VERBE ,-5 )
+
+      ELSE IF (.NOT.SPEC .AND.
+     +   (VERBE.EQ.'CMLT' .OR. VERBE.EQ.'CDIV'
+     +                    .OR. VERBE.EQ.'CONJMLT'))            THEN
+
+***        ABORT. DATA IS NOT COMPLEX.
+
+          WRITE(6,6006) VERBE
+          CALL                                     XIT( VERBE ,-6 )
+
+      END IF
+
+      IF (ROTAT .AND. KIND.NE.'CHAR' .AND. NFI.EQ.12)          THEN
+          XG2  = GETHIGH('IG2'  ,JBUF )
+          XG22 = GETHIGH('IG2'  ,IBUF )
+          IF (XG2 /= XG22)                                     THEN
+              DO  L=1,NLEVA
+                  CALL ROWORD( B((L-1)*NWDSA+1),TP,NI,NJ )
+              END DO
+          END IF
+      END IF
+
+      IF (KIND.NE.'LABL' .AND. KIND.NE.'CHAR')                 THEN
+
+          IF (MVALUE)                                          THEN
+
+***            CHECK FOR MISSING VALUES in B. TRACK THEM IN MB.
+
+              DO  I=1,NLEVA*NWDSA
+                                                      MB(I) = 1
+                  IF (ABS( B(I)-MISFLAG).LE.EPSILON ) MB(I) = 0
+              END DO
+
+          END IF
+
+***        APPLY THE REQUIRED OPERATION TO THE FIELDS.
+
+          IF (VERBE.EQ.'ADD')                                  THEN
+              IF (MVALUE)                                 THEN
+                  DO  I=1,NLEVA*NWDSA
+                      IF (MA(I).NE.0 .AND.
+     +                    MB(I).NE.0 )                         THEN
+                          A(I)  = A(I)+B(I)
+                          MA(I) = MA(I)+1
+                      ELSE IF (DEF)                            THEN
+                          A(I)  = MISFLAG ; MA(I) = 0
+                      ELSE IF (MB(I).NE.0)                     THEN
+                          A(I)  = B(I)
+                          MA(I) = 1
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,NLEVA*NWDS
+                      A(I) = A(I)+B(I)
+                  END DO
+              END IF
+          ELSE IF (VERBE.EQ.'SUB')                             THEN
+              IF (MVALUE)                                      THEN
+                  DO  I=1,NLEVA*NWDS
+                      IF (MA(I).NE.0 .AND.
+     +                    MB(I).NE.0 )                         THEN
+                          A(I)  = A(I)-B(I)
+                          MA(I) = MA(I)+1
+                      ELSE IF (MB(I).NE.0)                     THEN
+                          A(I)  = -B(I)
+                          MA(I) = 1
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,NLEVA*NWDS
+                      A(I) = A(I)-B(I)
+                  END DO
+              END IF
+          ELSE IF (VERBE.EQ.'MLT')                             THEN
+              IF (MVALUE)                                      THEN
+                  DO  I=1,NLEVA*NWDS
+                      IF (MA(I).NE.0 .AND.
+     +                    MB(I).NE.0 )                         THEN
+                          A(I)  = A(I)*B(I)
+                          MA(I) = MA(I)+1
+                      ELSE IF (DEF)                            THEN
+                          A(I)  = MISFLAG ; MA(I) = 0
+                      ELSE IF (MB(I).NE.0)                     THEN
+                          A(I)  = B(I)
+                          MA(I) = 1
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,NLEVA*NWDS
+                      A(I) = A(I)*B(I)
+                  END DO
+              END IF
+          ELSE IF (VERBE.EQ.'DIV')                             THEN
+              POS2 = 0
+              DO  L=1,NLEVA
+                  POS1 = POS2+1
+                  POS2 = POS2+NWDS
+***                ACCOUNT FOR VERY SMALL VALUES, AS
+***                DETERMINED VIA CALCEPS8, BUT ONLY
+***                WHEN THE RANGE OF VALUES IS LARGE
+                  EPSI = 0.0
+                  IF (JPAK.GE.-16)
+     +            EPSI = CALCEPS8( B(POS1),NWDS,JPAK )
+                  IF (MVALUE)                                  THEN
+                      DO  I=POS1,POS2
+                          IF (MA(I).NE.0 .AND.
+     +                        MB(I).NE.0 )                     THEN
+                              IF (ABS( B(I) ).LE.EPSI)         THEN
+                                  IF (JPAK.GE.-16)
+     +                            CORR = CORR+1
+                                  A(I) =  0. 
+                              ELSE 
+                                  A(I) = A(I)/B(I) 
+                              END IF
+                              MA(I) = MA(I)+1
+                          ELSE IF (DEF)                        THEN
+                              MA(I) = 0 ; A(I) = MISFLAG
+                          ELSE IF (MB(I).NE.0)                 THEN
+                              IF (ABS(  B(I) ).LE.EPSI)        THEN
+                                  IF (JPAK.GE.-16)
+     +                            CORR = CORR+1
+                                  A(I) = 0.
+                              ELSE
+                                  A(I) = 1./B(I)
+                              END IF
+                              MA(I) = 1
+                          END IF
+                      END DO
+                  ELSE
+                      DO  I=POS1,POS2
+                          IF (ABS( B(I) ).LE.EPSI)             THEN
+                              IF (JPAK.GE.-16)
+     +                        CORR = CORR+1
+                              A(I) =  0. 
+                          ELSE 
+                              A(I) = A(I)/B(I) 
+                          END IF 
+                      END DO
+                  END IF
+              END DO
+          ELSE IF (VERBE.EQ.'CMLT')                            THEN
+              IF (MVALUE)                                 THEN
+                  DO  I=1,NLEVA*NWDS,2
+                      IF (MA(I).NE.0 .AND. MA(I+1).NE.0 .AND.
+     +                    MB(I).NE.0 .AND. MA(I+1).NE.0 )      THEN
+                          CA     = DCMPLX( A(I),A(I+1) )
+                          CB     = DCMPLX( B(I),B(I+1) )
+                          CA     = CA*CB
+                          A(I)   = DBLE ( CA )
+                          A(I+1) = DIMAG( CA )
+                         MA(I)   = MA(I)  +1
+                         MA(I+1) = MA(I+1)+1
+                      ELSE IF (DEF)                            THEN
+                          A(I)   = MISFLAG ; MA(I)   = 0
+                          A(I+1) = MISFLAG ; MA(I+1) = 0
+                      ELSE IF (MB(I).NE.0 .AND. MA(I+1).NE.0)  THEN
+                          A(I)   = B(I)
+                          A(I+1) = B(I+1)
+                         MA(I)   = 1
+                         MA(I+1) = 1
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,NLEVA*NWDS,2
+                      CA     = DCMPLX( A(I),A(I+1) )
+                      CB     = DCMPLX( B(I),B(I+1) )
+                      CA     = CA*CB
+                      A(I)   = DBLE ( CA )
+                      A(I+1) = DIMAG( CA )
+                  END DO
+              END IF
+          ELSE IF (VERBE.EQ.'CONJMLT')                         THEN
+              IF (MVALUE)                                      THEN
+                  DO  I=1,NLEVA*NWDS,2
+                      IF (MA(I).NE.0 .AND. MA(I+1).NE.0 .AND.
+     +                    MB(I).NE.0 .AND. MA(I+1).NE.0 )      THEN
+                          CA     = DCMPLX( A(I),A(I+1) )
+                          CB     = DCMPLX( B(I),B(I+1) )
+                          CA     = CA*DCONJG( CB )
+                          A(I)   = DBLE ( CA )
+                          A(I+1) = DIMAG( CA )
+                         MA(I)   = MA(I)  +1
+                         MA(I+1) = MA(I+1)+1
+                      ELSE IF (DEF)                            THEN
+                          A(I)   = MISFLAG ; MA(I)   = 0
+                          A(I+1) = MISFLAG ; MA(I+1) = 0
+                      ELSE IF (MB(I).NE.0 .AND. MA(I+1).NE.0)  THEN
+                          A(I)   = B(I)
+                          A(I+1) = -B(I+1)
+                         MA(I)   = 1
+                         MA(I+1) = 1
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,NLEVA*NWDS,2
+                      CA     = DCMPLX( A(I),A(I+1) )
+                      CB     = DCMPLX( B(I),B(I+1) )
+                      CA     = CA*DCONJG( CB )
+                      A(I)   = DBLE ( CA )
+                      A(I+1) = DIMAG( CA )
+                  END DO
+              END IF
+          ELSE IF (VERBE.EQ.'CDIV')                            THEN
+              IF (MVALUE)                                      THEN
+                  DO  I=1,NLEVA*NWDS,2
+                      CB             = DCMPLX( B(I),B(I+1) )
+                      IF (MA(I).NE.0 .AND. MA(I+1).NE.0 .AND.
+     +                    MB(I).NE.0 .AND. MA(I+1).NE.0 )      THEN
+                          IF (CB.EQ.CZERO)                     THEN 
+                              A(I)   = 0.
+                              A(I+1) = 0.
+                          ELSE
+                              CA     = DCMPLX( A(I),A(I+1) )
+                              CA     = CA/CB
+                              A(I)   = DBLE ( CA )
+                              A(I+1) = DIMAG( CA )
+                          END IF
+                          MA(I)      = MA(I)  +1
+                          MA(I+1)    = MA(I+1)+1
+                      ELSE IF (DEF)                            THEN
+                           A(I)      = MISFLAG ; MA(I)   = 0
+                           A(I+1)    = MISFLAG ; MA(I+1) = 0
+                      ELSE IF (MB(I).NE.0 .AND. MA(I+1).NE.0)  THEN
+                          IF (CB.EQ.CZERO)                     THEN 
+                              A(I)   = 0.
+                              A(I+1) = 0.
+                          ELSE
+                              CA     = DCMPLX( 1D0 ,0D0 )
+                              CA     = CA/CB
+                              A(I)   = DBLE ( CA )
+                              A(I+1) = DIMAG( CA )
+                          END IF
+                          MA(I)      = 1
+                          MA(I+1)    = 1
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,NLEVA*NWDS,2
+                      CA     = DCMPLX( A(I),A(I+1) )
+                      CB     = DCMPLX( B(I),B(I+1) )
+                      IF (CB.EQ.CZERO)                         THEN 
+                          A(I)   = 0. 
+                          A(I+1) = 0.
+                      ELSE 
+                          CA     = CA/CB
+                          A(I)   = DBLE( CA )
+                         A(I+1) = DIMAG( CA )
+                      END IF 
+                  END DO
+              END IF
+          END IF
+
+      END IF
+
+***   ------
+      END DO
+***   ------
+
+      IF (KIND.NE.'LABL' .AND. KIND.NE.'CHAR')                 THEN
+
+***        SAVE THE RESULT ON FILE C.
+***        CHECK KEEPNAM TO DEFINE IBUF(3).
+
+          NFR  = MAX( 1,KEEPNAM )
+          IBUF(1:taille_entete) = ENTETE(1:taille_entete,NFR)
+
+          DO  NFI=2,NF-1
+              IF (ENTETE(3,1).NE.ENTETE(3,NFI))                THEN
+                  IF (KEEPNAM.EQ.0)                            THEN
+                      READ(VERBE,4) IBUF(3)
+                      EXIT
+                  END IF
+              END IF
+          END DO
+
+          IF (MVALUE)                                          THEN
+              CALL SET_MISPAR( MISFLAG,MISEPS )
+              DATYP = GETHIGH( 'DATYP',IBUF )
+              IF (IAND( DATYP,64 ) == 0)                       THEN
+                  DATYP = DATYP+64
+                  CALL PUTHIGH( DATYP,'DATYP',IBUF )
+              END IF
+          END IF
+
+          CALL PUTSET2( 10+NF, A, LEV(1,NFR),NLEVA, IBUF,MAXW )
+
+      ELSE IF (KIND.EQ.'CHAR')                                 THEN
+
+***        SAVE THE LAST CHARACTER RECORD READ FROM X1.
+
+          CALL PUTSET2( 10+NF, A, LEV,NLEVA, IBUF,MAXW )
+
+      ELSE IF (KIND.EQ.'LABL')                                 THEN
+
+***        SAVE THE LAST LABEL READ FROM X1.
+
+          LENLAB = IBUF(5)
+
+          CALL GETLAB( 0, CHAINE, IBUF,LENLAB, OK )
+          WRITE(NOM,4) IBUF(3)
+          NLEVA = 1
+
+          IF (NOM.EQ.'LABL')                                   THEN
+              CALL PUTLAB( 10+NF, CHAINE, IBUF,LENLAB,
+     +                               .FALSE. , .FALSE. )
+          ELSE IF (NOM.EQ.'FILE')                              THEN
+              CALL PUTLAB( 10+NF, CHAINE, IBUF,LENLAB, 
+     +                               .TRUE.  , .FALSE. )
+          ELSE IF (NOM.EQ.'INFO')                              THEN
+              CALL PUTLAB( 10+NF, CHAINE, IBUF,LENLAB, 
+     +                               .FALSE. , .TRUE.  )
+          END IF
+
+      END IF
+
+      IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+NLEVA
+      GOTO 140 
+
+***    PREMATURE E.O.F. ON UNIT #1,#2.
+
+  903 CALL                                         XIT( VERBE ,-3 )
+  904 CALL                                         XIT( VERBE ,-4 )
+
+***    ERROR READING COMMAND-LINE PARAMETRE.
+
+  908 IF (IO.NE.0) WRITE(6,6008) TRIM( VERBE ),IO
+      CALL                                         XIT( VERBE ,-8 )
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6005 FORMAT(A8,': Complex data detected, use CDIV or CMLT instead.')
+ 6006 FORMAT(A8,': Non-complex data detected, use MLT or DIV instead.')
+ 6007 FORMAT(A8,': Found ',I2,' input files.')
+ 6008 FORMAT(1X,A,' reports I/O error number ',I3)
+
+ 6000 FORMAT('0',I6,' Sets of records processed.')
+ 6101 FORMAT(' For first file  GRTYP,XG1,XG2,XG3,XG4= ',A,4F10.3/
+     +       ' For second file GRTYP,XG1,XG2,XG3,XG4= ',A,4F10.3)
+ 6200 FORMAT(' Corrected ',I8,' points smaller than epsilon.')
+ 6300 FORMAT(/' Using variable configuration from input file ',A/)
+
+ 6666 FORMAT(/' Note: Arrays in the second file will be inverted'/
+     +       '       in the North-South direction to orient them'/
+     +       '       as their counterparts in the first file.'/)
+
+      END 
+#     endif

@@ -1,0 +1,304 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     SEQUENCE D'APPEL...
+*      spsmoo  IN OUT INPUT OUTPUT [ -lrt VAL1 -a VAL2 ]
+*
+*
+*     AUTEUR  - B.Dugas, MAI 16/89.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spsmoo.ptn,v 4.8 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      spsmoo - CALCULATES SPECTRALY SMOOTHED VERSION OF THE INPUT FILE.
+*
+*
+*     PURPOSE - CALCULATES THE SMOOTHED VERSION (OUT) OF THE INPUT FILE (IN)
+*               BY MULTIPLYING IT BY EXP(-K0*(N(N+1))**R). THE K0 IS DERIVED
+*               FROM THE INPUT CUTOFF VALUE SUPPLIED BY THE USER.  R IS ALSO
+*               READ FROM INPUT (THE DEFAULTS ARE .. K0=1/(LR*(LR-1)), R=2).
+*               REFERENCES: SARDESHMUKH & HOSKINS, MWR VOL.112, 2524-2529.
+*
+*
+*     INPUT FILE...
+*      IN  =  CCRN FORMAT SPECTRAL FILE
+*
+*     OUTPUT FILE...
+*      OUT = FILE CONTAINING THE SMOOTHED VERSION OF THE INPUT FILE.
+*
+*
+*     PARAMETERS...
+*      N0 (lrt)  = SPECTRAL CUT-OFF WAVE NUMBER USED ( K0 = 1.0/(N0*(N0+1)) )
+*      R  (a)    = SPECTRAL EXPONENT. CANNOT BE NEGATIVE.
+*
+*      READ(5,5000) N0,R
+*5000  FORMAT(10X,I5,E10.0)
+*
+*
+*     EXEMPLE DE LIGNE D'APPEL...
+*
+* SPSMOO     42       2.0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 R CANNOT BE NEGATIVE
+*       2 MORE THAN ON SIZE IN FILE IN
+*       3 NO SPECTRAL INFORMATION PROVIDED
+*       4 NO INPUT INFORMATION PROVIDED
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spsmoo
+*    1               (IN,       OUT,       INPUT,       OUTPUT,
+*    2          TAPE1=IN, TAPE2=OUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     --------------------------------------------------------
+
+*     $Log: spsmoo.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2013/10/16 20:51:48  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/07/05 14:51:44  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  2000/02/01 20:46:14  armnrbd
+*     Remplacer "CALL MEMOIR" par "CALL HPALLOC".
+*     Corriger la documentation automatique.
+*
+*     Revision 4.2  1998/07/03 02:26:40  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:22  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:58  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/03/08  15:19:15  armnrbd
+*     Ajouter le support de RPBLOC.
+*     
+*     Revision 3.0  93/10/13  13:57:09  13:57:09  armnrbd (Bernard Dugas)
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/18  12:37:18  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/05/05  16:38:08  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:58  armnrbd
+*     Initial revision
+*     
+*     JAN 24/91 - B.DUGAS, RPN. (BUG(S) FIX + CALL TO GETLIGN ADDED)
+*     JAN 07/91 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+*     MAI 16/89 - B.DUGAS.
+
+*-----------------------------------------------------------------------------
+      IMPLICIT    none
+  
+      INTEGER, PARAMETER :: MAXLM = lm_maximal
+
+      LOGICAL     OK,RPBLOC
+      CHARACTER   LIGNE*80
+      REAL        ZERO,CONST,R
+      INTEGER     HEAD, LSR(2,MAXLM), JBUF(taille_entete), REG,IMG,
+     +            M,N,NF,NR,N0,IO,LEN,NWDS,NWD2,MAXW,JPAK,
+     +            IA,IB,I,L,LRLMT,LA,LR,LM,KTR, IER,INI
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: G,ALPHA
+
+      INTEGER     GETSIZ
+      EXTERNAL    GETSIZ
+
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,XIT,
+     +            DIMGT2,GETFLD2,PUTFLD2,RPBLOC
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spsmoo.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      NR  = 0
+      INI = 0
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          N0 = 0
+          R  = 0.0
+
+          OK = RPBLOC('LRT',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=999,IOSTAT=IO) N0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=999,IOSTAT=IO) R
+
+      ELSE
+
+***        READ EFFECTIVE CUTOFF N0 AND EXPONENT R FROM UNIT#5.
+  
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+               GOTO 1000
+          ELSE
+              READ( LIGNE, 5000,ERR=999,END=1000,IOSTAT=IO) N0,R
+              CALL BURNF
+          END IF
+
+      END IF
+  
+      IF (R.LT.0.0)                                            THEN
+          CALL                                     XIT(' Spsmoo ',-1 )
+      ELSE IF (R.EQ.0.0)                                       THEN
+          R = 2.0
+      END IF
+  
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) GOTO 900
+
+      NWD2 = NWDS/2
+
+      ALLOCATE( IBUF(LEN),G(NWDS),ALPHA(NWD2) )
+
+***    READ RECORDS FROM INPUT.
+  
+  100 CALL GETFLD2( 1, G, 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+  
+          IF (.NOT.OK)                                         THEN
+              INI = 0
+              DEALLOCATE( IBUF,G,ALPHA )
+              IF (MAXW.EQ.0) GOTO 050
+              WRITE(6,6000)                        NR
+              CALL                                 XIT(' Spsmoo ', 0 )
+          END IF
+  
+***        COMPUTE THE ARRAY C-ALPHA(N,M) - ONLY IF INI=0.
+  
+          IF (INI.EQ.0)                                        THEN
+  
+              LRLMT = IBUF(7) 
+              CALL DIMGT2( LSR, LA,LR,LM,KTR,LRLMT, 0,0 )
+  
+              IF (N0.LE.0) N0 = LR-1
+  
+              ALPHA(1) = 1.0
+  
+              DO 200 L=2,LSR(1,2)-1
+                  N        = L-1
+                  CONST    = FLOAT(N*(N+1))/FLOAT(N0*(N0+1))
+                  ALPHA(L) = EXP(-CONST**R)
+  200         CONTINUE
+  
+              DO 300 M=1,LM-1 
+                  IA = LSR(1,M+1)
+                  IB = LSR(1,M+2)-1
+                  DO 250 L=IA,IB
+                      N        = L-IA+M 
+                      CONST    = FLOAT(N*(N+1))/FLOAT(N0*(N0+1))
+                      ALPHA(L) = EXP(-CONST**R)
+  250             CONTINUE
+  300         CONTINUE
+  
+              INI = 1
+
+          ELSE IF (IBUF(7).NE.LRLMT .OR.
+     +             IBUF(5).NE.LA       )                       THEN
+
+              CALL                                 XIT(' Spsmoo ',-2 )
+
+          END IF
+  
+***        MULTIPLY G BY ALPHA.
+  
+          DO 350 I=1,LA
+              REG    = 2*I-1
+              IMG    = REG+1
+              G(REG) = G(REG)*ALPHA(I)
+              G(IMG) = G(IMG)*ALPHA(I)
+  350     CONTINUE
+  
+***        SAVE ON FILE OUT. 
+  
+          CALL PUTFLD2( 2, G, IBUF,MAXW ) 
+  
+          IF (NR.EQ.0) WRITE(6,6100) N0,R ; CALL PRTLAB( IBUF )
+  
+      NR = NR+1
+      GOTO 100
+  
+***    PREMATURE EOF ON UNIT#1.
+
+  900 CALL                                         XIT(' Spsmoo ',-3 )
+  
+***    PREMATURE EOF ON UNIT#5.
+
+  999 IF (IO.NE.0) WRITE(6,6004) IO  
+ 1000 CALL                                         XIT(' Spsmoo ',-4 )
+  
+*-----------------------------------------------------------------------
+
+    5 FORMAT(BN,I5)
+   10 FORMAT(BN,E10.0)
+
+ 5000 FORMAT(10X,I5,E10.0)
+ 6000 FORMAT('0Spsmoo produced ',I6,' records.')
+
+ 6004 FORMAT(' Spsmoo reports I/O error number ',I4,' on unit 5.')
+
+ 6100 FORMAT('0Effective spectral cutoff at N0 =',I5,' exponent ='E12.5/
+     +       ' on (first) IBUF = ')
+
+      END 
+#     endif

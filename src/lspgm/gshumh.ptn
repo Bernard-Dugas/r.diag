@@ -1,0 +1,852 @@
+#     if !defined (pression_au_toit)
+#         define   pression_au_toit 0.01
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*       gshumh   GSES GSTEMP GSLNSP GSSHUM GSRHUM GSLNPT \
+*                 INPUT OUTPUT [ -kind VAL1 [ VAL2 ] -b VAL3 \ 
+*                                -c    VAL4 -d VAL5  -i VAL6 -def ] 
+*
+*
+*     DESCRIPTION...
+*      gshumh  - CONVERTS ETA (SIGMA/HYBRID/GAL-CHEN) LEVEL MOISTURE
+*                VARIABLE TO SPECIFIC AND RELATIVE HUMIDITY.
+*
+*
+*     AUTHOR   - R. LAPRISE, FEB 29/88.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gshumh.ptn,v 4.14 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE  - CONVERTS ETA (SIGMA/HYBRID) LEVEL GRID FILE OF MODEL
+*                MOISTURE VARIABLE TO SPECIFIC AND RELATIVE HUMIDITY.
+*
+*     NOTES:  1) THIS PROGRAM IS UPWARD COMPATIBLE WITH ITS EARLIER
+*                VERSION (GSHUM), EXCEPT THAT IT WILL NOW READ PARAMETRES.
+*             2) WATER AND ICE PHASES ARE CONSIDERED IN THE CONVERSION
+*                WHEN THE COMMAND LINE PARAMETER "-def" IS SPECIFIED.
+*                OTHERWISE, ONLY WATER PHASE IS CONSIDERED.
+*             3) CALCULATIONS ARE DONE WITH THE RPN PHYSIC'S SET
+*                OF THERMODYNAMIC CONVERSION FUNCTIONS (I.E. FINTERN)
+*                RATHER THAN THE FORMULAS USED IN CCRN MODEL SPW6.
+*
+*     INPUT FILES...
+*      GSES    = MODEL MOISTURE VARIABLE (ES) ON ETA (SIGMA/HYBRID) LEVELS.
+*      GSTEMP  = TEMPERATURES ON THE SAME (OR MORE) LEVELS.
+*      GSLNSP  = CORRESPONDING SERIES OF LN(SF PRES). 
+*
+*     (EXCLUSIVELY FOR GAL-CHEN LEVELS, AS IN THE RCM MODEL)
+*      GSLNPT  = SET OF LN(PRESSURE).
+*
+*      Note that GSLNSP and GSLNPT pressure units for GAL-CHEN are
+*      Pascals. The other supported coordinates require GSLNSP
+*      pressure input fields in MBs.
+*
+*     OUTPUT FILES...
+*      GSSHUM  = OUTPUT FILE FOR THE SPECIFIC HUMIDITY.
+*      GSRHUM  = OUTPUT FILE FOR THE RELATIVE HUMIDITY.
+*
+* 
+*     INPUT PARAMETERS...
+*
+*      COORD (kind 1) = 'SIG'/'ETA'/'GALC' FOR SIGMA/ETA/GAL-CHEN COORDINATE
+*                       AND THREE VARIANTS OF THE GEM VERTICAL COORDINATES,
+*                       RESPECTIVELY ('GEM2' AND 'GEM3' ARE THE TWO RPN DEFAULTS).
+*      MOIST (kind 2) = TYPE OF MOISTURE VARIABLE FOUND IN FILE GSES. 
+*                       THE CURRENTLY SUPPORTED VALUES ARE AS FOLLOWS:
+*                       1) 'T-TD' : DEW POINT DEPRESSION  2) 'TD'   : DEW POINT
+*                       3) 'RLNQ' : -(LN(Q)**-1)          4) 'SQRT' : Q**0.5
+*                       5) 'Q'    : Q                     6) 'LNQ'  : LN(Q)
+*                       7) 'QHYB' : HYBRID ( = Q                ; Q <= Q0
+*                                            = Q0/(1-LN(Q/Q0))  ; Q >  Q0 ),
+*                                   WHERE Q0 IS THE "SHUMREF" REFERENCE VALUE.
+*      SHUMREF (b) = REFERENCE VALUE FOR THE HYBRID CASE (DEFAULT; 10.E-3 KG/KG)
+*      PTOIT   (c) = PRESSURE (PA) OF THE RIGID LID OF THE MODEL.
+*                    AS OF NOW, HAS TO BE GREATER THAN pression_au_toit PA.
+*      PREF    (d) = REF PRESSURE USED WHEN COORD='GEM2' OR 'GEM3' (DEF 80000 PA).
+*      R       (i) = EXPONENT USED ONLY WHEN COORD='GEM2' OR 'GEM3' (DEF 1.0)
+*
+*      NOTE THAT PTOIT IS NOT USED FOR GAL-CHEN LEVELS.
+*
+*      READ(5,5000,END=911) COORD,MOIST,PTOIT,SHUMREF,PREF,R
+*5000  FORMAT(10X,2(1X,A4),4E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+ *GSHUMH.   SIG T-TD      pression_au_toit
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 NOT ENOUGH OR TOO MANY LEVELS IN GSTEMP
+*       2 NOT ENOUGH OR TOO MANY LEVELS IN GSES
+*       3 GSES AND GSTEMP NOT THE SAME SIZE
+*       4 UNABLE TO READ GSLNSP
+*       5 GSLNSP AND GSTEMP NOT THE SAME SIZE
+*       6 UNABLE TO READ GSLNPT
+*       7 GSLNPT AND GSTEMP OT THE SAME SIZE
+*       8 LESS TIMESTEPS IN GSTEMP THAN IN GSLNSP
+*       9 MORE THAN ONE SIZE IN GSTEMP
+*      10 LESS TIMESTEPS IN GSLNPT THAN IN GSLNSP
+*      11 GSLNPT AND GSTEMP NOT THE SAME SIZE
+*      12 LESS TIMESTEPS IN GSES THAN IN GSLNSP
+*      13 GSES AND GSTEMP NOT THE SAME SIZE
+*      14 UNRECOGNIZED MOISTURE VARIABLE TYPE
+*      15 PROBLEM READING DIRECTIVE CARD
+*      16 UNSUPPORTED VERTICAL COORDINATE FOUND IN GSTEMP
+*      17 COORD PARAMETRE AND GSTEMP COORDINATE MISMATCH
+*      18 PTOIT GREATER THAN TOP MODEL LEVEL (=ETA(TOP)*PREF)
+*      19 GSES AND GSTEMP LEVELS ARE NOT ORDERED THE SAME
+*
+*     NON-FATAL CONDITIONS...
+*     101 FILE TYPE NOT PK84 (CCRN-RPN) AND NOT PK92 (CCCma)
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM gshumh
+*     PROGRAM GSHUMH (GSES,         GSTEMP,        GSLNSP,       GSSHUM,
+*    1                GSRHUM,       GSLNPT,        INPUT,        OUTPUT,
+*    2          TAPE1=GSES,   TAPE2 =GSTEMP, TAPE3=GSLNSP, TAPE8=GSSHUM, 
+*    3          TAPE9=GSRHUM, TAPE10=GSLNPT, TAPE5=INPUT,  TAPE6=OUTPUT) 
+*     ---------------------------------------------------------------
+*     $Log: gshumh.ptn,v $
+*     Revision 4.14  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.13  2009/09/08 20:54:52  dugas
+*     - Allocate/f90.
+*     - Ajouter support des coordonnees verticales GEM/2/3.
+*     - Utiliser les fonctions thermodynamiques de fintern.cdk.
+*
+*     Revision 4.12  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.11  2007/12/20 21:10:29  dugas
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2007/08/29 17:39:30  dugas
+*     Mieux documenter les unites utilisees dans GSLNSP.
+*
+*     Revision 4.9  2005/04/12 18:25:10  dugas
+*     Ignorer les espaces dans la variables d'entrees MOIST.
+*
+*     Revision 4.8  2000/07/14 15:48:07  armnrbd
+*     Utiliser GETSIZ plutot que GETSIZ2 sur LNSP (bug).
+*
+*     Revision 4.7  1998/10/19 19:54:41  armnrbd
+*     Modifier la documentation.
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.6  1998/07/03  02:26:29  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1998/07/03  01:18:35  armnrbd
+*     Ignorer les espaces dans le parametres d'entree COORD.
+*
+*     Revision 4.4  1998/05/21  20:20:49  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.3  1997/09/26  17:39:00  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/05/30  18:24:56  armnrbd
+*     Utiliser le common EPS pour les valeurs de A,B,EPS1 et EPS2.
+*
+*     Revision 4.1  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.0  1995/11/17  18:19:02  armnrbd
+*     Version initiale.
+*
+*     DEC 22/94 - F.MAJAESS (ALLOW READING THE REFERENCE VALUE)
+*     SEPT 9/93 - M. GIGUERE ( INTRODUCING GAL-CHEN LEVELS )
+*     JAN 12/93 - E. CHAN   (DECODE LEVELS IN 8-WORD LABEL)                     
+*     JAN 29/92 - E. CHAN   (CONVERT HOLLERITH LITERALS TO ASCII)              
+*     MAY 17/90 - M.LAZARE. - ADD 4HQHYB AS ANOTHER CHOICE FOR MOIST.           
+*     JUN 15/89 - M.LAZARE. - ADD 4H LNQ AS ANOTHER CHOICE FOR MOIST. 
+*     AUG 11/88 - M.LAZARE  (REPLACE "A,B,EPS1,EPS2" DATA BY COMMON STATEMENT.
+*                            ALSO, INSERT A CALL TO SPWCONH ROUTINE)
+*     FEB 29/88 - R.LAPRISE.
+
+*------------------------------------------------------------------------ 
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+      INTEGER     HEAD
+      PARAMETER ( HEAD   = taille_entete )
+      REAL        PTMIN
+      PARAMETER ( PTMIN  = pression_au_toit )
+
+      CHARACTER   LIGNE*80
+      LOGICAL     OK,SPWH,MODETA,MONOTONH,MONOTONS
+      CHARACTER*4 COORD,MOIST,CSHUM,CRHUM,LNSP,TEMP,NAME
+      INTEGER     LETAT(MAXLEV),LETAS(MAXLEV),KBUF(HEAD),
+     +            I,K,L,LBUF(HEAD),MBUF(HEAD),MISSING,NFIL,TIME,
+     +            LEN1,LEN2,LEN3,LEN,MAXW1,MAXW2,MAXW3,MAXW,
+     +            NWDS,KPAK,LPAK,MPAK,ILEV,LEVS,NRECS,IER,
+     +            IO,VKIND1,VKIND2,VKIND,TOP,BOT,INC,
+     +            TOPS,BOTS,INCS,FIRST,LAST
+      REAL        ADD,PREF,R,ETAH(MAXLEV),ETAS(MAXLEV),
+     +            AH(MAXLEV),BH(MAXLEV),PTOIT,SHUMREF,
+     +            SMIN,T,ES,TD,E,SHUM,SAT,QMIN,TOPASCL,
+     +            FUNMIN,PTOIT0,PREF0,R0
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE         :: IBUF 
+      REAL,       DIMENSION(:), ALLOCATABLE        :: F,G,SIGH
+      REAL,       DIMENSION(:), ALLOCATABLE,TARGET :: PRLNPT,PSMBLN
+      REAL,       DIMENSION(:), POINTER            :: PRESS,PRES
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+#     include "consdia.cdk"
+#     include "dintern.cdk"
+#     include "fintern.cdk"
+C***  REAL             A,B,EPS1,EPS2
+C***  COMMON     /EPS/ A,B,EPS1,EPS2
+
+      LOGICAL     RPBLOC
+      CHARACTER   GETYP*4,PKTYP*2
+      INTEGER     GETSIZ2,GETSIZ,GETKIND
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,GETSIZ2,GETSIZ,XIT,
+     +            CONVPR,WRITLEV,CMPLBL,COORDAB,HPALLOC,
+     +            GETFLD2,NIVCAL,PUTFLD2,LEADBLK,RPBLOC,
+     +            GETKIND,SETPT,INCTDIA,LIRPT,GETPT
+
+      DATA        SPWH,  MODETA  / 2*.FALSE. /
+      DATA        CSHUM,  CRHUM  /
+     +            'SHUM', 'RHUM' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gshumh.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NRECS = 0 
+      NFIL  = 8 
+
+      CALL JCLPNT( NFIL, 1,2,3, 8,9, 10, 5,6 )
+      CALL INCTDIA
+  
+      PKTYP = GETYP( 1 )
+
+      COORD ='DEF'
+      PTOIT = PTMIN
+      PREF  = 80000.
+      R     = 1.0
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          MOIST   ='T-TD'
+          SHUMREF = 0.0
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) COORD = LIGNE
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) MOIST = LIGNE
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=911,ERR=911,IOSTAT=IO) SHUMREF
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=911,ERR=911,IOSTAT=IO) PTOIT
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=911,ERR=911,IOSTAT=IO) PREF
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=911,ERR=911,IOSTAT=IO) R
+
+          SPWH = RPBLOC('DEFAUT',LIGNE)
+          IF (SPWH) WRITE(6,6000)
+          
+      ELSE
+
+***        READ-IN DIRECTIVE CARDS.
+
+          CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 911
+          ELSE
+              READ( LIGNE, 5000,END=911,ERR=911,IOSTAT=IO) 
+     +                     COORD,MOIST,PTOIT,SHUMREF,PREF,R
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (COORD.NE.' ') CALL LEADBLK( COORD )
+      IF (MOIST.NE.' ') CALL LEADBLK( MOIST )
+
+      IF (COORD.EQ.' ') COORD = 'DEF'
+      IF (MOIST.EQ.' ') MOIST = 'T-TD'
+
+      IF (COORD.EQ.'SIG')                                      THEN 
+          PTOIT = MAX( PTOIT, 0.00 ) 
+      ELSE
+          PTOIT = MAX( PTOIT,PTMIN )
+      ENDIF 
+
+      IF (PKTYP.EQ.'SQ'   .AND.
+     +   (COORD.EQ.'DEF'  .OR. 
+     +    COORD.EQ.'GEM2' .OR. 
+     +    COORD.EQ.'GEM3'))
+     +    CALL SETPT( PTOIT,PREF,R )
+
+      IF (SHUMREF.LE.0.) SHUMREF = 10.E-3
+
+***    GET ETA VALUES FROM TEMP FILE. ALSO FROM ES FILE. 
+***    ILEV,LEVS = NUMBER OF TEMP,MOISTURE LEVELS IN THE MODEL.
+***    ETAH = ETA VALUES OF THE TEMPERATURE LEVELS.
+***    MISSING MOISTURE LEVELS ARE AT THE TOP (LEVELS 1,2,..ETC).
+  
+      MAXW1 = GETSIZ2( 2, KBUF,LEN1,NWDS,KPAK, LETAT,ILEV )
+
+      IF (ILEV.EQ.0       .OR.
+     +    ILEV.GT.MAXLEV) CALL                     XIT(' Gshumh ',-1 ) 
+
+      WRITE(6,6015) KBUF(3)
+
+      DO  L=1,ILEV
+          CALL CONVPR( LETAT(L), ETAH(L), VKIND2, -2 )
+          IF (VKIND2.EQ.2) ETAH(L) = ETAH(L) * 0.001
+      END DO
+
+      IF (PKTYP /= 'SQ' .AND. LETAT(ILEV) == 1) ETAH(ILEV) = 1.0
+         
+***     CHECK THAT ETAH IS MONOTONIC.
+
+      CALL MONVERT( ETAH,ILEV, TOP,BOT,INC, MONOTONH )
+
+      WRITE(TEMP,0004) KBUF(3)
+
+      IF (TEMP == 'TEMP')                                      THEN
+          ADD   =  0.0
+          CRHUM = 'RHUM'
+      ELSE IF (TEMP == 'TT')                                   THEN
+          ADD   = TCDK
+          CRHUM = 'HR'
+      ELSE
+          CALL                                     XIT(' Gshumh ',-8 )
+      END IF
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+          VKIND = GETKIND()
+
+          IF (VKIND.NE.1 .AND.
+     +        VKIND.NE.5)                                      THEN
+              CALL                                 XIT(' Gshumh ',-16)
+          ELSE IF (VKIND.EQ.1)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM3'
+          ELSE IF (VKIND.EQ.5)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM2'
+              IF (COORD.NE.'GEM2') CALL            XIT(' Gshumh ',-17)
+          END IF
+
+      ELSE IF (COORD.EQ.'DEF')                                 THEN
+
+          COORD  = 'ET15'
+
+      END IF
+
+      IF (.NOT.(COORD == 'GEM2' .OR. COORD == 'GEM3'))
+     +    WRITE(6,6020) COORD,MOIST,PTOIT,SHUMREF
+  
+      CALL WRITLEV( ETAH,ILEV,COORD )
+
+      MAXW2 = GETSIZ2( 1, LBUF,LEN2,NWDS,LPAK, LETAS,LEVS )
+
+      IF (LEVS.EQ.0     .OR.
+     +    LEVS.GT.ILEV) CALL                       XIT(' Gshumh ',-2 ) 
+
+      WRITE(6,6015) LBUF(3)
+
+      DO  L=1,LEVS
+          CALL CONVPR( LETAS(L), ETAS(L), VKIND1, -2 )
+          IF (VKIND1.EQ.2) ETAS(L) = ETAS(L) * 0.001
+      END DO
+
+      IF (PKTYP /= 'SQ' .AND. LETAS(LEVS) == 1) ETAS(LEVS) = 1.
+
+      CALL WRITLEV( ETAS,LEVS,COORD )
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+      IF (.NOT.OK) CALL                            XIT(' Gshumh ',-3 ) 
+
+***    CHECK THAT ETAS IS MONOTONIC.
+
+      CALL MONVERT( ETAS,LEVS, TOPS,BOTS,INCS, MONOTONS )
+
+      IF (ILEV     .NE.   LEVS       .AND.
+     +   (INC      .NE.   INCS       .OR.
+     +    MONOTONH .NEQV. MONOTONS)) CALL          XIT(' Gshumh ',-19)
+
+      MISSING = ILEV-LEVS 
+
+***    INCREASING OR DECREASING LEVELS ?
+
+      IF (INC > 0)                                             THEN
+          FIRST = MISSING+1
+          LAST  = ILEV
+      ELSE
+          FIRST = 1
+          LAST  = LEVS
+      END IF
+
+***    CHECK LNSP SIZES.
+
+      MAXW3 = GETSIZ( 3, MBUF,LEN3,NWDS,MPAK )
+
+      IF (MAXW3.LE.0) CALL                         XIT(' Gshumh ',-4 )
+
+      CALL CMPLBL( 0,MBUF, 0,LBUF, OK )
+      IF (.NOT.OK) CALL                            XIT(' Gshumh ',-5 )
+
+      WRITE(LNSP,0004) MBUF(3)
+
+      IF (.NOT.(LNSP == 'LNSP' .OR. LNSP == 'LP'))             THEN
+          CALL                                     XIT(' Gshumh ',-4 )
+      END IF
+
+      LEN     = MAX( LEN1, LEN2, LEN3  )
+      MAXW    = MAX( MAXW1,MAXW2,MAXW3 )
+
+      IF (COORD.EQ.'GALC')                                     THEN
+
+***        CHECK LNPT SIZES.
+
+          MAXW2 = GETSIZ2( 10, LBUF,LEN2,NWDS,LPAK, LETAS,LEVS )
+
+          IF (MAXW2.LE.0) CALL                     XIT(' Gshumh ',-6 )
+
+          CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+          IF (.NOT.OK .OR.
+     +        LEVS.NE.ILEV) CALL                   XIT(' Gshumh ',-7 )
+
+          LEN  = MAX( LEN, LEN2  )
+          MAXW = MAX( MAXW,MAXW2 )
+
+      END IF
+
+***    DEFINE PARAMETERS OF THE VERTICAL DISCRETIZATION.
+
+      IF (COORD == 'GEM2' .OR.
+     +    COORD == 'GEM3' )                                    THEN
+
+          IF (PKTYP == 'SQ')                                   THEN
+
+***            CHECK IF GSFLD HOLDS OTHER
+***            VALUES OF PTOIT,PREF AND R.
+
+              CALL LIRPT( 2 )
+              CALL GETPT( 2 , PTOIT0,PREF0,R0 )
+
+              IF (PTOIT0.NE.-1.)                               THEN
+                  PTOIT = PTOIT0
+                  PREF  = PREF0
+                  R     = R0
+              END IF
+                  
+          END IF
+
+          IF (.NOT.MODETA .AND. COORD == 'GEM3')               THEN
+
+              MODETA =.TRUE.
+
+              ETAH(1:ILEV) = ETAH(1:ILEV)
+     +                    + ( 1.0 - ETAH(1:ILEV) ) * PTOIT / PREF
+
+          END IF
+
+          WRITE(6,6020) COORD,MOIST,PTOIT,SHUMREF
+          WRITE(6,6021) PREF,R
+
+          CALL GENAB( AH,BH, ETAH, PTOIT,PREF,R, ILEV )
+
+          IF ((1.0-ETAH(TOP)*PREF/PTOIT) > 1.E-7)              THEN
+              WRITE(6,6018) (PTOIT/PREF)-ETAH(TOP)
+              CALL                             XIT(' Gshumh ',-18)
+          END IF
+
+      ELSE IF (COORD.NE.'GALC' .AND. COORD.NE.'GEM')           THEN
+
+          CALL COORDAB( AH,BH, ILEV,ETAH,COORD,PTOIT )
+
+      END IF
+
+***    ALLOCATE WORK SPACE.
+
+      ALLOCATE( F(NWDS),G(NWDS),SIGH(NWDS),
+     +          PRLNPT(NWDS),PSMBLN(NWDS),
+     +          IBUF(LEN+HEAD) )
+
+      PRESS => PSMBLN ; PRES => PRLNPT
+*---------------------------------------------------------------------
+
+***    GET THE NEXT LNSP AND CONVERT TO SFC.PRES. IN PA. 
+  
+  100 CALL GETFLD2( 3, PSMBLN, 'GRID'//'SUBA',-1,LNSP,-1,
+     +                          IBUF,MAXW,OK )
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6010) NRECS 
+              IF (NRECS.EQ.0)                                  THEN
+                  CALL                             XIT(' Gshumh ',-4 ) 
+              ELSE
+                  CALL                             XIT(' Gshumh ', 0 )
+              END IF 
+          END IF 
+
+          TIME = IBUF(2)
+
+                               TOPASCL = 100.0
+          IF (COORD.EQ.'GALC') TOPASCL =   1.0
+
+          DO  I=1,NWDS 
+              PRESS(I) = TOPASCL*EXP( PSMBLN(I) ) 
+          END DO
+  
+***        LEVEL LOOP OVER ALL TEMPERATURE LEVELS. 
+***        --------------------------------------
+  
+          LEVELS : DO L=1,ILEV
+  
+***            DEFINE LOCAL SIGMA VALUES FOR CGCM.
+
+              IF (COORD.NE.'GALC' .AND. COORD(1:3).NE.'GEM')
+     +            CALL NIVCAL( SIGH, AH(L),BH(L),PRESS,1,NWDS,NWDS )
+
+***            GET THE TEMPERATURE INTO ARRAY G.
+  
+              CALL GETFLD2( 2, G, 'GRID'//'SUBA',TIME,TEMP,LETAT(L),
+     +                             IBUF,MAXW,OK ) 
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6010) NRECS
+                  CALL                             XIT(' Gshumh ',-8 ) 
+              END IF
+
+              CALL CMPLBL( 0,IBUF, 0,KBUF, OK ) 
+              IF (.NOT.OK) CALL                    XIT(' Gshumh ',-9 ) 
+  
+              IF (COORD.EQ.'GALC')                             THEN
+
+***                GET LN(PRES)
+
+                  CALL GETFLD2( 10, PRLNPT, 
+     +                         'GRID'//'SUBA',TIME,'LNPT',LETAT(L),
+     +                          IBUF,MAXW,OK )
+
+                  IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+                  IF (.NOT.OK) CALL                XIT(' Gshumh ',-10) 
+                      
+                  CALL CMPLBL( 0,IBUF, 0,KBUF, OK ) 
+                  IF (.NOT.OK) CALL                XIT(' Gshumh ',-11) 
+
+              END IF
+
+              MISSING_CONDITION : IF (L < FIRST .OR. L > LAST) THEN
+
+***                IF THERE ARE MISSING MOISTURE LEVELS AT
+***                THE TOP JUST SET RHUM AND SHUM TO ZERO.
+  
+                  DO  I=1,NWDS 
+                      F(I) = 0. 
+                      G(I) = 0.
+                  END DO
+  
+              ELSE 
+
+***                CALCULATE THE LOCAL PRESSURE.
+
+                  IF (COORD == 'GEM')                          THEN
+                      DO  I=1,NWDS
+                          PRES(I) = PTOIT+ETAH(L)*(PRESS(I)-PTOIT)
+                      END DO
+                  ELSE IF (COORD == 'GEM2' .OR.
+     +                     COORD == 'GEM3')                    THEN
+                      DO  I=1,NWDS
+                          PRES(I) = AH(L) + BH(L) * PRESS(I)
+                      END DO
+                  ELSE IF (COORD.NE.'GALC')                    THEN
+                      DO  I=1,NWDS
+                          PRES(I) = SIGH(I)*PRESS(I)
+                      END DO
+                  ELSE
+                      DO  I=1,NWDS
+                          PRES(I) = EXP( PRLNPT(I) )
+                      END DO
+                  END IF
+
+***                GET THE MODEL MOISTURE VARIABLE INTO ARRAY F, THEN
+***                CALCULATE SPEC. HUM. IN F, AND REL. HUM. IN G.
+  
+                  CALL GETFLD2( 1, F, 'GRID'//'SUBA',TIME,'ES',LETAT(L),
+     +                                 IBUF,MAXW,OK )
+
+                  IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+                  IF (.NOT.OK)                                 THEN 
+                      WRITE(6,6010) NRECS 
+                      CALL                         XIT(' Gshumh ',-12) 
+                  END IF
+
+                  CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+                  IF (.NOT.OK) CALL                XIT(' Gshumh ',-13) 
+  
+***               FOEW,FOEWA : FONCTIONS CALCULANT LA TENSION VAPEUR SATURANTE
+***                            A UNE TEMPERATURE DONNEE. FOEWA NE TIENT PAS
+***                            COMPTE DE LA PHASE GLACE.
+***               FOQFE :      FONCTION CALCULANT L'HUMIDITE SPECIFIQUE DE
+***                            LA TENSION DE VAPEUR ET DE LA PRESSION
+
+                  MOISTURE_VARIABLE : IF (MOIST.EQ.'T-TD')     THEN
+
+                      DO  I=1,NWDS
+
+                          T    = G(I)+ADD 
+                          ES   = F(I) 
+                          TD   = T-ES 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( TD )
+                          ELSE
+                              E = FOEWA( TD )
+                          END IF
+
+                          SHUM = FOQFE( E,PRES(I) )
+                          F(I )= SHUM 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( T )
+                          ELSE
+                              E = FOEWA( T )
+                          END IF
+
+                          SAT  = FOQFE( E,PRES(I) )
+                          G(I) = SHUM/SAT 
+
+                      END DO
+  
+                  ELSE IF (MOIST.EQ.'TD')                      THEN
+
+                      DO  I=1,NWDS
+
+                          T    = G(I)+ADD 
+                          ES   = F(I)+ADD 
+                          TD   = ES 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( TD )
+                          ELSE
+                              E = FOEWA( TD )
+                          END IF
+
+                          SHUM = FOQFE( E,PRES(I) )
+                          F(I )= SHUM 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( T )
+                          ELSE
+                              E = FOEWA( T )
+                          END IF
+
+                          SAT  = FOQFE( E,PRES(I) )
+                          G(I) = SHUM/SAT 
+
+                      END DO 
+  
+                  ELSE IF (MOIST.EQ.'RLNQ')                    THEN 
+
+                      DO  I=1,NWDS
+
+                          T    = G(I)+ADD 
+                          ES   = F(I) 
+                          SHUM = EXP( -1./ES )
+                          F(I )= SHUM 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( T )
+                          ELSE
+                              E = FOEWA( T )
+                          END IF
+
+                          SAT  = FOQFE( E,PRES(I) )
+                          G(I) = SHUM/SAT 
+
+                      END DO 
+  
+                  ELSE IF (MOIST.EQ.'Q')                       THEN 
+
+                      DO  I=1,NWDS
+
+                          T    = G(I)+ADD 
+                          ES   = F(I) 
+                          SHUM = ES 
+                          F(I )= SHUM 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( T )
+                          ELSE
+                              E = FOEWA( T )
+                          END IF
+
+                          SAT  = FOQFE( E,PRES(I) )
+                          G(I) = SHUM/SAT 
+
+                      END DO 
+  
+                  ELSE IF (MOIST.EQ.'SQRT')                    THEN 
+
+                      DO  I=1,NWDS
+
+                          T    = G(I)+ADD 
+                          ES   = F(I) 
+                          SHUM = ES**2
+                          F(I )= SHUM 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( T )
+                          ELSE
+                              E = FOEWA( T )
+                          END IF
+
+                          SAT  = FOQFE( E,PRES(I) )
+                          G(I) = SHUM/SAT 
+
+                      END DO 
+  
+                  ELSE IF (MOIST.EQ.'LNQ')                     THEN 
+
+                      DO  I=1,NWDS
+
+                          T    = G(I) 
+                          ES   = F(I) 
+                          SHUM = EXP(ES)
+                          F(I )= SHUM 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( T )
+                          ELSE
+                              E = FOEWA( T )
+                          END IF
+
+                          SAT  = FOQFE( E,PRES(I) )
+                          G(I) = SHUM/SAT 
+
+                      END DO 
+  
+                  ELSE IF (MOIST.EQ.'QHYB')                    THEN 
+
+                      QMIN   = 1.E-20
+                      FUNMIN = LOG( SHUMREF/QMIN )
+                      SMIN   = SHUMREF/(1.+FUNMIN) 
+
+                      DO  I=1,NWDS
+
+                          T    = G(I)+ADD 
+                          ES   = F(I) 
+
+                          IF (ES.GE.SHUMREF)                   THEN
+                              SHUM = ES 
+                          ELSE
+                              ES   = MAX(ES,SMIN) 
+                              SHUM = SHUMREF*EXP( 1.-(SHUMREF/ES) )
+                          END IF
+
+                          F(I )= SHUM 
+
+                          IF (SPWH)                            THEN
+                              E = FOEW( T )
+                          ELSE
+                              E = FOEWA( T )
+                          END IF
+
+                          SAT  = FOQFE( E,PRES(I) )
+                          G(I) = SHUM/SAT 
+
+                      END DO 
+  
+                  ELSE
+
+                      CALL                         XIT(' Gshumh ',-14) 
+
+                  END IF MOISTURE_VARIABLE
+
+              END IF MISSING_CONDITION
+  
+***            PUT SHUM ON FILE 8 AND RHUM ON FILE 9. 
+  
+                            IBUF(4) = LETAT(L) 
+              READ(CSHUM,4) IBUF(3)
+
+              CALL PUTFLD2( 8, F, IBUF,MAXW )
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+  
+              READ(CRHUM,4) IBUF(3)
+
+              CALL PUTFLD2( 9, G, IBUF,MAXW )
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+  
+              NRECS = NRECS+1
+  
+      END DO LEVELS
+  
+      GOTO 100 
+  
+***    E.O.F. ON INPUT.
+
+  911 CALL                                         XIT(' Gshumh ',-15)
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0010 FORMAT(BN,E10.0)
+
+ 5000 FORMAT(10X,2(1X,A4),4E10.0)
+
+ 6000 FORMAT(' Water and ice phases are considered.'/)
+ 6010 FORMAT('0 Gshumh transformed',I6, '  pairs.')
+ 6015 FORMAT(' Name = ',A4)
+ 6018 FORMAT('  (P.LID/P.REF)-ETA(TOP)=',E12.4)
+ 6020 FORMAT(' Coord = ',A4,', moisture variable = ',A4,
+     1       ', p.lid (PA)=',F10.3,', reference value=',1PE10.2)
+ 6021 FORMAT(' P.REF=',F10.3,', R=',F10.3/)
+
+      END 
+#     endif

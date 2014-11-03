@@ -1,0 +1,372 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      fpow  XIN XOUT INPUT OUTPUT [ -a VAL0 ]
+*
+*
+*     AUTHORS -R.Laprise AND J.D.Henderson, MAY 14 1983.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fpow.ptn,v 4.10 2014/09/25 20:20:47 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A CCC FILE ARITHMETIC PROGRAM WHICH...
+*
+*      ... PRODUCES FILE XOUT = XIN**POWER
+*          WHERE FILE XIN MUST CONTAIN REAL DATA OR
+*          POWER MUST BE ZERO OR ONE.
+*
+*      NOTE: 0**0 IS SET TO 1 RATHER THAN BE INDETERMINATE.
+*
+*
+*     INPUT PARAMETER...
+*
+*      POWER (a) = EXPONENT BY WHICH TO RAISE DATA VALUES (DEF=0.0)
+*
+*      READ( 5,5010 ) POWER
+*5010 FORMAT(10X,E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* FPOW           2.5
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 MORE THAN ONE SIZE IN XIN
+*       2 FOUND COMPLEX DATA AND POWER IN NOT A POSITIVE INTEGER
+*       3 FOUND NEAGATIVE DATA FOR UNEVEN OR FRACTIONAL EXPONENT
+*       4 ERROR ABORT READING INPUT
+*       5 ERROR ABORT READING XIN OR TOO MANY LEVELS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM fpow
+*    +            ( XIN,        XOUT,       INPUT,      OUTPUT,
+*    +       TAPE1= XIN, TAPE2= XOUT, TAPE5=INPUT,TAPE6=OUTPUT)
+ 
+*     $Log: fpow.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2008/04/25 21:38:39  dugas
+*     Permettre 20 caracteres pour les parametres reels sur la ligne de commande.
+*
+*     Revision 4.7  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.5  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.4  1998/07/03 02:26:24  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1997/09/26  17:38:52  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/04/01  18:14:16  armnrbd
+*     Verifier pour valeur negatives si EXP est non entier.
+*     Calcul recursif pour valeur entiere de EXP.
+*
+*     Revision 4.1  1996/02/29  20:44:21  armnrbd
+*     Imprimer plus d'informations lors du traitement du cas MAXW=0
+*     et aussi quand le programme se mets a ignorer les LABLs.
+*
+*     Revision 4.0  1994/11/17  14:20:03  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.3  94/05/09  11:42:37  armnrbd
+*     Corriger une declaration EXTERNAL.
+*     
+*     Revision 3.2  94/05/09  09:52:02  armnrbd
+*     Modifier le traitement de certains exposants entiers.
+*     Faire un petit menage dans le code.
+*     
+*     Revision 3.1  94/02/15  15:41:50  armnrbd
+*     Implanter l'utilisation de RPBLOC.
+*     
+*     Revision 3.0  93/10/13  13:55:59  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/10  17:18:48  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/10/13  15:57:12  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.2  92/03/17  11:29:24  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/10  15:57:05  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:42  armnrbd
+*     Initial revision
+*     
+
+***    MAY 14 1983 - R.LAPRISE **ET** NOV 27 1980 - J.D.HENDERSON 
+
+***    HISTORIQUES DES MODIFICATIONS:
+
+***    14 NOV 1990 - B.DUGAS, RPN : VERSION CY920.
+***    11 DEC 1990 - B.DUGAS, RPN : ALLOCATION DYNAMIQUE DE MEMOIRE.
+***    18 JAN 1991 - B.DUGAS, RPN : AJOUTER UN APPEL A GETLIGN.
+***    05 MAI 1991 -    "      "  : UTILISER GETSET2 PLUTOT QUE GETFLD2.
+
+*---------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      REAL        ZERO
+      REAL*8      APOW,POW
+      LOGICAL     OK,SPEC,RPBLOC
+      CHARACTER   TYPE*4,LIGNE*80,MESSAG*10
+      INTEGER     HEAD,JBUF(taille_entete),LEV(MAXLEV),NLEV,IPOW,
+     +            NLEVG,IER,I,NF,NR,MAXW,LEN,NWDS,JPAK,IO,MEM
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: G,H
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2,MACSPE,JCLPNT,
+     +            GETSET2,CMPLBL,PUTSET2,
+     +            XIT,GETLIGN,BURNF,RPBLOC
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        MESSAG / 'AUCUN' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/fpow.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      NR = 0
+
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          POW = 0.0
+
+          OK = RPBLOC( 'A',LIGNE )
+          IF (OK) READ(LIGNE,'(BN,E20.0)',ERR=900,IOSTAT=IO) POW
+
+      ELSE
+
+***        READ POWER FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 904
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=904,IOSTAT=IO) POW
+              CALL BURNF
+          END IF
+
+      END IF
+
+      WRITE(6,6000) POW
+      APOW = ABS( POW )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.LE.0) GOTO 905
+
+      WRITE(TYPE,0004) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      MEM = MAX( MAXW,NWDS*NLEV )
+      ALLOCATE( IBUF(LEN),G(MEM),H(MEM) )
+
+      IF (NR.NE.0) CALL PRTLAB( JBUF )
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CALL GETSET2( 1, G,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,G,H )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB( IBUF )
+              WRITE(6,6200) NR
+              CALL                                XIT('  Fpow  ', 0 ) 
+
+          END IF
+
+***        BY-PASS (I.E. STRIP) LABEL/CHARACTER RECORDS.
+
+          WRITE(TYPE,0004) IBUF(1) 
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR')              THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  WRITE(6,6400)
+                  MESSAG  = 'deja donne'
+              END IF
+              GOTO 100
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.LT.NLEVG)                      THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Fpow  ',-1 ) 
+          END IF
+
+***        STOP IF FIELD IS COMPLEX AND POW IS NOT A POSITIVE INTEGER.
+
+          SPEC = (TYPE.EQ.'SPEC' .OR.
+     +            TYPE.EQ.'FOUR' .OR.
+     +            TYPE.EQ.'CMPL')
+
+          IF ( SPEC           .AND.
+     +       ( POW  .NE. APOW .OR.
+     +         POW  .NE. DBLE(NINT(POW))))  CALL   XIT('  Fpow  ',-2 ) 
+ 
+***        SET H = G**APOW.
+
+          IF (APOW.NE.1.)                                      THEN
+              IF (APOW.EQ.0)                                   THEN
+                  DO  I=1,NWDS*NLEVG
+                      H(I) = 1.0
+                  END DO
+              ELSE IF (APOW.EQ.DBLE(NINT(APOW)))               THEN
+                  IPOW = APOW-1
+                  IF (SPEC)                                    THEN
+                      DO  I=1,NWDS*NLEVG,2
+                          H(I  ) = G(I)*G(I) - G(I+1)*G(I+1)
+                          H(I+1) =   2.*G(I) * G(I+1)
+                      END DO
+                  ELSE
+                      DO  I=1,NWDS*NLEVG
+                          H(I) = G(I)*G(I) 
+                      END DO
+                  END IF
+  200             CONTINUE
+                  IF (IPOW.GT.1)                               THEN
+                      IF (SPEC)                                THEN
+                          DO  I=1,NWDS*NLEVG,2
+                              H(I  ) = H(I)*G(I  ) - H(I+1)*G(I+1)
+                              H(I+1) = H(I)*G(I+1) + H(I+1)*G(I  )
+                          END DO
+                      ELSE
+                          DO  I=1,NWDS*NLEVG
+                              H(I) = H(I)*G(I) 
+                          END DO
+                      END IF
+                      IPOW = IPOW-1
+                      GOTO 200
+                  END IF
+              ELSE
+                  DO  I=1,NWDS*NLEVG
+                      IF (G(I).LT.0.0)                         THEN
+                          WRITE(6,6003) NR, MOD(I-1 ,NWDS)+1,
+     +                                         (I-1)/NLEVG+1,G(I)
+                          CALL                      XIT('  Fpow  ',-3 )
+                      END IF
+                  END DO
+                  DO  I=1,NWDS*NLEVG
+                      H(I) = G(I)**APOW
+                  END DO
+              END IF
+          ELSE
+              DO  I=1,NWDS*NLEVG
+                  H(I) = G(I)
+              END DO
+          END IF
+
+***        INVERT FOR NEGATIVE EXPONENTS.
+
+          IF (POW.LT.0.)                                       THEN
+              DO  I=1,NWDS*NLEVG
+                  IF (H(I).NE.0.) H(I) = 1.0/H(I)
+              END DO
+          END IF
+ 
+***        SAVE G ON FILE XOUT.
+
+          CALL PUTSET2( 2, H, LEV,NLEVG, IBUF,MAXW )
+
+      NR = NR+NLEVG
+      GOTO 100 
+
+***    E.O.F. ON UNIT #5.
+ 
+  900 IF (IO.NE.0) WRITE(6,6300) IO
+  904 CALL                                        XIT('  Fpow  ',-4 )
+
+***   E.O.F. ON UNIT #1.
+
+  905 IF (NLEV.GT.MAXLEV) WRITE(6,6005) NLEV,MAXLEV
+
+      CALL                                        XIT('  Fpow  ',-5 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+
+ 5010 FORMAT(10X,E10.0)
+
+ 6003 FORMAT(' After ',I5,' records POINT/LEVEL = ',2I7,
+     +       ', Value = ',E17.10)
+ 6005 FORMAT(' Nlev,maxlev= ',I5,1X,I5)
+
+ 6000 FORMAT(' Fpow will apply exponent=',E20.14)
+ 6200 FORMAT('0 Fpow read',I6,' records.')
+ 6300 FORMAT(' Fpow reports I/O error number ',I3,' on unit 5.')
+ 6400 FORMAT(' Fpow is stripping label/character records...')
+
+
+      END 
+#     endif

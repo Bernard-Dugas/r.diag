@@ -1,0 +1,465 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      bary  XIN DATAIN XOUT INPUT OUTPUT [-a VAL1 -kind VAL2 -ly VAL3]
+*
+*
+*     AUTHORS - S.TURNER, B.DENIS, S.BINER,  JUL 08/93.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/bary.ptn,v 4.8 2014/09/25 20:20:45 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      bary FAIT LA MOYENNE SELON Y
+*
+*
+*     PURPOSE
+*       - FAIRE LA MOYENNE ENTRE DEUX POINTS CONSECUTIFS EN Y POUR UN
+*         CHAMP QUI EST DANS XIN, ET DONT LES CARACTERISTIQUES SONT
+*         DANS DATAIN.
+*       - POSSIBILITE DE FAIRE INTERPOLATION CUBIQUE (4 POINTS)
+*         SAUF A LA FRONTIERE.
+*
+*
+*     INPUT FILES...
+*       XIN    = INPUT FILE CONTAINING REGIONAL DATA
+*       DATAIN = (OPTIONAL) MODEL INFORMATION FILE
+*
+*     OUTPUT FILE...
+*       XOUT = OUTPUT FILE
+*
+*
+*      PARAMETER...
+*
+*       OPT    (a)    = 0, POUR NE PAS COMBLER LES FRONTIERES
+*                       1, POUR COMBLER LES FRONTIERES AVEC
+*                          LA VALEUR LA PLUS PROCHE
+*       INTERP (kind) = 4, POUR INTERPOLATION CUBIQUE. NOTEZ
+*                          QUE TOUT AUTRE NOMBRE EST IGNORE
+*
+*       NJ     (ly)   = NOMBRE DE POINTS DE GRILLE SELON Y. LA VALEUR
+*                       PAR DEFAUT EST LA TAILLE DE LA GRILLE SELON Y+1.
+*                       SI LE FICHIER DATAIN EXISTE, CE PARAMETRE SERA
+*                       DEFINI PAR DATAIN(2).
+*
+*       READ(5,5010) OPT,INTERP
+*       READ(5,5011) NJ
+*5010   FORMAT(10X,I2,10X,I2)
+*5011   FORMAT(10X,I5)
+*
+*
+*      EXAMPLE OF INPUT CARD...
+*
+*BARY1     1 INTERPOLE 1
+*BARY2      121
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 READ ILLEGAL OPT VALUE
+*       2 PROBLEMS READING FILE XIN
+*       4 OPT=1 AND IBUF(6).EQ.NJ
+*       5 PROBLEMS READING THE FIRST DIRECTIVE CARD
+*       6 PROBLEMS READING THE SECOND DIRECTIVE CARD
+*       7 UNSUPPORTED GRID TYPE
+*       8 MORE THAN ONE GRID CONFIGURATION
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM bary
+*     PROGRAM BARY (XIN,         DATAIN,      XOUT,       
+*    1        TAPE1=XIN,   TAPE2=DATAIN,TAPE3=XOUT, 
+*    2        INPUT,OUTPUT,TAPE5=INPUT, TAPE6=OUTPUT)
+*     ---------------------------------------------------------
+*     $Log: bary.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2013/03/21 21:23:41  bernard
+*     Remplacer l'appel a GETZDES par un nouvel appel a GETZDES2.
+*
+*     Revision 4.6  2011/06/06 18:34:03  dugas
+*     - Modifier/securiser le traitement de DATAIN.
+*     - Ajouter support explicite de grilles CMC/RPN de type L,N,S et Z.
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.3  2004/11/12 16:33:59  dugas
+*     Ajouter le support des donnees de type SUBA.
+*
+*     Revision 4.2  1998/07/03 02:26:20  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:45  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1995/11/10  18:04:16  armnrbd
+*     Version initiale.
+*
+
+*      MAR 21/94 - G. BERGERON (CARTE DE CONTROLE POUR NJ
+*      NOV 04/93 - M. GIGUERE  (INTRODUIRE INTERPOLATION CUBIQUE)
+*      JUL 08/93 - S.TURNER, B.DENIS, S.BINER
+
+*-----------------------------------------------------------------------------  
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: N48 = 48, taille_jbuf = taille_entete + N48
+
+      LOGICAL     OK,SPEC
+      CHARACTER   LIGNE*80,PKTYP*2,GRTYP,RTYP
+      INTEGER     NJ,OPT,INTERP,IER,NFF,NR,IO,DGID,J
+      INTEGER     JBUF(taille_jbuf),LEN,NWDS,JPAK,MAXW,MAXD
+      INTEGER     IP1,IP2,IP3, ZIG1,ZIG2,ZIG3,ZIG4
+      REAL        DELTAI,DELTAF,PI,PJ,D60,DGRW,XG1,XG2,XG4
+      REAL        XLAT0,XLON0,DLAT0,DLON0,DATAIN(N48)
+      INTEGER     ILG,ILAT,OLAT, IG1,IG2,IG3,IG4
+ 
+      INTEGER,    ALLOCATABLE, DIMENSION(:)   :: IBUF
+      REAL,       ALLOCATABLE, DIMENSION(:)   :: F,G, VALX,VALY 
+      REAL,       ALLOCATABLE, DIMENSION(:,:) :: LATLON_WE,LATLON_SN,LONR,LATR
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
+      INTEGER,    EXTERNAL :: GETSIZ,GETHIGH,GDLL,EZGDEF_FMEM
+      EXTERNAL    JCLPNT,GETLIGN,BY0,BY1,GETZREF,DSET_IGS,
+     +            BURNF,GETFLD2,PUTFLD2,XIT
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/bary.ptn,v $'
+
+*---------------------------------------------------------------------- 
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 5
+      CALL JCLPNT( NFF, 1,2,3, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+      NR = 0 ; MAXD = N48
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NJ     = -1
+          OPT    = -1
+          INTERP =  0
+
+          OK = RPBLOC('LY',LIGNE)
+          IF (OK) READ( LIGNE, 05, END=901,ERR=901,IOSTAT=IO) NJ
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 05, END=903,ERR=903,IOSTAT=IO) OPT
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ( LIGNE, 05, END=903,ERR=903,IOSTAT=IO) INTERP 
+
+      ELSE
+
+***        LECTURE DE  L'OPTION ET DU TYPE INTERPOLATION.
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              GOTO 903
+
+          ELSE
+
+              READ( LIGNE, 5010, END=903,ERR=903,IOSTAT=IO)  OPT,INTERP
+
+              IF (OPT.EQ.1)                                    THEN
+
+***                DETERMINER LA VALEUR DE NJ SEULEMENT SI OPT=1.
+
+                  IF (NFF == 3)                                THEN
+
+***                    EN PREMIER, TENTER UNE LECTURE DE DATAIN ...
+
+                      CALL GETFLD2( 2, DATAIN, 'DATA',-1,' ',-1,
+     +                                          IBUF,MAXD,OK )
+
+                  ELSE
+                      OK = .FALSE.
+                  END IF
+
+                  IF (.NOT.OK)                                 THEN
+
+***                    ... SINON, LIRE UNE NOUVELLE CARTE DE DIRECTIVE.
+
+                      CALL GETLIGN( 5,LIGNE,80,OK )
+                      IF (.NOT.OK)                             THEN
+                          GOTO 901
+                      ELSE
+                          READ( LIGNE, 5011, 
+     +                          END=901,ERR=901,IOSTAT=IO ) NJ
+                      END IF
+                  ELSE
+                      NJ= INT( DATAIN(2)+.5 )
+                  END IF
+
+              END IF
+
+          END IF
+
+          CALL BURNF
+
+      END IF
+
+      IF (INTERP.NE.4)                                         THEN
+          IF (INTERP.NE.0) WRITE (6,6105)
+          INTERP = 0
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                          XIT('  Bary  ',-2 )
+
+      ILG = JBUF(5) ; ILAT = JBUF(6)
+
+      IF (NJ < 0) NJ = ILAT+1
+      OPT = MAX( OPT,0 )
+
+      IF (OPT == 0) OLAT = ILAT-1
+      IF (OPT == 1) OLAT = ILAT+1
+
+      WRITE (6,6100) OPT,INTERP 
+      WRITE (6,6110) OLAT
+
+      IF (OPT.NE.0 .AND. OPT.NE.1)
+     +    CALL                                     XIT('  Bary  ',-1 )
+
+      ALLOCATE( IBUF(LEN),F(NWDS),G(ILG*(ILAT+1)),
+     +          VALX(ILG),VALY(ILAT+1), STAT=IER )
+
+      IF (PKTYP == 'SQ')                                       THEN
+
+          GRTYP = GETHIC( 'GRTYP',JBUF )
+
+          IG1   = GETHIGH( 'IG1' ,JBUF ) 
+          IG2   = GETHIGH( 'IG2' ,JBUF ) 
+          IG3   = GETHIGH( 'IG3' ,JBUF ) 
+          IG4   = GETHIGH( 'IG4' ,JBUF ) 
+
+          IF      (GRTYP == 'L')                               THEN
+
+***            GENERIC LAT-LON GRID INPUT.
+
+              CALL CIGAXG( GRTYP, XLAT0,XLON0,DLAT0,DLON0,
+     +                            IG1  ,IG2  ,IG3  ,IG4 )
+
+              IF (OPT == 0) XLAT0 = XLAT0+DLAT0/2
+              IF (OPT == 1) XLAT0 = XLAT0-DLAT0/2
+
+
+              CALL CXGAIG( GRTYP, IG1  ,IG2  ,IG3  ,IG4  ,
+     +                            XLAT0,XLON0,DLAT0,DLON0 )
+
+          ELSE IF (GRTYP == 'N' .OR. GRTYP == 'S')             THEN
+
+***            POLAR-STEREOGRAPHIC GRID INPUT.
+
+              CALL CIGAXG( GRTYP, PI ,PJ ,D60,DGRW,
+     +                            IG1,IG2,IG3,IG4 )
+
+              IF (OPT == 0) PJ = PJ-0.5
+              IF (OPT == 1) PJ = PJ+0.5
+
+              CALL CXGAIG( GRTYP, IG1,IG2,IG3,IG4 ,
+     +                            PI ,PJ ,D60,DGRW )
+
+          ELSE IF (GRTYP == 'Z')                               THEN
+
+***            Z-GRID INPUT.
+
+              CALL GETZREF( 1, '>>',VALX )
+              CALL GETZREF( 1, '^^',VALY )
+
+              CALL GETZDES2( RTYP, ZIG1,ZIG2,ZIG3,ZIG4, ILG,ILAT )
+
+              IF (RTYP == 'N' .OR. RTYP == 'S')                THEN
+
+                  CALL CIGAXG( GRTYP,   PI,  PJ, D60,DGRW,
+     +                                ZIG1,ZIG2,ZIG3,ZIG4 )
+
+                  IF (OPT == 0)                                THEN
+                      PJ = PJ-0.5
+                  ELSE IF (OPT == 1)                           THEN
+                      PJ           = PJ+0.5
+                      DELTAF       = VALY( ILAT )-VALY( ILAT-1 )
+                      VALY(ILAT+1) = VALY( ILAT )+DELTAF
+                  END IF
+
+                  CALL CXGAIG( GRTYP, ZIG1,ZIG2,ZIG3,ZIG4 ,
+     +                                  PI,  PJ, D60,DGRW )
+
+              ELSE IF (RTYP == 'E')                            THEN
+
+                  IF      (OPT == 0)                               THEN
+                      DO  J=1,ILAT-1
+                          VALY(J) = 0.5 * (VALY(J)+VALY(J+1))
+                      END DO
+                  ELSE IF (OPT == 1)                               THEN
+                      DELTAF = VALY( ILAT )-VALY( ILAT-1 )
+                      DELTAI = VALY(   2  )-VALY(    1   )
+                      DO  J=ILAT,2,-1
+                          VALY(J)  = 0.5 * (VALY(J-1)+VALY(J))
+                      END DO
+                      VALY(ILAT+1) = VALY(ILAT) + DELTAF
+                      VALY(   1  ) = VALY( 2  ) - DELTAI
+                  END IF
+
+              ELSE
+
+                  WRITE(6,6007) GRTYP
+                  CALL                             XIT('  Bary  ',-7 )
+
+              END IF
+              
+              ALLOCATE( LONR(ILG,OLAT),LATR(ILG,OLAT),
+     +                  LATLON_WE(ILG,2),LATLON_SN(OLAT,2), STAT=IER )
+
+***            Get lat/lon values on center lines along X and
+***            along Y from the horizontal grid descriptors.
+
+              DGID = EZGDEF_FMEM( ILG, 1, 'Z',RTYP,
+     +                            ZIG1,ZIG2,ZIG3,ZIG4,
+     +                            VALX,VALY(OLAT/2) )
+              IER  = GDLL( DGID,LATLON_WE,LATLON_WE(1,2) )
+              DGID = EZGDEF_FMEM( 1,OLAT, 'Z',RTYP,
+     +                            ZIG1,ZIG2,ZIG3,ZIG4,
+     +                            VALX(ILG/2),VALY )
+              IER  = GDLL( DGID,LATLON_SN,LATLON_SN(1,2) )
+
+              LONR(:,OLAT/2) = LATLON_WE(:,1)
+              LATR(:,OLAT/2) = LATLON_WE(:,2)
+              LONR(ILG/2,:)  = LATLON_SN(:,1)
+              LATR(ILG/2,:)  = LATLON_SN(:,2)
+
+              IG3 = 0 ; IG4 = 0
+
+              CALL DSET_IGS( IG1,IG2, LONR,LATR,
+     +                       RTYP,ZIG1,ZIG2,ZIG3,ZIG4,
+     +                       ILG,OLAT )
+
+              DEALLOCATE( LONR,LATR,LATLON_WE,LATLON_SN, STAT=IER )
+
+              CALL PUTZREF( VALX,VALY, 'Z',RTYP,
+     +                      ZIG1,ZIG2,ZIG3,ZIG4,
+     +                      IG1,IG2,IG3, ILG,OLAT )
+          END IF
+
+      END IF
+
+***    READ THE NEXT GRID FROM FILE XIN.
+
+  100 CALL GETFLD2( 1, F, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (NR.EQ.0)                                     THEN
+                  CALL                             XIT('  Bary  ',-2 )
+              ELSE
+                  CALL PRTLAB( IBUF )
+                  WRITE(6,6120) NR
+                  CALL                             XIT('  Bary  ', 0 )
+              END IF
+          END IF                                                                
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+              CALL                                 XIT('  Bary  ',-8 )
+          END IF
+
+***        FAIRE LA MOYENNE SELON Y.
+
+          IF (OPT.EQ.0)                                        THEN
+
+              CALL BY0( F,G, IBUF(5),IBUF(6),IBUF(5),OLAT, INTERP )
+              IBUF(6) = OLAT
+
+          ELSE IF (OPT.EQ.1)                                   THEN
+
+***            SI L'OPTION EST 1, ON VERIFIE QUE LA DIMENSION
+***            EN y DU CHAMP DE DEPART EST BIEN INFERIEURE A
+***            CELLE SPECIFIEE DANS LE FICHIER DATAIN.
+
+              IF (IBUF(6).EQ.NJ)                               THEN
+ 
+                  CALL                            XIT('  Bary  ',-4 )
+ 
+              ELSE
+
+                  CALL BY1( F,G,
+     +                      IBUF(5),IBUF(6),IBUF(5),OLAT, INTERP )
+                  IBUF(6) = OLAT
+
+              END IF
+
+          END IF
+
+***        SAVE ON FILE XOUT.
+
+          IF (PKTYP == 'SQ')                                   THEN
+              CALL PUTHIGH( IG1, 'IG1' ,IBUF ) 
+              CALL PUTHIGH( IG2, 'IG2' ,IBUF ) 
+              CALL PUTHIGH( IG3, 'IG3' ,IBUF ) 
+              CALL PUTHIGH( IG4, 'IG4' ,IBUF ) 
+          END IF
+
+          CALL PUTFLD2( 3, G, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  901 CALL                                         XIT('  Bary  ',-6 )
+  903 CALL                                         XIT('  Bary  ',-5 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+
+ 5010 FORMAT(10X,I2,10X,I2)
+ 5011 FORMAT(10X,I5)
+
+ 6007 FORMAT(' Unsupported grid type ',A)
+
+ 6100 FORMAT('0 OPTION  =',I2,' INTERPOLATION =',I2)
+ 6105 FORMAT(1X,' INTERP different de 4, on redefinit INTERP: INTERP=0')
+ 6110 FORMAT(' Nombre de points de grille de sortie selon Y =',I5)
+ 6120 FORMAT('0  Bary  read ',I6,' records.')
+
+      END
+#     endif

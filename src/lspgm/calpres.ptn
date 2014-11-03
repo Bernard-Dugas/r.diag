@@ -1,0 +1,513 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      calpres   GPST GPSLNSP PHIS DATAIN LNPM LNPT LNPHT \ 
+*                INPUT OUTPUT [-a VAL1 -b VAL2]
+*
+*
+*     DESCRIPTION...
+*      calpres - CALCUL DU LOG DE LA PRESSION HYDROSTATIQUE SUR
+*                LES SURFACES DES NIVEAUX GAL-CHEN
+*
+*										
+*     AUTHORS  - G. Bergeron et C. Thurre, JUILLET 01/1993
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/calpres.ptn,v 4.10 2014/09/25 20:20:45 dugas Exp $
+*
+*
+*     BUT     -  CE PROGRAMME EVALUE LA PRESSION HYDROSTATIQUE (PI)
+*                CORRESPONDANTE POUR LES POINTS DE GRILLE SITUES SUR
+*                TOUS LES NIVEAUX GAL-CHEN.
+*										
+*                NOUS GENERONS DEUX ENSEMBLES DE RESULTATS:
+*                LE PREMIER EST ASSOCIE AUX NIVEAUX MOMENTUM (LNPM).
+*                LE SECOND EST ASSOCIE AUX NIVEAUX THERMODYNAMIQUE (LNPT).
+*                NOUS CALCULONS EGALEMENT LE LOG DE LA PRESSION AU NIVEAU
+*                DU TOIT (LNPHT).
+*
+*                POUR CHAQUE POINT DE GRILLE, NOUS INTEGRONS L'EQUATION
+*                HYDROSTATIQUE DLN(PI)=-(G/RT)DZ POUR OBTENIR LA VARIABLE
+*                LN(PI). LA PRESSSION HYDROSTATIQUE EST REPRESENTEE PAR PI
+*                ET DZ REPRESENTE LA HAUTEUR PHYSIQUE ENTRE DEUX NIVEAUX
+*                GAL-CHEN DE MEME TYPE. UNE FOIS QUE NOUS CONNAISSONS LN(PI)
+*                POUR LES NIVEAUX DE TYPE MOMENTUM, NOUS EFFECTUONS UNE
+*                MOYENNE VERTICALE POUR OBTENIR LES LN(PI) ASSOCIES A
+*                L'ENSEMBLE DES POINTS DE GRILLE SITUEES SUR LES NIVEAUX
+*                DE TYPE THERMODYNAMIQUE.
+*
+*
+*     FICHIERS D'ENTRES...
+*      GPST    = TEMPERATURE SUR DES NIVEAUX GAL-CHEN (NOM: 'TEMP' OU 'TT')
+*      GPSLNSP = LOG DE LA PRESSION DE SURFACE        (NOM: 'LNSP' OU 'LP')
+*      PHIS    = GEOPOTENTIEL AU SOL                  (NOM: 'PHIS' OU 'MT')
+*      DATAIN  = LISTE DES PARAMETRES PROPRES A L'INTEGRATION (optionel)
+*                                                     (NOM: 'DATA' OU 'XX')
+*
+*     FICHIERS DE SORTIES...
+*      LNPM    = LN(PI) CORRESPONDANT AUX POINTS DE GRILLE SITUES SUR DES
+*                NIVEAUX DE TYPE MOMENTUM             (NOM: 'LNPM' OU 'PM').
+*      LNPT    = LN(PI) CORRESPONDANT AUX POINTS DE GRILLE SITUES SUR DES
+*                NIVEAUX DE TYPE THERMODYNAMIQUE      (NOM: 'LNPT' OU 'PT')
+*      LNPHT   = LN(PI) CORRESPONDANT AUX POINTS DE GRILLE SITUES AU TOIT
+*                DU MODELE                            (NOM: 'LNPH' OU 'PH')
+*
+*     NOTONS QUE SI GPST CONTIENT DES 'TEMP', GPSLNSP, PHIS ET DATAIN
+*     DEVRONT CONTENIR DES 'LNSP', 'PHIS' ET 'DATA', RESPECTIVEMENT. 
+*     ET LES FICHIERS DE SORTIES RESPECTENT LA MEME CONVENTION. LES
+*     NOMS A DEUX CARACTERES SONT REQUIS POUR LES FICHIERS DE TYPE
+*     CMC/RPN 1989. ILS NE LE SONT PLUS DEPUIS LA VERSION 2000.
+*
+*
+*     PARAMETRES D'ENTREE (FACULTATIFS, SI LE FICHIER DATAIN EXISTE)...
+*
+*       HTOIT  (a) = HAUTEUR DU TOIT DU MODELE (OU BIEN DATAIN(8))
+*       TMOYEN (b) = TEMPERATURE MOYENNE UTILISEE POUR LE CALCUL
+*                    DES HAUTEURS PSEUDO-SIGMA (OU BIEN DATAIN(11))
+*
+*       READ(5,5011,END=901) HTOIT,TMOYEN
+*5011   FORMAT(10X,2F10.1)
+*
+*
+*     EXEMPLE DE CARTE D'ENTRE...
+*
+*CALPRES      38770.      250.
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEM READING THE DIRECTIVE CARD
+*       2 TOO MANY OR NOT ENOUGH VARTICAL LEVELS IN GPST
+*       3 UNABLE TO READ PHIS
+*       4 PHIS AND GPST NOT THE SAME SIZE
+*       5 UNABLE TO READ FIRST SET IN GPST
+*       6 FILE GPST CONTAINS ANOTHER VARIABLE THAN 'TEMP'
+*       7 VARIABLE NUMBER OF VERTICAL LEVELS IN GPST
+*       8 MORE THAN ONE SIZE IN GPST
+*       9 PROBLEMS WHILE READING GPSLNSP
+*      10 GPSLNSP AND GSPT NOT THE SAME SIZE
+*      11 UNABLE TO DETERMINE SIZE AND VERTICAL LEVELS OF GSPT
+*      12 GPST DOES NOT CONTAIN GRIDDED DATA
+*      13 GPST DOES NOT CONTAIN GAL-CHEN LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM calpres
+*     PROGRAM CALPRES (GPST,  GPSLNSP,    PHIS,   DATAIN,
+*    1                 LNPM,     LNPT,   LNPHT,    INPUT,   OUTPUT,
+*    2     TAPE11=GPST, TAPE12=GPSLNSP, TAPE13=PHIS,  TAPE14=DATA,
+*    3     TAPE15=LNPM, TAPE16=LNPT   ,TAPE17=LNPHT, TAPE6=OUTPUT)
+*     ---------------------------------------------------------------
+*     $Log: calpres.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:10:29  dugas
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2005/03/08 18:37:36  dugas
+*     Allocation minimale (>MAXW) pour le champs T (unite 11).
+*     Verification du type de donnees a l'entree (grilles).
+*
+*     Revision 4.6  2004/11/26 15:38:49  dugas
+*     Modifier le traitement des noms de variables.
+*     Ajouter le support des grilles de type SUBA.
+*     Mettre a jour la documentation automatique.
+*
+*     Revision 4.5  2000/04/07 18:30:20  armnrbd
+*     Corriger la definition des pointeurs P8,P9,PA,PB et PC.
+*
+*     Revision 4.4  1998/05/21 20:20:45  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.3  1997/09/26  17:38:45  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/05/30  18:04:36  armnrbd
+*     Conversions de noms/unites seulement pour fichiers SQ89.
+*
+*     Revision 4.1  1996/09/19  15:07:05  armnrbd
+*     Premiere version fonctionnelle.
+*
+*     Revision 4.0  1995/11/10  18:09:03  armnrbd
+*     Version initiale.
+*
+
+*     MAR 01/95 - M.GIGUERE de E CHAN (DECODE LEVELS IN 8-WORD LABEL)
+*                           ET CORRECTION DES DIMENSIONS VARIABLES.
+*     AUG 04/94 - M.GIGUERE  (COSMETIQUES)
+*     JUL 04/94 - G.BERGERON (NSTEP=-1 DANS GETFLD2 POUR DATA ET PHIS)
+*     MAR 28/94 - G.BERGERON (CARTE DE CONTROLE POUR PDAT)
+*     MAR 22/94 - M.GIGUERE (COSMETIQUES)
+*     MAR 15/94 - M.GIGUERE (ENLEVER LES DEPENDANCES SELON NIM, NJM ET NK.)
+*     DEC 21/93 - M.GIGUERE (ENLEVER LE CHAMP LNSP DE LNPM)
+*     NOV 29/93 - M.GIGUERE (AJOUT DU CALCUL DU LOG DE LA PRESSION AU TOIT
+*                            ET CORRECTION DU CALCUL DES NIVEAUX)
+*     JUL  1/93 - G.BERGERON et C.THURRE
+
+*-----------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+
+      LOGICAL     OK
+      CHARACTER   LIGNE*80,PKTYP*2
+      CHARACTER(4) NAME,STATUS,MDATA,CPHIS,CTEMP,CLNSP,TYPE
+      INTEGER     LEVT(MAXLEV),LEVM(MAXLEV+1),KBUF(HEAD),KPAK,
+     +            NFIL,MAXW,LEN,NSL,NSL1,IER,NPACK,K,LEVTH,UN,
+     +            NSETS,NWDS,IO,IBUF,IJ,NII,NJJ,NST,MEM,VKIND
+
+*     VARIABLES DE HAUTEUR
+
+***    ZGT  = HAUTEUR GAL-CHEN D'UN NIVEAU THERMODYNAMIQUE.
+***    ZGM  = HAUTEUR GAL-CHEN D'UN NIVEAU MOMENTUM.
+***    ZPT  = HAUTEUR PHYSIQUE D'UN NIVEAU THERMODYNAMIQUE.
+***    ZPM  = HAUTEUR PHYSIQUE D'UN NIVEAU MOMENTUM.
+***    DZPM = EPAISSEUR PHYSIQUE ENTRE DEUX NIVEAUX MOMENTUM.
+
+      REAL        ZGT(MAXLEV),ZGM(MAXLEV),PSIGMA(MAXLEV)
+      REAL        ZPT,ZPM,DZPM,T,LNPM,LNPT,PDAT,PHIS,H0,LNSP
+      REAL        LNPHT,DZHTM,HTOIT,TMOYEN,GRAV,RGAS,RCSTE
+      REAL        PSIGTOI,PSIGSOL
+
+      POINTER   ( P1,  ZPT(1) ),( P2,  ZPM(1) ),( P3,DZPM(1) )
+      POINTER   ( P4,    T(1) ),( P5, LNPM(1) ),( P6,LNPT(1) )
+      POINTER   ( P7, PDAT(11)),( P8, PHIS(1) ),( P9,LNSP(1) )
+      POINTER   ( PA,LNPHT(1) ),( PB,DZHTM(1) ),( PC,  H0(1) )
+      POINTER   ( PD, IBUF(8) )
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ2
+      CHARACTER,  EXTERNAL :: GETYP*4
+      EXTERNAL    JCLPNT,DEFCPHY,GETSTAT,GETFLD2,
+     +            CMPLBL,CALZ,DZHTMOM,GETSET2,XIT,
+     +            CALLNPM,CALLNPT,CALLNPH,PUTSET2,
+     +            GETLIGN,BURNF,LVCODE,CONVPR
+
+      DATA        OK / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/calpres.ptn,v $'
+
+*---------------------------------------------------------------------- 
+      NSETS = 0
+      UN    = 1
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFIL  = 9
+      CALL JCLPNT( NFIL, 11,12,13,14, 15,16,17, 5,6 )
+
+      PKTYP = GETYP( 11 )
+
+***    DETERMINER LA TAILLE DU PROBLEME ET
+***    ALLOUER LES CHAMPS DE TRAVAIL.
+
+      MAXW = GETSIZ2( 11, KBUF,LEN,NWDS,KPAK, LEVT,NSL )
+      IF (MAXW.EQ.0) GOTO 902
+
+      WRITE(TYPE ,0004) KBUF(1)
+      WRITE(CTEMP,0004) KBUF(4)
+
+      IF (CTEMP.EQ.'TT')                                       THEN
+          CLNSP = 'LP'
+          CPHIS = 'MT'
+          MDATA = 'XX'
+      ELSE IF (CTEMP.EQ.'TEMP')                                THEN
+          CLNSP = 'LNSP'
+          CPHIS = 'PHIS'
+          MDATA = 'DATA'
+      ELSE
+          CALL                                     XIT(' Calpres ',-5 )
+      END IF
+
+      IF (TYPE.NE.'GRID' .AND.
+     +    TYPE.NE.'SUBA' .AND.
+     +    TYPE.NE.'ZONL') CALL                     XIT(' Calpres ',-12)
+
+      CALL HPALLOC( P1, NWDS*(5*NSL+9)+MAX( MAXW,NWDS*NSL ),IER,0 )
+      CALL HPALLOC( PD, NWDS+ taille_entete +4 ,IER,0 )
+
+      P2 = LOC(   ZPT(NWDS* NSL   +1) )
+      P3 = LOC(   ZPM(NWDS*(NSL+1)+1) )
+      P4 = LOC(  DZPM(NWDS*(NSL+1)+1) )
+      P5 = LOC( T(MAX(NWDS* NSL,MAXW)+1) )
+      P6 = LOC(  LNPM(NWDS*(NSL+1)+1) )
+      P7 = LOC(  LNPT(NWDS* NSL   +1) )
+
+      P8 = LOC(  PDAT(NWDS+1) )
+      P9 = LOC(  PHIS(NWDS+1) )
+      PA = LOC(  LNSP(NWDS+1) )
+      PB = LOC( LNPHT(NWDS+1) )
+      PC = LOC( DZHTM(NWDS+1) )
+
+***    DEFINITION DES CONSTANTES ET PARAMETRES PHYSIQUES.
+
+      CALL DEFCPHY( GRAV,RGAS )
+
+***    LECTURE DES PARAMETRES PROPRES A L'INTEGRATION. D'ABORD,
+***    DETERMINER LE STATUT DU FICHIER ASSOCIE AU FICHIER DATAIN
+
+      CALL GETSTAT( 14,STATUS )
+
+      IF (STATUS.EQ.'OLD' .AND. NFIL.EQ.7)                     THEN
+
+***        LECTURE DE DATAIN
+
+          CALL GETFLD2( 14, PDAT, 'DATA',-1,MDATA,-1, IBUF,MAXW,OK )
+
+          HTOIT  = PDAT(8)
+          TMOYEN = PDAT(11)
+
+      END IF
+      IF (.NOT.OK)                                             THEN
+
+          IF (RPBLOC( ' ',LIGNE ))                             THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+              HTOIT  = 0
+              TMOYEN = 0
+
+              OK = RPBLOC('A',LIGNE)
+              IF (OK) READ( LIGNE,10,END=901,ERR=901,IOSTAT=IO ) HTOIT
+
+              OK = RPBLOC('B',LIGNE)
+              IF (OK) READ( LIGNE,10,END=901,ERR=901,IOSTAT=IO ) TMOYEN
+
+          ELSE
+
+              CALL GETLIGN( 5,LIGNE,80,OK )
+
+              IF (.NOT.OK)                                     THEN
+
+                  GOTO 901
+
+              ELSE
+
+                  READ( LIGNE,  5011,ERR=901,END=901,IOSTAT=IO)
+     +                          HTOIT,TMOYEN
+
+              END IF
+
+              CALL BURNF
+
+          END IF
+
+      END IF
+
+      WRITE(6,6009) HTOIT,TMOYEN
+
+***    LECTURE DE LA VALEUR DES NIVEAUX EN PSEUDO-SIGMA ASSOCIEE
+***    AUX NIVEAUX DE TYPE THERMODYNAMIQUE.
+
+      IF (NSL.LT.1 .OR. NSL.GT.MAXLEV) CALL        XIT(' Calpres ',-2 )
+
+      DO  K=1,NSL
+          CALL CONVPR( LEVT(K), PSIGMA(K), VKIND, -2 )
+          IF (VKIND.EQ.2) PSIGMA(K) = PSIGMA(K) * 0.001 
+      END DO
+
+      IF (PKTYP.EQ.'SQ' .AND. VKIND.NE.21) CALL    XIT(' Calpres ',-13)
+
+      RCSTE   = -1.*RGAS*TMOYEN/GRAV
+      PSIGTOI = EXP( HTOIT/RCSTE )
+      PSIGSOL =  1.
+
+***    CALCULE LA VALEUR DES NIVEAUX EN PSEUDO-SIGMA
+***    ASSOCIEE AUX NIVEAUX DE TYPE MOMENTUM.
+***    ZGM SERT DE VECTEUR DE TRAVAIL.
+
+          ZGM(1)    = SQRT( PSIGTOI*PSIGMA(1) )
+      DO  K=2,NSL-1
+          ZGM(K)    = SQRT( PSIGMA(K-1)*PSIGMA(K) )
+      END DO
+          ZGM(NSL ) = SQRT( PSIGMA(NSL-1)*PSIGSOL )
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          DO  K=1,NSL
+              CALL CONVPR( LEVM(K), ZGM(K), VKIND, +2 )
+          END DO
+          CALL CONVPR( LEVM(NSL+1), 1.0, VKIND, +2 )
+      ELSE
+          CALL LVCODE( LEVM,ZGM,NSL )
+          LEVM(NSL+1) = 1000
+      END IF
+
+***    CALCULE LA HAUTEUR GAL-CHEN ASSOCIEE AU NIVEAU PSEUDO-SIGMA
+***    DE TYPE THERMODYNAMIQUE.
+
+      DO  K=1,NSL
+          ZGT(K) = RCSTE*ALOG(PSIGMA(K))
+      END DO
+
+***    LECTURE DES VALEURS DE PHIS.
+
+      CALL GETFLD2( 13, PHIS ,TYPE,-1,CPHIS,-1, IBUF,MAXW,OK )
+      IF (.NOT.OK) CALL                            XIT(' Calpres ',-3 )
+
+      CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+      IF (.NOT.OK) CALL                            XIT(' Calpres ',-4 )
+
+***    CALCULONS 'H0', LA HAUTEUR DE LA TOPOGRAPHIE.
+
+      DO  IJ=1,NWDS
+          H0(IJ) = PHIS(IJ)/GRAV
+      END DO
+
+***    CALCULONS L'EPAISSEUR PHYSIQUE ENTRE DEUX
+***    NIVEAUX GAL-CHEN DE TYPE MOMENTUM.
+
+      NII = IBUF(5)
+      NJJ = IBUF(6)
+      CALL CALZ( H0,ZGT,ZGM,ZPT,ZPM,DZPM,NII,NJJ,NSL,NSL-1,NSL+1,HTOIT )
+
+***    CALCULONS L'EPAISSEUR ENTRE LE NIVEAU MOM.
+***    LE PLUS ELEVE ET LE TOIT (DZHTM).
+
+      CALL DZHTMOM( DZHTM,ZPM, NII,NJJ,NSL+1, HTOIT )
+
+***    BOUCLE SUR L'ENSEMBLE DES PAS DE TEMPS.
+
+ 100  CALL GETSET2( 11, T, LEVT,NSL1, IBUF,MAXW,OK )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6030) NSETS
+              IF (NSETS.EQ.0)                                  THEN
+                  CALL                             XIT(' Calpres ',-5 )
+              ELSE
+                  CALL                             XIT(' Calpres ', 0 )
+              END IF
+          END IF
+
+          WRITE( NAME,0004 ) IBUF(3)
+          IF (NAME.NE.CTEMP) CALL                  XIT(' Calpres ',-6 )
+
+          IF (NSL.NE.NSL1) CALL                    XIT(' Calpres ',-7 )
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( KBUF )
+              CALL                                 XIT(' Calpres ',-8 )
+          END IF
+
+          NPACK = IBUF(8)
+
+***        ACCOUNT FOR TEMPERATURES IN DEGREES C.
+
+          IF (CTEMP.EQ.'TT')                                   THEN
+              DO  IJ=1,NWDS*NSL
+                  T(IJ) = T(IJ)+273.15
+              END DO
+          END IF
+
+***        LECTURE DU LOG DE LA PRESSION DE
+***        SURFACE POUR CE PAS DE TEMPS CI.
+
+          NST = IBUF(2)
+          CALL GETFLD2( 12, LNSP, TYPE,NST,CLNSP,-1, IBUF,MAXW,OK )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+          IF (.NOT.OK) CALL                        XIT(' Calpres ',-9 )
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Calpres ',-10)
+
+***        CALCULE 'LNPM', I.E. LN(PI) SUR
+***        NIVEAU GAL-CHEN DE TYPE MOMENTUM.
+
+          CALL CALLNPM( T,DZPM,LNSP,LNPM, NII,NJJ,NSL,NSL+1,
+     +                  GRAV,RGAS )
+
+***        CALCULE 'LNPT', I.E. LN(PI) SUR
+***        NIVEAU GAL-CHEN DE TYPE THERMO.
+
+          CALL CALLNPT( LNPT,LNPM,T,ZPT,ZPM, NII,NJJ,NSL,NSL+1,
+     +                  GRAV,RGAS,HTOIT )
+
+***        CALCULE 'LNPH', I.E. LN(PI) (NIVEAU GAL-CHEN) AU TOIT.
+
+          CALL CALLNPH( LNPHT,T,DZHTM,LNPM, NII,NJJ,NSL,NSL+1,
+     +                  GRAV,RGAS )
+
+***        ECRIT 'LNPM' SUR 15 ET 'LNPT' SUR 16.
+
+                             NAME = 'LNPM'
+          IF (CTEMP.EQ.'TT') NAME = 'PM'
+
+          READ( NAME,0004 ) IBUF(3)
+                            IBUF(8) = NPACK
+
+          CALL PUTSET2( 15, LNPM,LEVM,NSL, IBUF,MAXW )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+
+                             NAME = 'LNPT'
+          IF (CTEMP.EQ.'TT') NAME = 'PT'
+
+          READ( NAME,0004 )  IBUF(3)
+
+          CALL PUTSET2( 16, LNPT,LEVT,NSL, IBUF,MAXW )
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+***        ECRIT 'LNPH' SUR 17
+
+                             NAME = 'LNPH'
+          IF (CTEMP.EQ.'TT') NAME = 'PH'
+
+          READ( NAME,0004 )  IBUF(3)
+
+          LEVTH = UN
+
+          CALL PUTSET2( 17, LNPHT,LEVTH,UN, IBUF,MAXW )
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+      NSETS = NSETS+1
+      GOTO 100
+
+  901 CALL                                         XIT(' Calpres ',-1 )
+  902 CALL                                         XIT(' Calpres ',-11)
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0010 FORMAT(BN,E10.0)
+
+ 5011 FORMAT(10X,2F10.1)
+
+ 6009 FORMAT(' Hauteur du toit du modele =',F10.1/
+     +       ' Temperature moyenne pour le calcul des',
+     +       ' hauteurs pseudo-sigma =',F10.1)
+
+ 6030 FORMAT('0',I5,' pas de temps convertis.')
+
+      END
+#     endif

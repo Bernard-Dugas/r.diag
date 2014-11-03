@@ -1,0 +1,381 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      laslon  X Y INPUT OUTPUT [ -kind VAL1 ]
+*
+*
+*     AUTEUR - B.Dugas, AVRIL 01/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/laslon.ptn,v 4.11 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      laslon  - ENLEVER OU AJOUTER UNE DERNIERE COLONNE
+*                A TOUTES LES GRILLE D'UN FICHIER. DANS
+*                UN FICHIER LATITUDE-LONGITUDE, CETTE
+*                COLONNE CORREPONDS A UNE LONGITUDE.
+*
+*
+*     FICHIER D'ENTREE...
+*      X = FICHIER CONTENANT DES GRILLES DE SURFACE.
+*
+*     FICHIER DE SORTIE...
+*      Y = FICHIER CONTENANT DES GRILLES DE SURFACE MODIFIEE.
+*
+*
+*     PARAMETRE D'ENTREE...
+*      KIND = 0, POUR ENLEVER LA DERNIERE LONGITUDE ET
+*             1, POUR AJOUTER UNE DERNIERE LONGITUDE DE TELLE SORTE QUE
+*                Y(DERNIERE LONGITUDE) = Y(PREMIERE LONGITUDE).
+*
+*      READ 5,5000 ) KIND
+*5000  FORMAT(10X,I5)
+*
+*
+*     EXEMPLE...
+*
+*LASLON       1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 DATA TYPE NOT GRID
+*       2 MORE THAN ONE SIZE IN X
+*       3 ERROR ABORT READING INPUT
+*       4 PREMATURE EOF ON X
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM laslon
+*    1                (      X,       Y,       INPUT,       OUTPUT,
+*    2                 TAPE1=X, TAPE2=Y, TAPE5=INPUT, TAPE6=OUTPUT)
+  
+*     $Log: laslon.ptn,v $
+*     Revision 4.11  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.10  2013/10/17 11:17:59  bernard
+*     Utiliser les macros longitude_maximale et latitude_maximale pour definir les parametres MAXI et MAXJ, respectivement.
+*
+*     Revision 4.9  2012/05/17 22:05:43  dugas
+*     Ignorer les grilles non supportees.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2006/03/13 22:39:22  dugas
+*     Faire en sorte que >> soit monotone croissant.
+*
+*     Revision 4.5  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.4  2003/05/23 20:44:50  dugas
+*     Ajouter le support des grilles de type Z
+*
+*     Revision 4.3  2002/02/02 00:38:01  dugas
+*     Generaliser les operations aux champs SUBA
+*
+*     Revision 4.2  1998/07/03 02:26:31  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:05  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:20:51  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/04/12  15:08:00  armnrbd
+*     Corriger un Bogue d'allocation de memoire si KIND=1.
+*     
+*     Revision 3.0  93/10/13  13:56:27  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/30  15:39:32  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/11/10  10:01:42  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/17  14:04:28  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/11  14:36:55  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     
+*     Revision 1.0  92/02/24  14:41:48  armnrbd
+*     Initial revision
+*     
+
+***   AVRIL   01/87 - B. DUGAS.
+  
+***   MODIFIE LE 20 MAI 1989 PAR B.DUGAS ...
+***   ...  UTILISER L'ALLOCATION DE MEMOIRE DYNAMIQUE.
+***   MODIFIE, NOVEMBRE 90 PAR B.DUGAS, RPN ...
+***   ...  VERSION CY920/IRIX F77.
+***   MODIFIE, JANVIER 91 PAR B.DUGAS, RPN ...
+***   ...  CALL TO GETLIGN ADDED.
+
+*---------------------------------------------------------------------  
+      IMPLICIT     none
+  
+      INTEGER, PARAMETER :: MAXI = longitude_maximale
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+
+      CHARACTER*4  TYPE
+      LOGICAL      OK,ERROR
+      CHARACTER    LIGNE*80,VALEUR*10,GRTYP,ZTYP
+      REAL         ZERO,ALON(MAXI),ALAT(MAXJ),DELTA
+      INTEGER      HEAD,JBUF(taille_entete),JPAK,OPERAT,LEN,LENOUT,
+     +             I,J,NWDI,NWDO,MAXW,NF,NR,LON,LAT,IJIN,IJOUT,
+     +             IO,IER,DIMX,DIMY,OIP1,OIP2,OIP3,
+     +             ZIG1,ZIG2,ZIG3,ZIG4,IP1,IP2,IP3
+   
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:), ALLOCATABLE :: X,Y
+
+      LOGICAL      RPBLOC
+      INTEGER      GETSIZ,GETHIGH
+      CHARACTER*4  GETYP,PKTYP,GETHIC
+      EXTERNAL     GETSIZ,RPBLOC,MACSPE,JCLPNT,GETLIGN,BURNF,
+     +             GETFLD2,XIT,PUTFLD2,CMPLBL,LBLCHK,GETHIC,
+     +             GETYP,GETHIGH,GETZREF,PUTZREF
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         OIP1,OIP2,OIP3 /
+     +              -1 , -1 , -1  /
+      DATA         GRTYP / ' ' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/laslon.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+  
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      NR=0
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OPERAT = 0
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=900,IOSTAT=IO) OPERAT
+
+      ELSE
+
+***        DETERMINE MODE OF OPERATION (=0 TO DELETE LAST LONGITUDE).
+    
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN  
+              GOTO 901
+          ELSE
+              READ ( LIGNE, 5000,ERR=900,END=901,IOSTAT=IO) OPERAT
+              CALL BURNF
+          END IF
+
+      END IF
+  
+      IF (OPERAT.NE.0) OPERAT = 1
+
+***    DETERMINE SIZES AND ...
+  
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDI,JPAK )
+      IF (MAXW.EQ.0) GOTO 902
+  
+      LON     = JBUF(5)
+      LAT     = JBUF(6)
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.NE.'GRID' .AND.
+     +    TYPE.NE.'SUBA')                                      THEN
+          WRITE(6,6010) TYPE
+          CALL SUIVANT( 1, JBUF,ERROR,OK ) ! Bypass non-supported arrays.
+          IF (.NOT.ERROR .AND. OK) GOTO 050
+          CALL                                     XIT(' Laslon ',-1 )
+      END IF
+
+      IF (OPERAT.EQ.1)                                         THEN
+          JBUF(5) = LON+1
+          CALL LBLCHK( LENOUT, NWDO,JPAK,JBUF )
+          LEN     = MAX( LEN,LENOUT )
+          NWDO    = NWDI+LAT
+          JBUF(5) = LON
+      ELSE
+          NWDO = NWDI-LAT
+      END IF
+
+      MAXW = LEN-HEAD
+
+***    ... ASK FOR THE REQUIERED AMOUNT OF MEMORY.
+  
+      ALLOCATE( IBUF(LEN),X(NWDI),Y(NWDO) )
+      
+***    READ THE NEXT FIELD.
+  
+ 100  CALL GETFLD2( 1, X, ' ',-1,' ',-1, IBUF,MAXW, OK ) 
+  
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( IBUF,X,Y )
+              IF (MAXW.EQ.0) GOTO 050
+              WRITE(6,6000) NR
+              CALL                                 XIT(' Laslon ', 0 )
+          END IF
+  
+***        CHECK TYPE AND SIZE CONSISTANCY.
+          
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+  
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+              CALL                                 XIT(' Laslon ',-2 )
+          END IF
+  
+          IF (PKTYP.EQ.'SQ')                                   THEN
+
+***            FOR SQI FILES, CHECK THE REAL DATA TYPE.
+                                    
+              GRTYP = GETHIC( 'GRTYP',IBUF )
+              IP1   = GETHIGH( 'IG1' ,IBUF )
+              IP2   = GETHIGH( 'IG2' ,IBUF )
+              IP3   = GETHIGH( 'IG3' ,IBUF )
+
+              IF (GRTYP.EQ. 'Z'  .AND.
+     +           (IP1  .NE. OIP1 .OR.
+     +            IP2  .NE. OIP2 .OR.
+     +            IP3  .NE. OIP3 )  )                          THEN
+
+***                RETRIEVE THE X- AND Y-DIRECTIONAL INFO.
+
+                  CALL GETZREF( 1, '>>',ALON )
+                  CALL GETZREF( 1, '^^',ALAT )
+
+                  CALL GETZDES( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, DIMX,DIMY )
+
+              END IF
+
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+  
+***        DO IT ...
+  
+          IF (OPERAT.EQ.0)                                     THEN
+  
+              DO  200 J=1,LAT
+                  IJIN  = (J-1)*LON
+                  IJOUT = (J-1)*(LON-1) 
+                  DO  I=1,LON-1
+                      Y(IJOUT+I) = X(IJIN+I)
+                  END DO
+  200         CONTINUE
+              IBUF(5) = LON-1 
+  
+          ELSE
+  
+              DELTA = ALON(2)-ALON(1)
+
+              DO  300 J=1,LAT
+                  IJIN  = (J-1)*LON
+                  IJOUT = (J-1)*(LON+1) 
+                  DO  I=1,LON
+                      Y(IJOUT+I) = X(IJIN+I)
+                  END DO
+                  Y(IJOUT+I) = X(IJIN+1)
+  300         CONTINUE
+              IBUF(5) = LON+1 
+  
+              ALON(IBUF(5)) = ALON(LON)+DELTA
+
+          END IF
+  
+          IF (GRTYP.EQ. 'Z'  .AND.
+     +       (IP1  .NE. OIP1 .OR.
+     +        IP2  .NE. OIP2 .OR.
+     +        IP3  .NE. OIP3 )  )                              THEN
+
+              OIP1 = IP1
+              OIP2 = IP2
+              OIP3 = IP3
+
+              CALL PUTZREF( ALON,ALAT, 'Z',
+     +                      ZTYP,ZIG1,ZIG2,ZIG3,ZIG4,
+     +                      IP1,IP2,IP3, IBUF(5),IBUF(6) )
+
+          END IF
+              
+***        SAVE THE RESULT ON FILE Y.
+  
+          CALL PUTFLD2( 2, Y, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+  
+      NR = NR+1
+      GOTO 100
+  
+***    PREMATURE E.O.F. ON UNIT#5.
+
+  900 IF (IO.NE.0) WRITE(6,6030) IO
+  901 CALL                                         XIT(' Laslon ',-3 )
+  
+***    PREMATURE E.O.F. ON UNIT#1.
+  
+  902 CALL                                         XIT(' Laslon ',-4 )
+  
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 5000 FORMAT(10X,I5)
+ 6000 FORMAT('0',I6,' Records processed.')
+
+ 6010 FORMAT(' Nop on kind = ',A4)
+ 6030 FORMAT(' Laslon reports I/O error number ',I4,' on unit 5.')
+
+      END 
+#     endif

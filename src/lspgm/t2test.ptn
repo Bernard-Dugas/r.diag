@@ -1,0 +1,1133 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      t2test  U1BAR VU1 V1BAR VV1 COV1 U2BAR VU2 V2BAR VV2 COV2 \ 
+*              DU DV AMP FVALUE KVALUE  DVALUE MASK INPUT OUTPUT \
+*                [ -a VAL1 -lx VAL2 -ly VAL3 -kind VAL4 ]
+*
+*
+*     DESCRIPTION...
+*      t2test  - CONDUCT A TWO SAMPLE HOTELLING'S T**2 STATISTICAL TEST.
+*
+*
+*     AUTHORS - F. Zwiers and F. Majaess, November 06 1987.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/t2test.ptn,v 4.15 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     PURPOSE - CONDUCT A TWO SAMPLE HOTELLING'S T**2 STATISTICAL TEST.
+*               UPON RETURN, THE PROGRAM REPORTS THE COMPUTED STATISTICAL
+*               VALUES IN FVALUE AS WELL AS RETURNING THE K-VALUE AND
+*               D-VALUE WHICH ARE RESPECTIVELY THE TRANSFORMED SIGNIFICANCE
+*               LEVELS AND THE ACCEPTANCE/REJECTION FLAG. ALSO RETURNED ARE
+*               THE DIFFERENCES EXPERIMENT-CONTROL OF THE TWO COMPONENTS IN
+*               DU AND DV AS WELL AS THE AMPLITUDE OF THE VECTOR DIFFERENCE
+*               IN AMP.
+*
+*     NOTE - 1) TESTS ARE  NOT PERFORMED  WHEN ONE  OR  MORE  OF  THE
+*               "POOLED VARIANCES" AND/OR THE CORRELATION COEFFICIENT
+*               IS APPROXIMATELY EQUAL TO  THE  NOISE INDUCED  BY THE
+*               PACKING ALGORITHM.
+*            2) INTERPRETATION OF VU1, VV1,  VU2  AND  VV2  FILES  IS
+*               CONTROLED BY INPUT PARAMETER IVAR.
+*            3) MASK FILE NEED NOT BE SPECIFIED IN THE PROGRAM CALLING
+*               SEQUENCE. (SEE OUTPUT FILES SECTION BELOW).
+*
+*
+*     INPUT FILES...
+*
+*      CONTROL DATASET STATISTICS FOR W1(U1,V1):
+*      =========================================
+*      U1BAR  = FIELDS OF MEANS OF THE 'U1-CONTROL' VARIABLE.
+*               SUM( U1(I) ) / N1, I=1,...,N1.
+*     (IF (IVAR.EQ.0) THEN
+*     (VU1    = THE VARIANCE OF U1. SUM( (U1(I)-U1BAR)**2 ) / N1, I=1,...,N1.
+*     (OTHERWISE,
+*     (VU1    = THE UNBIASED ESTIMATES OF THE STANDARD DEVIATIONS OF U1.
+*     (         SQRT( SUM( (U1(I)-U1BAR)**2 ) / (N1-1) ), I=1,...,N1.
+*      V1BAR  = SAME AS U1BAR EXCEPT FOR THE 'V1-CONTROL' VARIABLE.
+*      VV1    = SAME AS VU1   EXCEPT FOR THE 'V1-CONTROL' VARIABLE.
+*      COV1   = COVARIANCE OF THE CONTROL COMPONENTS.
+*               SUM( (U1(I)-U1BAR) * (V1(I)-V1BAR) ) / N1, I=1,...,N1.
+*
+*      EXPERIMENT DATASET STATISTICS FOR W2(U2,V2):
+*      ============================================
+*      U2BAR  = FIELDS OF MEANS OF THE 'U2-EXPERIMENT' VARIABLE.
+*               SUM( U2(J) ) / N2, J=1,...,N2.
+*     (IF (IVAR.EQ.0) THEN
+*     (VU2    = THE VARIANCE OF U2. SUM( (U2(J)-U2BAR)**2 ) / N2, J=1,...,N2.
+*     (OTHERWISE,
+*     (VU2    = THE UNBIASED ESTIMATES OF THE STANDARD DEVIATIONS OF U2.
+*     (         SQRT( SUM( (U2(J)-U2BAR)**2 ) / (N2-1) ), J=1,...,N2.
+*      V2BAR  = SAME AS U2BAR EXCEPT FOR THE 'V2-EXPERIMENT' VARIABLE.
+*      VV2    = SAME AS VU2   EXCEPT FOR THE 'V2-EXPERIMENT' VARIABLE.
+*      COV2   = COVARIANCE OF THE EXPERIMENT COMPONENTS.
+*               SUM( (U2(J)-U2BAR) * (V2(J)-V2BAR) ) / N2, J=1,...,N2.
+*
+*     OUTPUT FILES...
+*
+*      DU     = FIELDS OF MEAN DIFFERENCES FOR THE FIRST COMPONENTS
+*               COMPUTED AS DU=U2BAR-U1BAR.
+*      DV     = FIELDS OF MEAN DIFFERENCES FOR THE SECOND COMPONENTS
+*               COMPUTED AS DV=V2BAR-V1BAR.
+*      AMP    = FIELDS OF THE AMPLITUDE OF THE MEAN DIFFERENCES
+*               COMPUTED AS AMP=SQRT(DU**2+DV**2).
+*      FVALUE = FIELDS OF 'F-VALUES' STANDARDIZED DIFFERENCES OF MEANS.
+*               USING N1,N2, DU,DV, VU1,VU2, COV1,COV2 AS DEFINED ABOVE,
+*               THIS FIELD IS COMPUTED AS FOLLOWS:
+*
+*                 F     = FACT3*T22
+*
+*                 FACT3 = (N1+N2-2-1)/(2*(N1+N2-2))
+*
+*                 T22   = FACT2*SDIF/(1-ROP**2)
+*
+*                 FACT2 = N1*N2/(N1+N2)
+*
+*                 SDIF  = SU**2 - 2*ROP*SU*SV + SV**2
+*
+*                 SU    = DU/S1P
+*
+*                 SV    = DV/S2P
+*
+*                 S1P   = SQRT( S1P2 )
+*
+*                 S1P2  = FACT1*(N1*VU1+N2*VU2)
+*
+*                 FACT1 = 1/(N1+N2-2)
+*
+*                 S2P   = SQRT( S2P2 )
+*
+*                 S2P2  = FACT1*(N1*VV1+N2*VV2)
+*
+*                 ROP   = FACT1*(N1*COV1+N2*COV2)/(S1P*S2P)
+*
+*               T22 IS THE TWO SAMPLE HOTELLING'S T**2 STATISTICAL VALUE.
+*      KVALUE = FIELDS OF 'K-VALUES' OF TRANSFORMED SIGNIFICANCE LEVELS.
+*               COMPUTED AS K IN:
+*
+*                  P    = ALPHA/(5**(K-1))
+*
+*               OR K    = LOG (ALPHA/P)+1
+*                            5
+*
+*               WHICH INDICATES THAT THE OBSERVED STATISTIC IS
+*               SIGNIFICANT AT THE
+*
+*                 ALPHA/(5**(K-1))
+*
+*               SIGNIFICANCE LEVEL.
+*               THUS K=1 INDICATES THAT THE OBSERVED STATISTIC IS JUST
+*               SIGNIFICANT AT THE ALPHA SIGNIFICANCE LEVEL.
+*               IF PLOTTED WITH UNIT CONTOUR INTERVALS, SUCCESSIVE
+*               CONTOURS WILL ENCLOSE REGIONS WHERE LOCALLY IT IS
+*               FIVE TIMES AS UNLIKELY THAT VALUES OF THE OBSERVED
+*               STATISTICS ARE CONSISTENT WITH THE NULL HYPOTHESIS
+*               THAN IN REGIONS OUTSIDE THE NEXT LOWER CONTOUR.
+*      DVALUE = FIELDS OF 'D-VALUES' COMPUTED AS:
+*                          __
+*                         ! 0  IF THE NULL HYPOTHESIS IS ACCEPTED
+*                  D    = !
+*                         ! 1  IF THE NULL HYPOTHESIS IS REJECTED
+*                          --
+*      MASK   = FIELDS OF 'MASK-VALUES' COMPUTED AS:
+*                          __
+*                         ! 1  IF THE TEST WAS     CONDUCTED
+*                  MASK = !
+*                         ! 0  IF THE TEST WAS NOT CONDUCTED
+*                          --
+*
+*               THE MASK FILE IS NOT RETURNED IF THE PROGRAM IS NOT
+*               CALLED WITH OUTPUT FILE MASK.
+* 
+*
+*     INPUT PARAMETERS...
+*
+*      ALPHA (a)    = THE SIGNIFICANCE LEVEL OF THE TEST.
+*      N1    (lx)   = THE NUMBER OF OBSERVATIONS IN THE CONTROL    DATA SET,
+*      N2    (ly)   = THE NUMBER OF OBSERVATIONS IN THE EXPERIMENT DATA SET.
+*                     THE ACTUAL VALUE USED ARE RATHER NX AND NY DEFINED AS
+*                     N1 = INT( AN1 ) AND  N2 = INT( AN2 ).
+*                     IF N1 >= 1 , N2 >= 1 AND N1+N2 > 3 THEN
+*                        N1 AND N2 FROM THE INPUT CARD ARE USED IN THE
+*                        COMPUTATION OF THE NUMBER OF DEGREES OF FREEDOM.
+*                     OTHERWISE,
+*                        THE N1 AND N2 VALUES NEEDED IN THE COMPUTATION ARE
+*                        OBTAINED FROM THE RECORD LABELS OR FROM THE IP3
+*                        DESCRIPTORS, DEPENDING ON THE FILE TYPE OF THE
+*                        U1BAR AND U2BAR FILES.
+*      IVAR  (kind) = A FLAG USED TO DETERMINE THE CONTENTS OF
+*                     VU1, VV1, VU2 AND VV2 FILES. THAT IS :
+*                     IF (IVAR.EQ.0) THEN
+*                        THE VU1, VV1, VU2 AND VV2 FILES CONTAIN THE VARIANCES
+*                        OF U1,  V1,  U2 AND  V2, RESPECTIVELY.
+*                     OTHERWISE,
+*                        VU1, VV1, VU2 AND VV2 FILES CONTAIN THE UNBIASED
+*                        ESTIMATES  OF THE   STANDARD   DEVIATIONS   OF
+*                        U1,  V1,  U2 AND  V2 RESPECTIVELY.
+*
+*      READ(5,5010) ALPHA,AN1,AN2,IVAR
+*5010  FORMAT(10X,E10.0,2F5.0,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+**T2TEST.      5.E-2  10.   5.    1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 PREMATURE EOF ON STDIN
+*       2 PREMATURE EOF ON UNIT 11 AND/OR 16
+*       3 FIRST U1BAR AND U2BAR NOT THE SAME SIZE
+*       4 UNABLE TO READ FIRST U1BAR
+*       5 FOUND ILLEGAL N1 VALUE
+*       6 MISSING U2BAR ARRAY
+*       7 FOUND ILLEGAL N2 VALUE
+*       8 FOUND N1+N2 SMALLER OR EQUAL TO 3
+*       9 U1BAR AND/OR U2BAR NOT THE SAME SIZE AS FIRST U1BAR
+*      10 MISSING V1BAR ARRAY
+*      11 MISSING V2BAR ARRAY
+*      12 V1BAR AND/OR V2BAR NOT THE SAME SIZE AS FIRST U1BAR
+*      13 MISSING VU1 ARRAY
+*      14 VU1 NOT THE SAME SIZE AS U1BAR
+*      15 MISSING VU2 ARRAY
+*      16 VU2 NOT THE SAME SIZE AS U2BAR
+*      17 MISSING VV1 ARRAY
+*      18 VV1 NOT THE SAME SIZE AS U1BAR
+*      19 MISSING VV2 ARRAY
+*      20 VV2 NOT THE SAME SIZE AS U2BAR
+*      21 MISSING COV1 ARRAY
+*      22 COV1 NOT THE SAME SIZE AS U1BAR
+*      23 MISSING COV2 ARRAY
+*      24 COV2 NOT THE SAME SIZE AS U2BAR
+*
+*     NON-FATAL CONDITIONS...
+*     101 VERY SMALL DENOMINATORS IN T**2 STATISTIC
+*     102 NAMES OF MEAN FIELDS DO NOT MATCH
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM t2test
+*     PROGRAM T2TEST (U1BAR, VU1, V1BAR, VV1, COV1,
+*    1                U2BAR, VU2, V2BAR, VV2, COV2,
+*    2                DU, DV, AMP, FVALUE, KVALUE,  DVALUE,      MASK,
+*    3                                              INPUT,       OUTPUT,)
+*    4         TAPE11=U1BAR,  TAPE12=VU1,    TAPE13=V1BAR,  TAPE14=VV1, 
+*    5                                                      TAPE15=COV1,
+*    6         TAPE16=U2BAR,  TAPE17=VU2,    TAPE18=V2BAR,  TAPE19=VV2, 
+*    7                                                      TAPE20=COV2,
+*    8                        TAPE21=DU,     TAPE22=DV,     TAPE23=AMP, 
+*    9         TAPE24=FVALUE, TAPE25=KVALUE, TAPE26=DVALUE, TAPE27=MASK,
+*    A                                        TAPE5=INPUT, TAPE6=OUTPUT)
+*     ------------------------------------------------------------------
+*     $Log: t2test.ptn,v $
+*     Revision 4.15  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.14  2008/07/24 19:42:59  dugas
+*     Utiliser CALCEPS8 plutot que CALCEPS.
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.11  2005/04/14 18:15:49  dugas
+*     Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.10  2003/01/21 22:27:32  dugas
+*     Corriger l'allocation dynamique (le pointeurs P62 et P32
+*      etaient tous deux mals definis).
+*
+*     Revision 4.9  2001/03/17 21:41:37  armnrbd
+*     Remplacer GETPARI par GETHIGH.
+*
+*     Revision 4.8  2000/03/20 21:30:31  armnrbd
+*     Associer un seul champs par pointeur.
+*
+*     Revision 4.7  1998/10/19 19:48:40  armnrbd
+*     Modifier la documentation.
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.6  1998/07/03  02:26:42  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:48:03  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1997/02/17  03:39:11  armnrbd
+*     Corriger l'ecriture de certaines etiquettes.
+*
+*     Revision 4.3  1997/01/30  03:19:39  armnrbd
+*     Corriger la definition du MASK.
+*
+*     Revision 4.2  1996/12/12  19:59:51  armnrbd
+*     Ajouter le support de fichiers SQI.
+*
+*     Revision 4.1  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.0  1996/01/03  20:54:45  armnrbd
+*     Version initiale.
+*
+
+*     JUN 05/94 - B.DENIS  (MODIFY CALCULATION OF A1SCAL/A2SCAL)
+*     MAR 07/94 - F.MAJAESS (MODIFY DATA SECTION)
+*     AUG 04/92 - E. CHAN   (MODIFY EXTRACTION/CALCULATION OF XMAX, XMIN,       
+*                            AND XSCALE DUE TO IMPLEMENTATION OF NEW PACKER)    
+*     JAN 29/92 - E. CHAN   (CONVERT HOLLERITH LITERALS TO ASCII)               
+*     OCT 11/89 - F.MAJAESS (ALLOW SUPPLYING VARIANCE OR UNBIASED              
+*                            ESTIMATES OF THE STANDARD DEVIATION)             
+*     APR 29/88 - F. MAJAESS (REPLACE ABORT EXIT BY WARNING EXIT
+*                             FOR UNMATCHED MEAN FIELD NAMES) 
+*     NOV 06/87 - F. ZWIERS, F. MAJAESS
+
+*-------------------------------------------------------------------------------
+      IMPLICIT   none
+
+      INTEGER      HEAD
+      PARAMETER  ( HEAD = taille_entete )
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+      CHARACTER    LIGNE*80
+      REAL*8       D,F,K,P,WK1,WK2,WK3,ALPHA,T22
+      LOGICAL      OK,OK1,OK2,LN1N2,VAR,NRMLXIT,MASK,MATCH 
+      CHARACTER*4  CK,CD,CF,CDU,CDV,CAMP,CMASK,GRID,SUBA,ZONL,TYPE
+      REAL         A1,A2,DU,DV,AMP,S1P2,S2P2,S1P,S2P,FMASK,FN1,FN2,
+     +             AN1,AN2,FACT,FACT1,FACT2,FACT3,ROP,EPSA1(MAXLEV),
+     +             EPSA2(MAXLEV),EPS1P(MAXLEV),EPS2P(MAXLEV),SU,SV,
+     +             EPSROP(MAXLEV),EPS(MAXLEV),SDIF
+      INTEGER      IBUF1(HEAD),IBUF2(HEAD),FIRST1(HEAD),FIRST2(HEAD),
+     +             IBUF,IO,N1,N2,IVAR,KIND,NREC,IER,WHERE,I,
+     +             L,LEV(MAXLEV),NLEV,NLEV1,NLEV2,MAXW,NWDS,
+     +             CNT,NFF,LEN,LEN1,LEN2,MAXW1,MAXW2,
+     +             XPAK,YPAK,NDF,MEM,LEV2(MAXLEV)
+
+      POINTER    ( P1,     F(1) ),( P12,     D(1) )
+      POINTER                     ( P13,    A2(1) ),( P14,   T22(1) )
+      POINTER    ( P2,     K(1) ),( P22,     P(1) ),( P23,  S2P2(1) )
+      POINTER    ( P3,   WK1(1) ),( P32,    DU(1) )
+      POINTER    ( P4,   WK2(1) ),( P42,    DV(1) )
+      POINTER    ( P5,   WK3(1) ),( P52,   AMP(1) ),( P53,  S1P2(1) )
+      POINTER    ( P6, FMASK(1) ),( P62,    A1(1) )
+      POINTER    ( P7,  IBUF(8) )
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      LOGICAL      RPBLOC
+      REAL*8       CALCEPS8
+      CHARACTER    PKTYP*2,GETYP*4
+      INTEGER      GETSIZ2,GETHIGH 
+      EXTERNAL     JCLPNT,GETSTAT,GETLIGN,BURNF,HPALLOC,
+     +             PROBF,HTEST,GETSIZ2,WRITLEV2,RPBLOC,
+     +             GETSET2,CMPLBL,XIT,PUTSET2,CALCEPS8,
+     +             GETYP,GETHIGH
+
+      DATA         GRID  /'GRID'/,
+     +             SUBA  /'SUBA'/,
+     +             ZONL  /'ZONL'/,
+     +             CMASK /'MASK'/
+      DATA         CDU   /'DU'/,
+     +             CDV   /'DV'/,
+     +             CAMP  /'AMP'/
+      DATA         CK    /'K'/,
+     +             CF    /'F'/,
+     +             CD    /'D'/
+
+      DATA         NRMLXIT,MATCH,MASK / 2*.TRUE.,.FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/t2test.ptn,v $'
+
+*---------------------------------------------------------------------- 
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 19
+      CALL JCLPNT( NFF, 11,12,13,14,15,16,17,18,19,20,
+     +                  21,22,23,24,25,26,27, 5,6 )
+
+***    RETREIVE FILE TYPE.
+
+      PKTYP = GETYP( 11 )
+
+      CALL GETSTAT( 27,LIGNE )
+      IF (LIGNE.EQ.'OLD' .OR.
+     +    LIGNE.EQ.'NEW') MASK = .TRUE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ALPHA = 0.0
+          AN1   = 0.0
+          AN2   = 0.0
+          IVAR  =  0
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,0005, END=8000,ERR=8000,IOSTAT=IO ) IVAR
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) ALPHA
+
+          OK = RPBLOC('LX',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) AN1
+
+          OK = RPBLOC('LY',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) AN2
+
+      ELSE
+
+***        GET ALPHA, AN1, AN2 AND IVAR.
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 8000
+          ELSE
+              READ( LIGNE,5010, END=8000,ERR=8000,IOSTAT=IO )
+     +                          ALPHA,AN1,AN2,IVAR
+              CALL BURNF
+          END IF
+
+      END IF
+
+      WRITE(6,6020) ALPHA,AN1,AN2,IVAR 
+      N1 = INT( AN1+0.0001 )
+      N2 = INT( AN2+0.0001 )
+
+***    CHECK N1, N2 AND IVAR VALUES. 
+
+      IF ((N1.LT.1) .OR. (N2.LT.1) .OR. (N1+N2.LE.3))          THEN
+          LN1N2 =.TRUE.
+      ELSE
+          LN1N2 =.FALSE. 
+      END IF
+
+      IF (IVAR.EQ.0)                                           THEN 
+          VAR =.TRUE.
+      ELSE
+          VAR =.FALSE. 
+      END IF
+
+***    DETERMINE SIZES AND ALLOCATE MEMORY.
+
+      MAXW1 = GETSIZ2( 11, FIRST1,LEN1,NWDS,XPAK, LEV,NLEV )
+      MAXW2 = GETSIZ2( 16, FIRST2,LEN2,NWDS,YPAK, LEV2,NLEV2)
+
+      IF (MAXW1.LE.0 .OR. MAXW2.LE.0) GOTO 9000
+
+      LEN  = MAX( LEN1 ,LEN2  )
+      MAXW = MAX( MAXW1,MAXW2 )
+
+      WRITE( TYPE,0004) FIRST1(1)
+      IF (TYPE.EQ.'ZONL') NWDS = FIRST1(5)
+
+      CALL WRITLEV2( LEV,NLEV,FIRST1 )
+      CALL WRITLEV2( LEV2,NLEV2,FIRST2 )
+
+      CALL CMPLBL( 0,FIRST1, 0,FIRST2, OK )
+
+      CALL PRTLAB( FIRST1 ) ; CALL PRTLAB( FIRST2 )
+
+      IF (.NOT.OK        .OR.
+     +    NLEV .NE.NLEV2 .OR.
+     +   (TYPE .NE.GRID .AND.
+     +    TYPE .NE.SUBA .AND.
+     +    TYPE .NE.ZONL )   )                                  THEN
+          WRITE(6,6030) NLEV,NLEV2
+          CALL                                     XIT(' T2test ',-3 )
+      END IF
+
+      MEM = MAX( MAXW,NWDS*NLEV )
+
+      CALL HPALLOC( P1,5*MEM,IER,8 )
+      P2 = LOC(     F(MEM+1) )
+      P3 = LOC(     K(MEM+1) )
+      P4 = LOC(   WK1(MEM+1) )
+      P5 = LOC(   WK2(MEM+1) )      
+
+      P12 = P1
+      P13 = P1
+      P14 = P1
+      P22 = P2
+      P23 = P2
+      P32 = P3
+      P42 = P4
+      P52 = P5
+      P53 = P5
+
+      CALL HPALLOC( P6,MEM+LEN,IER,0 )
+      P62 = P6
+      P7  = LOC( FMASK(MEM+1) )
+*-----------------------------------------------------------------------
+
+      KIND = 1 
+      NREC = 0
+ 1000 CONTINUE
+
+***        OBTAIN U1BAR. 
+
+          CALL GETSET2( 11, A1, LEV,NLEV1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              IF (NREC.EQ.0)                                   THEN
+                  WRITE(6,6090) 
+                  CALL                             XIT(' T2test ',-4 ) 
+              END IF
+              WRITE(6,6030) NREC 
+              IF (NRMLXIT.AND.MATCH)                           THEN
+                  CALL                             XIT(' T2test ', 0 )
+              ELSE 
+                  IF (.NOT.NRMLXIT) CALL           XIT(' T2test ',-101)
+                  IF (.NOT.MATCH)   CALL           XIT(' T2test ',-102)
+              END IF
+          END IF
+
+***        CHECK SIZE CONSISTENCY.
+
+          DO  I=1, HEAD 
+              IBUF1(I) = IBUF(I) 
+          END DO
+
+          CALL CMPLBL( 0,IBUF1, 0,FIRST1, OK1 )
+
+          WRITE(TYPE,0004) IBUF1(1)
+
+          IF (LN1N2)                                           THEN
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  N1 = GETHIGH('IP3',IBUF1 )
+              ELSE
+                  N1 = IBUF1(2)
+              END IF
+          END IF
+          IF (N1.LT.1)                                         THEN 
+              WRITE(6,6050) N1
+              CALL                                 XIT(' T2test ',-5 ) 
+          END IF
+
+          FN1  = FLOAT( N1 ) 
+
+***        OBTAIN U2BAR. 
+
+          CALL GETSET2( 16, A2, LEV,NLEV2, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6100)
+              CALL                                 XIT(' T2test ',-6 )
+          END IF
+
+***        CHECK SIZE CONSISTENCY.
+
+          DO  I=1, HEAD
+              IBUF2(I) = IBUF(I) 
+          END DO
+
+          CALL CMPLBL( 0,IBUF2, 0,FIRST2, OK2 )
+
+          IF (LN1N2)                                           THEN
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  N2 = GETHIGH('IP3',IBUF2 )
+              ELSE
+                  N2 = IBUF2(2)
+              END IF
+          END IF
+          IF (N2.LT.1)                                         THEN 
+              WRITE(6,6060) N2
+              CALL                                 XIT(' T2test ',-7 ) 
+          END IF
+
+          FN2  = FLOAT( N2 ) 
+
+          IF (N1+N2.LE.3)                                      THEN
+              WRITE(6,6070) N1,N2 
+              CALL                                 XIT(' T2test ',-8 ) 
+          END IF
+
+          OK = (OK1 .AND. OK2)
+
+          IF (.NOT.OK       .OR.
+     +        NLEV1.NE.NLEV .OR.
+     +        NLEV2.NE.NLEV .OR.
+     +       (TYPE .NE.GRID .AND.
+     +        TYPE .NE.SUBA .AND.
+     +        TYPE .NE.ZONL )   )                              THEN
+              WRITE(6,6030) NREC
+              WRITE(6,6080)
+              WRITE(6,6081) NLEV1,NLEV2
+              CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF2 )
+              CALL                                 XIT(' T2test ',-9 )
+          END IF
+
+          IF (MATCH .AND. (IBUF1(3).NE.IBUF2(3)))              THEN 
+              MATCH =.FALSE.
+              WRITE(6,6210)
+          END IF
+
+          NDF   = N1+N2-3 
+          FACT1 = 1.0/(FN1+FN2-2.0) 
+          FACT2 = (FN1*FN2)/(FN1+FN2) 
+          FACT3 = (FN1+FN2-2.0-1.0)/(2.0*(FN1+FN2-2.0)) 
+
+***        COMPUTE DU. 
+
+          DO  I=1,NWDS*NLEV
+              DU(I) = A2(I)-A1(I) 
+          END DO
+
+***        OBTAIN V1BAR. 
+
+          CALL GETSET2( 13, A1, LEV,NLEV1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6110)
+              CALL                                 XIT(' T2test ',-10 )
+          END IF
+
+***        CHECK SIZE CONSISTENCY.
+
+          CALL CMPLBL( 0,IBUF, 0,IBUF1, OK1 )
+
+          DO  I=1, HEAD 
+              IBUF1(I) = IBUF(I) 
+          END DO
+
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        OBTAIN V2BAR. 
+
+          CALL GETSET2( 18, A2, LEV,NLEV2, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6120)
+              CALL                                 XIT(' T2test ',-11 )
+          END IF
+
+***        CHECK SIZE CONSISTENCY.
+
+          CALL CMPLBL( 0,IBUF, 0,IBUF2, OK2 )
+
+          DO  I=1, HEAD 
+              IBUF2(I) = IBUF(I) 
+          END DO
+
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          OK = (OK1 .AND. OK2)
+
+          IF (.NOT.OK       .OR.
+     +        NLEV1.NE.NLEV .OR.
+     +        NLEV2.NE.NLEV )                                  THEN
+              WRITE(6,6030) NREC
+              WRITE(6,6080)
+              WRITE(6,6081) NLEV1,NLEV2
+              CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF2 )
+              CALL                                 XIT(' T2test ',-12 )
+          END IF
+
+          IF (MATCH .AND. (IBUF1(3).NE.IBUF2(3)))              THEN 
+              MATCH =.FALSE.
+              WRITE(6,6210)
+          END IF
+
+***        COMPUTE DV. 
+
+          DO  I=1,NWDS*NLEV
+              DV(I) = A2(I)-A1(I) 
+          END DO
+
+***        IF N1.LE.1, SET VARIANCE OF U1 TO ZERO
+***        OTHERWISE,  READ IN THE VARIANCE/S.D. OF U1. 
+
+          IF (N1.GT.1)                                         THEN 
+
+              CALL GETSET2( 12, A1, LEV,NLEV1, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6130) 
+                  CALL                             XIT(' T2test ',-13 ) 
+              END IF
+
+***            CHECK SIZE CONSISTENCY.
+
+              CALL CMPLBL( 0,IBUF, 0,IBUF1, OK )
+
+              IF (.NOT.OK        .OR.
+     +            NLEV1.NE.NLEV  )                             THEN
+                  WRITE(6,6030) NREC
+                  WRITE(6,6080)
+                  WRITE(6,6081) NLEV1,NLEV
+                  CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT(' T2test ',-14 )
+              END IF
+
+              IF (.NOT.VAR)                                    THEN
+
+***            CONVERT UNBIASED STANDARD DEVIATION
+***            ESTIMATES TO VARIANCES.
+
+                  FACT = (FN1-1.0)/FN1
+                  DO  I=1,NWDS*NLEV 
+                      A1(I) = FACT*( A1(I)**2 )
+                  END DO
+
+              END IF
+
+              DO  L=1,NLEV
+                  WHERE = (L-1)*NWDS+1
+                  EPSA1(L) = CALCEPS8( A1(WHERE),NWDS,IBUF(8) )
+              END DO
+
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          ELSE
+
+***            SET A1 TO ZERO IF N1=1. 
+
+              DO  I=1,NWDS*NLEV
+                  A1(I) = 0.0
+              END DO
+              DO  L=1,NLEV
+                  EPSA1(L) = 1.0
+              END DO
+
+          END IF
+
+***        IF N2.LE.1, SET VARIANCE OF U2 TO ZERO
+***        OTHERWISE,  READ IN THE VARIANCE/S.D. OF U2. 
+
+          IF (N2.GT.1)                                         THEN 
+
+              CALL GETSET2( 17, A2, LEV,NLEV2, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6140) 
+                  CALL                             XIT(' T2test ',-15 ) 
+              END IF
+
+***            CHECK SIZE CONSISTENCY.
+
+              CALL CMPLBL( 0,IBUF, 0,IBUF2, OK )
+
+              IF (.NOT.OK        .OR.
+     +            NLEV2.NE.NLEV  )                             THEN
+                  WRITE(6,6030) NREC
+                  WRITE(6,6080)
+                  WRITE(6,6081) NLEV2,NLEV
+                  CALL PRTLAB( IBUF2 ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT(' T2Test ',-16 )
+              END IF
+
+              IF (.NOT.VAR)                                    THEN
+
+***            CONVERT UNBIASED STANDARD DEVIATION
+***            ESTIMATES TO VARIANCES.
+
+                  FACT = (FN2-1.0)/FN2
+                  DO  I=1,NWDS*NLEV 
+                      A2(I) = FACT*( A2(I)**2 )
+                  END DO
+
+              END IF
+
+              DO  L=1,NLEV
+                  WHERE = (L-1)*NWDS+1
+                  EPSA2(L) = CALCEPS8( A2(WHERE),NWDS,IBUF(8) )
+              END DO
+
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          ELSE
+
+***            SET A2 TO ZERO IF N2=1. 
+
+              DO  I=1,NWDS*NLEV
+                  A2(I) = 0.0
+              END DO
+              DO  L=1,NLEV
+                  EPSA2(L) = 1.0
+              END DO
+
+          END IF
+
+          DO  L=1,NLEV
+              EPS1P(L) = MIN( EPSA1(L),EPSA2(L) )
+          END DO
+
+***        COMPUTE S1P2. 
+
+          DO  I=1,NWDS*NLEV
+              S1P2(I) = FACT1*(FN1*A1(I)+FN2*A2(I)) 
+          END DO
+
+***        IF N1.GT.1, READ IN THE VARIANCE/S.D. OF V1. 
+
+          IF (N1.GT.1)                                         THEN 
+
+              CALL GETSET2( 14, A1, LEV,NLEV1, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6150) 
+                  CALL                             XIT(' T2test ',-17 ) 
+              END IF
+
+***            CHECK SIZE CONSISTENCY.
+
+              CALL CMPLBL( 0,IBUF, 0,IBUF1, OK )
+
+              IF (.NOT.OK        .OR.
+     +            NLEV1.NE.NLEV  )                             THEN
+                  WRITE(6,6030) NREC
+                  WRITE(6,6080)
+                  WRITE(6,6081) NLEV1,NLEV
+                  CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT(' T2test ',-18 )
+              END IF
+
+              IF (.NOT.VAR)                                    THEN
+
+***            CONVERT UNBIASED STANDARD DEVIATION
+***            ESTIMATES TO VARIANCES.
+
+                  FACT = (FN1-1.0)/FN1
+                  DO  I=1,NWDS*NLEV 
+                      A1(I) = FACT*( A1(I)**2 )
+                  END DO
+
+              END IF
+
+              DO  L=1,NLEV
+                  WHERE = (L-1)*NWDS+1
+                  EPSA1(L) = CALCEPS8( A1(WHERE),NWDS,IBUF(8) )
+              END DO
+
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          END IF
+
+***        IF N2.GT.1, READ IN THE VARIANCE/S.D. OF V2.
+
+          IF (N2.GT.1)                                         THEN 
+
+              CALL GETSET2( 19, A2, LEV,NLEV2, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6160) 
+                  CALL                             XIT(' T2test ',-19 ) 
+              END IF
+
+***            CHECK SIZE CONSISTENCY.
+
+              CALL CMPLBL( 0,IBUF, 0,IBUF2, OK )
+
+              IF (.NOT.OK        .OR.
+     +            NLEV2.NE.NLEV  )                             THEN
+                  WRITE(6,6030) NREC
+                  WRITE(6,6080)
+                  WRITE(6,6081) NLEV2,NLEV
+                  CALL PRTLAB( IBUF2 ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT(' T2Test ',-20 )
+              END IF
+
+              IF (.NOT.VAR)                                    THEN
+
+***            CONVERT UNBIASED STANDARD DEVIATION
+***            ESTIMATES TO VARIANCES.
+
+                  FACT = (FN2-1.0)/FN2
+                  DO  I=1,NWDS*NLEV 
+                      A2(I) = FACT*( A2(I)**2 )
+                  END DO
+
+              END IF
+
+              DO  L=1,NLEV
+                  WHERE = (L-1)*NWDS+1
+                  EPSA2(L) = CALCEPS8( A2(WHERE),NWDS,IBUF(8) )
+              END DO
+
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          END IF
+
+          DO  L=1,NLEV
+              EPS2P(L) = MIN( EPSA1(L),EPSA2(L) )
+          END DO
+
+***        COMPUTE S2P2. 
+
+          DO  I=1,NWDS*NLEV
+              S2P2(I) = FACT1*(FN1*A1(I)+FN2*A2(I)) 
+          END DO
+
+***        IF N1.GT.1, READ IN THE COVARIANCE OF (U1,V1). 
+
+          IF (N1.GT.1)                                         THEN 
+
+              CALL GETSET2( 15, A1, LEV,NLEV1, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6170) 
+                  CALL                             XIT(' T2test ',-21 ) 
+              END IF
+
+***            CHECK SIZE CONSISTENCY.
+
+              CALL CMPLBL( 0,IBUF, 0,IBUF1, OK )
+
+              IF (.NOT.OK        .OR.
+     +            NLEV1.NE.NLEV  )                             THEN
+                  WRITE(6,6030) NREC
+                  WRITE(6,6080)
+                  WRITE(6,6081) NLEV1,NLEV
+                  CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT(' T2test ',-22 )
+              END IF
+
+              DO  L=1,NLEV
+                  WHERE = (L-1)*NWDS+1
+                  EPSA1(L) = CALCEPS8( A1(WHERE),NWDS,IBUF(8) )
+              END DO
+
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          END IF
+
+***       IF N2.GT.1, READ IN THE COVARIANCE OF (U2,V2). 
+
+          IF (N2.GT.1)                                         THEN 
+
+              CALL GETSET2( 20, A2, LEV,NLEV2, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6180) 
+                  CALL                             XIT(' T2test ',-23 ) 
+              END IF
+
+***            CHECK SIZE CONSISTENCY.
+
+              CALL CMPLBL( 0,IBUF, 0,IBUF2, OK )
+
+              IF (.NOT.OK        .OR.
+     +            NLEV2.NE.NLEV  )                             THEN
+                  WRITE(6,6030) NREC
+                  WRITE(6,6080)
+                  WRITE(6,6081) NLEV2,NLEV
+                  CALL PRTLAB( IBUF2 ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT(' T2Test ',-24 )
+              END IF
+
+              DO  L=1,NLEV
+                  WHERE = (L-1)*NWDS+1
+                  EPSA2(L) = CALCEPS8( A2(WHERE),NWDS,IBUF(8) )
+              END DO
+
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          END IF
+
+          DO  L=1,NLEV
+              EPSROP(L) = MIN( EPSA1(L),EPSA2(L) ) 
+              EPS(L)    = MIN( EPS1P(L),EPS2P(L),EPSROP(L) ) 
+          END DO
+
+***        COMPUTE T22.
+
+          DO  L=1,NLEV
+
+              CNT = 0
+
+              DO  I=(L-1)*NWDS+1,L*NWDS
+
+                  IF (S1P2(I).LE.EPS1P(L) .OR.
+     +                S2P2(I).LE.EPS2P(L) )                    THEN 
+                      S1P = EPS1P(L)
+                      S2P = EPS2P(L)
+                      ROP = 1.0 
+                  ELSE
+                      S1P = SQRT( S1P2(I) ) 
+                      S2P = SQRT( S2P2(I) ) 
+                      ROP = FACT1*(FN1*A1(I)+FN2*A2(I))/(S1P*S2P)
+                      IF (ABS(ROP).LE.EPSROP(L))
+     +                ROP = 1.0 
+                  END IF
+
+                  IF (S1P          .LE.EPS1P(L) .OR.
+     +                S2P          .LE.EPS2P(L) .OR. 
+     +                (1.-ABS(ROP)).LE.EPS(L))                 THEN
+                      FMASK(I) = 0.0
+                      T22(I)   = 0.0
+                      CNT      = CNT+1 
+                  ELSE
+                      FMASK(I) = 1.0
+                      SU       = DU(I)/S1P
+                      SV       = DV(I)/S2P
+                      SDIF     = SU**2 - 2.0*ROP*SU*SV + SV**2
+                      T22(I)   = FACT2*SDIF/(1.0-(ROP**2))
+                  END IF
+
+              END DO
+
+              IF (CNT.GE.1)                                   THEN 
+                  NRMLXIT =.FALSE. 
+                  WRITE(6,6200) CNT,NWDS,LEV(L)
+              END IF
+
+          END DO
+
+***        COMPUTE F-STATISTICS (F-VALUES).
+
+          DO  I=1,NWDS*NLEV
+              F(I) = FACT3*T22(I) 
+          END DO
+
+***        MODIFY THE BUFFER USED TO WRITE OUT THE RESULTS.
+
+          DO  I=1, HEAD 
+              IBUF(I) = IBUF2(I)
+          END DO
+
+***        WRITE OUT DU. 
+
+          READ(CDU,0004) IBUF(3)
+          CALL PUTSET2( 21, DU, LEV,NLEV, IBUF,MAXW )
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        WRITE OUT DV. 
+
+          READ(CDV,0004) IBUF(3)
+          CALL PUTSET2( 22, DV, LEV,NLEV, IBUF,MAXW )
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        COMPUTE AMP. TRANSFER F TO DU.
+
+          DO  I=1,NWDS*NLEV
+              AMP(I) = SQRT( DU(I)**2 + DV(I)**2 )
+              DU(I)  = F(I)
+          END DO
+
+***        WRITE OUT AMP.
+
+          READ(CAMP,0004) IBUF(3)
+          CALL PUTSET2( 23, AMP, LEV,NLEV, IBUF,MAXW ) 
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        WRITE OUT F-VALUES. 
+
+          READ(CF,0004) IBUF(3)
+          CALL PUTSET2( 24, DU, LEV,NLEV, IBUF,MAXW ) 
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        COMPUTE THE P-VALUES AS 
+***    
+***                        P=PROB(FISHER-F > OBSERVED F) 
+***    
+***             IE, P = PROB THAT F IS GREATER THAN THE OBSERVED VALUE 
+***             ASSUMING THAT THE NULL HYPOTHESIS OF EQUALITY OF MEANS 
+***             IS CORRECT.
+
+          CALL PROBF( F, 2,NDF,NWDS*NLEV, P, WK1,WK2,WK3 )
+
+***        COMPUTE K AND D-VALUES. 
+
+          CALL HTEST( P, NWDS*NLEV, ALPHA,KIND, K,D )
+
+***        TRANSFER K,D TO DU,DV.
+
+          DO  I=1,NWDS*NLEV
+              DU(I) = K(I)
+              DV(I) = D(I)
+          END DO
+
+***        WRITE OUT K-VALUES. 
+
+          READ(CK,0004) IBUF(3)
+          CALL PUTSET2( 25, DU, LEV,NLEV, IBUF,MAXW ) 
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        WRITE OUT D-VALUES. 
+
+          READ(CD,0004) IBUF(3)
+          CALL PUTSET2( 26, DV, LEV,NLEV, IBUF,MAXW ) 
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        WRITE OUT MASK-VALUES IF REQUIRED.
+
+          IF (MASK)                                           THEN
+              READ(CMASK,0004) IBUF(3)
+              CALL PUTSET2( 27, FMASK, LEV,NLEV, IBUF,MAXW ) 
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+          END IF
+
+      NREC = NREC+NLEV
+      GOTO 1000 
+
+***    EOF ON UNIT #5. 
+
+ 8000 CONTINUE
+      WRITE(6,6070) 
+      CALL                                         XIT(' T2test ',-1 )
+
+***    EOF ON UNIT 11 and/OR 16.
+
+ 9000 CONTINUE
+      WRITE(6,6150) 
+      CALL                                         XIT(' T2test ',-2 )
+
+*-------------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 format(BN,I5)
+ 0010 format(BN,E10.0)
+
+ 5010 FORMAT(10X,E10.0,2F5.0,I5)
+
+ 6010 FORMAT(' The T2test card is missing.')
+ 6020 FORMAT(' T2test.   ',e10.1,2F5.0,I5)
+ 6030 FORMAT(' Conducted F-tests on ',I5,' pairs of mean fields.')
+ 6050 FORMAT(' Illegal # of control obs. N1= ',I10)
+ 6060 FORMAT(' Illegal # of experimental obs. N2= ',I10)
+ 6070 FORMAT(' Illegal # of data points, N1= ',I10,', N2= ',I10)
+ 6080 FORMAT(' Labels on mean fields do not match.')
+ 6081 FORMAT(' Number of levels found: ',2I5)
+ 6090 FORMAT(' File of means for variable U1 empty.')
+ 6100 FORMAT(' Unexpected eof on U2 means file.')
+ 6110 FORMAT(' Unexpected eof on V1 means file.')
+ 6120 FORMAT(' Unexpected eof on V2 means file.')
+ 6130 FORMAT(' Unexpected eof on U1 variance/s.d. file.')
+ 6140 FORMAT(' Unexpected eof on U2 variance/s.d. file.')
+ 6150 FORMAT(' Unexpected eof on V1 variance/s.d. file.')
+ 6160 FORMAT(' Unexpected eof on V2 variance/s.d. file.')
+ 6170 FORMAT(' Unexpected eof on (U1,V1) covariance file.')
+ 6180 FORMAT(' Unexpected eof on (U2,V2) covariance file.')
+ 6190 FORMAT(' Insufficient array size= ',I10,', for # pts= ',I10)
+ 6200 FORMAT(' Warning ',I6,' detected very small denominators',
+     +       ' out of ',I6,' computed T**2-values at level ',I6)
+ 6210 FORMAT(' ** Note - Unmatched mean field names **.')
+*-----------------------------------------------------------------------
+
+      END 
+#     endif

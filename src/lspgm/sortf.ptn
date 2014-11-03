@@ -1,0 +1,378 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      sortf  DATA CRITERIA RESULT INPUT OUTPUT [-kind VAL1]
+*
+*
+*     AUTHOR - B.Dugas,  31 juillet/95.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/sortf.ptn,v 4.11 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A PROGRAM WHICH...
+*
+*      ... SORTS THE TIMESETS IN FILE DATA ACCORDING TO THE VALUES
+*          FOUND IN THE FIRST RECORD OF FILE CRITERIA.
+*
+*      NOTES: 1) THERE SHOULD BE AT MANY TIMESETS IN FILE DATA AS THERE
+*                ARE POINTS IN THE RECORD READ FROM FILE CRITERIA
+*             2) WHEN KIND >= 0, THE PROGRAM WILL ALWAYS TRY TO ALLOCATE
+*                ENOUGH MEMORY TO FIT THE FULL FILE DATA.
+*             3) THE TIMESETS CAN CONTAIN MULTIPLE LEVELS AND/OR MULTIPLE
+*                VARIABLES. IN THIS LAST CASE, THE FILE IS SUPPOSED TO BE
+*                SORTED ACCORDING TO A TIMESTEP/NAME/LEVEL RULE,
+*                FROM MOST TO LEAST SIGNIFICANT
+*           
+*
+*     INPUT PARAMETER...
+*      ABS(KIND) =  0,1, TO SORT IN INCREASING ORDER (DEFAULT)
+*                   2,   TO SORT IN DECREASING ORDER
+*          KIND  <  0,   TO TREAT TIMESERIES RECORDS INDIVIDUALLY
+*                >= 0,   TO TREAT THE WHOLE FILES AS THE TIMESERIES
+*
+*      READ(5,5000) KIND
+*5000  FORMAT(10X,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* SORTF       0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 DATA TOO LARGE TO FIT IN MEMORY (KIND >= 0)
+*       2 UNABLE TO READ FIRST RECORD IN CRITERIA
+*       3 NOT ENOUGH SETS IN DATA FILE
+*       4 PREMATURE EOF ON STDIN FILE
+*       5 PREMATURE EOF ON FILE DATA
+*       6 PREMATURE EOF ON FILE CRITERIA
+*       7 MORE THAN ONE SIZE IN TIME SERIES
+*       8 TIME SERIES AND CRITERIA NOT THE SAME LENGTH
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM sortf
+*    1                   (DATA  ,       CRITERIA,       RESULT,
+*    2              TAPE1=DATA  , TAPE2=CRITERIA, TAPE3=RESULT, 
+*    3                    INPUT ,       OUTPUT  ,
+*    4              TAPE6=OUTPUT, TAPE6=OUTPUT  )
+ 
+*     $Log: sortf.ptn,v $
+*     Revision 4.11  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.10  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2004/11/12 16:29:12  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.6  2000/04/07 20:31:28  armnrbd
+*      Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.5  1998/07/03 02:26:36  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1997/09/26  17:39:17  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1996/02/13  19:13:57  armnrbd
+*     Modifier le criteres de consistance (exit-7) et
+*     en ajouter un autre (exit-8).
+*
+*     Revision 4.2  1995/11/20  13:24:19  armnrbd
+*     Ajouter le support des enregistrements de type series temporelles.
+*
+*     Revision 4.1  1995/08/01  17:42:34  armnrbd
+*     Permiere version fonctionelle.
+*
+*     Revision 4.0  1995/08/01  16:22:03  armnrbd
+*     Version initiale.
+*
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD    = taille_entete
+      INTEGER,    PARAMETER :: MAXLEV  = 999
+
+      LOGICAL     OK,TS
+      REAL        PR(MAXLEV)
+      CHARACTER   VALEUR*80,PKTYP*2
+      CHARACTER*4 TYPE,VARIAB(MAXLEV)
+      INTEGER     LEV(MAXLEV),IER,NSETS,
+     +            JPAK,JBUF(HEAD),KPAK,KBUF(HEAD),
+     +            WHERE,MAXW,MAXW1,MAXW2,LEN1,LEN2,LEN,
+     +            NR,I,L,NWDS,NF,NLEV,NVAR,NSIZE,IO,KIND,
+     +            HOLD,ILI,ILO,MSTEP(MAXLEV),NLEV0
+
+      INTEGER,    ALLOCATABLE :: IBUF(:),INDEX(:),TIME(:),STEP(:)
+      REAL,       ALLOCATABLE :: C(:),D(:)
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER,  EXTERNAL :: GETYP*4
+      INTEGER,    EXTERNAL :: GETSIZ,GETSIZ3,GETHIGH
+      EXTERNAL    MACSPE,JCLPNT,GETFLD2,GETMSET,GETSET2,
+     +            PUTHIGH,PUTSET2,PUTMSET,CSORTR,GETLIGN,BURNF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/sortf.ptn,v $'
+
+*-------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5
+      NR = 0
+
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+ 
+      PKTYP = GETYP( 1 )
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          KIND = 0
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ( VALEUR, 5,ERR=900,END=900,IOSTAT=IO ) KIND
+
+      ELSE
+
+***        READ KIND FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,VALEUR,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( VALEUR, 5010,ERR=900,END=900,IOSTAT=IO ) KIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    CHECK FOR THE TYPE OF TIMESERIES.
+
+      IF (KIND.LT.0)                                           THEN
+          TS   = .TRUE.
+          KIND = -KIND
+      ELSE
+          TS   = .FALSE.
+      END IF
+
+***    READ FIRST SET OF INFO BUFFERS.
+
+      MAXW2 = GETSIZ( 2, KBUF,LEN2,NSETS,KPAK )
+      IF (MAXW2.EQ.0) GOTO 902
+
+      CALL PRTLAB( KBUF )
+
+      MAXW1 = GETSIZ3( 1, JBUF,LEN1,NWDS,JPAK,  .TRUE.,
+     +                    LEV,NLEV, VARIAB,NVAR, MAXLEV )
+
+      IF (MAXW1.EQ.0      .OR.
+     +    NLEV .GT.MAXLEV .OR.
+     +    NVAR .GT.MAXLEV ) GOTO 901
+
+      CALL PRTLAB( JBUF )
+      WRITE(6,6200) (VARIAB(I),I=1,NVAR)
+
+      CALL WRITLEV2( LEV,NLEV,JBUF )
+
+***    CHECK SIZE OF FILE DATA.
+
+      MAXW = MAX( MAXW1,MAXW2 )
+      LEN  = MAX( LEN1, LEN2  )
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      NSIZE = NWDS*NLEV*NVAR
+
+***    ANOTHER CONSISTENCY CHECK.
+
+      IF (TS .AND. NSETS.NE.NWDS) CALL             XIT('  Sortf  ',-8 )
+
+***    ALLOCATE MEMORY.
+
+      ALLOCATE( C(NSETS),TIME(NSETS),STEP(NSETS),
+     +          INDEX(NSETS),IBUF(LEN), STAT=IER )
+
+      IF (TS)                                                  THEN
+          ALLOCATE( D(NSETS*NLEV*2), STAT=IER ) ! ALLOUER D 
+      ELSE
+          ALLOCATE( D(NSETS*NSIZE),  STAT=IER ) ! ALLOUER D POUR TOUT LIRE
+          IF (IER /= 0 .OR. loc( D ) == 0)                     THEN
+              WRITE(6,6001) NSETS*NSIZE
+              CALL                                 XIT('  Sortf  ',-1 ) 
+          END IF
+      END IF
+
+***    RETREIVE THE FIRST VALID RECORD OF CRITERIA.
+
+  100 CALL GETFLD2( 2, C, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+      IF (.NOT.OK) CALL                            XIT('  Sortf ',-2 ) 
+
+      WRITE(TYPE,4) IBUF(1)
+      IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 100
+
+***    INITIALIZE INDEX.
+
+      DO  I=1,NSETS
+          INDEX(I) = I
+      END DO
+
+***    SORT C FROM SMALLEST TO LARGEST.
+
+      CALL CSORTR( C,INDEX,NSETS )
+
+      IF (TS)                                                  THEN
+
+***        TREAT EACH RECORD INDIVIDUALLY.
+
+  200     CALL GETSET2( 1, D, LEV,NLEV0, IBUF,MAXW,OK )
+
+          IF (OK)                                              THEN
+
+              CALL CMPLBL( 0,IBUF, 0,JBUF, OK)
+
+              IF (.NOT.OK .OR. NLEV.NE.NLEV0)                  THEN
+                  CALL PRTLAB( JBUF ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT('  Sortf ',-7 )
+              END IF
+
+***            SORT RECORD.
+
+              DO  L=1,NLEV
+                  ILI = (L-1)*NSETS
+                  IF (KIND.LE.1)                               THEN
+                      ILO = ILI+NLEV*NSETS
+                      DO  I=1,NSETS
+                          D(ILO+I) = D(ILI+INDEX(I))
+                      END DO
+                  ELSE
+                      ILO = ILI+(NLEV+1)*NSETS+1
+                      DO  I=1,NSETS
+                         D(ILO-I) = D(ILI+INDEX(I))
+                      END DO
+                  END IF
+              END DO
+
+***            WRITE SORTED RECORD.
+
+              CALL PUTSET2( 3, D(NLEV*NSETS+1), LEV,NLEV0, IBUF,MAXW )
+
+***            READ NEXT RECORD.
+
+              NR = NR+NLEV0
+              GOTO 200
+
+          END IF
+
+          WRITE(6,6300) NR
+          IF (NR.EQ.0) CALL                        XIT('  Sortf ',-5 )
+
+      ELSE
+
+***        READ ALL THE NSETS SET FROM DATA.
+
+          DO  I=1,NSETS
+
+              WHERE = (I-1)*NSIZE+1
+
+              CALL GETMSET( 1, D(WHERE), LEV,   NLEV, MSTEP,.TRUE.,
+     +                                   VARIAB,NVAR, IBUF,MAXW,OK )
+
+              TIME(I) = IBUF(2) ; IF (PKTYP == 'SQ')
+     +        STEP(I) = GETHIGH('NPAS',IBUF )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6003) I
+                  CALL                             XIT('  Sortf ',-3 ) 
+              END IF
+
+          END DO
+
+          IF (KIND.GT.1)                                       THEN
+
+***            INVERT SORT ORDER.
+
+              DO  I=1,NSETS/2
+                  HOLD             = INDEX(I)
+                  INDEX(      I  ) = INDEX(NSETS-I+1)
+                  INDEX(NSETS-I+1) = HOLD
+              END DO
+
+          END IF
+
+***        SAVE SORTED DATA.
+
+          DO  I=1,NSETS
+
+              IBUF(2) = TIME(INDEX(I)) ; IF (PKTYP == 'SQ')
+     +        CALL PUTHIGH( STEP(INDEX(I)),'NPAS',IBUF )
+
+              WHERE = (INDEX(I)-1)*NSIZE+1
+              CALL PUTMSET( 3, D(WHERE), LEV,NLEV, 
+     +                      VARIAB,NVAR, IBUF,MAXW )
+
+          END DO
+
+      END IF
+ 
+      CALL                                         XIT('  Sortf ', 0 )
+
+***    E.O.F. ON UNITS #5, #1 OR #2
+
+  900 CALL                                         XIT('  Sortf ',-4 )
+  901 CALL                                         XIT('  Sortf ',-5 )
+  902 CALL                                         XIT('  Sortf ',-6 )
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+
+ 5010 FORMAT(10X,I15)
+
+ 6001 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' words.')
+ 6003 FORMAT(' Error reading set number ',I5/)
+
+ 6200 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6300 FORMAT(/' Sortf read ',I5,' time series.')
+
+      END
+#     endif

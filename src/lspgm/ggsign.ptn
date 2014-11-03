@@ -1,0 +1,354 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggsign  GGIN INPUT OUTPUT [ -t1 VAL1 -name VAL2 -lv1 VAL3 -label VAL4 ]
+*
+*
+*     DESCRIPTION...
+*      ggsign - MAPS THE SIGN (-,0,+) OF EACH POINT IN A GRID
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 24/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggsign.ptn,v 4.6 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     PURPOSE - DRAWS A COMPACT MAP OF THE SIGN OF EACH GRID POINT FOR EACH
+*               GRID IN A GCM DIAGNOSTIC OUTPUT FILE AS REQUESTED ON CARDS.
+*               GRIDS MUST BE REQUESTED IN THE SAME ORDER AS THEY OCCUR IN
+*               THE FILE SINCE THE FILE IS SCANNED ONLY ONCE.
+*
+*
+*     INPUT FILE...
+*      GGIN = FILE CONTAINING GRIDS TO BE MAPPED
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NSTEP (t1)  = Selected timestep.
+*      NAME        = Name of the variable to look for. If name='NEXT'
+*                    or blank, the next grid on the file is mapped.
+*      LEVEL (lv1) = Selected level.
+*
+*      LABEL       = Label (80 CHARACTERS MAXIMUM).
+*
+*      READ( 5,5010 ) NSTEP,NAME,LEVEL
+*      READ( 5,5012 ) LABEL
+*5010  FORMAT(10X,I10,1X,A4,I5)
+*5012  FORMAT(20A4)
+*
+*
+*     EXAMPLE OF INPUT LINES...
+*
+*   GGSIGN         6  PHI  500
+*         500 MB GEOPOTENTIAL
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 MISSING ARRAY ON FILE GGIN
+*       2 MISSING LABEL INFORMATION
+*       3 PREMATURE EOF ON GGIN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggsign
+*     PROGRAM GGSIGN (GGIN,       INPUT,       OUTPUT,
+*    1          TAPE1=GGIN, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ------------------------------------------------
+
+*     $Log: ggsign.ptn,v $
+*     Revision 4.6  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.5  2010/05/06 16:25:30  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2007/12/20 21:01:45  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.2  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.1  1998/05/20  14:38:48  armnrbd
+*     Corriger la sequence d'appel de GETFLD2.
+*
+*     Revision 4.0  1994/11/17  14:20:25  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:01:58  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:14  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  92/04/07  13:47:33  armnrbd
+*     Initial revision
+*     
+
+*     MAR 27/86 - J.HASLIP. (CHANGED FIRST CALL XIT-2 TO CALL XIT-1)
+*     NOV 24/83 - B.DUGAS.
+*     NOV 24/80 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXR       , HEAD
+      PARAMETER ( MAXR = 999 , HEAD = taille_entete )
+
+      REAL        RLV
+      LOGICAL     OK,RPIO
+      INTEGER*8 :: NT,MUN=-1,ZER=0
+      CHARACTER   SLEVEL*15,ALEVEL*10,ASTEP*20
+      CHARACTER   NAME*4, LIGNE*80,ROW(MAXR)
+      INTEGER     IER,NFF,IO,NSTEP,VKIND,
+     +            VKIND0,LEVEL,LX,LY,JR,N,I,J,K,
+     +            MAXW, LEN,NWDS,JPAK,JBUF(HEAD)
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: F
+
+      LOGICAL     RPBLOC
+      INTEGER*8   Y2KDAT8
+      CHARACTER*4 GETYP,PKTYP
+      INTEGER     GETKIND,GETSIZ
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,GETSIZ
+     +            XIT,GETBUF2,GETFLD2,CONVPR,
+     +            Y2KDAT8,RPBLOC,GETYP,GETKIND
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        RPIO / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggsign.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+      MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                      XIT(' Ggsign ',-1 )
+
+      ALLOCATE(  IBUF(HEAD+MAXW),F(MAXW) )
+
+      VKIND0 = GETKIND( )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          RPIO   = .TRUE.
+
+***        CHECK PARAMETRE BLOCK.
+
+          LEVEL =  0
+          NAME  = ' '    
+          NT    =  0
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NAME = LIGNE(1:4)
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ( LIGNE, 0020, ERR=900,END=900,IOSTAT=IO ) NT
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) ALEVEL = LIGNE
+
+          OK = RPBLOC('LABEL',LIGNE)
+          IF (.NOT.OK) LIGNE = ' '
+
+      END IF
+
+  100 CONTINUE
+
+          IF (.NOT.RPIO)                                       THEN
+
+***            READ A CARD IDENTIFYING THE FIELD TO BE CONTOURED.
+***            IF NAME='SKIP' JUST SKIP THE NEXT RECORD ON THE FILE.
+***            OTHERWISE READ THE LABEL TO BE PRINTED UNDER THE MAP.
+
+              CALL GETLIGN( 5, LIGNE,80,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  GOTO 900
+              ELSE
+                  READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO )
+     +                          NT,NAME,ALEVEL
+              END IF
+ 
+              IF (NAME.EQ.'STOP') CALL             XIT(' Ggsign ', 1 )
+
+              IF (NAME.EQ.'SKIP')                              THEN
+                  CALL GETBUF2( 1, IBUF,HEAD,OK )
+                  IF (.NOT.OK) GOTO 903
+                  GOTO 100
+              END IF
+
+              CALL GETLIGN( 5, LIGNE,80,OK )
+              IF (.NOT.OK) GOTO 902
+
+              CALL BURNF
+
+          END IF
+
+***        TAKE CARE OF (BLANK) DEFAULT VALUES
+***        AND DECODE/DECODE ALEVEL.
+
+          IF (NAME   == ' ') NAME   = 'NEXT'
+
+          IF (NT     == ZER) NT     =  -1
+          IF (NT     /= MUN) NT     = Y2KDAT8( NT )
+
+          CALL DATE2STAMP( NT,NSTEP )
+
+          IF (ALEVEL == ' ') ALEVEL = '-1'
+ 
+          IF (ALEVEL /= '-1')                                  THEN
+
+              IF (INDEX( ALEVEL,'.' ).EQ.0)                    THEN
+                  READ(ALEVEL,'(BN,I10)',ERR=900,IOSTAT=IO ) LEVEL
+                  CALL  CONVPR( LEVEL, RLV, VKIND, -2 )
+                  IF (PKTYP.EQ.'SQ') CALL CONVPR( LEVEL,RLV,VKIND, +2 )
+              ELSE
+                  READ(ALEVEL,'(BN,E10.0)',ERR=900,IOSTAT=IO ) RLV
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL  CONVPR( LEVEL, RLV, VKIND0, +2 )
+                  ELSE
+                      CALL LVCODE( LEVEL,RLV/1000.,1 )
+                  END IF
+                  VKIND = VKIND0
+              END IF
+
+              CALL GET_IP1_STRING( LEVEL,SLEVEL )
+              CALL LEADBLK( SLEVEL )
+
+              IF (VKIND0.NE.VKIND)             THEN
+                 DO  I=LEN_TRIM( SLEVEL ),1,-1
+                    IF (SLEVEL(I:I).EQ.' ') EXIT
+                 END DO
+                 IF (I.NE.0) SLEVEL = SLEVEL(1:I)
+              END IF
+
+          ELSE
+               LEVEL =   -1
+              SLEVEL = ' -1 '
+          END IF
+
+***        FIND THE REQUESTED FIELD.
+
+          CALL GETFLD2( 1, F, 'GRID'//'SUBA', NSTEP,NAME,LEVEL,
+     +                                        IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL PDATE( ASTEP,NSTEP )
+              WRITE(6,6020) TRIM( ASTEP ),NAME,TRIM( SLEVEL )
+              CALL                                 XIT(' Ggsign ',-1 )
+          END IF
+
+          LX = IBUF(5)
+          LY = IBUF(6)
+
+***        MAP THE FIELD AND GO BACK FOR THE NEXT ONE.
+
+          WRITE(6,6001)
+
+          DO 300 JR=1,LY
+              N = (LY-JR)*LX
+              DO 200 I=1,LX
+                  K = N+I
+                  IF (F(K).GT.0.)                              THEN
+
+                      ROW(I) = '+'
+
+                  ELSE IF (F(K).LT.0.)                         THEN
+
+                      ROW(I) = '-'
+
+                  ELSE
+
+                      ROW(I) = '0'
+
+                  END IF
+  200         CONTINUE
+              J = LY+1-JR
+              WRITE(6,6025) J,(ROW(I),I=1,LX)
+  300     CONTINUE
+
+          WRITE(6,6030)
+          CALL PRTLAB2('      ',IBUF)
+          WRITE(6,6040) LIGNE
+
+      IF (.NOT.RPIO) GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  900 CALL                                         XIT(' Ggsign ', 0 )
+  902 CALL                                         XIT(' Ggsign ',-2 )
+
+***    E.O.F. ON FILE GGIN.
+
+  903 CALL                                         XIT(' Ggsign ',-3 )
+*---------------------------------------------------------------------
+
+ 0005 FORMAT(BN,I5)
+ 0015 FORMAT(BN,I15)
+ 0020 FORMAT(BN,I20)
+
+ 5010 FORMAT(10X,I10,1X,A4, A5)
+ 5012 FORMAT(20A4)
+
+ 6001 FORMAT('1')
+ 6020 FORMAT('0..Eof looking for ',A,2X,A4,2X,A)
+ 6025 FORMAT(1X,I4,2X,500A1)
+ 6030 FORMAT(/12X,'STEP',7X,'NAME',1X,'LEVEL',2X,'LX',4X,
+     +       'LY',6X,'KHEM',3x,'NPACK')
+
+ 6040 FORMAT('+',48X,A80)
+
+      END
+#     endif

@@ -1,0 +1,574 @@
+#     if defined (AUTO_DOC)
+*
+*     * Auteur: B.Dugas, RPN - 21 fevier 1992.
+*
+*     * LSPGM contient l'historique des revisions a la version UNIX
+*     * (32 bits) de LSPGM. Cette version a d'abord ete codee pour
+*     * des ordinateurs de type MIPS, mais fonctionne egalement sur
+*     * des ordinateurs HP9000. Certaines extensions MP de Silicon
+*     * Graphics sont aussi supportees. Dans ce dernier cas, la
+*     * variable CPP "nombre_de_taches" peut determiner le nombre
+*     * maximal de processeurs allouables.
+*
+*     $Log: lspgm.ptn,v $
+*     Revision 4.3  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.2  2013/02/07 21:49:09  bernard
+*     Corriger la declaration de UNIT5.
+*
+*     Revision 4.1  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.0  1994/11/17 14:21:00  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.15  94/09/16  11:12:23  armnrbd
+*     AJouter la doc pour BETA,BETAO,DELHAT,DELHATO.
+*     
+*     Revision 3.14  94/07/14  14:05:08  14:05:08  armnrbd (Bernard Dugas)
+*     Ajouter les programmes MEMCOEF et MEMPRED.
+*     
+*     Revision 3.13  94/05/23  16:36:03  armnrbd
+*     Ajouter le programme LININT.
+*     
+*     Revision 3.12  94/05/20  22:53:04  armnrbd
+*     Ajouter le programme VERTINC.
+*     
+*     Revision 3.11  94/05/10  20:55:29  armnrbd
+*     Ajouter les programmes SINF et COSF.
+*     
+*     Revision 3.11  94/05/10  20:50:24  armnrbd
+*     Ajouter les programmes SINF et COSF.
+*     
+*     Revision 3.10  94/04/04  22:02:50  armnrbd
+*     Ajouter le programme TMMULT.
+*     
+*     Revision 3.9  94/03/31  16:05:09  armnrbd
+*     Remplacer EOF25 par le programme MEOFVEC.
+*     
+*     Revision 3.8  94/03/17  16:27:24  armnrbd
+*     Ajouter le programme MINVERS.
+*     
+*     Revision 3.7  94/02/16  16:37:51  armnrbd
+*     Corriger la description de SPDLAT et SPDLON.
+*     
+*     Revision 3.6  94/02/16  15:48:29  armnrbd
+*     Modifier la description de GGTRIG.
+*     
+*     Revision 3.5  94/02/14  09:38:42  armnrbd
+*     Ajouter les programmes SPDLAT et SPDLON.
+*     
+*     Revision 3.4  94/01/05  17:10:03  armnrbd
+*     Ajouter le programme GSAPTP
+*     
+*     Revision 3.3  93/11/02  13:12:45  armnrbd
+*     Ajouter declaration EXTERNAL pour la routine UP2LOW.
+*     
+*     Revision 3.2  93/11/02  11:56:18  armnrbd
+*     Petit BugFix au cas -DEF.
+*     
+*     Revision 3.1  93/11/02  10:48:57  armnrbd
+*     Ajouter les programmes ZXMAX et ENLEVE.
+*     Ajouter la cle DEF (pour defaut).
+*     
+*     Revision 3.0  93/10/13  13:56:30  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 2.15  93/08/19  15:20:16  armnrbd
+*     Modifications cosmetiques.
+*     
+*     Revision 2.14  93/08/04  16:09:50  armnrbd
+*     Ajouter les programmes GGALL et VSINTH.
+*     Enlever toutes references a COFALL.
+*     
+*     Revision 2.13  93/06/23  11:22:26  armnrbd
+*     Ajouter les programmes SPLDISS et XMPLOT.
+*     
+*     Revision 2.12  93/06/09  12:15:51  armnrbd
+*     Ajouter le programme XPLOT.
+*     Modifier le comportement du programme GPDPD.
+*     
+*     Revision 2.11  93/03/05  14:53:48  armnrbd
+*     Ajouter reference a ADJUST dans la section de documentation.
+*     
+*     Revision 2.10  93/02/17  16:36:27  armnrbd
+*     Modifier les programmes GGATIM et TIMAGG.
+*     Ajouter les programmes de la section G ainsi que
+*        les programmes GAUSSW,RANGRD et SMOOTH.
+*     
+*     Revision 2.9  92/12/24  12:04:46  armnrbd
+*     Mentionner que GGTRIG fonctionne egalement sur grilles hemispheriques.
+*     
+*     Revision 2.8  92/12/10  15:55:10  armnrbd
+*     Utiliser le nouveau CCARD (positionnel en premier).
+*     
+*     Revision 2.7  92/11/26  17:09:51  armnrbd
+*     Ajouter le programme SUBAREA.
+*     
+*     Revision 2.6  92/11/25  21:16:46  armnrbd
+*     Ajouter le programme TRANSPOS.
+*     
+*     Revision 2.5  92/11/25  17:20:20  armnrbd
+*     Remplacer l'appel a JCLPNT par un appel a  CCARD.
+*     
+*     Revision 2.4  92/11/25  16:11:24  armnrbd
+*     Ajouter les programmes DERTIM et INTTIM.
+*     
+*     Revision 2.3  92/11/21  13:03:01  armnrbd
+*     1) Ajouter les programmes EOF25 et EOFROT.
+*     2) Implanter support de PKTYP dans tous les modules.
+*     3) Quelques BugFix @ TIMCOV, ZXINT et ailleurs.
+*     4) Modifier les transformees spectrales en ne considerant
+*        que les polynomes d'une seule hemisphere.
+*     
+*     Revision 2.2  92/08/28  13:57:34  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 2.1  92/08/25  16:18:59  armnrbd
+*     Ajouter le programme GROPR.
+*     Modifier le comportement de GGDLAT.
+*     
+*     Revision 2.0  92/06/02  12:23:53  armnrbd
+*     Ajouter HOVPLOT/Enlever HDPLOT.
+*     Modifier CONVERT suite a des suggestions de Caya.
+*     Corriger la documentation de ZADLEV.
+*     
+*     Revision 1.91  92/05/06  11:15:56  armnrbd
+*     Paufiner le format 6100.
+*     
+*     Revision 1.9  92/05/06  11:05:16  armnrbd
+*     Terminer l'ajout de la documenttion automatique.
+*     Ajouter CONVERT,MKSYMM,MKUNSY,MIROIR,SPBLOW et SPSMOO
+*        dans la documentation generale.
+*     Mentionner la cle -help de secour specifique.
+*     
+*     Revision 1.8  92/04/30  13:52:10  armnrbd
+*     Ajouter GGDEV,GGDLAT,GGDLON,GGHEMS,GGVECPS,GGTRIG,GGLOB,MSLPR,
+*             GPDPD,PGEN,PSDIV,PSMLT,JOINER,TIMEGEN,BETAO.
+*     Le programme WINDOW devient WINDOWF.
+*     Continuer d'ajouter la documentation automatique.
+*     
+*     Revision 1.7  92/04/08  09:18:26  armnrbd
+*     Modifier documentation re: ggvecps.
+*     Ajouter les programmes BETA,DELHAT,DELHATO,GGSIGN,SIGNAG,GGVECPS,
+*                            LEVREV,RZONAVG,TIMCOV,ZONCOV,SELECT2,FMASK
+*     
+*     Revision 1.6  92/03/25  15:01:08  armnrbd
+*     Bug Fix a LSPGM.
+*     
+*     Revision 1.5  92/03/25  14:45:19  armnrbd
+*     Add IJLOOK,LPPRINT,RELABL,SLICE,ZXPRINT.
+*     Continuer a ajouter la documentation automatique.
+*     Ajouter la section "MORE INFO" a LSPGM.
+*     
+*     Revision 1.4  92/03/06  15:37:40  armnrbd
+*     Corriger LSPGM.
+*     
+*     Revision 1.3  92/03/06  15:20:49  armnrbd
+*     Inserer du code de documentation automatique dans LSPGM.
+*     
+*     Revision 1.2  92/03/06  14:57:44  armnrbd
+*     Modifier implantation de la doc automatique dans ZADLEV.PTN (1.1)
+*     
+*     Revision 1.1  92/03/04  21:21:08  armnrbd
+*     Modifier BINACH et CHABIN (1.0)
+*     Ajouter SPCALPA,SPDLSQ,SPNEGM,SPREIM,SPZXMLT,ZXDEV,
+*             ZXDEVP,ZXDLAT,ZXDLATF,ZXTRIG,ZXWAVE.
+*     
+*     Revision 1.0  92/02/27  14:04:48  armnrbd
+*     Initial revision
+*     
+#     endif
+#     if defined (MORE_INFO)
+*a
+*a  A) DISPLAY PROGRAMS - FIELDS OR FILE CONTENTS
+*a  ---------------------------------------------
+*a    
+*a  crvplot  - PLOT CURVES IN THE X - Y PLANE                             1 0 C
+*a  ggplot   - CREATES NCAR PLOT MAP AND/OR VECTOR FROM FILE(S)           3 0 C G
+*a  ggsign   - MAPS THE SIGN (-,0,+) OF EACH POINT IN A GRID              1 0 C
+*a  ggstat   - PRINTS STATISTICS FOR EACH FIELD IN A GRID FILE            9 0
+*a  hovplot  - HOVMULLER PLOT UTILITY FOR SLICES AT A SINGLE LEVEL        1 0 C
+*a  invntry  - LISTS FIELD LABELS FROM A DIAGNOSTICS FILE                 1 0
+*a  ijlook   - PRINTS TIME SERIES OF A WINDOW IN A GRID FILE              1 0 C
+*a  lpprint  - PRINTS VALUES OF ANY SIZE (MAX 361x180) GRID               1 0 C
+*a  splook   - PRINTS REQUESTED SPECTRAL FIELDS FROM A FILE               1 0 C
+*a  spplot   - PLOTS A 2-D SPECTRUM                                       1 0 C
+*a  spslope  - COMPUTES AND PRINTS SPECTRAL M OR N LOGARITHMIC SLOPE      1 0 C G
+*a  txtplot  - PLOT A TEXT RECORD ON A FRAME                              0 0 C
+*a  xmplot   - PLOT UP TO 50 1-D ZONAL/MERIDIONAL CROSS-SECTIONS          1 0 C
+*a  xplot    - PLOT A ONE DIMENSIONAL ARRAY                               1 0 C
+*a  zxint    - GRAPHS LAT AVG AND PRES INTEGRAL OF A CROSS-SECTION        1 0 C G
+*a  zxplot   - CREATES NCAR PLOT VECTORS  FOR ONE CROSS-SECTION           3 0 C
+*a  zxprint  - PRINTS VALUES OFF A CROSS SECTION FILE                     1 0 C
+*a    
+*b    
+*b  B) FILE, LABEL OR RECORD MANIPULATION PROGRAMS
+*b  ----------------------------------------------
+*b    
+*b  adjust   - ADJUST LABEL FORMAT BETWEEN (MTL) AND (TOR) FILES          1 1
+*b  binach   - CONVERT A STANDARD CCRN FILE TO CHARACTER FORM             1 1
+*b  chabin   - RESTORE A CHARACTER CODED FILE BACH TO BINARY              1 1
+*b  convert  - RPN STANDART TO/FROM CCC FORMAT FILES                      1 1 
+*b  enleve   - REMOVES SELECTED RECORDS FROM A FILE                       1 1 C
+*b  extrac   - ZEROES OUT ALL OF A GRID EXCEPT A WINDOW DEFINED IN INPUT  1 1 C
+*b  fsttri   - SORT A RPN-STANDART FILE ACCORDING TO IT'S INTERNAL KEYS   1 1 
+*b  joiner   - JOINS TWO FILES. RESULT HAS ASCENDING STEP NUMBERS.        2 1
+*b  joinup   - JOINS UP TO 8 FILES WITHOUT CHECKING.                      8 1
+*b  levrev   - REVERSES THE ORDER OF LEVELS OF EACH SET IN A FILE         1 1
+*b  mergef   - MERGES TWO FILES ORDERED BY TIMESTEP NUMBER                2 1
+*b  newnam   - CHANGES THE NAME IN IBUF(3) OF ALL RECORDS ON A FILE       1 1 C
+*b  relabl   - CHANGES COMPLETE LABELS IN A FILE                          1 1 C
+*b  repack   - REPACKS A FILE                                             1 1 C
+*b  rmlabl   - REMOVES ALL LABELS RECORDS IN A FILE                       1 1
+*b  select   - SELECTS UP TO FOUR REQUESTED VARIABLES FROM A FILE         1 4 C
+*b  select2  - SELECTS UP TO TWO VARIABLES, DOES TIME INTERVAL CHECK      1 2 C
+*b  timegen  - CREATES A FILE WITH VALUES SET EQUAL TO TIMESTEP NUMBER    1 1
+*b  windowf  - EXTRAC/EXPAND A WINDOW RECORD INTO ANOTHER                 1 1 C
+*b  xfind    - FIND A SUPERLABELED SET IN A FILE                          1 1 C
+*b  xsave    - SAVES A SUPERLABELED SET IN A FILE                         2 1 C
+*b  
+*c    
+*c  C) GENERAL COMPUTATION PROGRAMS
+*c  -------------------------------
+*c    
+*c  addf     - ADDS TWO FILES                                             2 1
+*c  cdiv     - COMPLEX DIVISION OF TWO FILES (X/0=0)                      2 1
+*c  cmlt     - COMPLEX MULTIPLICATION OF TWO FILES                        2 1
+*c  conjmlt  - COMPLEX CONJUGATE MULTIPLICATION OF TWO COMPLEX FILES      2 1
+*c  corpar   - COMPUTE CORIOLIS PARAMETER OF SAME TYPE/SIZE AS INPUT      1 1
+*c  cosf     - COMPUTE THE COSINUS VALUE OF A FILE (IN RADIANS)           1 1 C
+*c  dertim   - TIME DIFFERENCE BETWEEN SUCCESIVE TIME STEPS IN A FILE     1 1
+*c  diftim   - TIME DIFFERENCE OF TWO SETS IN THE SAME FILE               1 1 C
+*c  divf     - DIVIDES TWO REAL FILES  (X/0=0)                            2 1
+*c  dxdp     - VERTICAL PRESSURE DERIVATIVE OF A FILE                     1 1
+*c  expone   - EXPONENTIATES A REAL FILE                                  1 1
+*c  extrac   - ZEROES OUT ALL OF A GRID EXCEPT A WINDOW DEFINED IN INPUT  1 1 C
+*c  fpow     - RAISES A REAL FILE TO A GIVEN POWER                        1 1 C
+*c  gdiv     - DIVIDES EACH SET IN A FILE BY THE FIRST SET OF ANOTHER     1 1
+*c  globavg  - CALCULATES SURFACE MEAN OF FIELD                           1 1
+*c  gmlt     - MULTIPLIES EACH SET IN A FILE BY THE FIRST SET OF ANOTHER  1 1
+*c  grset    - CREATES A GRID DATA FIELD FOR TESTING PURPOSES             0 1 C G
+*c  inttim   - TIME SUMMATION BETWEEN SUCCESIVE TIME STEPS IN A FILE      1 1
+*c  kef      - COMPUTES KINETIC ENERGY  (U**2+V**2)/2.                    2 1
+*c  loge     - NATURAL LOG OF A REAL FILE                                 1 1
+*c  miroir   - BUILD GLOBAL ARRAYS FROM HEMISPHERIC ONES                  1 1 C
+*c  mksymm   - BUILD SYMMETRIC GLOBAL ARRAYS FROM HEMISPHERIC ONES        1 1
+*c  mkunsy   - BUILD ANTI-SYMMETRIC GLOBAL ARRAYS FROM HEMISPHERIC ONES   1 1
+*c  mltf     - MULTIPLIES TWO REAL FILES                                  2 1
+*c  pgen     - CREATES A FILE OF SAME TYPE AS INPUT WITH PRESSURE VALUES  1 1
+*c  psdiv    - DIVIDES A FILE OF REAL SETS BY A ONE-LEVEL REAL FILE       2 1
+*c  psmlt    - MULTIPLIES A FILE OF REAL SETS BY A ONE-LEVEL REAL FILE    2 1
+*c  rgopr    - MULTIPLIES A MULTI0LEVEL FILE BY RGAS/PRESSURE             1 1
+*c  sinf     - COMPUTE THE SINUS VALUE OF A FILE (IN RADIANS)             1 1 C
+*c  slice    - SELECTS ZONAL OR MERIDIONAL SECTIONS FROM FILE OF SETS     1 1
+*c  spconj   - COMPLEX CONJUGATE OF A COMPLEX FILE                        1 1
+*c  sqroot   - TAKES THE SQUARE ROOT OF AN ARRAY (NO TYPE CHECK)          1 1
+*c  square   - SQUARES GRID FIELDS                                        1 1
+*c  subf     - SUBTRACTS TWO FILES                                        2 1
+*c  timavg   - COMPUTES MULTI-LEVEL TIME AVERAGE OF A FILE                1 1
+*c  timdev   - COMPUTES TIME DEVIATIONS OF A FILE                         2 1
+*c  vertinc  - VERTICAL PRESSURE INCREMENTS (DELTA P) LEVEL BY LEVEL      1 1
+*c  vpint    - VERTICAL PRESSURE INTEGRAL OF A FILE                       1 1
+*c  vpintl   - VERTICAL PRESSURE INTEGRAL OF A FILE LEVEL BY LEVEL        1 1
+*c  vpintv   - VERTICAL INTEGRAL WHITH VARIABLE BOUNDARYS                 2 1 C G
+*c  vsint    - VERTICAL SIGMA INTEGRAL OF A FILE (FULL OR HALF LEVELS)    1 1 C
+*c  vsinth   - VERTICAL SIGMA INTEGRAL FOR HYBRID COORDINATE LEVELS       1 1 C
+*c  xlin     - LINEAR OPERATION ON ONE FILE     Y=A*X+B                   1 1 C
+*c  xylin    - LINEAR OPERATION ON TWO FILES    Z=A*X+B*Y+C               2 1 C
+*c  
+*d    
+*d  D) GRID PROGRAMS
+*d  ----------------
+*d
+*d  beta     - COMPUTES THE FUNCTION BETA FOR ALL PRESSURE LEVELS         1 1 C
+*d  betao    - COMPUTES BETA FOR OBSERVED HEIGHTS                         2 2
+*d  delhat   - COMPUTES THE FUNCION DELTA-HAT FOR ALL PRESSURE LEVELS     1 1 C
+*d  delhato  - COMPUTES DELTA-HAT FROM OBSERVED HEIGHTS                   2 1
+*d  fmask    - MAKES 1. OR 0. MASK FROM A GRID                            1 1 C
+*d  gaussw   - PRODUCES A FILE OF GAUSSIAN WEIGTH                         1 1
+*d  ggacof   - CONVERTS GAUSSIAN GRID (OR ZONAL CROSS-SECTION) FILE TO
+*d             SPECTRAL COEFF                                             1 1 C  
+*d  ggall    - CONVERT GAUSSIAN GRID FILE TO LAT-LONG FILE                1 1 C
+*d  ggaps    - CONVERT GAUSSIAN GRID FILE TO P.S. FILE                    1 1 C G
+*d  ggdev    - GRID SET DEVIATION FROM GLOBAL MEAN                        1 1   G
+*d  ggdlat   - LATITUDE DERIVATIVE OF A GRID SET                          1 1
+*d  ggdlon   - LONGITUDE DERIVATIVE OF A GRID SET                         1 1
+*d  gghems   - SPLITS GLOBAL GAUSSIAN GRID FILE INTO HEMISPHERES          1 2   G
+*d  gglob    - CONVERTS HEMI GRID OR CROSS-SECTION FILE TO GLOBAL         1 1 C
+*d  ggtrig   - GRID SET MULTIPLIED BY CONST*FUNCTION(LAT,LON)             1 1 C
+*d  ggvecps  - CONVERTS GAUSSIAN U,V TO P.S. WIND COMPONENTS              2 4 C G
+*d  gpdpd    - COMPUTES DEW POINT DEPRESSION FROM T AND SHUM OR RHUM      2 1
+*d  gphum    - CONVERTS PRES. GRIDS OF ES,T TO SPECIFIC AND REL HUM       3 2
+*d  grset    - CREATE SETS OF MULTILEVEL FIELD SET TO AN ASSIGNED VALUE   0 1 C G
+*d  gsapl    - INTERPOLATES SIGMA FILE TO PRESSURE                        2 1 C
+*d  gsaptp   - INTERPOLATES SIGMA FILE OF TEMP TO PRESSURE PHI AND TEMP   3 2 C
+*d  gsapzl   - INTERPOLATES SIGMA FILE OF PHI TO PRESSURE PHI AND TEMP    3 2 C
+*d  gshum    - CONVERTS SIGMA GRIDS OF ES,T TO SPECIFIC AND REL HUM       3 2
+*d  gwtqd    - COMPUTES SPECTRAL Q,D FROM GRID WINDS                      2 2 C
+*d  laslon   - ADD/REMOVE LAST LONGITUDE COLUMN                           1 1 C G
+*d  rangrd   - CREATES MULTI-LEVEL SETS OF RANDOM VALUE GRIDS               1 C
+*d  rzonavg  - TAKES THE REPRESENTATIVE ZONAL AVERAGE OF A FIELD          2 1
+*d  signag   - PRODUCES A GRID OF (-1,0,1) FROM (-,0,+) INPUT CARDS       0 1 C G
+*d  smooth   - SIMPLE MINDED GEOGRAPHICAL SMOOTHER                        1 1
+*d  subarea  - COMPUTES SUB-AREAS (EITHER PS OR LL) OF GG GRIDS           1 1 C
+*d  timcov   - COMPUTES COVARIANCE OF TWO GRID DEVIATION FILES            2 1
+*d  transpos - TRANSPOSE LATITUDES AND LONGITUDES IN A GRID FILE          1 1
+*d  zonavg   - COMPUTES MULTI-LEVEL ZONAL AVERAGE OF A SET OF GRIDS       1 1
+*d  zoncov   - COMPUTES ZONAL COVARIANCE OF TWO GRID SETS                 2 1
+*d  zondev   - COMPUTES ZONAL DEVIATIONS OF A GRID SET                    2 1
+*d  
+*e  
+*e  E) SPHERICAL HARMONIC PROGRAMS
+*e  ------------------------------
+*e    
+*e  cofagg   - CONVERTS SPECTRAL FILE TO GAUSSIAN GRIDS                   1 1 C
+*e  cofaps   - CONVERTS SPECTRAL FILE TO POLAR STEREOGRAPHIC GRIDS        1 1 C G
+*e  ctemps   - CONVERTS SPECTRAL PHI FILE TO SPECTRAL TEMPERATURES        2 1
+*e  cwinds   - CONVERTS SPECTRAL Q,D FILES TO SPECTRAL U,V                2 2
+*e  spamp    - PRODUCES AMPLITUDE OF COMPLEX ARRAY                        1 1
+*e  spblow   - HEMISPHERIC TO/FROM GLOBAL SPECTRAL ARRAYS                 1 2 C
+*e  spcalpa  - MAKES FILE OF CMPLX(N*(N+1),0.)                            1 1   G
+*e  spcdns   - CONTRIBUTION OF SP COEFF TO GLOBAL MEAN OF PRODUCT         2 1   G
+*e  spcpgm   - MULTIPLY SPECTRAL SETS BY CP*(STATIC STABILITY)            2 1
+*e  spcsum   - PRINTS SPECTRAL SUMS OVER M OR N                           1 0 C G
+*e  spdlat   - COMPUTES SPECTRAL LATITUDE DERIVATIVE                      1 1   G
+*e  spdlon   - COMPUTES SPECTRAL LONGITUDE DERIVATIVE                     1 1   G
+*e  spdlsq   - COMPUTES SPECTRAL LAPLACIAN                                1 1   G
+*e  spfill   - FILLS SPECTRAL ARRAY WHITH A CERTAIN COEFFICIENT'S VALUE   1 1 C
+*e  spflux   - COMPUTE AND PRINT SPECTRAL M OR N FLUX                     1 0 C G
+*e  spgdev   - SETS SPECTRAL MEANS TO ZERO                                1 1
+*e  spkecor  - COMPUTES SPECTRAL CORIOLIS TERMS IN K.E. BUDGET            4 1   G
+*e  splapl   - COMPUTES SPECTRAL LAPLACIAN                                1 1   G
+*e  spldiss  - COMPUTES LEITH SPECTRAL DISSIPATION FUNCTION               1 1   G
+*e  splinv   - MULTIPLY SPECTRAL FILE BY A**2/(N*(N+1))                   1 1   G
+*e  spnegm   - PRODUCES SPECTRAL HARMONIC "-M CONJUGATE"                  1 1
+*e  spreim   - SEPARATES REAL AND IMAGINARY PARTS OF A COMPLEX ARRAY      1 2
+*e  spresol  - EXTRACTS LOWER RESOLUTION SUB-SET FROM SPECTRAL FILE       1 1 C G
+*e  spsmoo   - SPECTRAL SMOOTHING "a la" Sardeshmukh & Hoskins            1 1 C  
+*e  spvdgx   - SPECTRAL V DOT GRAD X                                      3 1   G
+*e  spzdev   - COMPUTES SPECTRAL DEVIATION FROM ZONAL MEAN                1 1   G
+*e  spzxmlt  - MULTIPLY SPECTRAL FILE BY CROSS-SECTION FILE               2 1
+*e  zxwave   - MAKES CROSS-SECTION OF SPECTRAL AMPLITUDE AND PHASE        1 2 C
+*e  
+*f  
+*f  F) ZONAL CROSS-SECTION PROGRAMS
+*f  -------------------------------
+*f    
+*f  ggacof   - CONVERTS ZONAL CROSS-SECTION FILE TO SPECTRAL COEFF FILE   1 1 C
+*f  zadlev   - ADDS/INTERPOLATE LEVELS IN A ZONAL CROSS-SECTION           1 1 C
+*f  zonmod   - CONVERTS FILES FROM SINGLE-LEVEL MODE TO MULTI-LEVEL MODE  1 1
+*f  zxdev    - CROSS-SECTION DEVIATION FROM MERIDIONAL MEAN               1 1   G
+*f  zxdevp   - CROSS-SECTION DEVIATION FROM PRESSURE MEAN.                1 1
+*f  zxdlat   - CROSS-SECTION LATITUDE DERIVATIVE - LEGENDRE POLYNOMIALS   1 1 C G
+*f  zxdlatf  - CROSS-SECTION LATITUDE DERIVATIVE - FINITE DIFFERENCE      1 1   G
+*f  zxint    - GRAPHS LATITUDE AND PRESSURE INTEGRALS OF CROSS-SECTION    1   C G
+*f  zxke     - COMPUTES KINETIC ENERGY FROM U AND V ZONAL CROSS-SECTIONS  2 1
+*f  zxmav    - CROSS-SECTION MERIDIONAL AVERAGE PUT ON A FILE             1 1   G
+*f  zxpsi    - COMPUTES MERIDIONAL STREAM-FUNCTION FROM A CROSS-SECTION   1 1   G
+*f  zxrhum   - CROSS-SECTION CALCULATION OF RELATIVE HUMIDITY             2 1
+*f  zxtrig   - CROSS-SECTION MULTIPLIED BY  CONST*TRIG(LAT)**M            1 1 C G
+*f  
+*g
+*g  G) TIME-SERIES ANALYSIS AND MATRIX OPERATIONS PROGRAMS
+*g  ------------------------------------------------------
+*g
+*g  anomali  - TESTING A SET OF CONDITIONS ON SETS OF TIME SERIES         1 1 C
+*g  binning  - IDENTIFIES MEAN PROPRETIES BY THE BIN METHOD               1 1 C
+*g  eof25    - OUTDATED/RPLACED BY MEOFVEC                                      
+*g  eofrot   - ORTHOGONAL/OBLIQUE ROTATION OF EOF VECTORS                 1 3 C
+*g  fcats    - COMPUTE ACTUAL TIME SERIES FROM TIME SERIES FOURIER 
+*g             COEFFICIENTS                                               1 1 C
+*g  fullcor  - CORRELATION BETWEEN RECORDS IN A FILE                      1 1 C
+*g  fullmix  - CREATES DATA FOR INPUT TO FULLCOR                          1 2 C
+*g  ggatim   - TRANSFORM GRIDS TO TIME-SERIES FORMAT                      2 1 C
+*g  lagcor   - ONE POINT LAGGED/UNLAGGED CORRELATION BETWEEN TWO FILES    2 1 C
+*g  linint   - FILL HOLES IN DATASET WITH LINEAR INTERPOLATION            1 1 C
+*g  memcoef  - CALCULATE MEM PARAMETRES OR MEM SPECTRA                    1 1 C
+*g  mempred  - MAKE PREDICTIONS WITH A MEM MODEL                          2 1 C
+*g  meofvec  - MATRIX EIGEN SOLVER                                        1 2 C
+*g  minvers  - MATRIX INVERSION OF A FILE                                 1 1
+*g  mkmaskX  - MASK MAKING FAMILY OF PROGRAMS (X=1,2,3)                   X X C
+*g  mmult    - MATRIX MULTIPLY OF TWO FILES (STORED IN COLUMN MODE)       2 1
+*g  tmmult   - TRANSPOSE MATRIX MULTIPLY OF TWO FILES (AS IN MMULT)       2 1
+*g  mtrace   - TRACE OF A MATRIX (STORED IN COLUMN MODE)                  1
+*g  pcomp    - PRINCIPAL COMPONENT CALCULATION                            2 1
+*g  randeof  - PRINCIPAL COMPONENT SELECTION ALGORITHM                    2 2 C
+*g  timagg   - TRANSFORM TIME-SERIES TO GRIDS FORMAT                      1 1
+*g  tsafc    - COMPUTE FINITE FFT'S OF TIME SERIES                        1 1 C
+*g  unbinn   - INVERT BINNING PROCEDURE                                   1 1 C
+*g  unmask   - INVERT MASKING PROCEDURE                                   2 1
+*g  unseas   - REMOVE SEASONNAL CYCLE FROM FC TIME-SERIES                 1 1 C
+*g  w2stat   - CRAMER-VON MISSES STATISTIC FOR RANDOM FIT OF TS           1 1
+*g  xtracX   - DATA EXTRACTION FAMILY OF PROGRAMS (X=none,2,3,4)          2 1
+*g
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM lspgm
+
+      EXTERNAL    QQQDOC,XIT,CCARD,GETLIGN,BURNF,time,UP2LOW
+
+      LOGICAL     OK,IOPEN(99)
+
+      INTEGER     I,IO,STIME,time,IPOS
+      CHARACTER   NOMFIC*256,LIGNE*80,CHOIX,UNIT5*512,
+     +            CLES(3)*8,NAM(3)*8,DEF2(3)*8
+
+      COMMON     /IODIRE/  UNIT5
+      COMMON     /TIMER/   STIME
+      COMMON     /IOPEN/   IOPEN
+      COMMON     /PROGNAM/ NOMFIC
+*---------------------------------------------------------------------
+      NOMFIC  = 'lspgm.ptn'
+
+      CLES(1) = '-'
+      NAM(1)  = ' '
+      DEF2(1) = ' '
+
+      CLES(2) = 'HELP'
+      NAM(2)  = 'NON'
+      DEF2(2) = 'OUI'
+
+      CLES(3) = 'DEF'
+      NAM(3)  = 'NON'
+      DEF2(3) = 'OUI'
+
+***    STANDART INPUT I/O UNIT NAME IS BLANCK.
+
+      UNIT5 = ' '
+
+***    GET INITIAL SYSTEM TIME AND SAVE IT.
+
+      STIME = time()
+
+      DO I=1,99
+          IOPEN(I) = .FALSE.
+      END DO
+
+***    CHECK FOR A HELP REQUEST.
+
+      IPOS = 1
+      CALL CCARD( CLES,DEF2,NAM,3, IPOS )
+
+      IF (NAM(2).EQ.'OUI')                                     THEN
+          CALL QQQDOC( )
+          CALL XIT('  Help  ', 0 )
+      ELSE IF (NAM(3).EQ.'OUI')                                     THEN
+          NOMFIC = 'lspgm_a.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_b.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_c.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_d.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_e.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_f.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_g.doc'
+          CALL QQQDOC( )
+          CALL XIT('  Help  ', 0 )
+      END IF
+
+      WRITE(6,6000)
+
+***    QUELLE SECTION (' ' ===> TOUTES).
+
+      CALL GETLIGN( 5, LIGNE,80, OK)
+
+      CHOIX = ' '
+
+      IF (.NOT.OK)                                             THEN
+          GOTO 100
+      ELSE
+          READ( LIGNE, 5000,END=100,ERR=100,IOSTAT=IO) CHOIX
+          CALL UP2LOW( CHOIX,CHOIX )
+          CALL BURNF
+      END IF  
+
+  100 IF (CHOIX.NE.' ')                                        THEN
+          IF (CHOIX.EQ.'a' .OR.
+     +        CHOIX.EQ.'b' .OR.
+     +        CHOIX.EQ.'c' .OR.
+     +        CHOIX.EQ.'d' .OR.
+     +        CHOIX.EQ.'e' .OR.
+     +        CHOIX.EQ.'f' .OR.
+     +        CHOIX.EQ.'g' )                                   THEN
+              NOMFIC = 'lspgm_'//CHOIX//'.doc'
+              CALL QQQDOC( )
+          ELSE
+              WRITE(6,6100)
+              CALL                                 XIT('  Lspgm ', 0 )
+          END IF
+      ELSE
+          NOMFIC = 'lspgm_a.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_b.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_c.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_d.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_e.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_f.doc'
+          CALL QQQDOC( )
+          NOMFIC = 'lspgm_g.doc'
+          CALL QQQDOC( )
+      END IF
+
+      WRITE(6,6200)
+
+      CALL                                         XIT('  Lspgm ', 0 )
+
+*---------------------------------------------------------------------
+ 5000 FORMAT(A1)
+ 6000 FORMAT(
+     +  '1Available sections:'//
+     +  ' A) Display programs'/
+     +  ' B) File/label/record manipulation programs'/
+     +  ' C) General computation programs'/
+     +  ' D) Grid programs'/
+     +  ' E) Spherical harmonic and fourier programs'/
+     +  ' F) Zonal cross-section programs'/
+     +  ' G) Time-series analysis and matrix operations programs'///
+     +  'Up to four characters follow each description...'//
+     +  '   1 - Number of input files (excluding stdin)'/
+     +  '   2 - Number of output files  (excluding stdout)'/
+     +  '   3 - C if the program reads stdin'/
+     +  '   4 - G if the program is restricted to global fields'//
+     +  '0Choose one section (a/b/c/d/e/f/g): ',$)
+ 6100 FORMAT('0Only one of a,b,c,d,e,f or g is allowed...')
+ 6200 FORMAT(/26X,'*** NOTE ***'//3x,'Help is also available from the',
+     +  ' individual programs themselves'/3X,'Simply invoke the',
+     +  ' programs with the -help specifier, as in ...'
+     +   //20X,'Program_Name -help' //)
+
+      END
+#     endif
+
+
+
+

@@ -1,0 +1,669 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ftest  SDX SDY FRATIO KVALU DVALU MASK INPUT OUTPUT \
+*                [ -a VAL1 -lx VAL2 -ly VAL3 -kind VAL4 ]
+*
+*
+*     DESCRIPTION...
+*      ftest   - CONDUCT AN EQUALITY OF VARIANCE TEST (F-TEST).
+*
+*
+*     AUTHORS - F. ZWIERS, F. MAJAESS, November 28/1984.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ftest.ptn,v 4.16 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     PURPOSE - CONDUCT AN EQUALITY OF VARIANCES TEST ( AN F-TEST ) AND
+*               REPORT THE 'F-VALUE' IN FRATIO, AS WELL AS RETURNING THE
+*               K-VALUE AND D-VALUE WHICH ARE RESPECTIVELY THE TRANSFORMED
+*               SIGNIFICANCE LEVELS AND THE ACCEPTANCE/REJECTION FLAG.
+*
+*     NOTE: 1 - TESTS ARE NOT PERFORMED WHEN EITHER OF THE VARIANCES IS
+*               APPROXIMATELY EQUAL TO THE NOISE INDUCED BY THE PACKING
+*               ALGORITHM.
+*           2 - INTERPRETATION OF SDX AND SDY FILES IS CONTROLLED BY INPUT
+*               PARAMETER ISTD (SEE INPUT CARD PARAMETERS DESCRIPTION BELOW).
+*           3 - ALSO, MASK FILE NEED NOT BE SPECIFIED IN THE PROGRAM CALLING
+*               SEQUENCE.
+*
+*
+*     INPUT FILES...
+*     (IF (ISTD.EQ.0) THEN
+*     (SDX    = FIELDS OF THE STANDARD DEVIATION OF THE X-VARIABLE.
+*     (         SQRT(SUM(X(I)-XBAR)**2/(NX-1)), I=1,...,NX.
+*     (OTHERWISE,
+*     (SDX    = FIELDS OF THE VARIANCE OF THE X-VARIABLE.
+*     (         SUM(X(I)-XBAR)**2/NX, I=1,...,NX.
+*      SDY    = AS SDX EXCEPT FOR THE Y-VARIABLE.
+*
+*     OUTPUT FILES...
+*      FRATIO = FIELDS OF F-VALUES COMPUTED AS :
+*
+*                          F=SX**2/SY**2
+*
+*               WHERE, SX AND SY ARE THE STANDARD DEVIATIONS OF X
+*               AND Y RESPECTIVELY.
+*      KVALU  = FIELDS OF K-VALUES OF TRANSFORMED SIGNIFICANCE LEVELS
+*               COMPUTED AS K IN:
+*
+*                          P=ALPHA/(5**(K-1))
+*
+*               OR         K=LOG (ALPHA/P)+1
+*                               5
+*
+*               WHICH INDICATES THAT THE OBSERVED STATISTIC IS
+*               SIGNIFICANT AT THE
+*
+*                          ALPHA/(5**(K-1))
+*
+*               SIGNIFICANCE LEVEL.
+*               THUS K=1 INDICATES THAT THE OBSERVED STATISTIC IS JUST
+*               SIGNIFICANT AT THE ALPHA SIGNIFICANCE LEVEL.
+*               IF PLOTTED WITH UNIT CONTOUR INTERVALS, SUCCESSIVE
+*               CONTOURS WILL ENCLOSE REGIONS WHERE LOCALLY IT IS
+*               FIVE TIMES AS UNLIKELY THAT VALUES OF THE OBSERVED
+*               STATISTICS ARE CONSISTENT WITH THE NULL HYPOTHESIS
+*               THAN IN REGIONS OUTSIDE THE NEXT LOWER CONTOUR.
+*      DVALU  = FIELDS OF D-VALUES COMPUTED AS:
+*                           __
+*                           ! 0  IF THE NULL HYPOTHESIS IS ACCEPTED
+*                       D = !
+*                           ! 1  IF THE NULL HYPOTHESIS IS REJECTED
+*                           --
+*
+*      MASK   = FIELDS OF MASK-VALUES COMPUTED AS:
+*                           __
+*                           ! 1  IF THE TEST WAS     CONDUCTED
+*                    MASK = !
+*                           ! 0  IF THE TEST WAS NOT CONDUCTED
+*                           --
+*
+*               THE MASK FILE IS NOT RETURNED IF THE PROGRAM IS
+*               NOT CALLED WITH OUTPUT FILE MASK.
+*
+* 
+*     INPUT PARAMETERS...
+*
+*      ALPHA (a)    = THE SIGNIFICANCE LEVEL OF THE TEST.
+*      ANX   (lx)   = THE NUMBER OF OBSERVATIONS IN THE X-VARIABLE DATA SET,
+*      ANY   (ly)   = THE NUMBER OF OBSERVATIONS IN THE Y-VARIABLE DATA SET.
+*                     THE ACTUAL VALUE USED ARE RATHER NX AND NY DEFINED AS
+*                     NX = INT( ANX ) AND  NY = INT( ANY ).
+*                     IF NX > 1 AND NY > 1 THEN
+*                        NX AND NY READ FROM THE INPUT CARD ARE USED IN THE
+*                        COMPUTATION OF THE NUMBER OF DEGREES OF FREEDOM.
+*                     OTHERWISE,
+*                       THE NX AND NY VALUES NEEDED IN THE COMPUTATION ARE
+*                       OBTAINED FROM THE RECORD LABELS OR FROM THE IP3
+*                       DESCRIPTORS, DEPENDING ON THE FILE TYPE OF THE
+*                       FILES SDX AND SDY.
+*      ISTD  (kind) = A FLAG USED TO DETERMINE THE CONTENTS OF
+*                     THE SDX AND SDY FILES. THAT IS :
+*                     IF (ISTD.EQ.0) THEN
+*                       SDX AND SDY FILES CONTAIN THE UNBIASED ESTIMATES
+*                       OF THE STANDARD DEVIATIONS OF X AND Y RESPECTIVELY.
+*                     OTHERWISE,
+*                       SDX AND SDY FILES CONTAIN THE VARIANCES
+*                       OF X AND Y, RESPECTIVELY.
+*
+*      READ(LIGNE,5010) ALPHA,ANX,ANY,ISTD
+*5010  FORMAT(10X,E10.0,2F5.0,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+**FTEST.       5.E-2  10.   5.    1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 PREMATURE EOF ON UNIT 5
+*       2 PREMATURE EOF ON UNIT 1 AND/OR 2
+*       3 INITIAL ILLEGAL DATA TYPE OR SDX/SDY NOT COMPATIBLE
+*       4 CANNOT READ FIRST RECORD IN SDX
+*       5 PARAMETER NX TOO SMALL
+*       6 CANNOT READ FIRST RECORD IN SDY
+*       7 PARAMETER NY TOO SMALL
+*       8 MORE THAN ONE SIZE IN SDX AND/OR SDY
+*
+*     NON-FATAL CONDITIONS...
+*     101 VERY SMALL VALUES FOUND IN SDX OR SDY
+*     102 NAMEL MISMATCH BETWENN SDX AND SDY
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM FTEST 
+*     PROGRAM FTEST (SDX,        SDY,          FRATIO,        KVALU,
+*    1                           DVALU,        MASK,          OUTPUT,   )
+*    2         TAPE1=SDX,  TAPE2=SDY,   TAPE11=FRATIO, TAPE12=KVALU,
+*    3                    TAPE13=DVALU, TAPE14=MASK,    TAPE6=OUTPUT) 
+*     ---------------------------------------------------------------
+*     $Log: ftest.ptn,v $
+*     Revision 4.16  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.15  2008/07/24 19:42:59  dugas
+*     Utiliser CALCEPS8 plutot que CALCEPS.
+*
+*     Revision 4.14  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.13  2008/04/25 21:10:56  dugas
+*     Toujours utiliser GET_IP1_STRING avant d'imprimer un niveau vertical.
+*
+*     Revision 4.12  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.11  2003/05/23 21:06:30  dugas
+*     Ajouter le support des grilles de type Z.
+*
+*     Revision 4.10  2001/03/17 21:41:37  armnrbd
+*     Remplacer GETPARI par GETHIGH.
+*
+*     Revision 4.9  2000/03/20 19:56:23  armnrbd
+*     Associer un seul champs par pointeur.
+*
+*     Revision 4.8  1998/10/19 19:48:40  armnrbd
+*     Modifier la documentation.
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.7  1998/07/03  02:26:24  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.6  1997/09/26  18:15:42  armnrbd
+*     Deuxieme phase de la generalisation de taille_entete.
+*
+*     Revision 4.5  1997/09/26  17:48:03  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1997/01/30  03:19:39  armnrbd
+*     Corriger la definition du MASK.
+*
+*     Revision 4.3  1996/12/12  19:59:51  armnrbd
+*     Ajouter le support de fichiers SQI.
+*
+*     Revision 4.2  1996/01/03  20:55:54  armnrbd
+*     Modifier la sequence d'appel de la fonction CALCEPS.
+*
+*     Revision 4.1  1995/12/21  20:25:11  armnrbd
+*     Deplacer la fonction CALCEPS vers UTIL.FTN.
+*     Corriger quelques erreurs mineures.
+*
+*     Revision 4.0  1995/12/19  20:04:46  armnrbd
+*     Initial version.
+*
+
+*     JUN 05/94 - B.DENIS  (MODIFY CALCULATION OF XSCALE/YSCALE)
+*     MAR 07/94 - F.MAJAESS (MODIFY DATA SECTION)
+*     SEP 07/93 - J. FYFE  (FIX "JCLPNT" CALL )                                 
+*     AUG 04/92 - E. CHAN  (MODIFY EXTRACTION/CALCULATION OF XMAX, XMIN,        
+*                           AND XSCALE DUE TO IMPLEMENTATION OF NEW PACKER)    
+*     JAN 29/92 - E. CHAN  (CONVERT HOLLERITH LITERALS TO ASCII)                
+*     F. ZWIERS  -- AUG 31, 1989 (FIX AN EXIT CONDITION ERROR)                  
+*     F. MAJAESS -- APR 29, 1988 (REPLACE ABORT EXIT BY WARNING EXIT
+*                                 FOR UNMATCHED MEAN FIELD NAMES) 
+*     F. MAJAESS -- NOV 06, 1987 (ADD COMPUTATIONS FOR K AND D-VALUES). 
+*     F. ZWIERS  -- NOV 28, 1984
+
+*---------------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+      CHARACTER    LIGNE*80,SLEV*15
+      REAL*8       D,F,K,P,WK1,WK2,WK3,FMAX,ALPHA
+      CHARACTER*4  CK,CD,CF,CMASK,GRID,SUBA,ZONL,TYPE
+      LOGICAL      OK,OK1,OK2,LNXNY,STD,NRMLXIT,MASK,MATCH 
+      REAL         FMASK,FNX,FNY,ANX,ANY,FACTX,FACTY,FS,SX,
+     +             SY,EPSX(MAXLEV),EPSY(MAXLEV)
+      INTEGER      IBUF,IBUFX(taille_entete),IBUFY(taille_entete),IO,NX,NY,ISTD,
+     +             NFILES,IKIND,NREC,LEV(MAXLEV),NLEV,IER,
+     +             NLEVX,NLEVY,MAXW,NWDS,WHERE,I,L,NDFX,
+     +             NDFY,CNT,NF,LEN,LEN1,LEN2,MAXW1,
+     +             MAXW2,XPAK,YPAK
+
+      POINTER    ( P1,     D(1) ),( P12, SY(1) ),( P13, WK2(1) )
+      POINTER    ( P2,     F(1) )
+      POINTER    ( P3,     K(1) ),( P32, SX(1) ),( P33, WK3(1) )
+      POINTER    ( P4,     P(1) ),( P42, FS(1) )
+      POINTER    ( P5,   WK1(1) )
+      POINTER    ( P6, FMASK(1) )
+      POINTER    ( P7,  IBUF(8) )
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      LOGICAL      RPBLOC
+      REAL*8       CALCEPS8
+      CHARACTER    PKTYP*2,GETYP*4
+      INTEGER      GETSIZ2,GETHIGH
+      EXTERNAL     JCLPNT,GETSTAT,GETLIGN,BURNF,HPALLOC,
+     +             PROBF,HTEST,GETSIZ2,WRITLEV2,
+     +             GETSET2,CMPLBL,XIT,PUTSET2,CALCEPS8,
+     +             GETYP,GETHIGH,RPBLOC
+
+      DATA         GRID  /'GRID'/,
+     +             SUBA  /'SUBA'/,
+     +             ZONL  /'ZONL'/,
+     +             CMASK /'MASK'/
+      DATA         CK    /'K'/,
+     +             CF    /'F'/,
+     +             CD    /'D'/
+      DATA         FMAX  /100./ 
+
+      DATA         NRMLXIT,MATCH,MASK / 2*.TRUE.,.FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ftest.ptn,v $'
+
+*---------------------------------------------------------------------- 
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFILES = 8
+      CALL JCLPNT( NFILES, 1,2, 11,12,13,14, 5,6 )
+
+***    RETREIVE FILE TYPE.
+
+      PKTYP = GETYP( 1 )
+
+      CALL GETSTAT( 14,LIGNE )
+      IF (LIGNE.EQ.'OLD' .OR.
+     +    LIGNE.EQ.'NEW') MASK = .TRUE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ALPHA = 0.0
+          ANX   = 0.0
+          ANY   = 0.0
+          ISTD  =  0
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,0005, END=8000,ERR=8000,IOSTAT=IO ) ISTD
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) ALPHA
+
+          OK = RPBLOC('LX',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) ANX
+
+          OK = RPBLOC('LY',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) ANY
+
+      ELSE
+
+***        GET ALPHA, ANX, ANY AND ISTD. 
+
+          CALL GETLIGN( 5, LIGNE,80, OK )
+
+          IF (.NOT.OK)                                             THEN
+              GOTO 8000
+          ELSE
+              READ(LIGNE,5010, ERR=8000,END=8000,IOSTAT=IO )
+     +                         ALPHA,ANX,ANY,ISTD
+              CALL BURNF
+          END IF
+
+      END IF
+
+      WRITE(6,6050) ALPHA,ANX,ANY,ISTD 
+      NX = INT( ANX+0.0001 )
+      NY = INT( ANY+0.0001 )
+
+***    CHECK NX, NY AND STD.
+
+      IF ((NX.LE.1).OR.(NY.LE.1))                              THEN
+          LNXNY =.TRUE.
+      ELSE
+          LNXNY =.FALSE. 
+      END IF 
+      IF (ISTD.EQ.0)                                           THEN 
+          STD   =.TRUE.
+      ELSE
+          STD   =.FALSE. 
+      END IF 
+
+***    DETERMINE SIZES AND ALLOCATE MEMORY.
+
+      MAXW1 = GETSIZ2( 1, IBUFX,LEN1,NWDS,XPAK, LEV,NLEV )
+      MAXW2 = GETSIZ2( 2, IBUFY,LEN2,NWDS,YPAK, LEV,NLEVY)
+
+      IF (MAXW1.LE.0 .OR. MAXW2.LE.0) GOTO 9000
+
+      LEN  = MAX( LEN1 ,LEN2  )
+      MAXW = MAX( MAXW1,MAXW2 )
+
+      WRITE( TYPE,0004) IBUFX(1)
+      IF (TYPE.EQ.'ZONL') NWDS = IBUFX(5)
+
+      CALL WRITLEV2( LEV,NLEV, IBUFX )
+
+      CALL PRTLAB( IBUFX )
+      CALL PRTLAB( IBUFY )
+
+      IF (.NOT.OK        .OR.
+     +    NLEV .NE.NLEVY .OR.
+     +   (TYPE .NE.GRID  .AND.
+     +    TYPE .NE.SUBA  .AND.
+     +    TYPE .NE.ZONL  )   )                                 THEN
+          WRITE(6,6030) NLEV,NLEVY
+          CALL                                     XIT('  Ftest ',-3 )
+      END IF
+
+      CALL HPALLOC( P1,5*NWDS*NLEV,IER,8 )
+      P2 = LOC(     D(NWDS*NLEV+1) )
+      P3 = LOC(     F(NWDS*NLEV+1) )
+      P4 = LOC(     K(NWDS*NLEV+1) )
+      P5 = LOC(     P(NWDS*NLEV+1) )
+
+      P12 = P1
+      P13 = P1
+      P32 = P3
+      P33 = P3
+      P42 = P4
+
+      CALL HPALLOC( P6,NWDS*NLEV+LEN,IER,0 )
+      P7 = LOC( FMASK(NWDS*NLEV+1) )
+*---------------------------------------------------------------------- 
+
+      IKIND = 1 
+      NREC  = 0
+ 1000 CONTINUE
+
+***        READ SDX INTO SX. 
+
+          CALL GETSET2( 1, SX, LEV,NLEVX, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN 
+              IF (NREC.EQ.0)                                   THEN
+                  WRITE(6,6010) 
+                  CALL                             XIT('  Ftest ',-4 )
+              END IF
+              WRITE(6,6040) NREC 
+              IF (NRMLXIT.AND.MATCH)                           THEN
+                  CALL                             XIT('  Ftest ', 0 ) 
+              ELSE 
+                  IF (.NOT.NRMLXIT) CALL           XIT('  Ftest ',-101)
+                  IF (.NOT.MATCH)   CALL           XIT('  Ftest ',-102)
+              END IF
+          END IF 
+
+***        CHECK SIZE CONSISTENCY.
+
+          CALL CMPLBL( 0,IBUF, 0,IBUFX, OK1 )
+
+          DO  I=1,taille_entete 
+              IBUFX(I) = IBUF(I) 
+          END DO
+
+          IF (LNXNY)                                           THEN
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  NX = GETHIGH('IP3',IBUF )
+              ELSE
+                  NX = IBUFX(2)
+              END IF
+          END IF
+          IF (NX.LE.1)                                         THEN 
+              WRITE(6,6080) NX
+              CALL                                 XIT('  Ftest ',-5 )
+          END IF
+
+***        CALCULATE EPSILON FOR EACH LEVEL OF SDX.
+
+          DO  L=1,NLEV
+              WHERE = (L-1)*NWDS+1
+              EPSX(L) = CALCEPS8( SX(WHERE),NWDS,IBUF(8) )
+          END DO
+
+***        READ SDY INTO SY. 
+
+          CALL GETSET2( 2, SY, LEV,NLEVY, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6020)
+              CALL                                 XIT('  Ftest ',-6 )
+          END IF
+
+***        CHECK SIZE CONSISTENCY.
+
+          CALL CMPLBL( 0,IBUF, 0,IBUFY, OK2 )
+
+          DO  I=1,taille_entete 
+              IBUFY(I) = IBUF(I) 
+          END DO
+
+          IF (LNXNY)                                           THEN
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  NY = GETHIGH('IP3',IBUF )
+              ELSE
+                  NY = IBUFY(2)
+              END IF
+          END IF
+          IF (NY.LE.1)                                         THEN 
+              WRITE(6,6090) NY
+              CALL                                 XIT('  Ftest ',-7 )
+          END IF
+
+***        CALCULATE EPSILON FOR EACH LEVEL OF SDY.
+
+          DO  L=1,NLEV
+              WHERE = (L-1)*NWDS+1
+              EPSY(L) = CALCEPS8( SY(WHERE),NWDS,IBUF(8) )
+          END DO
+
+***        CHECK LABELS
+
+          WRITE(TYPE,0004) IBUFX(1)
+
+          OK = (OK1 .AND. OK2)
+
+          IF (.NOT.OK        .OR.
+     +        NLEVX.NE.NLEV  .OR.
+     +        NLEVX.NE.NLEVY .OR.
+     +       (TYPE .NE.GRID  .AND.
+     +        TYPE .NE.SUBA  .AND.
+     +        TYPE .NE.ZONL  )   )                             THEN
+              WRITE(6,6040) NREC 
+              WRITE(6,6030) NLEVX,NLEVY
+              CALL PRTLAB( IBUFX )
+              CALL PRTLAB( IBUFY )
+              CALL                                 XIT('  Ftest ',-8 )
+          END IF
+
+          IF( (IBUFX(3).NE.IBUFY(3)) .AND. MATCH )             THEN 
+              MATCH = .FALSE.
+              WRITE(6,6120)
+          END IF
+
+          NDFX = NX-1 
+          NDFY = NY-1 
+
+***        COMPUTE F-RATIOS. 
+
+          IF (STD)                                             THEN
+
+              DO  L=1,NLEV
+
+                  CNT = 0
+
+                  DO  I=(L-1)*NWDS+1,L*NWDS
+
+                      IF (SX(I).LE.EPSX(L) .OR.
+     +                    SY(I).LE.EPSY(L) )                   THEN
+                          FMASK(I) = 0.0 
+                          F(I)     = 1.0 
+                          CNT      = CNT+1
+                      ELSE 
+                          FMASK(I) = 1.0 
+                          F(I)     =  SX(I)*(     SX(I) 
+     +                             /( SY(I)*DBLE( SY(I) ) ) )
+                          F(I)     =  MIN( FMAX,F(I) )
+                      END IF
+
+                  END DO
+
+                  IF (CNT.GE.1)                                THEN
+                      NRMLXIT = .FALSE. 
+                      CALL GET_IP1_STRING( LEV(L),SLEV )
+                      WRITE(6,6110) CNT,NWDS,SLEV
+                  END IF 
+
+              END DO
+
+          ELSE
+
+              FNX   = FLOAT( NX )
+              FNY   = FLOAT( NY )
+              FACTX = FNX/( FNX-1.0 )
+              FACTY = FNY/( FNY-1.0 )
+
+              DO  L=1,NLEV
+
+                  CNT = 0
+
+                  DO  I=(L-1)*NWDS+1,L*NWDS
+
+                      IF (SX(I).LE.EPSX(L) .OR.
+     +                    SY(I).LE.EPSY(L) )                   THEN
+                          FMASK(I) = 0.0 
+                          F(I)     = 1.0 
+                          CNT      = CNT+1
+                      ELSE 
+                          FMASK(I) = 1.0 
+                          F(I)     =  FACTX*(     SX(I)
+     +                             /( FACTY*DBLE( SY(I) ) ) )
+                          F(I)     =  MIN( FMAX,F(I) )
+                      END IF 
+
+                  END DO
+
+                  IF (CNT.GE.1)                                THEN
+                      NRMLXIT = .FALSE. 
+                      WRITE(6,6110) CNT,NWDS,LEV(L)
+                  END IF 
+
+              END DO
+
+          END IF 
+
+***        PREPARE TO WRITE OUT THE RESULTS. 
+
+          DO  I=1,taille_entete
+              IBUF(I)=IBUFX(I)
+          END DO
+
+***        WRITE OUT THE F-RATIOS. 
+
+          DO  I=1,NWDS*NLEV
+              FS(I) = F(I)
+          END DO
+
+          IBUF(3) = NF 
+          CALL PUTSET2( 11, FS, LEV,NLEV, IBUF,MAXW )
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        COMPUTE P-VALUES AS 
+***        
+***                P = PROB( F-RATIO > OBSERVED F-RATIO ) 
+***       
+***          (IE, THE PROBABILITY OF OBSERVING AN F-RATIO GREATER
+***           THAN THE CALCULATED F-RATIO UNDER THE HYPOTHESIS THAT 
+***           THE VARIANCES ARE EQUAL). 
+
+          CALL PROBF( F, NDFX,NDFY, NWDS*NLEV, P, WK1,WK2,WK3 )
+
+***        COMPUTE K AND D-VALUES. 
+
+          CALL HTEST( P, NWDS*NLEV,ALPHA,IKIND, K,D ) 
+
+***        WRITE OUT THE K-VALUES. 
+
+          DO  I=1,NWDS*NLEV
+              SX(I) = K(I)
+          END DO
+
+          READ(CK,0004) IBUF(3)
+          CALL PUTSET2( 12, SX, LEV,NLEV, IBUF,MAXW )
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        WRITE OUT THE D-VALUES. 
+
+          DO  I=1,NWDS*NLEV
+              SY(I) = D(I)
+          END DO
+
+          READ(CD,0004) IBUF(3)
+          CALL PUTSET2( 13, SY, LEV,NLEV, IBUF,MAXW )
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        WRITE OUT THE MASK-VALUES IF REQUIRED.
+
+          IF (MASK)                                            THEN 
+              READ(CMASK,0004) IBUF(3)
+              CALL PUTSET2( 14, FMASK, LEV,NLEV, IBUF,MAXW )
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+          END IF
+
+      NREC = NREC+NLEV
+      GOTO 1000
+
+***    EOF ON UNIT #5. 
+
+ 8000 CONTINUE
+      WRITE(6,6070) 
+      CALL                                         XIT('  Ftest ',-1 )
+
+***    EOF ON UNIT 1 and/OR 2. 
+
+ 9000 CONTINUE
+      WRITE(6,6130) 
+      CALL                                         XIT('  Ftest ',-2 )
+
+*-------------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 format(BN,I5)
+ 0010 format(BN,E10.0)
+
+ 5010 FORMAT(10X,E10.0,2F5.0,I5)
+
+ 6010 FORMAT(' ** First file of standard deviations was empty **')
+ 6020 FORMAT(' ** Unexpected eof on sdy file **')
+ 6030 FORMAT(' Corresponding field labels do not match.'/
+     +       ' Number of levels found in SDX,SDY: ',2I5)
+ 6040 FORMAT(' Conducted F-tests on ',I5,' pairs of fields.')
+ 6050 FORMAT(' Ftest.    ',E10.1,2F5.0,I5)
+ 6070 FORMAT(' ** The parameters are missing or badly formatted **')
+ 6080 FORMAT(' Illegal # of obs. NX= ',I10)
+ 6090 FORMAT(' Illegal # of obs. NY= ',I10)
+ 6100 FORMAT(' Insufficient array size= ',I10,', for # pts= ',I10)
+ 6110 FORMAT(' WARNING ',I6,' detected very small denominators ',
+     +       'out of ',I6,' computed F-values at level ',A)
+ 6120 FORMAT(' ** NOTE - Unmatched mean field names **')
+ 6130 FORMAT(' ** Unable to read one of the input files **')
+ 
+      END 
+#     endif

@@ -1,0 +1,49 @@
+Introduction to proj4 and Related Lambert Projection Information
+
+Useful proj4 links:
+
+    proj4 General Parameters (http://proj.maptools.org/gen_parms.html)
+    proj4 Forum
+        WGS84 to Sphere Inconsistency Between Proj Versions 
+    Geo::Proj4 Perl Module (http://search.cpan.org/~sderle/Geo-Proj4-0.11/Proj4.pm)
+
+To obtain information about the Lambert Conformal Conic projection:
+
+proj -l=lcc
+      lcc : Lambert Conformal Conic
+        Conic, Sph&Ell
+        lat_1= and lat_2= or lat_0
+
+To check the corner points of GRIB grid #221:
+
+proj +proj=lcc +lat_1=50.0 +lat_2=50.0 +units=km +lon_0=-145.5 +lat_0=1.0
+-145.5 1
+0.00    0.00
+148.639 46.635
+-4423.64        7779.44
+-2.566 46.352
+5437.68 13357.10
+-68.318 0.897
+9825.53 5557.50
+
+invproj +proj=lcc +lat_1=50.0 +lat_2=50.0 +units=km +lon_0=-145.5 +lat_0=1.0
+0.0 0.0
+145d30'W        1dN
+-4423.64 7779.44
+148d38'20.337"E 46d38'6.196"N
+5437.68 13357.10
+2d33'57.438"W   46d21'7.298"N
+9825.53 5557.50
+68d19'4.831"W   0d53'49.07"N
+
+ proj +proj=lcc +lat_1=50.0 +lat_2=50.0 +units=m +lon_0=-145.5 +lat_0=1.0
+-68.32005 0.897945
+9825241.65      5557308.39
+-2.569891 46.3544
+5437532.15      13356725.65
+148.6418 46.63433
+-4423564.60     7779222.01
+-145.5 1.000001
+0.00    0.15
+-145.5 1.0
+0.00    0.00

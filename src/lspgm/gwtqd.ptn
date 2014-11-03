@@ -1,0 +1,723 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if !defined (nombre_de_taches)
+#         define   nombre_de_taches 4
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      gwtqd  GGBIGU GGBIGV SPVORT SPDIV INPUT OUTPUT [-lrt VAL1  -lmt  VAL2
+*                                                      -ktr VAL3  -kuv [VAL4]
+*                                                      -npg VAL5]
+*
+*
+*     DESCRIPTION...
+*      gwtqd  - COMPUTES SPECTRAL Q,D FROM GRID WINDS 
+* 
+*
+*     AUTHORS - B.Dugas AND J.D.Henderson, fev 22/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gwtqd.ptn,v 4.21 2014/09/25 20:20:49 dugas Exp $
+* 
+*
+*     PURPOSE - COMPUTES THE SPECTRAL COEEFICIENT FILES FOR VORTICITY AND 
+*               DIVERGENCE FROM WIND COMPONENTS ON GAUSSIAN GRIDS. 
+*
+*     NOTES: 1) WIND INPUT MAY BE REAL WIND OR MODEL WIND, WHERE THE 
+*               MODEL WIND COMPONENTS ARE DEFINED AS:
+*
+*                            (U,V)*COS(LAT)/(EARTH RADIUS).
+
+*            2) A) IF GGBIGU'S INTERNAL NAME IS 'U' OR GGBIGV'S INTERNAL
+*                  NAME IS 'V', THEIR UNITS ARE ASSUMED TO BE IN M/S.
+*               B) IF GGBIGU'S INTERNAL NAME IS 'UU' OR GGBIGV'S INTERNAL
+*                  NAME IS 'VV', THEIR UNITS ARE ASSUMED TO BE IN KNOTS.
+*               C) IF NEITHER A) AND B) APPLY, THE INPUT FILE TYPES
+*                  DETERMINE THE UNITS IN THE FOLLOWING MANNER:
+*                  - AT LEAST ONE RPN 1989 STANDARD FILE = KNOTS
+*                  - ANYTHING ELSE                       = M/S
+*               WHEN THE INPUT VARIABLES ARE IN UNITS OF KNOTS, THEY
+*               ARE CONVERTED TO M/S DURING THE CALCULATIONS.
+*
+*
+*     INPUT FILES... 
+*      GGBIGU = GLOBAL GAUSSIAN GRIDS OF U WIND COMPONENTS. 
+*      GGBIGV = GLOBAL GAUSSIAN GRIDS OF V WIND COMPONENTS. 
+* 
+*     OUTPUT FILES... 
+*      SPVORT = SPECTRAL VORTICITY 
+*      SPDIV  = SPECTRAL DIVERGENCE 
+* 
+*
+*     INPUT PARAMETERS... 
+* 
+*      LRT,LMT = N,M TRUNCATION WAVE NUMBERS 
+*      KTR     = SPECTRAL TRUNCATION TYPE 
+*      KUV     = 0, ASSUMES MODEL WINDS (PRIMARY DEFAULT),
+*              = 1, ASSUMES TRUE WINDS (SECONDARY DEFAULT).
+*      NPG     = OUTPUT PACKING DENSITY. BLANK INPUT MEANS
+*                THAT THE PROGRAM USES AT LEAST 32 BITS AND
+*                PERHAPS MORE IF GGBIGU USES MORE THAN THAT.
+*
+*      READ( 5,5010 ) LRT,LMT,KTR,KUV,NPG
+*5010  FORMAT(10X,5I5) 
+* 
+*     COMMENTS CONCERNING THE USAGE OF KUV...
+*
+*      SPECTRAL PROJECTIONS OF VECTOR COMPONENTS SHOULD ONLY BE
+*      CARRIED ON SO-CALLED MODEL COMPONENTS, WHICH ARE ASSUMED
+*      THE BE THE REAL WINDS MULTIPLIED BY 
+*
+*                  COS( LAT )/( EARTH RADIUS ).
+*
+*      THE MODEL WINDS ARE THUS CONTINUOUS AT THE POLES AND CAN THEN
+*      BE CORRECTLY PROJECTED. THE NORMAL MODE OF OPERATION ASSUMES
+*      THE PRESENCE OF SO-CALLED MODEL WINDS AND DOES NO CONVERSIONS.
+*
+*
+*     EXAMPLE OF INPUT CARD... 
+* 
+*    GWTQD   20   20    2    0  -32
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 INPUT ARRAY IS NOT A GLOBAL GRID
+*       2 PROBLEM UNPACKING FIRST ARRAY IN GGBIGU
+*       3 NOT AS MANY ARRAYS IN GGBIGV AS IN GGBIGU
+*       4 DIFFERENT SIZE ARRAYS FOR U AND V
+*       5 ERROR ABORT READING INPUT
+*       6 PREMATURE EOF ON GGBIGU
+*       7 INPUT VARIABLE NAME MISMATCH
+*       8 UNABLE TO ALLOCATE WORKING MEMORY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM gwtqd
+*    +   (      GGBIGU,      GGBIGV,      SPVORT,      SPDIV,
+*    +    TAPE1=GGBIGU,TAPE2=GGBIGV,TAPE3=SPVORT,TAPE4=SPDIV,
+*    +    INPUT,OUTPUT, TAPE4=SPDIV,TAPE5=INPUT,TAPE6=OUTPUT) 
+
+*     $Log: gwtqd.ptn,v $
+*     Revision 4.21  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.20  2013/10/16 19:04:10  bernard
+*      - Utiliser les macros latitude_maximale et lm_maximal pour definir
+*        les valeurs de MAXJ et MAXM, respectivement
+*      - Faire l'I/O en mode 64 bits et conserver tous les resultats en 64 bits
+*      - Verifier que l'allocation de la memoire de travail e ete reussie
+*      - Ne plus faire d'appel a MACSPE
+*      - Declarations 'a la' F90
+*
+*     Revision 4.19  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.18  2012/09/07 19:15:57  dugas
+*     - Allocations et declarations "a la" F90.
+*     - Correction de la declaration de GETHIC.
+*
+*     Revision 4.17  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.16  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.15  2003/09/15 16:06:36  dugas
+*     Corriger le test de verification de grilles de type G
+*
+*     Revision 4.14  2001/06/14 19:37:18  armnrbd
+*     Modifier le traitement des conversions d'unites.
+*
+*     Revision 4.13  2000/03/07 21:40:49  armnrbd
+*     Ajouter des commentaires sur l'usage du parametre "-kuv".
+*
+*     Revision 4.12  1999/11/03 20:38:23  armnrbd
+*     Enlever la routine MEMGWQD.
+*     Faire les transformees de Legendre en Real*8.
+*
+*     Revision 4.11  1998/07/23 19:55:02  armnrbd
+*     Modifier le traitement associe a la routine MPSERV.
+*
+*     Revision 4.10  1998/07/03  02:26:30  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.9  1998/06/11  20:02:20  armnrbd
+*     La valeur par defaut de KPAK devient -32.
+*
+*     Revision 4.8  1997/09/26  18:15:42  armnrbd
+*     Deuxieme phase de la generalisation de taille_entete.
+*
+*     Revision 4.7  1997/09/26  17:39:03  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.6  1997/05/30  18:04:36  armnrbd
+*     Conversions de noms/unites seulement pour fichiers SQ89.
+*
+*     Revision 4.5  1996/12/16  00:15:09  armnrbd
+*     Modifier le calcul de ILH.
+*
+*     Revision 4.4  1996/10/15  17:17:11  armnrbd
+*     Ajouter la cle "-npg"
+*
+*     Revision 4.3  1996/02/06  18:15:07  armnrbd
+*     Tenir compte du type de fichier dans le calcul de ILG.
+*
+*     Revision 4.2  1996/02/05  18:06:02  armnrbd
+*     Corriger la conversion d'unites pour les fichiers SQI.
+*
+*     Revision 4.1  1996/01/08  15:55:10  armnrbd
+*     Tenir compte des unites de vents que l'on trouve sur les fichiers SQI.
+*
+*     Revision 4.0  1994/11/17  14:20:39  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/08/16  21:02:05  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.1  94/03/10  11:47:22  armnrbd
+*     Corriger la documentation.
+*     
+*     Revision 3.0  93/10/13  13:56:21  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.10  93/08/19  15:20:10  15:20:10  armnrbd (Bernard Dugas)
+*     Modifications cosmetiques.
+*     
+*     Revision 1.9  93/08/04  11:42:49  armnrbd
+*     Utiliser CLRLMT dans les calculs de lrlmt.
+*     Utiliser l'option d'allocation Real*8 de HPALLOC.
+*     
+*     Revision 1.8  93/03/30  11:34:03  armnrbd
+*     Remplacer l'appel explicite a Mp_Block() par un appel
+*     a mpserv('BLOCK',bidon).
+*     
+*     Revision 1.7  92/12/21  15:33:39  armnrbd
+*     Utiliser FFTINI2 (SFFT au niveau FACTOR5a).
+*     Implanter defaut primaire/secondaire pour KUV.
+*     
+*     Revision 1.6  92/12/19  22:24:05  armnrbd
+*     Utiliser RPBLOC pour passer les parametres.
+*     Utiliser les symmetries hemispheriques dans les transformees de legendre.
+*     
+*     Revision 1.5  92/09/15  15:55:35  armnrbd
+*     Dernier bogue empechant de tourner en rond.
+*     
+*     Revision 1.4  92/09/15  13:20:29  armnrbd
+*     Correction a GWAQD2.
+*     
+*     Revision 1.3  92/03/17  14:20:42  armnrbd
+*     Isoler appel a Mp_Block par un SGI_MP.
+*     
+*     Revision 1.2  92/03/17  14:04:26  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/11  14:36:39  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:47  armnrbd
+*     Initial revision
+*     
+
+***   OCT 12/91 - B.DUGAS, RPN. (NEW ORDER IN ARRAY DQ)
+***   JAN 17/91 - B.DUGAS, RPN. (CALL TO GETLIGN ADDED)
+***   NOV 22/90 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77).
+***   FEV 22/85 - B.DUGAS. (SET TO 22 T20 GRIDS AT A TIME INSTEAD OF 25)
+
+*-----------------------------------------------------------------------
+      IMPLICIT      none
+
+      REAL(8), PARAMETER :: ZERO = 0.0
+      INTEGER, PARAMETER :: HEAD = taille_entete
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXM = lm_maximal , MAXNP = 64
+
+      LOGICAL       OK
+      REAL(8)       CONVERT
+      CHARACTER(4)  TYPE,PKTYP1,PKTYP2,
+     +              NAMEDD,NAMEQR,NAMEUU,NAMEVV
+      CHARACTER     LIGNE*80,VALEUR*10,CNPG*5,GRTYP
+      INTEGER       JBUF(HEAD),JPAK,NP,NF,IHEM,IER,NPG
+      INTEGER       IBU(HEAD,MAXNP),IBV(HEAD,MAXNP),IFAC(20),LSR(2,MAXM)
+      INTEGER       MAXLEV,NX,ND,NQ,NR,ILEV,NSP,I,L,LRT,LMT,ITIM
+      INTEGER       ILG1,ILH,ILATH,LA,LAW,LR,LM,LRLMT,KTR,LEVL
+      INTEGER       MAXW,NWDS,LENSPE,LENGRD, ILG,ILAT,KUV,IO,N
+      REAL(8)       SL(MAXJ),WL(MAXJ),CL(MAXJ),
+     +              RAD(MAXJ),WOSSL(MAXJ)
+
+      REAL(8),      ALLOCATABLE,DIMENSION(:) :: DQ,UU,VV,P,CA,DP,
+     +                           CT,WRK,TRIG,ALP,DALP,EPSI,UF,VF
+       INTEGER,      ALLOCATABLE :: IBUF(:)
+
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+C$    INTEGER       mpserv,Bidon
+C$    EXTERNAL      mpserv
+
+      INTEGER,      EXTERNAL :: CLRLMT
+      CHARACTER(4), EXTERNAL :: GETHIC,GETYP
+      LOGICAL,      EXTERNAL :: RPBLOC,SETIO64
+      EXTERNAL      MACSPE,JCLPNT,GETLIGN,BURNF,XIT
+      EXTERNAL      GETBUF2,DIMGT2,LBLCHK,SETLAB,FFTINI2
+      EXTERNAL      LGTST,GETFLD2,GWAQD,LWBW,PUTFLD2
+
+      DATA          CONVERT / .514444 /, NPG / -1 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gwtqd.ptn,v $'
+
+*-----------------------------------------------------------------------
+***   ACCEDER LES FICHIERS D'E/S.
+
+      NF = 6
+      CALL JCLPNT( NF, 1,2, 3,4, 5,6 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***   READ SPECTRAL ARRAY SIZE, TRUNCATION TYPE, KUV AND NPG.
+***   KUV=1 CONVERTS REAL WINDS TO MODEL WINDS. 
+
+      IF (RPBLOC( ' ',VALEUR ))                                    THEN
+
+          LRT  =  0
+          LMT  =  0
+          KTR  =  0
+          KUV  =  0
+          CNPG = ' '
+
+          OK = RPBLOC('LRT',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=901,IOSTAT=IO) LRT
+          OK = RPBLOC('LMT',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=901,IOSTAT=IO) LMT
+          OK = RPBLOC('KTR', VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=901,IOSTAT=IO) KTR 
+          OK = RPBLOC('KUV', VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=901,IOSTAT=IO) KUV
+          OK = RPBLOC('NPG', VALEUR)
+          IF (OK) CNPG = VALEUR
+
+      ELSE
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                             THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5010, ERR=901,END=902,IOSTAT=IO) 
+     +                           LRT,LMT,KTR,KUV,CNPG
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (KUV.EQ.1) WRITE(6,6108)
+
+***   GET SPECTRAL DIMENSIONS.
+
+      LRLMT = CLRLMT( LRT+1,LMT+1,KTR,.TRUE. )
+      CALL DIMGT2( LSR, LA,LR,LM,KTR,LRLMT, 0,-1 )
+      LAW   = LA+LM
+
+      WRITE(6,6120) LA,LR,LM,KTR,LRLMT
+
+***   READ SIZE OF GRIDS AND DETERMINE MAXLEV.
+
+      CALL GETBUF2( -1, JBUF,HEAD,OK)
+      IF (.NOT.OK) GOTO 903
+
+      PKTYP1 = GETYP( 1 )
+
+      WRITE(TYPE,4) JBUF(1)
+
+                               ILG1  =  JBUF(5)
+                               ILG   =  ILG1-1
+      IF (MOD( ILG1,2 ).EQ.0)  ILG   =  ILG1
+                               ILH   = (ILG1+1)/2
+      IF (MOD( ILG1,2 ).EQ.0)  ILH   =  ILH+1
+
+                               GRTYP = 'G'
+      IF (PKTYP1(1:2).EQ.'SQ') GRTYP = GETHIC( 'GRTYP',JBUF )
+
+      ILAT  =  JBUF(6)
+      ILATH =  ILAT/2
+      IHEM  =  JBUF(7)
+
+      IF (TYPE .NE.'GRID' .OR.
+     +    GRTYP.NE.'G'    .OR.
+     +    IHEM .NE. 00    ) CALL                   XIT('  Gwtqd ',-1 )
+
+***   ACCOUNT FOR A NON-BLANK INPUT VALUE OF NPG.
+***   BLANK VALUES DEFAULT TO THE MINUMUM OF THAT
+***   FOUND IN IBUF AND -32.
+
+      NPG = -32
+      IF (CNPG.NE.' ') READ(CNPG,5) NPG
+      IF (CNPG.EQ.' ') NPG = MIN( JBUF(8),NPG )
+
+***   SIZE OF I/O BUFFERS.
+
+      CALL LBLCHK( LENGRD, NWDS,JPAK,JBUF )
+      CALL SETLAB( JBUF,  'SPEC',-1,' ',-1,LA,1,LRLMT,NPG ) 
+      CALL LBLCHK( LENSPE, NSP, JPAK,JBUF )
+
+      MAXW  = MAX( LENSPE,LENGRD )-HEAD
+
+***    CHECK THE NUMBER OF PARALLEL THREADS AVAILABLE.
+ 
+      NP    =  1
+C$    NP    =  nombre_de_taches
+C$    NP    = mpserv('THREADS',NP)
+C$    Bidon = mpserv('BLOCK',Bidon)
+ 
+***   DETERMINE REQUIRED AMOUNT OF MEMORY FOR EACH FIELD
+***   AND ALLOCATE ACCORDINGLY.
+
+      ALLOCATE( ALP (LAW*NP),   \
+                DALP(LAW*NP),   \
+                CA  (LA),       \
+                EPSI(LAW),      \
+                TRIG(ILG*6),    \
+                UF  (ILH*2*ILAT*NP), \
+                VF  (ILH*2*ILAT*NP), \
+                CT  (ILG*2*NP), \
+                DP  (LA*ILATH), \
+                P   (LA*ILATH), \
+                DQ  (LA*4*NP),  \
+                UU  (NWDS*NP),  \
+                VV  (NWDS*NP),  \
+                WRK (ILG*4*NP), \
+                IBUF(MAXW+HEAD), STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT('  Gwtqd ',-8 )
+
+***    CALCULATE THE CONSTANTS.
+
+      CALL FFTini2( TRIG,IFAC,ILG, IER ) 
+  
+      CALL LGTST( ILAT,LRLMT, SL,WL, CA,P,DP,
+     +            CL,RAD,WOSSL,  ALP,DALP,EPSI,
+     +            LSR,LA,LM, .TRUE.,.TRUE., 0,NP )
+  
+      MAXLEV = NP
+
+*-----------------------------------------------------------------------
+***   READ AS MANY U AND V FIELDS AS POSSIBLE.
+
+      NR   = 0
+  140 ILEV = 0
+      NX   = 1
+      DO 160 L=1,MAXLEV 
+
+         CALL GETFLD2( 1, UU(NX), 'GRID',-1,' ',-1, IBUF,MAXW,OK )
+
+         IF (.NOT.OK)                                          THEN
+             IF (ILEV+NR.EQ.0)                                 THEN
+                 CALL                              XIT('  Gwtqd ',-2 )
+             ELSE IF (ILEV.EQ.0)                               THEN
+                 WRITE (6,6110) NR
+                 CALL                              XIT('  Gwtqd ', 0 ) 
+             ELSE
+                 GOTO 170
+             END IF
+         END IF
+
+         IF (NR+L.EQ.1)               CALL PRTLAB( IBUF )
+                                      NX   = NX+NWDS 
+                                      ILEV = ILEV+1
+                                      NR   = NR+1
+
+         DO 160 N=1,HEAD 
+            IBU(N,L) = IBUF(N)
+  160 CONTINUE
+
+  170 NX = 1
+      DO 180 L=1,ILEV 
+
+          CALL GETFLD2( 2, VV(NX), 'GRID',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK) CALL                        XIT('  Gwtqd ',-3 )
+
+          IF (NR+L.EQ.ILEV+1) CALL PRTLAB( IBUF )
+
+          NX = NX+NWDS 
+
+          DO 180 N=1,HEAD 
+              IBV(N,L)=IBUF(N)
+  180 CONTINUE
+
+      DO 190 L=1,ILEV 
+          CALL CMPLBL( 0,IBU(1,L), 0,IBV(1,L), OK )
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( IBU ) ; CALL PRTLAB( IBV )
+              CALL                                 XIT('  Gwtqd ',-4 )
+          END IF
+  190 CONTINUE
+
+***   COMPUTE VORT AND DIV FROM WINDS.
+
+      IF (KUV.EQ.1)                                            THEN
+          CALL LWBW( UU, ILG1,ILAT,ILEV,CL, 1 )
+          CALL LWBW( VV, ILG1,ILAT,ILEV,CL, 1 )
+      END IF
+
+      CALL gwaqd( UU,VV,DQ, UF,VF,P,DP, ILG1,ILAT,LA,ILH,
+     +            ILEV,LM,ILG,CT, LSR,IFAC,WRK, TRIG,WOSSL )
+
+***    TRY TO ACCOUNT FOR DIFFERENT OUTPUT NAMES AND UNITS
+***    BY INSPECTING THE LAST INPUT VARIABLE NAMES.
+
+      PKTYP2 = GETYP( 2 )
+
+      WRITE(NAMEUU,0004) IBU(3,ILEV)
+      WRITE(NAMEVV,0004) IBV(3,ILEV)
+
+      IF      ((NAMEUU.EQ.'UU'  .AND. NAMEVV.EQ.'V'   ) .OR.
+     +         (NAMEUU.EQ.'U'   .AND. NAMEVV.EQ.'VV  ') )      THEN
+          WRITE(6,6007) NAMEUU,NAMEVV
+          CALL                                     XIT(' Gwtqd ',-7 )
+      ELSE IF  (NAMEUU.EQ.'U'    .OR.  NAMEVV.EQ.'V'  )        THEN
+          NAMEDD = 'DIV'
+          NAMEQR = 'VORT'
+      ELSE IF ((NAMEUU.EQ.'UU'   .OR. NAMEVV.EQ.'VV'  ) .OR.
+     +         (PKTYP1.EQ.'SQ89' .OR. PKTYP2.EQ.'SQ89') )      THEN
+          NAMEDD = 'DD'
+          NAMEQR = 'QR'
+      ELSE
+          NAMEDD = 'DIV'
+          NAMEQR = 'VORT'
+      END IF
+
+      IF (NAMEDD.EQ.'DD')                                      THEN
+          DO  I=1,4*LA*ILEV
+              DQ(I) = DQ(I)*CONVERT
+          END DO
+      END IF
+
+***   PUT SPECTRAL VORT,DIV ON FILES 3,4. 
+
+      ND = 1
+      NQ = ND+2*LA
+      DO 200 L=1,ILEV 
+
+         ITIM = IBU(2,L)
+         LEVL = IBU(4,L)
+
+         CALL SETLAB( IBUF, 'SPEC',ITIM,NAMEQR,LEVL,LA,1,LRLMT,NPG )
+         CALL PUTFLD2( 3, DQ(NQ), IBUF,MAXW )
+
+         IF (NR+L.EQ.ILEV+1) CALL PRTLAB( IBUF )
+
+         READ(NAMEDD,4) IBUF(3)
+         CALL PUTFLD2( 4, DQ(ND), IBUF,MAXW )
+
+         IF (NR+L.EQ.ILEV+1) CALL PRTLAB( IBUF )
+
+         ND = NQ+2*LA 
+         NQ = ND+2*LA 
+
+  200 CONTINUE
+      GO TO 140 
+
+*-------------------------------------------------------------------
+***   E.O.F. ON INPUT.
+
+  901 IF (IO.NE.0)
+     +    WRITE(6,6180) IO
+
+  902 IF (IO.EQ.0)
+     +    WRITE(6,6005) 
+
+      CALL                                         XIT(' Gwtqd ',-5 )
+  
+***   E.O.F. ON UNIT 1.
+  
+  903 WRITE(6,6006) 
+      CALL                                         XIT(' Gwtqd ',-6 )
+  
+*-----------------------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+
+ 5010 FORMAT(10X,4I5,A5)
+
+ 6005 FORMAT(' Empty input record.')
+ 6006 FORMAT(' Empty data file.')
+ 6007 FORMAT(' Input variable name mismatch, U,V = ',A,1x,A)
+
+ 6108 FORMAT('0 Include Wind conversion'/)
+ 6110 FORMAT('0Gwtqd converted ',I6,' records.') 
+ 6120 FORMAT('0LA,LR,LM,KTR,LRLMT=',4I8,I10)
+ 6180 FORMAT(' Gwtqd reports I/O error number ',I4)
+
+      END 
+      SUBROUTINE gwaqd ( UU,VV,DQ, UF,VF,P,DP,    ILON,ILAT,LA,ILH,
+     +                             NP,LM,ILG,CT,  LSR,IFAC,
+     +                             WRK,TRIG,WOSSL )
+
+***   Nov 23/90 - B.Dugas, RPN.
+***   OCT 12/91 - B.DUGAS, RPN. (NEW ORDER IN ARRAYS DQ,UF,VF,P AND DP)
+
+***   Gwaqd TRANSFORMS UU,VV GRIDPOINT VALUES TO QR,DD SPECTRAL VALUES.
+
+      IMPLICIT  none
+
+      INTEGER   ILON,ILAT,LA,ILH,NP,LM,ILG,IFAC(1),LSR(2,1)
+      REAL(8)   DQ(2,LA,2,NP),UU(ILON,ILAT,NP), VV(ILON,ILAT,NP)
+      REAL(8)   P(LA,1),DP(LA,1)
+
+      REAL(8)   WOSSL(ILAT), UF(2,ILH,ILAT,NP),VF(2,ILH,ILAT,NP)
+      REAL(8)   CT(ILG,2,NP),WRK(ILG,4,NP),    TRIG(1)
+
+      INTEGER   I,J,J1,J2,ILATH,M,N,MUN,NN,NLI,NLF,NLD
+      REAL(8)   AM,OVIM,SD,SV
+
+C$    INTEGER   mpserv,mp,bidon
+C$    EXTERNAL  mpserv
+
+      DATA      MUN / -1 /
+
+*--------------------------------------------------------------------
+      ILATH = ILAT/2
+
+C$doacross local(NN,I,J,J1,J2,M,N,AM,NLI,NLF,OVIM,SD,SV)
+
+      DO 1000 NN=1,NP
+
+         OVIM = 1.0/FLOAT(2*ILG)
+
+         DO 40 J=1,ILAT
+
+            DO I=1,ILG
+               CT(I,1,NN)=UU(I,J,NN)*OVIM
+               CT(I,2,NN)=VV(I,J,NN)*OVIM
+            END DO
+
+            CALL SFFT( MUN, ILG,1,IFAC, CT(1,1,NN), CT(1,2,NN),
+     +                                 WRK(1,1,NN),WRK(1,2,NN),TRIG )
+
+            UF(1,1,J,NN)=2.0*WRK(1,1,NN)
+            VF(1,1,J,NN)=2.0*WRK(1,2,NN)
+            UF(2,1,J,NN)=0.0
+            VF(2,1,J,NN)=0.0
+            DO M=2,LM
+               UF(1,M,J,NN)=+WRK(M,1,NN)+WRK(ILG+2-M,1,NN)
+               UF(2,M,J,NN)=+WRK(M,2,NN)-WRK(ILG+2-M,2,NN)
+               VF(1,M,J,NN)=+WRK(M,2,NN)+WRK(ILG+2-M,2,NN)
+               VF(2,M,J,NN)=-WRK(M,1,NN)+WRK(ILG+2-M,1,NN)
+            END DO
+
+   40    CONTINUE
+
+***      LEGENDRE TRANSFORMS. VORTICITY   IN DQ(*,*,2,*) 
+***                           DIVERGENCCE IN DQ(*,*,1,*) 
+
+         DO 70 M=1,LM
+
+            AM  = DBLE(M-1)
+            NLI = LSR(1,M)
+            NLF = LSR(1,M+1)-1
+            NLD = NLF-NLI+1
+
+***          INITIALISE WRK.
+
+            DO N=1,NLD
+               WRK(N,1,NN) = 0.0
+               WRK(N,2,NN) = 0.0
+               WRK(N,3,NN) = 0.0
+               WRK(N,4,NN) = 0.0
+            END DO
+
+            DO 60 J1=1,ILATH
+
+               SV  = -1.0
+               SD  = -1.0
+
+               J2 = ILAT-J1+1
+
+***            VORTICITY LENGENDRE TRANSFORM
+
+               DO N=1,NLD
+
+                  SV = -SV
+
+                  WRK(N,3,NN)  = WRK(N,3,NN)
+     +             + WOSSL(J1) * (    UF(1,M,J1,NN)*DP(N+NLI-1,J1)
+     +                           - AM*VF(2,M,J1,NN)* P(N+NLI-1,J1) )
+     +        - SV * WOSSL(J2) * (    UF(1,M,J2,NN)*DP(N+NLI-1,J1)
+     +                           + AM*VF(2,M,J2,NN)* P(N+NLI-1,J1) )
+
+                  WRK(N,4,NN)  = WRK(N,4,NN)
+     +             + WOSSL(J1) * (    UF(2,M,J1,NN)*DP(N+NLI-1,J1)
+     +                           + AM*VF(1,M,J1,NN)* P(N+NLI-1,J1) )
+     +        - SV * WOSSL(J2) * (    UF(2,M,J2,NN)*DP(N+NLI-1,J1)
+     +                           - AM*VF(1,M,J2,NN)* P(N+NLI-1,J1) )
+
+               END DO
+
+**             DIVERGENCE LENGENDRE TRANSFORM
+
+               DO N=1,NLD
+
+                  SD  = -SD
+
+                  WRK(N,1,NN)  = WRK(N,1,NN)
+     +             - WOSSL(J1) * (    VF(1,M,J1,NN)*DP(N+NLI-1,J1)
+     +                           + AM*UF(2,M,J1,NN)* P(N+NLI-1,J1) )
+     +        + SD * WOSSL(J2) * (    VF(1,M,J2,NN)*DP(N+NLI-1,J1)
+     +                           - AM*UF(2,M,J2,NN)* P(N+NLI-1,J1) )
+
+                  WRK(N,2,NN)  = WRK(N,2,NN)
+     +             - WOSSL(J1) * (    VF(2,M,J1,NN)*DP(N+NLI-1,J1)
+     +                           - AM*UF(1,M,J1,NN)* P(N+NLI-1,J1) )
+     +        + SD * WOSSL(J2) * (    VF(2,M,J2,NN)*DP(N+NLI-1,J1)
+     +                           + AM*UF(1,M,J2,NN)* P(N+NLI-1,J1) )
+
+               END DO
+
+   60       CONTINUE
+
+            DO N=1,NLD
+               DQ(1,N+NLI-1,1,NN) = WRK(N,1,NN)
+               DQ(2,N+NLI-1,1,NN) = WRK(N,2,NN)
+               DQ(1,N+NLI-1,2,NN) = WRK(N,3,NN)
+               DQ(2,N+NLI-1,2,NN) = WRK(N,4,NN)
+            END DO
+
+   70    CONTINUE
+
+ 1000 CONTINUE
+
+C$    mp = mpserv( 'BLOCK',bidon )
+
+      RETURN
+      END
+#     endif

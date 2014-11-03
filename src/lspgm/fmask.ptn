@@ -1,0 +1,380 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      fmask  GG MASK INPUT OUTPUT \ 
+*            [ -t1 VAL1 -name VAL2 -kind VAL3 -a VAL4 -npg VAL5 ]
+*
+*
+*     DESCRIPTION... 
+*      fmask  - MAKES 1. OR 0. MASK FROM A GRID OR A SET OF GRIDS.
+*
+*
+*     AUTHORS - J.D.Henderson AND B.Dugas, NOV 15 1985.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fmask.ptn,v 4.16 2014/09/25 20:20:47 dugas Exp $
+*
+*
+*     PURPOSE - PRODUCES A FLOATING POINT MASK (0. OR 1.) FROM A FIELD READ
+*               FROM FILE GG AND A LOGICAL OPERATOR (LOP) AND COMPARISON
+*               NUMBER (VALUE) WHICH ARE BOTH READ FROM STDIN.  FOR EACH 
+*               NUMBER IN THE FIELD, WHENEVER (FIELD.LOP.VALUE) IS TRUE,
+*               THE MASK IS SET TO 1.0, OTHERWISE IT IS SET TO 0.0
+*
+*     NOTES   - 1) THE FIELD FROM GG MAY BE REAL OR COMPLEX.
+*               2) COMPLEX FIELDS ARE TREATED AS A STRING OF REAL NUMBERS
+*
+*
+*     INPUT FILE...
+*      GG = FILE OF REAL OR COMPLEX FIELDS
+*
+*     OUTPUT FILE...
+*      MASK = MASK FIELDS COMPUTED FROM THE FIELDS IN GG.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NT,NAME (t1,name) = STEP AND NAME OF FIELD TO BE SELECTED IN GG.
+*                          BLANK INPUT DEFAULTS TO -1 AND 'NEXT',
+*                          RESPECTIVELY i.e. TREAT ALL RECORDS.
+*      LOP     (kind)    = 2 CHARACTER LOGICAL OPERATOR. THE KNOWN
+*                          OPERATORS ARE (EQ,NE,LT,LE,GT,GE).
+*                          THE DEFAULT OPERATOR IS 'GT'.
+*      VALUE   (a)       = COMPARISON VALUE FOR LOP.
+*      NPG               = OUTPUT PACKING DENSITY (THE DEFAULT
+*                          BEHAVIOUR IS TO KEEP IT UNCHANGED).
+*
+*      READ( 5,5010 ) NT,NAME,LOP,VALUE
+*5010  FORMAT(10X,I10,1X,A4,3X,A2,E10.0,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*    FMASK        36   TS   GT      273.   -4
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+* FOR THE ABOVE EXAMPLE THE MASK WILL BE SET TO  1.0 WHENEVER THE
+* VALUE IN THE FIELD TS IS GREATER THAN 273.0, AND 0.0 ELSEWHERE.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON GG
+*       2 TOO MANY LEVELS AND/OR GRID TOO LARGE
+*       3 UNSUPPORTED LOGICAL OPERATOR
+*       4 ERROR READING INPUT PARAMETERS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM fmask
+*     PROGRAM FMASK (GG,       MASK,       INPUT,       OUTPUT,
+*    1         TAPE1=GG, TAPE2=MASK, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ---------------------------------------------------------
+*     $Log: fmask.ptn,v $
+*     Revision 4.16  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.15  2010/02/15 22:34:27  dugas
+*     - Utiliser la fonction intrinseque MERGE plutot que CVMGT.
+*     - Utiliser DATE2STAMP pour coder NT, qui est maintenant INTEGER*8.
+*
+*     Revision 4.14  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.13  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.12  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.11  2003/12/10 22:43:32  dugas
+*     Implementer le calcul en mode 64 bits
+*
+*     Revision 4.10  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.9  2002/12/06 16:23:17  dugas
+*     Implementer le mode CALL SETRABT( '&NON' )
+*
+*     Revision 4.8  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.7  1998/09/23  18:37:36  armnrbd
+*     Ajouter le parametre -npg et enlever l'ancienne valeur
+*     de compaction par defaut qui etait de 4 bits/mots.
+*
+*     Revision 4.6  1998/07/03  02:26:24  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:38:52  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1997/09/23  14:30:23  armnrbd
+*     Utiliser GETSIZ2 pour determiner la taille du probleme.
+*     Ne pas utiliser le nom FMSK si le nom de recherche est NEXT.
+*
+*     Revision 4.3  1996/02/16  20:21:15  armnrbd
+*     Utiliser LEADBLK sur le parametre NOM.
+*
+*     Revision 4.2  1995/10/24  15:35:12  armnrbd
+*     Augmenter MAXW de 100000 a 1000000.
+*
+*     Revision 4.1  1995/06/02  20:17:24  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.0  94/11/17  14:20:01  14:20:01  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.0  93/10/13  13:55:58  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/10/13  15:57:07  15:57:07  armnrbd (Bernard Dugas)
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.1  92/04/09  12:04:25  armnrbd
+*     Ajouter valeurs de defauts pout NAME,NT et LOP.
+*     
+*     Revision 1.0  92/04/06  16:04:17  armnrbd
+*     Initial revision
+*     
+*     NOV 15/85 - B.DUGAS, J.D.HENDERSON (VECTORISER...)
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      REAL*8      VALUE
+      INTEGER*8 :: NT,MUN=-1
+      LOGICAL     OK,SPEC,ZONL
+      CHARACTER*4 TYPE,NOM,NAME,FMSK
+      CHARACTER   LOP*2,LIGNE*80,ANT*20,PKG*5
+      INTEGER     NFF,NF,NWDS,STAMP,IO,NLEV,I,
+     +            IER,LEV(MAXLEV),STEP,NPG,
+     +            JBUF(taille_entete),LEN,NWDS0,JPAK,
+     +            NLEV0,MAXW,MEM
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: GG,GMSK
+
+      INTEGER     GETSIZ2
+      INTEGER*8   Y2KDAT8
+      LOGICAL     RPBLOC,SETIO64
+      EXTERNAL    RPBLOC,GETSIZ2
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,LEADBLK,
+     +            GETSET2,PUTSET2,XIT,Y2KDAT8,SETIO64,
+     +            DATE2STAMP
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        FMSK / 'FMSK' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/fmask.ptn,v $'
+
+*---------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ANT = ' '
+          NOM = ' '
+          LOP = ' '
+          PKG = ' '
+          
+          VALUE = 0.0
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) ANT = LIGNE
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NOM = LIGNE
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) LOP = LIGNE
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=900,END=900,IOSTAT=IO) VALUE
+
+          OK = RPBLOC('NPG',LIGNE)
+          IF (OK) PKG = LIGNE
+
+          OK = RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        GET MASK INFORMATION FROM STDIN. NT AND NAME IDENTIFY
+***        THE FIELD TO BE READ. LOP IS A TWO CHARACTER LOGICAL 
+***        OPERATOR (EQ,NE,LT,GT,LE,GE) AND VALUE IS THE FIELD 
+***        COMPARISON NUMBER.
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO )
+     +                     ANT,NOM,LOP,VALUE,PKG
+              CALL BURNF
+          END IF
+
+      END IF
+
+      NF=0
+
+***    TAKE CARE OF DEFAULT VALUES.
+
+      IF (NOM.NE.'  ') CALL LEADBLK( NOM )
+      IF (NOM.EQ.'-1') NOM = 'NEXT'
+      IF (NOM.EQ.'  ') NOM = 'NEXT'
+      IF (ANT.EQ.'  ') ANT = '-1'
+      IF (LOP.EQ.'  ') LOP = 'GT'
+
+      READ(ANT,20,ERR=900,END=900,IOSTAT=IO) NT
+      CALL DATE2STAMP( NT,STAMP )
+
+      NT = Y2KDAT8( NT )
+
+      WRITE(6,6008) NT,NOM
+      WRITE(6,6010) LOP,VALUE
+ 
+***    ALLOCATE WORKING MEMORY.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS0,JPAK, LEV,NLEV0 )
+      IF (MAXW.LE.0) CALL                          XIT('  Fmask ',-2 )
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS0 = JBUF(5)
+
+      MEM = MAX( MAXW,NWDS0*NLEV0 )
+      ALLOCATE( IBUF(2*LEN),GG(MEM),GMSK(MEM) )
+
+***    GET THE REQUESTED FIELD FROM FILE 1.
+ 
+  100 CALL GETSET2( 1, GG, LEV,NLEV, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,GG,GMSK )
+                  GOTO 050
+              END IF
+              WRITE(6,6030) NF
+              IF (NF.EQ.0)  CALL                   XIT('  Fmask ',-1 )
+              CALL                                 XIT('  Fmask ', 0 )
+          END IF
+
+          WRITE(TYPE,4) IBUF(1)
+          WRITE(NAME,4) IBUF(3)
+          STEP = IBUF(2)
+
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 100
+
+          IF (NF.EQ.0)  CALL PRTLAB( IBUF )
+
+          IF (NOM   == 'NEXT') GOTO 200
+          IF (NOM   /= NAME   .OR.
+     +       (NT    /= MUN    .AND. 
+     +        STAMP /= STEP) ) GOTO 100
+
+  200     SPEC = ( (TYPE.EQ.'SPEC') .OR.
+     +             (TYPE.EQ.'FOUR') .OR.
+     +             (TYPE.EQ.'CMPL') )
+
+          ZONL = ( TYPE.EQ.'ZONL' )
+
+                    NWDS = IBUF(5)*IBUF(6)
+          IF (ZONL) NWDS = IBUF(5)
+          IF (SPEC) NWDS = NWDS*2
+ 
+          IF (NWDS*NLEV.GT.NWDS0*NLEV0) CALL       XIT('  Fmask ',-2 )
+
+***        PREPARE THE MASK ACCORDING TO KIND AND VALUE.
+ 
+          IF (LOP.EQ.'LT')                                     THEN
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+     +          GG(1:NWDS*NLEV) < VALUE )
+          ELSE IF(LOP.EQ.'GT')                                 THEN
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+     +          GG(1:NWDS*NLEV) > VALUE )
+          ELSE IF(LOP.EQ.'GE')                                 THEN
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+     +          GG(1:NWDS*NLEV) >= VALUE )
+          ELSE IF(LOP.EQ.'LE')                                 THEN
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+     +          GG(1:NWDS*NLEV) <= VALUE )
+          ELSE IF(LOP.EQ.'EQ')                                 THEN
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+     +          GG(1:NWDS*NLEV) == VALUE )
+          ELSE IF(LOP.EQ.'NE')                                 THEN
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+     +          GG(1:NWDS*NLEV) /= VALUE )
+          ELSE
+              CALL                                 XIT('  Fmask ',-3 )
+          END IF
+ 
+***        SAVE THE MASK ON FILE 2.
+ 
+          IF (NAME.NE.'SUBA' .AND.
+     +        NAME.NE.'NEXT' ) READ(FMSK,0004)                   IBUF(3)
+          IF (PKG .NE. ' '   ) READ(PKG, 0005,ERR=900,IOSTAT=IO) IBUF(8)
+
+          CALL PUTSET2( 2, GMSK, LEV,NLEV, IBUF,MAXW )
+
+          IF (NF.EQ.0) CALL PRTLAB( IBUF )
+
+      NF = NF+NLEV
+      GOTO 100
+ 
+***    E.O.F. ON INPUT.
+ 
+  900 IF (IO.NE.0) WRITE(6,6100) IO
+      CALL                                         XIT('  Fmask ',-4 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+ 0020 FORMAT(BN,I20)
+
+ 5010 FORMAT(10X,A10,1X,A4,3X,A2,E10.0,A5)
+
+ 6008 FORMAT('0Field ',I16,2X,A4)
+ 6010 FORMAT('0Mask for all values',2X,A2,E12.3/)
+ 6030 FORMAT('0Fmask read ',I5,' fields.')
+ 6100 FORMAT(' Fmask reports I/O error number ',I3,' on unit 5.')
+
+      END
+#     endif

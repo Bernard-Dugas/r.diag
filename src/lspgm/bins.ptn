@@ -1,0 +1,299 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      bins  X XB INPUT OUTPUT [-a VAL1]
+*
+*
+*     DESCRIPTION...
+*      bins   - SIMPLE BINNING PROGRAM
+*
+*
+*     AUTHOR  - G.J.Boer, November 1985
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/bins.ptn,v 4.8 2014/09/25 20:20:45 dugas Exp $
+*
+*
+*     PURPOSE - SIMPLE TIMESTEP BINNING PROGRAM.
+*     NOTE    - X  MAY BE REAL OR COMPLEX, AS WELL
+*               AS MULTI-LEVEL.
+*
+*
+*     INPUT FILES...
+*      X  = FILE OF REAL OR COMPLEX FIELDS
+*
+*     OUTPUT FILES...
+*      XB = AVERAGE OF "NBIN" CONSEQUTIVE INPUT VALUES
+*
+*
+*     INPUT PARAMETER...
+*
+*      NBIN (a) = NUMBER OF VALUES PER BIN (MINIMUM OF 2)
+*
+*      READ(5,5010) NBIN
+*5010  FORMAT(10X,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*  BINS       3
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 PROBLEM READING FIRST SET
+*      2 MORE THAN ONE SIZE IN FILE X
+*      3 PROBLEMS READING DIRECTIVE CARD
+*      4 NBIN TOO SMALL
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM bins
+*     PROGRAM BINS (X,       XB,       INPUT,       OUTPUT,
+*    1        TAPE1=X, TAPE2=XB, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -----------------------------------------------------
+*     $Log: bins.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2012/07/26 16:37:24  dugas
+*     Sauver des DATEO/DATEV/IP3/DEET/NPAS 'a la TIMAVG' pour les fichier CMC/RPN.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.3  1998/07/03 02:26:20  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1997/09/26  17:38:44  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1995/11/20  14:02:51  armnrbd
+*     Version multi-niveaux.
+*
+*     NOV   /85 - G.J.BOER
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      LOGICAL     OK,SPEC
+      REAL(8)     DELTAT,FACT
+      CHARACTER   LIGNE*80,TYPE*4,PKTYP*2
+      INTEGER     NFF,NBIN,NR,NB,MAXW,IO,DATEO,DATEF,
+     +            LEV(MAXLEV),NLEV,NLEVA,NLEVB,IER,DEET,
+     +            KBUF(taille_entete),LEN,KPAK,NWDS,I,K,NF,MEM
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+      REAL(8),    DIMENSION(:), ALLOCATABLE :: A,B
+
+      CHARACTER(4),EXTERNAL :: GETYP
+      INTEGER,     EXTERNAL :: GETSIZ2
+      LOGICAL,     EXTERNAL :: RPBLOC,SETIO64
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,CMPLBL,
+     +            GETSET2,PUTSET2,XIT
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/bins.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NBIN = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 0005, END=900,ERR=900,IOSTAT=IO ) NBIN
+
+      ELSE
+ 
+***        READ NUMBER OF VALUES PER BIN FROM CARD - MINIMUM OF 2.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ(LIGNE,5010,ERR=900,END=900,IOSTAT=IO) NBIN
+              CALL BURNF
+          END IF
+
+      END IF
+
+      WRITE(6,6005) NBIN
+      IF (NBIN.LE.1) CALL                          XIT('  Bins  ',-4 )
+
+      NR = 0
+      NB = 0
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, KBUF,LEN,NWDS,KPAK, LEV,NLEV )
+      IF (MAXW.LE.0) CALL                          XIT('  Bins  ',-1 )
+
+      WRITE(TYPE,0004) KBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      MEM = MAX( MAXW,NWDS*NLEV )
+      ALLOCATE( IBUF(LEN),JBUF(LEN), A(MEM),B(MEM) )
+
+***    READ THE NEXT SET OF RECORDS IN THE BIN
+
+  100 CALL GETSET2( 1, A, LEV,NLEVA, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6010) NR,NB,NF
+              IF (NR.EQ.0) CALL                    XIT('  Bins  ',-1 )
+              CALL                                 XIT('  Bins  ', 0 )
+          END IF
+
+***        BYPASS LABEL/CHARACTER DATA.
+
+          WRITE(TYPE,0004) IBUF(1)
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 100
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+          IF (.NOT.OK .OR. NLEVA.NE.NLEV)                      THEN
+              WRITE(6,6020) NLEV,NLEVA
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( KBUF )
+              CALL                                 XIT('  Bins  ',-2 )
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+          DATEO = IBUF(2)
+
+          NR = NR+NLEV
+          NB = NB+NLEV
+          NF = 1
+
+***        READ SUBSEQUENT RECORDS IN BIN AND AVERAGE
+
+  200     CALL GETSET2( 1, B, LEV,NLEVB, JBUF,MAXW,OK )
+
+              IF (.NOT.OK) GOTO 300
+              NR = NR+NLEVB
+
+***            AGAIN, BYPASS LABEL/CHARACTER DATA.
+
+              WRITE(TYPE,0004) JBUF(1)
+              IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 200
+
+***            MAKE SURE THAT THE FIELDS ARE THE SAME KIND AND SIZE.
+
+              CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+              IF (.NOT.OK .OR. NLEVA.NE.NLEVB)                 THEN
+                  WRITE(6,6020) NLEVA,NLEVB
+                  CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+                  CALL                             XIT('  Bins  ',-2 )
+              END IF
+
+***            AVERAGE THE NBIN VALUES
+
+              DO  I=1,NWDS*NLEV
+                  A(I) = A(I)+B(I)
+              END DO
+
+              NF = NF+1
+
+          IF (NF.LT.NBIN) GOTO 200
+
+          DATEF = JBUF(2)
+
+          IF (PKTYP == 'SQ')                                   THEN
+
+              CALL DIFDATR( DATEF,DATEO,DELTAT )
+              DEET = NINT( DELTAT/(NBIN-1) )*3600
+
+              CALL PUTHIGH( DATEO,'DATEO',IBUF )
+              CALL PUTHIGH( DEET ,'DEET' ,IBUF )
+              CALL PUTHIGH( NF-1 ,'NPAS' ,IBUF )
+              CALL PUTHIGH( NBIN ,'IP3'  ,IBUF )
+
+              IBUF(2) = NF-1
+
+          END IF
+
+***        GET BIN AVERAGE
+
+  300     FACT = 1.0/FLOAT( NBIN )
+
+          DO  I=1,NWDS*NLEV
+              A(I)=A(I)*FACT
+          END DO
+
+***        SAVE THE RESULT ON FILE XB WITH IBUF
+***        THAT OF THE FIRST RECORD IN THE BIN.
+
+          CALL PUTSET2( 2, A, LEV,NLEV, IBUF,MAXW )
+
+***        INFORMATION OUTPUT AT END OF LAST BIN
+
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( JBUF )
+              WRITE(6,6010) NR,NB,NF
+              CALL                                 XIT('  Bins  ', 0 )
+          END IF
+
+      GOTO 100
+
+  900 CALL                                         XIT('  Bins  ',-3 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+
+ 5010 FORMAT(10X,I5)
+
+ 6005 FORMAT(' Bin size=', I5)
+ 6010 FORMAT(' Records=',I5,3X,'Bins=',I5,3X,'number in last bin=',I5)
+ 6020 FORMAT(' Expecting ',I4,' levels. Found ',I4)
+
+      END
+#     endif
+
+
+

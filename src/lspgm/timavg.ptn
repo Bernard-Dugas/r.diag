@@ -1,0 +1,1403 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      accumul NEW  ACCUM [MISSACC] [MISSING] OUTPUT [ -mvalue VAL1 -kind VAL2 ]
+*      timavg  SERA AVGA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -kind VAL2 -def VAL3 -npg VAL4 ]
+*      timmax  SERA MAXA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -def  VAL2 -npg VAL3 ]
+*      timmin  SERA MINA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -def  VAL2 -npg VAL3 ]
+*
+*
+*     DESCRIPTIONS...
+*      (1) accumul - ADDS THE CONTENT OF NEW TO THAT OF ACCUM
+*      (2) timavg  - COMPUTES THE AVERAGE OF ALL SAMPLES IN A FILE
+*      (3) timmax  - FINDS MAXIMUM TIME-SERIES VALUE AT EACH POINT
+*      (4) timmin  - FINDS MINIMUM TIME-SERIES VALUE AT EACH POINT
+*
+*
+*     AUTHOR  - J.D.Henderson, MAY 07/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/timavg.ptn,v 4.39 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     PURPOSE - (1) PERFORMS AS AN ACCUMULATOR: ADDS INFORMATION FROM FILE
+*                   NEW TO THAT OF FILE ACCUM. THE RESULT IS A SAMPLE AVERAGE
+*               (2) COMPUTES THE 2-D SAMPLE AVERAGE FOR EACH VARIABLE AND
+*                   LEVEL OF A SERIES OF (MULTI-LEVEL) SETS OF DATA,
+*                   EACH HAVING THE SAME SIZE AND TYPE.
+*           (3)/(4) FINDS THE TIMEWISE MAXIMUM/MINIMUM FOR EACH
+*                   GRID POINT AND SAVES IT IN THE OUTPUT FILE.
+*
+*
+*     INPUT FILES...
+*      SERA/NEW = SERIES OF MULT-VARIABLE MULTI-LEVEL SETS, WHERE
+*                 THE DATA MAY BE REAL OR COMPLEX. THE FILE IS SUPPOSED
+*                 TO BE SORTED ACCORDING TO A TIMESTEP/NAME/LEVEL RULE,
+*                 FROM MOST TO LEAST SIGNIFICANT.
+*      ACCUM    = (OPTIONALLY) A SINGLE STEP OF MULT-VARIABLE MULTI-LEVEL
+*                 ACCUMULATIONS RESULTING FROM PREVIOUS JOB STEPS. THE
+*                 PREVIOUS SAMPLE SIZE FOUND IN ACCUM IS USED TO
+*                 CORRECTLY ADD THE NEW FILE TO ACCUM
+*
+*     OUTPUT FILE...
+*        (1)  ACCUM     = UPDATED ACCUMULATOR SET. OVEWRITES ORIGINAL FILE.
+*        (2)  AVGA      = ONE SET WHICH IS THE MEAN OF ALL THE SETS IN SERA.
+*    (3)/(4)  MAXA/MINA = TIMEWISE MAXIMUM/MINIMUM VALUES AT EACH GRID POINT
+*
+*
+*     Command-line arguments...
+*      mvalue = Real number used to identify missing values (DEF = none)
+*      kind   = "SAMPLES", modifies the way sample sizes are handled (see notes)
+*             = "SQUARE", does the sum of the square input fields with ACCUMUL.
+*      def    = "KEEPTIME", turns off all of the descriptor management (see notes)
+*      npg    = Output packing density (DEF = -32)
+*
+*
+*     Missing value mode...
+*      Missing value treatment is activated by providing a real number to be
+*      used as a missing value flag with the "-mvalue" command-line argument.
+*      Data that has this value will be disregarded by the program. Accessory
+*      files can also be provided to indicate how many samples were used to
+*      build values read in input. Otherwise, the program assumes that the
+*      total sample size gives this information for all valid points. The
+*      program will write this updated information in the MISSACC/MISSOUT
+*      files. These files have the same 3D structure as the other files.
+*
+*     Files associated with the missing value mode...
+*      MISSING  = Number of samples in input file that had valid data and
+*                 where used in the calculation of NEW at each point. The
+*                 default value is the IP3 (CMC/RPN) or IBUF(2) (CCC) found
+*                 in the new input data. If present, there has to be many as
+*                 sets of data in this file as in the new input data file.
+*      MISSOUT  = Number of samples that had valid data and where used
+*                 in the calculation of AVGA,MAXA or MINA at each point.
+*                 If MISSING was specified, this will be accounted for.
+*      MISSACC  = Same as MISSING/MISSOUT when running in ACCUMUL mode
+*                 for file ACCUM.
+*
+*      The program may attempt to automatically determine wether missing
+*      values are present at startup by examining the first set of records
+*      as the different "missing value" files can only be processed when this
+*      situation is correctly identified. Explicitely specifying "-mvalue"
+*      at startup will remove any ambiguity and may in fact be required.
+*
+*
+*     Notes: 1) Specifying the "-npg" command-line parametre with a valid
+*               value forces TIMAVG/TIMMIN/TIMMAX to use this packing density
+*               on output.
+*            2) The first file's sample size may also be used by ACCUMUL to
+*               correctly build the ensemble mean. This will always occurr
+*               with RPN Standard files, but will only occurr with CCRN
+*               files when the command-line parameter sequence "-kind SAMPLES"
+*               is specified. In the latter case, the number in IBUF(2) will
+*               be assumed to be a sample size and not a date/step number.
+*            3) Each record in a file can also be representative of several
+*               samples. Specifying the same "-kind SAMPLES" arguments with
+*               TIMAVG will correctly account for the sample sizes.
+*            4) When dealing with RPN Standard files, accumul and timavg modify
+*               the file's time descriptors such that the earliest sample time
+*               is saved in DATEO, while the latest can be reconstructed from
+*               new values of DATEO, NPAS and DEET. In addition, IP3 will then
+*               contain the number of time samples used to construct the average.
+*               Other R.DIAG modules such as TIMGEN and the statistical testing
+*               modules (FTEST, ...) can then use this information directly.
+*
+*    ************************************************************************
+*   *** All of the above descriptor modifications can be avoided in timavg ***
+*  ***    by specifying the "-def KEEPTIME" parametre on the command line   ***
+*   ***     !!! But usage of this key is  generally NOT RECOMMENDED !!!    ***
+*    ************************************************************************
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH VERTICAL LEVELS IN INPUT FILE
+*       2 PREMATURE EOF IN FILE SERA
+*       3 MORE THAN ONE SIZE FOUND IN SERA/NEW
+*       4 AT LEAST ONE TIMESTEP SET IS INCOMPLETE
+*       5 ACCUMUL: VARIABLES AND/OR LEVELS DIFFER IN NEW AND ACCUM
+*       6 UNABLE TO ALLOCATE ENOUGH WORKING MEMORY
+*       7 BAD ARGUMENT VALUE WITH A COMMAND-LINE PARAMETRE
+*       8 UNRECOGNIZED OUTPUT FILE IN ACCUMUL MODE
+*       9 MISSING VALUES: VARIABLES AND/OR LEVELS DIFFER, OR UNABLE TO READ
+*      10 MISSING VALUES: TYPVAR .NE. 'MV' IN FILE MISSACC/MISSING
+*      11 MISSING VALUES DETECTED, BUT MISSING VALUE MODE NOT ACTIVE (-mvalue)
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM timavg
+*    1               (SERA,        AVGA,       OUTPUT,
+*    2         TAPE11=SERA, TAPE12=AVGA, TAPE6=OUTPUT)
+*     ------------------------------------------------
+
+*     $Log: timavg.ptn,v $
+*     Revision 4.39  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.38  2014/02/17 22:43:41  dugas
+*     Etendre la doc concernant les fichiers MISSING/MISSOUT/MISSACC.
+*
+*     Revision 4.37  2014/01/09 19:32:01  dugas
+*     Faire un UP2LOW sur le resultat de l'appel a GETVERB.
+*
+*     Revision 4.36  2013/12/18 23:48:00  bernard
+*      - Verifier si des valeurs manquantes ont ete detectees a la
+*        lecture, et ce malgre que le mode valeur manquante" soit
+*        inactif. Arreter le traitement si cela se produit.
+*
+*     Revision 4.35  2010/02/15 22:57:41  dugas
+*     On fait une moyenne des echantillons, tenant compte des IP3.
+*
+*     Revision 4.34  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.33  2008/04/25 21:17:42  dugas
+*     Implementer l'option 'SQUARE, does the sum of the square input fields with ACCUMUL'.
+*
+*     Revision 4.32  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.31  2007/08/29 16:34:24  dugas
+*     Corriger le format 6000 pour qu'il utilise le bon VERBE.
+*
+*     Revision 4.30  2006/12/18 12:41:40  dugas
+*     Ameliorer la gestions des fichiers associes aux valeurs manquantes.
+*
+*     Revision 4.29  2006/09/19 19:11:06  dugas
+*     - Corriger le code preparant les appels a WRITLEV.
+*     - Les index de valeurs manquantes sont sauves avec TYPVAR='MV'.
+*
+*     Revision 4.28  2006/07/04 17:53:21  dugas
+*     Ajouter le support des donnees manquantes par le biais soit
+*      du parametre "-mvalue valeur [epsilon]", soit de la variable
+*      d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*      nombre reel denotant une valeur manquante et "epsilon" est
+*      le facteur de precision utilise dans les comparaisons. La
+*      valeur par defaut de epsilon est 1%. La seconde methode a
+*      preseance sur la premiere.
+*
+*     Revision 4.27  2006/02/09 17:13:52  dugas
+*     Etendre le traitement de l'option "-kind SAMPLES" a TIMAVG plutot
+*      que le restreindre a ACCUMUL. Ceci permets un meilleur traitement
+*      du nombre d'echantillons utilise pour calcule une moyenne.
+*
+*     Revision 4.26  2005/07/05 18:45:44  dugas
+*     Faire passer MAXLEV de 1999 a 9999.
+*
+*     Revision 4.25  2004/11/12 16:38:27  dugas
+*     Remplacer le format interne (I5) par (BN,I5).
+*
+*     Revision 4.24  2003/12/22 17:16:42  dugas
+*     Verifier que le permier fichier input est de type acceptable et non vide.
+*     Deplacer le calcul de NLEV apres la varification associee a MAXW/GETSIZ4.
+*
+*     Revision 4.23  2003/12/15 21:10:30  dugas
+*     Corriger le premier calcul de NLEV (apres xit -1)
+*
+*     Revision 4.22  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.21  2003/01/21 14:59:16  dugas
+*     Faire en sorte que TIMMIN et TIMMAX repondent aux
+*      parametres "-def KEPPTIME" et "-npg".
+*
+*     Revision 4.20  2002/12/06 16:24:41  dugas
+*     Toujours sauver le nombre d'echantillon dans IP3 pour les fichier RPN.
+*
+*     Revision 4.19  2001/10/11 11:15:05  armnrbd
+*     Les noms lus par GETSIZ4 et ecrits par PUTMSET2 contiennent
+*     maintenant les etiquettes des enregistrements (RPN STD).
+*
+*     Revision 4.18  2001/09/24 14:58:16  armnrbd
+*     Implanter GETSIZ4 et GET/PUT(MSET2).
+*
+*     Revision 4.17  2001/03/13 21:45:40  armnrbd
+*     Ajouter  le parametre "-npg" pour le mode TIMAVG.
+*
+*     Revision 4.16  2001/02/01 12:46:19  armnrbd
+*     Corriger une ou deux petites erreurs avec la derniere modif.
+*
+*     Revision 4.15  2001/02/01 12:39:53  armnrbd
+*     Ajouter l'option "-def KEEPTIME" pour le mode TIMAVG.
+*     Utiliser (GET/PUT)HIGH plutot que (GET/PUT)PARI.
+*
+*     Revision 4.14  2000/04/07 20:19:48  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.13  1999/06/21 18:46:27  armnrbd
+*     Corriger le message d'erreur -5.
+*
+*     Revision 4.12  1998/10/23 19:21:46  armnrbd
+*     Renforcir le controle de la compatibilite entre les fichiers de donnees.
+*
+*     Revision 4.11  1998/09/10  20:42:15  armnrbd
+*     Ajouter les points d'entrees TIMMAX et TIMMIN.
+*
+*     Revision 4.10  1998/07/07  15:06:20  armnrbd
+*     Remplacer DATMGP par DATMGP2 (probleme Y2K).
+*
+*     Revision 4.9  1997/10/10  19:05:36  armnrbd
+*     Modifier les indicateurs temporels pour les fichiers SQI.
+*
+*     Revision 4.8  1997/09/26  17:39:25  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.7  1997/04/17  18:16:41  armnrbd
+*     Suite de la derniere correction. On avait ouble de traiter DATEIA.
+*
+*     Revision 4.6  1997/04/08  02:57:33  armnrbd
+*     Corriger un probleme lorsque DATEO et DATEI ne
+*     sont pas dans le meme mois: on doit faire le
+*     calcul du jour Julien absolu.
+*
+*     Revision 4.5  1997/02/17  03:43:02  armnrbd
+*     Ajouter le mode de fonctionnement ACCUMUL.
+*
+*     Revision 4.4  1996/11/26  20:13:06  armnrbd
+*     Tenir compte du temps decroissant dans le cas de fichiers SQI.
+*
+*     Revision 4.3  1996/10/15  17:16:02  armnrbd
+*     Sauver ou lire la taille de l'echantillon dans IP3
+*     pour les fichiers de type SQI.
+*
+*     Revision 4.2  1995/10/26  17:44:07  armnrbd
+*     Ajouter de la decumentation sur le mode de fonctionnement multi-variable.
+*
+*     Revision 4.1  1995/07/07  03:04:10  armnrbd
+*     Implanter un mode de travail a multi-variables.
+*
+*     Revision 4.0  1994/11/17  14:22:08  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:14  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  92/11/18  15:50:30  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/04/03  11:41:07  armnrbd
+*     Accumulateur a 64 bits plutot qu'a 32 bits.
+*     
+*     Revision 1.1  92/04/02  12:24:50  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:01  armnrbd
+*     Initial revision
+*     
+*     AVR 05/91 - B.Dugas, RPN (Allocation dynamique de memoire)
+*     NOV 15/90 - B.DUGAS, RPN (PORT TO CY920/IRIX)
+*     MAR 11/88 - F.MAJAESS (COSMETIC MODIFICATIONS)
+*     MAR 10/88 - F.MAJAESS (CORRECT HANDLING OF AN EMPTY FILE "SERA")
+*     MAY 07/80 - J.D.HENDERSON
+
+*---------------------------------------------------------------------------
+      IMPLICIT    none
+ 
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 9999 )
+
+      REAL        ZERO
+      CHARACTER*2 TYPVAR,MISTYP
+      CHARACTER   VERBE*8,VALEUR*20
+      CHARACTER*4 TYPE,ACCSTAT,ACCMISS,PREMISS
+      LOGICAL     MODTIM,MVALUE,MISSOUT,SQUARE,
+     +            OK,OK2,ACCUM,TIMAX,TIMIN,SAMPLES
+      REAL*8      FNI,HEURE,MISFLAG,EPSILON,EPS
+      INTEGER     I,K,NF,MEM,NWDS,LEN,IER,MAXW,NLEV,HEAD,
+     +            LEV(MAXLEV,2),LEV2(MAXLEV,2),KPAK,KBUF(taille_entete),
+     +            DATEI,JOURI,HEURI,DATEO,NPAS,HOLD, MAXW2,LEN2,
+     +            DATEAI,JOURAI,HEURAI,LBUF(taille_entete),
+     +            LPAK,NWDS2,DATIM(14),DATEF,JOURF,NR,
+     +            NRECS,STEP(MAXLEV),DEET,NSET,NSET2,
+     +            HEURF,ANNEE,JOUR,MOIS,DEETA,IO,
+     +            NPG,SET(0:MAXLEV),SET2(0:MAXLEV),
+     +            DATEAF,JOURAF,HEURAF,NLEV2,IER2,
+     +            NSETSA(MAXLEV),NSETSB(MAXLEV),
+     +            NSAMP(MAXLEV),NSETS,NIP3(MAXLEV),
+     +            MBUF(taille_entete),M0,M1,
+     +            NMIN,NMAX
+
+      CHARACTER*20 VARIAB(MAXLEV),VARIAB2(MAXLEV)
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: F,AVG,MF,MA
+
+#     include "machtype.cdk" 
+
+      INTEGER     GETSIZ4,GETHIGH
+      EXTERNAL    GETSIZ4,GETHIGH,PUTHIGH
+
+      LOGICAL     SETIO64,RPBLOC
+      CHARACTER*4 PKTYP*2,GETYP,GETHIC
+      EXTERNAL    MACSPE,JCLPNT,XIT,GETMSET3,MISPAR,
+     +            WRITLEV2,PUTMSET3,GETHIC,PUTHIC,
+     +            GETYP,INCDATR,DIFDATR,SETIO64,
+     +            GETVERB,DATMGP2,JDATEC,RPBLOC
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        NPG/ 999 /, MODTIM,OK,OK2/ 3*.TRUE. /
+      DATA        MISSOUT,SAMPLES,SQUARE/ 3*.FALSE. /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/timavg.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&OUI' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5
+      CALL JCLPNT( NF, 11,12,13,14, 6 )
+ 
+      NSETS = 0
+      NRECS = 0
+      NSAMP = 0
+      NSETSA= 0
+
+      PKTYP = GETYP( 11 )
+      CALL GETVERB( VERBE ) ; CALL up2low( VERBE,VERBE )
+
+***    DOES I/O UNIT 12 ALREADY CONTAIN INFO ?
+
+      CALL GETSTAT( 12,ACCSTAT )
+
+      IF (ACCSTAT.EQ.' ' .OR.
+     +    ACCSTAT.EQ.'NONE' ) CALL                 XIT( VERBE ,-8 )
+
+***    CHECK MISSING VALUE PARAMETRES.
+
+      CALL MISPAR( MVALUE,MISFLAG,EPSILON )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    WHAT OPERATING MODE: STANDARD, ACCUMULATOR OR MAX/MIN ?
+
+                              TIMAX = .FALSE.
+                              TIMIN = .FALSE.
+                              ACCUM = .FALSE.
+      IF (VERBE.EQ.'accumul') ACCUM = .TRUE.
+      IF (VERBE.EQ.'timmin' ) TIMIN = .TRUE.
+      IF (VERBE.EQ.'timmax' ) TIMAX = .TRUE.
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK
+
+          IF (     (TIMIN .OR. TIMAX)
+     +        .AND.(PKTYP .EQ. 'SQ' ))                         THEN
+
+***            (CASE 1: TIMMIN/TIMMAX modes with standard files).
+
+              OK = RPBLOC('NPG',VALEUR )
+              IF (OK) READ( VALEUR,0005,ERR=900,IOSTAT=IO ) NPG
+
+              OK = RPBLOC('DEFAUT',VALEUR )
+              CALL LOW2UP(  VALEUR,VALEUR )
+              IF (OK) MODTIM = (VALEUR.NE.'KEEPTIME')
+
+              IF (.NOT.MODTIM) WRITE(6,6000) trim( VERBE )
+
+          ELSE IF (.NOT.(ACCUM .OR. TIMIN .OR. TIMAX)
+     +             .AND.(PKTYP .EQ. 'SQ' ))                    THEN
+
+***            (CASE 2: TIMAVG mode with standard files).
+
+              OK = RPBLOC('NPG',VALEUR )
+              IF (OK) READ( VALEUR,0005,ERR=900,IOSTAT=IO ) NPG
+
+              OK = RPBLOC('DEFAUT',VALEUR )
+              CALL LOW2UP(  VALEUR,VALEUR )
+              IF (OK) MODTIM = (VALEUR.NE.'KEEPTIME')
+
+              IF (.NOT.MODTIM) WRITE(6,6000) trim( VERBE )
+
+              OK = RPBLOC('KIND',VALEUR )
+              CALL LOW2UP(  VALEUR,VALEUR )
+
+              IF (OK) SAMPLES = (VALEUR.EQ.'SAMPLES')
+
+              IF (SAMPLES) WRITE(6,6501)
+
+          ELSE IF (ACCUM)                                      THEN
+
+***            (CASE 3: ACCUMUL).
+
+              OK = RPBLOC('KIND',VALEUR )
+              CALL LOW2UP(  VALEUR,VALEUR )
+
+              IF (OK)                                          THEN
+
+                  IF (PKTYP.NE.'SQ')                           THEN
+
+                      SAMPLES = (VALEUR.EQ.'SAMPLES')
+
+                      IF (SAMPLES) WRITE(6,6502)
+
+                  END IF
+
+                  SQUARE  = (VALEUR.EQ.'SQUARE')
+
+                  IF (SQUARE .AND. MVALUE)                     THEN
+                      SQUARE = .FALSE.
+                      WRITE(6,6550)
+                  END IF
+
+                  IF (SQUARE) WRITE(6,6551)
+
+              END IF
+
+          END IF
+
+      END IF
+
+      ACCMISS = ' '
+      PREMISS = ' '
+
+      IF (MVALUE)                                              THEN
+
+          EPS = EPSILON * ABS( MISFLAG )
+
+***        CHECK FILES USED BY MISSING VALUE PROCESSING.
+
+          IF (NF.GT.2) MISSOUT = .TRUE.
+
+          IF (NF.GT.3)                                         THEN
+
+***            DOES MISSING (I/O UNIT 14) REALLY CONTAIN INFO ?
+
+              CALL GETSTAT( 14,PREMISS )
+
+              IF (PREMISS.NE.'OLD') CALL           XIT( VERBE ,-9 )
+
+          END IF
+          IF (ACCUM .AND. MISSOUT)                             THEN
+
+***            DOES MISSACC (I/O UNIT 13) ALREADY CONTAIN INFO ?
+
+              CALL GETSTAT( 13,ACCMISS )
+
+              IF (ACCMISS.EQ.' ' .OR.
+     +            ACCMISS.EQ.'NONE' ) CALL         XIT( VERBE ,-9 )
+
+          END IF
+
+      ENDIF
+
+***    FIND HOW MANY VARIABLES AND LEVELS IN ONE SET AND ASK
+***    FOR  NECESSARY MEMORY. USE NEXT SET OF INFO BUFFERS.
+ 
+  100 MAXW = GETSIZ4( 11, KBUF,LEN,NWDS,KPAK, SET,NSET,
+     +                    LEV,VARIAB, MAXLEV )
+
+      IF (MAXW.NE.0 .AND. NSETS.EQ.0 .AND. PKTYP.EQ.'SQ')      THEN
+
+***        SAVE DEET AS WELL AS INITIAL DATE AND CURRENT TIMESTEP.
+
+          DEET  = GETHIGH('DEET' ,KBUF )
+          NPAS  = GETHIGH('NPAS' ,KBUF )
+          DATEO = GETHIGH('DATEO',KBUF )
+
+***        SAVE ORIGINAL TYPVAR.
+
+          TYPVAR = GETHIC('TYPVAR',KBUF )
+
+***        CALCULATE CURRENT DATE.
+
+          IF (DEET.NE.0)                                       THEN
+              HEURE = (NPAS*(DBLE( DEET )/60.))/60.
+              CALL INCDATR( DATEI,DATEO,HEURE )
+          ELSE
+              DATEI = DATEO
+          END IF
+          
+      ELSE IF (MAXW.LE.0)                                      THEN
+
+          WRITE(6,6100) VERBE,NSET,MAXLEV
+          CALL                                     XIT( VERBE ,-1 )
+
+      END IF
+
+      NLEV = SET(1)
+      DO  I=2,NSET
+          IF (NLEV.NE.SET(I)-SET(I-1)) NLEV = 0
+      END DO
+
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      CALL PRTLAB( KBUF )
+      WRITE(6,6250) (VARIAB(SET(I))(1:4),I=1,NSET)
+
+      IF (NLEV*NSET.EQ.SET(NSET))                              THEN
+          CALL WRITLEV2( LEV,NLEV, KBUF )
+      ELSE
+          WRITE(6,6450) NSET,SET(NSET)
+      END IF
+
+      IF (ACCUM .AND. ACCSTAT.EQ.'OLD' .AND. NSETS.EQ.0)       THEN
+
+***        CHECK ACCUMULATOR FILE RECORD SIZE.
+
+          MAXW2 = GETSIZ4( 12, LBUF,LEN2,NWDS2,LPAK, SET2,NSET2,
+     +                         LEV2,VARIAB2, MAXLEV )
+
+          IF (MAXW2.EQ.0)                                      THEN
+
+***            THE FILE WILL BE OVERWRITTEN.
+
+              ACCSTAT   = 'NEW'
+
+          ELSE
+
+***            CHECK THE PARAMETERS FROM THE ACCUMULATOR.
+
+              NLEV2 = SET2(1)
+              DO  I=2,NSET2
+                  IF (NLEV2.NE.SET2(I)-SET2(I-1)) NLEV2 = 0
+              END DO
+
+              CALL CMPLBL( 0,LBUF, 0,KBUF, OK )
+
+              IF (.NOT.OK                  .OR.
+     +            SET(NSET).NE.SET2(NSET2) .OR. 
+     +                NSET .NE.     NSET2  ) THEN
+                  CALL PRTLAB( LBUF )
+                  WRITE(6,6250) (VARIAB2(SET(I))(1:4),I=1,NSET2)
+                  IF (NLEV2*NSET2.EQ.SET2(NSET2))
+     +                CALL WRITLEV2( LEV2,NLEV2, LBUF )
+                  CALL                             XIT( VERBE ,-5 )
+              END IF
+
+              DO  I=1,NSET
+                  IF (VARIAB(SET(I))(1:4) .NE.
+     +                VARIAB2(SET2(I))(1:4))                   THEN
+                      WRITE(6,6101) I,VARIAB2(SET2(I))(1:4)
+                      CALL                         XIT( VERBE ,-5 )
+                  END IF
+                  DO  K=SET(I-1)+1,SET(I)
+                      IF (LEV(I,1).NE.LEV2(I,1))               THEN
+                          WRITE(6,6102) I,LEV2(I,1)
+                          CALL                     XIT( VERBE ,-5 )
+                      END IF
+                  END DO
+              END DO
+
+          END IF
+
+          MAXW = MAX( MAXW,MAXW2 )
+          LEN  = MAX( LEN, LEN2 )
+
+      END IF
+
+      IF (MVALUE)                                              THEN
+
+***        CHECK SIZE OF MISSING VALUE FILES.
+
+          IF (ACCMISS.EQ.'OLD' .AND. NSETS.EQ.0)               THEN
+
+              MAXW2 = GETSIZ4( 13, MBUF,LEN2,NWDS2,LPAK, SET2,NSET2,
+     +                             LEV2,VARIAB2, MAXLEV )
+
+              IF (MAXW2.EQ.0)                                  THEN
+
+                  ACCMISS = 'NEW'
+
+              ELSE
+
+***                CHECK THE PARAMETERS FROM THE MISSING VALUE FILES
+
+                  NLEV2 = SET2(1)
+                  DO  I=2,NSET2
+                      IF (NLEV2.NE.SET2(I)-SET2(I-1)) NLEV2 = 0
+                  END DO
+
+                  CALL CMPLBL( 0,MBUF, 0,KBUF, OK )
+
+                  IF (.NOT.OK                  .OR.
+     +                SET(NSET).NE.SET2(NSET2) .OR. 
+     +                NSET .NE.     NSET2  )                   THEN
+                      CALL PRTLAB( MBUF )
+                      WRITE(6,6250) (VARIAB2(SET(I))(1:4),I=1,NSET2)
+                      IF (NLEV2*NSET2.EQ.SET2(NSET2))
+     +                    CALL WRITLEV2( LEV2,NLEV2, MBUF )
+                      CALL                         XIT( VERBE ,-9 )
+                  END IF
+
+                  DO  I=1,NSET
+                      IF (VARIAB(SET(I))(1:4) .NE.
+     +                    VARIAB2(SET2(I))(1:4))               THEN
+                          WRITE(6,6101) I,VARIAB2(SET2(I))(1:4)
+                          CALL                     XIT( VERBE ,-9 )
+                      END IF
+                      DO  K=SET(I-1)+1,SET(I)
+                          IF (LEV(I,1).NE.LEV2(I,1))           THEN
+                              WRITE(6,6102) I,LEV2(I,1)
+                              CALL                 XIT( VERBE ,-9 )
+                          END IF
+                      END DO
+                  END DO
+
+              END IF
+
+              MAXW = MAX( MAXW,MAXW2 )
+              LEN  = MAX( LEN, LEN2 )
+
+          END IF
+
+          IF (PREMISS.EQ.'OLD')                                THEN
+
+              MAXW2 = GETSIZ4( 14, MBUF,LEN2,NWDS2,LPAK, SET2,NSET2, 
+     +                             LEV2,VARIAB2, MAXLEV )
+
+              IF (MAXW2.EQ.0)                                  THEN
+
+                  PREMISS = 'NONE'
+
+              ELSE
+
+***                CHECK THE PARAMETERS FROM THE MISSING VALUE FILES
+
+                  NLEV2 = SET2(1)
+                  DO  I=2,NSET2
+                      IF (NLEV2.NE.SET2(I)-SET2(I-1)) NLEV2 = 0
+                  END DO
+
+                  CALL CMPLBL( 0,MBUF, 0,KBUF, OK )
+
+                  IF (.NOT.OK                  .OR.
+     +                SET(NSET).NE.SET2(NSET2) .OR. 
+     +                    NSET .NE.     NSET2  )               THEN
+                      CALL PRTLAB( MBUF )
+                      WRITE(6,6250) (VARIAB2(SET(I))(1:4),I=1,NSET2)
+                      IF (NLEV2*NSET2.EQ.SET2(NSET2))
+     +                    CALL WRITLEV2( LEV2,NLEV2, MBUF )
+                      CALL                         XIT( VERBE ,-9 )
+                  END IF
+
+                  DO  I=1,NSET
+                      IF (VARIAB(SET(I))(1:4) .NE.
+     +                    VARIAB2(SET2(I))(1:4))               THEN
+                          WRITE(6,6101) I,VARIAB2(SET2(I))(1:4)
+                          CALL                     XIT( VERBE ,-9 )
+                      END IF
+                      DO  K=SET(I-1)+1,SET(I)
+                          IF (LEV(I,1).NE.LEV2(I,1))           THEN
+                              WRITE(6,6102) I,LEV2(I,1)
+                              CALL                 XIT( VERBE ,-9 )
+                          END IF
+                      END DO
+                  END DO
+
+              END IF
+
+              MAXW = MAX( MAXW,MAXW2 )
+              LEN  = MAX( LEN, LEN2 )
+
+          END IF
+
+      END IF
+      
+      MEM = NWDS*SET(NSET)
+
+      IF (NSETS.EQ.0)                                          THEN
+          ALLOCATE( IBUF(2*LEN), F(MEM),AVG(MEM),  STAT=IER )
+      ELSE
+          ALLOCATE( IBUF(2*LEN), F(MEM),           STAT=IER )
+      END IF
+
+      IF (MVALUE)                                              THEN
+          IF (NSETS.EQ.0)                                      THEN
+              ALLOCATE(         MF(MEM), MA(MEM),  STAT=IER2 )
+          ELSE
+              ALLOCATE(         MF(MEM),           STAT=IER2 )
+          END IF
+          IER = MAX( IER,IER2 )
+      END IF
+      
+      IF (IER.NE.0)                                            THEN
+          IF (MVALUE)                                          THEN
+              WRITE(6,6006) 8*LEN*(MOD( MACHINE,2 )+1)+32*MEM
+          ELSE
+              WRITE(6,6006) 8*LEN*(MOD( MACHINE,2 )+1)+16*MEM
+          END IF
+          CALL                                     XIT( VERBE ,-6 )
+      END IF
+*-------------------------------------------------------------------------
+
+***    DO THE WORK.
+
+      IF (NSETS.EQ.0)                                          THEN
+
+***        IBUF(2) TREATMENT DEPENDS ON THE INPUT FILE TYPE.
+
+          IF (ACCUM .AND. ACCSTAT.EQ.'OLD')                    THEN
+
+***            RETREIVE THE NUMBER OF SETS ACCUMULATED
+***            (AND POSSIBLY, THE ORIGINAL DATE).
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+                  DATEAI = GETHIGH('DATEO',LBUF )
+                  NPAS   = GETHIGH('NPAS' ,LBUF )
+
+                  IF (DEET.NE.0)                               THEN
+                      DEETA = DEET
+                  ELSE
+                      DEETA = 3600
+                  END IF
+
+                  HEURE = (NPAS*(DBLE( DEETA )/60.))/60.
+                  CALL INCDATR( DATEAF,DATEAI,HEURE )
+          
+
+              END IF
+
+***            READ THE PREVIOUSLY ACCUMULATED VALUES.
+
+              CALL GETMSET3( 12, AVG, SET,NSETSA,NSET,
+     +                                LEV,VARIAB,STEP,
+     +                                IBUF,MAXW,OK )
+
+***            RE-POSITION AT START OF FILE.
+
+              CALL PRECEDE( 12,-1 )
+
+              IF (PKTYP.NE.'SQ') NSETSA(1:NSET)  = IBUF(2)
+
+              
+              IF (MVALUE)                                      THEN
+
+***                INITIALIZE MA TO THE TOTAL NUMBER OF
+***                SAMPLES  ALLREADY ACCOUNTED FOR BY AVG.
+
+                  DO  K=1,NSET
+                      M0 = NWDS*SET(K-1)+1
+                      M1 = NWDS*SET(K)    
+                      DO  I=M0,M1
+                          MA(I) = NSETSA(K)
+                      END DO
+                  END DO
+                 
+              END IF
+              IF (ACCMISS.EQ.'OLD')                            THEN
+
+***                READ THE PREVIOUSLY MISSING DATA INDICATORS.
+
+                  CALL GETMSET3( 13, MA, SET,NIP3,NSET,
+     +                                   LEV,VARIAB,STEP,
+     +                                   IBUF,MAXW,OK2 )
+
+                  IF (.NOT.OK2)                                THEN
+
+                       ACCMISS = 'NEW'
+
+                  ELSE IF (PKTYP.EQ.'SQ')                      THEN
+
+                      MISTYP = GETHIC('TYPVAR',IBUF )
+                      IF (MISTYP.NE.'MV') CALL     XIT( VERBE ,-10 )
+
+                  END IF
+
+***                RE-POSITION AT START OF FILE.
+
+                  CALL PRECEDE( 13,-1 )
+
+              END IF
+              IF (MVALUE)                                      THEN
+
+***                CHECK AVG FOR MISSING VALUES.
+
+                  DO  I=1,MEM
+                      IF (ABS( AVG(I)-MISFLAG ).LE.EPS) MA(I) = 0.0
+                  END DO
+
+              END IF
+              IF (OK)                                          THEN
+
+***                ACCOUNT FOR THE NUMBER OF SAMPLES IN AVG.
+
+                  IF (MVALUE .AND.  ACCMISS.EQ.'OLD')          THEN
+                      DO  I=1,MEM
+                          AVG(I) = AVG(I)*MA(I)
+                      END DO
+                  ELSE
+                      DO  K=1,NSET
+                          M0 = NWDS*SET(K-1)+1
+                          M1 = NWDS*SET(K)    
+                          DO  I=M0,M1
+                              AVG(I) = AVG(I)*NSETSA(K)
+                          END DO
+                      END DO
+                  END IF
+
+              END IF
+
+          END IF
+          IF (.NOT.(ACCUM .AND. ACCSTAT.EQ.'OLD' .AND. OK))    THEN
+
+***            READ THE FIRST SET. STOP IF THE FILE IS EMPTY.
+
+              CALL GETMSET3( 11, F, SET,NSAMP,NSET,
+     +                              LEV,VARIAB,STEP,
+     +                              IBUF,MAXW,OK )
+
+              IF (.NOT.OK) CALL                    XIT( VERBE ,-2 )
+
+***            CHECK WETHER MISSING VALUES HAVE BEEN DETECTED,
+***            EVEN THOUGH THE MISSING VALUE MODE IS INACTIVE.
+
+              IF (.NOT.MVALUE)                                 THEN
+                  CALL MISPAR( MVALUE,MISFLAG,EPSILON )
+                  IF (MVALUE)                                  THEN
+                      WRITE(6,6011)
+                      CALL                         XIT( VERBE ,-11 )
+                  END IF
+              END IF
+
+              NRECS  = NRECS+SET(NSET)
+              NSETS  = 1
+
+              IF (ACCUM)                                       THEN
+                  IF (PKTYP.NE.'SQ') NSAMP(1:NSET)  = IBUF(2)
+              ELSE IF (.NOT.(SAMPLES .AND. PKTYP.EQ.'SQ') )    THEN
+                  NSAMP(1:NSET) = 1
+              END IF
+
+***            HERE, DATEAI IS DEFINED AS EITHER THE INITIAL DATE "DATEO"
+***            WHEN WE ARE DEALING WITH THE PREVIOUS RESULT OF ACCUMUL
+***            (AND THEN "NSAMP.GT.1") OR  AS THE CURRENT CALCULATED 
+***            VALIDITY DATE "DATEI".
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  NMAX = NSAMP(1)
+                  DO  K=2,NSET
+                      NMAX = MAX( NMAX, NSAMP(K) )
+                  END DO
+                  IF (NMAX > 1)                                THEN
+                      DATEAI = DATEO
+                  ELSE
+                      DATEAI = DATEI
+                  END IF
+                  DATEAF = DATEI
+              END IF
+
+              IF (MVALUE)                                      THEN
+
+***                INITIALIZE MF TO THE TOTAL NUMBER OF
+***                SAMPLES  ALLREADY ACCOUNTED FOR BY F.
+
+                  DO  K=1,NSET
+                      M0 = NWDS*SET(K-1)+1
+                      M1 = NWDS*SET(K)    
+                      DO  I=M0,M1
+                          MF(I) = NSAMP(K)
+                      END DO
+                  END DO
+                 
+              END IF
+              IF (PREMISS.EQ.'OLD')                            THEN
+
+***                READ THE MISSING DATA INDICATORS.
+
+                  CALL GETMSET3( 14, MF, SET,NIP3,NSET,
+     +                                   LEV,VARIAB,STEP,
+     +                                   IBUF,MAXW,OK )
+
+                  IF (.NOT.OK)                                 THEN
+
+                      PREMISS = 'NONE'
+
+                  ELSE IF (PKTYP.EQ.'SQ')                      THEN
+
+                      MISTYP = GETHIC('TYPVAR',IBUF )
+                      IF (MISTYP.NE.'MV') CALL     XIT( VERBE ,-10 )
+
+                  END IF
+
+              END IF
+              IF (MVALUE)                                      THEN
+
+***                CHECK F FOR MISSING VALUES.
+
+                  DO  I=1,MEM
+                      IF (ABS( F(I)-MISFLAG ).LE.EPS) MF(I) = 0.0
+                  END DO
+
+              END IF
+
+***            INITALIZE AVG (AND POSSIBLY MA).
+
+              IF (.NOT. ( TIMIN .OR. TIMAX))                   THEN
+
+                  IF (MVALUE)                                  THEN
+                      DO  I=1,MEM
+                          AVG(I) =  F(I)*MF(I)
+                           MA(I) = MF(I)
+                      END DO
+                  ELSE
+                      DO  K=1,NSET
+                          M0 = NWDS*SET(K-1)+1
+                          M1 = NWDS*SET(K)    
+                          IF (SQUARE)                          THEN
+                              DO  I=M0,M1
+                                  AVG(I) = (F(I)*F(I))*NSAMP(K)
+                              END DO
+                          ELSE
+                              DO  I=M0,M1
+                                  AVG(I) =  F(I)      *NSAMP(K)
+                              END DO
+                          END IF
+                      END DO
+                  END IF
+
+              ELSE
+                  
+                  DO  I=1,MEM
+                      AVG(I) =  F(I)
+                      IF (MVALUE)
+     +                MA (I) = MF(I)
+                  END DO
+
+              END IF
+
+          END IF
+
+      END IF
+
+***    TIMESTEP LOOP. GET THE NEXT SET FROM FILE 11.
+  
+  200 CALL GETMSET3( 11, F, SET,NSETSB,NSET,
+     +                      LEV,VARIAB,STEP,
+     +                      IBUF,MAXW,OK )
+
+          IF (       .NOT.OK  .AND. MAXW.EQ.0)                 THEN
+              DEALLOCATE( IBUF,F )
+              IF (MVALUE) DEALLOCATE( MF )
+              GOTO 100
+          END IF
+
+          IF (.NOT.OK) GOTO 300
+
+***        AGAIN CHECK WETHER MISSING VALUES HAVE BEEN DETECTED,
+***        EVEN THOUGH THE MISSING VALUE MODE IS INACTIVE.
+
+          IF (.NOT.MVALUE)                                     THEN
+              CALL MISPAR( MVALUE,MISFLAG,EPSILON )
+              IF (MVALUE)                                      THEN
+                  WRITE(6,6011)
+                  CALL                         XIT( VERBE ,-11 )
+              END IF
+          END IF
+
+***        DEFINE THE NEW SAMPLE SIZE FOR ACCUMUL/TIMAVG.
+
+          IF (ACCUM)                                           THEN
+              IF (PKTYP.NE.'SQ') NSETSB(1:NSET)  = IBUF(2)
+          ELSE IF (.NOT.(SAMPLES .AND. PKTYP.EQ.'SQ') )        THEN
+              NSETSB(1:NSET) = 1
+          END IF
+
+***        DEFINE MF = THE NUMBER OF SAMPLES
+***        ACCOUNTED FOR BY THE CURRENT F.
+
+          IF (MVALUE)                                          THEN
+
+              DO  K=1,NSET
+                  M0 = NWDS*SET(K-1)+1
+                  M1 = NWDS*SET(K)    
+                  DO  I=M0,M1
+                      MF(I) = NSETSB(K)
+                  END DO
+              END DO
+                 
+          END IF
+          IF (PREMISS.EQ.'OLD')                                THEN
+
+***            READ THE MISSING DATA INDICATORS INTO MF.
+
+              CALL GETMSET3( 14, MF, SET,NIP3,NSET,
+     +                               LEV,VARIAB,STEP,
+     +                               IBUF,MAXW,OK )
+
+              IF (.NOT.OK) PREMISS = 'NONE'
+
+          END IF
+          IF (MVALUE)                                          THEN
+                 
+***            CHECK F FOR MISSING VALUES.
+
+              DO  I=1,MEM
+                  IF (ABS( F(I)-MISFLAG ).LE.EPS) MF(I) = 0.0
+              END DO
+
+          END IF
+
+***        ACCOUNT FOR THE NEW DATA.
+
+          IF (MVALUE)                                          THEN
+              IF (TIMIN)                                       THEN
+                  DO  I=1,MEM
+                      IF ( MA(I).GT.EPSILON .AND.
+     +                     MF(I).GT.EPSILON )                  THEN
+                          AVG(I) = MIN( AVG(I),F(I) )
+                          MA (I) = MA(I)+MF(I)
+                      ELSE IF (MF(I).GT.EPSILON)               THEN
+                          AVG(I) =  F(I)
+                           MA(I) = MF(I)
+                      END IF
+                  END DO
+              ELSE IF (TIMAX)                                  THEN
+                  DO  I=1,MEM
+                      IF ( MA(I).GT.EPSILON .AND.
+     +                     MF(I).GT.EPSILON )                  THEN
+                          AVG(I) = MAX( AVG(I),F(I) )
+                           MA(I) = MA(I)+MF(I)
+                      ELSE IF (MF(I).GT.EPSILON)               THEN
+                          AVG(I) =  F(I)
+                           MA(I) = MF(I)
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,MEM
+                      AVG(I) = AVG(I)+(F(I)*MF(I))
+                       MA(I) =  MA(I)+      MF(I)
+                  END DO
+              END IF
+          ELSE
+              IF (TIMIN)                                       THEN
+                  DO  I=1,MEM
+                      AVG(I) = MIN( AVG(I),F(I) )
+                  END DO
+              ELSE IF (TIMAX)                                  THEN
+                  DO  I=1,MEM
+                      AVG(I) = MAX( AVG(I),F(I) )
+                  END DO
+              ELSE
+                  DO  K=1,NSET
+                      M0 = NWDS*SET(K-1)+1
+                      M1 = NWDS*SET(K)    
+                      IF (SQUARE)                              THEN
+                          DO  I=M0,M1
+                              AVG(I) = AVG(I)+(F(I)*F(I))*NSETSB(K)
+                          END DO
+                      ELSE
+                          DO  I=M0,M1
+                              AVG(I) = AVG(I)+ F(I)      *NSETSB(K)
+                          END DO
+                      END IF
+                  END DO
+              END IF
+          END IF
+
+      NSAMP(1:NSET) = NSAMP(1:NSET)+NSETSB(1:NSET)
+
+      NRECS = NRECS+SET(NSET)
+      NSETS = NSETS+1
+      GOTO 200
+ 
+***    STOP IF THE LAST SET IS NOT COMPLETE.
+ 
+  300 IF (ACCUM   .OR.
+     +   (SAMPLES .AND. VERBE.EQ.'timavg'))                    THEN
+          NMIN = NSAMP(1) ; NMAX = NMIN
+          DO  K=2,NSET
+              NMIN = MIN( NMIN,NSAMP(K) )
+              NMAX = MAX( NMAX,NSAMP(K) )
+          END DO
+          IF (NMIN < NMAX)                                     THEN
+              WRITE(6,6303) VERBE,NSETS,(NSAMP(K),K=1,NSET)
+          ELSE
+              WRITE(6,6301) VERBE,NSETS,NSAMP(1)
+          END IF
+      ELSE
+          WRITE(6,6302) VERBE,NSETS
+      END IF
+
+      NR = NSETS*SET(NSET)
+      IF (NR.NE.NRECS)                                         THEN
+          WRITE(6,6350) NR,NRECS
+          CALL                                     XIT( VERBE ,-4 )
+      END IF
+ 
+      NSAMP(1:NSET) = NSAMP(1:NSET)+NSETSA(1:NSET)
+      NSETS         = NSAMP(1)
+
+***    CALCULATE THE AVERAGE FOR EACH OF THE SET(NSET) RECORDS.
+
+      IF (MVALUE)                                              THEN
+          DO  I=1,MEM
+              IF (MA(I).LE.EPSILON)                            THEN
+                  AVG(I) = MISFLAG
+              ELSE
+                  IF (.NOT.(TIMIN.OR.TIMAX)) AVG(I) = AVG(I) / MA(I)
+              END IF
+          END DO
+      ELSE
+          DO  K=1,NSET
+              M0 = NWDS*SET(K-1)+1
+              M1 = NWDS*SET(K)    
+
+                                         FNI = 1.0
+              IF (.NOT.(TIMIN.OR.TIMAX)) FNI = 1.0/DBLE( NSAMP(K) )
+
+              DO  I=M0,M1
+                  AVG(I) = AVG(I)*FNI
+              END DO
+          END DO
+      END IF
+
+***    PUT THE RESULT ONTO FILE 12 (BY DEFAULT, NOT PACKED).
+
+      IF (.NOT.(TIMIN.OR.TIMAX)) IBUF(8) = -32
+      IF (ACCUM .OR.
+     +    KPAK  .EQ.-64)         IBUF(8) = -64 
+      IF (NPG   .NE.999)         IBUF(8) = NPG
+
+      IF (PKTYP.EQ.'SQ' .AND. MODTIM)                          THEN
+
+***        RETREIVE LAST DATE AND SAVE IT IN DATEF.
+
+          DATEO = GETHIGH('DATEO',IBUF )
+          NPAS  = GETHIGH('NPAS' ,IBUF )
+
+          IF (DEET.NE.0)                                       THEN
+              HEURE = (NPAS*(DBLE( DEET )/60.))/60. 
+              CALL INCDATR( DATEF,DATEO,HEURE )
+          ELSE
+              DATEF = DATEO
+          END IF
+          
+***        ACCOUNT FOR DECREASING TIME:
+***        DATEI MUST ALWAYS BE THE EARLIEST TIME.
+
+***        CALCULATE JULIAN DAY CORRESPONDING TO DATEF.
+
+          DATIM(14) = DATEF
+          CALL DATMGP2( DATIM )
+
+          HEURF = DATIM(5)
+          ANNEE = DATIM(4)
+          JOUR  = DATIM(3)
+          MOIS  = DATIM(2)
+
+          CALL JDATEC( JOURF, ANNEE,MOIS,JOUR )
+
+***        CALCULATE JULIAN DAY CORRESPONDING TO DATEI.
+
+          DATIM(14) = DATEI
+          CALL DATMGP2( DATIM )
+
+          HEURI = DATIM(5)
+          ANNEE = DATIM(4)
+          JOUR  = DATIM(3)
+          MOIS  = DATIM(2)
+
+          CALL JDATEC( JOURI, ANNEE, MOIS, JOUR )
+
+***        THIS IS WHERE WE ENSURE INCREASING SAMPLE TIME.
+
+          IF (JOURF.LT.JOURI .OR.
+     +       (JOURF.EQ.JOURI .AND. HEURF.LT.HEURI))            THEN
+
+              HOLD  = DATEF
+              DATEF = DATEI
+              DATEI = HOLD
+
+              HOLD  = JOURF
+              JOURF = JOURI
+              JOURI = HOLD
+
+              HOLD  = HEURF
+              HEURF = HEURI
+              HEURI = HOLD
+
+          END IF
+
+***        AND NOW, CALCULATE JULIAN DAYS
+***        CORRESPONDING TO DATEAI ...
+
+          DATIM(14) = DATEAI
+          CALL DATMGP2( DATIM )
+
+          HEURAI = DATIM(5)
+          ANNEE = DATIM(4)
+          JOUR  = DATIM(3)
+          MOIS  = DATIM(2)
+
+          CALL JDATEC( JOURAI, ANNEE, MOIS, JOUR )
+
+***        ... AND TO DATEAF.
+
+          DATIM(14) = DATEAF
+          CALL DATMGP2( DATIM )
+
+          HEURAF = DATIM(5)
+          ANNEE = DATIM(4)
+          JOUR  = DATIM(3)
+          MOIS  = DATIM(2)
+
+          CALL JDATEC( JOURAF, ANNEE, MOIS, JOUR )
+
+***        ACCOUNT FOR ACCUMULATOR'S INITIAL STATE.
+
+          IF (JOURAF.LE.JOURI .OR.
+     +       (JOURAF.EQ.JOURI .AND. HEURAF.LT.HEURI))          THEN
+
+***            NEW SAMPLES ARE ALL LATER.
+
+              CALL DIFDATR( DATEF,DATEAI,HEURE )
+
+          ELSE IF (JOURF.LE.JOURAI .OR.
+     +            (JOURF.EQ.JOURAI .AND. HEURF.LT.HEURAI))     THEN
+
+***            NEW SAMPLES ARE ALL EARLIER.
+
+              CALL DIFDATR( DATEAF,DATEI,HEURE )
+              DATEAI   = DATEI
+
+          ELSE
+
+***            NEW AND OLD SAMPLES ARE NOT WELL ORDERED.
+
+              WRITE(6,6400) DATEO,DATEI,DATEAI,DATEAF
+
+***            DETERMINE EARLIEST AND LATEST DATES.
+
+              IF (JOURF.LE.JOURAF .OR.
+     +           (JOURF.EQ.JOURAF .AND. HEURF.LT.HEURAF))
+     +            DATEF =  DATEAF
+              IF (JOURI.LE.JOURAI .OR.
+     +           (JOURI.EQ.JOURAI .AND. HEURI.LT.HEURAI))
+     +            DATEAI = DATEI
+
+              CALL DIFDATR( DATEF,DATEAI,HEURE )
+
+          END IF
+
+          IF (DEET.NE.0)                                       THEN
+
+***            PUT VALIDITY DATE OF FIRST SET IN DATEO. THE
+***            SAMPLE SIZE IS SAVED IN IP3 AND THE NUMBER OF
+***            TIMESTEPS SPANNING THE SET GOES TO IBUF(2).
+***            THE CALCULATED VALIDITY DATE THAT WILL BE
+***            SAVED ON THE FILE WILL CORRESPOND TO
+***            THE EARLIEST SAMPLE.
+
+              NPAS = NINT( (HEURE*60.)/(DBLE( DEET )/60.) )
+
+          ELSE
+
+***            RESET DEET TO AN HOUR AND DO THE
+***            SAME THING AS IN THE PREVIOUS CASE.
+
+              NPAS = HEURE
+              DEET = 3600
+
+          END IF
+
+          CALL PUTHIGH( DATEAI,'DATEO',IBUF )
+          CALL PUTHIGH( DEET  ,'DEET' ,IBUF )
+          CALL PUTHIGH( NPAS  ,'NPAS' ,IBUF )
+
+          IBUF(2) = NPAS
+
+      ELSE
+
+          IF (MODTIM) IBUF(2) = NSETS
+
+      END IF
+
+***    MAKE SURE TYPVAR HAS ITS ORIGINAL VALUE.
+
+      IF (PKTYP.EQ.'SQ') CALL PUTHIC( TYPVAR,'TYPVAR',IBUF )
+
+***    SAVE AVERAGES.
+
+      CALL PUTMSET3( 12, AVG, SET,NSAMP,NSET, LEV,VARIAB,MAXLEV,
+     +                        IBUF,MAXW )
+
+      IF (MISSOUT)                                             THEN
+
+***        MISSING VALUES ARE SAVED WITH A 'MV' TYPVAR.
+
+          IF (PKTYP.EQ.'SQ') CALL PUTHIC( 'MV','TYPVAR',IBUF )
+
+          CALL PUTMSET3( 13, MA,  SET,NSAMP,NSET,
+     +                            LEV,VARIAB,MAXLEV,
+     +                            IBUF,MAXW )
+
+      END IF
+
+***    CLEANUP AND EXIT.
+ 
+      CALL PRTLAB( IBUF )
+      CALL                                         XIT( VERBE , 0 )
+
+***    ERROR READING NPG OR MISFLAG.
+ 
+  900 IF (IO.NE.0) WRITE(6,6007) IO
+      CALL                                         XIT( VERBE ,-7 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0020 FORMAT(BN,E20.0)
+
+ 6006 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' characters.')
+ 6007 FORMAT(' I/O error number ',I3,
+     +       ', while reading command-line parametre value.')
+ 6011 FORMAT(' Missing values detected, but the missing value',
+     +       ' mode is not active.'/' Restart with the appropriate',
+     +       ' -mvalue argument sequence and accessory files.')
+
+ 6000 FORMAT(/' ',A,' will not update the time descriptors.'/)
+ 6100 FORMAT('0..',A,' input file is empty. NSET/MAX VALUE=',2I6)
+ 6101 FORMAT(/' Problem with accumulator file...'/
+     +        ' Variable no. ',I3,' different...= ',A4/)
+ 6102 FORMAT(/' Problem with accumulator files...'/
+     +        ' Level no. ',I4,' different...= ',I6/)
+ 6250 FORMAT(/' Variable(s) : ',A4,1X,A4,1X,A4,1X,A4,1X,A4,1X,A4,1X,A4,
+     +                             1X,A4,1X,A4,1X,A4/(15X,10(A4,1X)))
+ 6301 FORMAT(/' ',A,' read',I5,'  set(s), accounting for',I6,' samples.')
+ 6302 FORMAT(/' ',A,' read',I5,'  set(s).')
+ 6303 FORMAT(/' ',A,' read',I5,'  set(s).'/
+     +       ' The number of samples for each variable(s) is ',(6I6)/)
+ 6350 FORMAT('0..Last set incomplete. NR/NRECS=',2I6)
+ 6400 FORMAT(' Warning: Beginning and end of new samples=',2I10,
+     +       ', while start and end of old samples=',2I10)
+ 6450 FORMAT(/' Each set will contain ',I3,' variables distributed',
+     +        ' over ',I4,' horizontal records.'/)
+ 6501 FORMAT(/' Timavg will use sample sizes in IP3.'/)
+ 6502 FORMAT(/' Accumul assumes IBUF(2) contains sample sizes.'/)
+ 6550 FORMAT(/' Option SQUARE unavalable with missing values.'/)
+ 6551 FORMAT(/' Option SQUARE active...'/)
+
+      END
+#     endif

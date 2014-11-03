@@ -1,0 +1,377 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      complex  X Y Z OUTPUT [-name VAL1 [VAL2]]
+*
+*
+*     DESCRIPTION...
+*      complex - JOINS/SEPARATES REAL AND IMAGINARY PARTS OF A COMPLEX ARRAY
+*
+*
+*     AUTHOR   - B.Dugasr, Oct/94.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/complex.ptn,v 4.10 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     PURPOSE - MODE 1: FILE Y = REAL (X) AND Z = IMAG (X)
+*               MODE 2: FILE Z = CMPLX( X , Y )
+*
+*     NOTES   - 1) THE MODE IS DETERMINED BY THE TYPE OF FILE X.
+*                  IF X IS OF TYPE COMPLEX ('SPEC', 'FOUR' OR 'CMPL'),
+*                  MODE 1 HOLDS. IF X IS OF TYPE REAL ('GRID' OR 'ZONL'),
+*                  MODE 2 HOLDS
+*               2) ALL OF THE OUTPUT GRID PARAMETERS ARE AS THE INPUT,
+*                  EXCEPT FOR THE TYPE WHICH MAY CHANGE TO/FROM
+*                  'GRID'/'SUBA'/'ZONL' AND 'CMPL'/'SPEC'/'FOUR'
+*
+*
+*     (COMMAND LINE) PARAMETRE...
+*
+*      name = DEFINES THE VARIABLE NAMES USED IN OUTPUT FILE(S) IF
+*             THEY ARE TO BE DIFFERENT FROM THOSE IN INPUT FILE(S).
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR READING X
+*       2 ERROR READING Y (MODE 2)
+*       3 X AND Y NOT THE SAME SIZE (MODE 2)
+*       4 UNSUPPORTED DATA TYPE IN X
+*       6 MORE RECORDS IN X THAN IN Y (MODE 2)
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM Complex
+*     PROGRAM COMPLEX (X,       Y,       Z,       OUTPUT,
+*    1          TAPE1=X, TAPE2=Y, TAPE3=Z, TAPE6=OUTPUT)
+*     --------------------------------------------------
+ 
+*     $Log: complex.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2006/07/04 18:17:57  dugas
+*     Ajouter le support des grilles de type Z.
+*
+*     Revision 4.6  2006/06/19 16:34:02  dugas
+*     Corriger l'allocation de C1.
+*
+*     Revision 4.5  2005/03/03 19:32:58  dugas
+*     Ameliorer la verification du type des donnees.
+*
+*     Revision 4.4  2003/07/05 14:47:59  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1998/07/03 02:26:21  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1997/10/10  19:55:03  armnrbd
+*     Enlever le message d'erreur -5.
+*     Activer le mode I/O a 64 bits.
+*
+*     Revision 4.1  1997/09/26  17:38:46  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:19:32  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  94/10/12  14:47:30  armnrbd
+*     Premiere version du code.
+*     
+*     12 octobre 1994 - Bernard Dugas, RPN.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 ) 
+
+      REAL        ZERO
+      LOGICAL     OK,SPEC
+      REAL*8      A1,A2,B0,C1,C2
+      CHARACTER   VALEUR*20,GRTYP
+      CHARACTER*4 KIND,GRID,CMPL,SUBA,PKTYP,NAME(2)
+      INTEGER     NFF,NRECS,NWDS,I,IBUF,JBUF,IER,KBUF(taille_entete),LBUF(taille_entete),
+     +            MAXW,MAXW2,LEN,LEN2,KPAK,LPAK,LEV(MAXLEV),
+     +            NLEV,NLEV2,NLEV3,HEAD,NWDS2,NAMEH
+
+      POINTER   ( IB,IBUF(8) )
+      POINTER   ( JB,JBUF(8) )
+      POINTER   ( PA,A1(2,1) )
+      POINTER   ( PA,A2(1) )
+      POINTER   ( PB,B0(1) )
+      POINTER   ( PC,C1(1) )
+      POINTER   ( PC,C2(2,1) )
+
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETSIZ2
+      CHARACTER*4 GETYP,GETHIC
+      LOGICAL     SETIO64,RPBLOC
+      EXTERNAL    GETSIZ2,MACSPE,JCLPNT,GETSET2,XIT,SETIO64,
+     +            PUTSET2,CMPLBL,HPALLOC,HPDEALLC,PRECEDE,
+     +            GETYP,GETHIC,RPBLOC
+
+      DATA        GRID  ,  CMPL  ,  SUBA  /
+     +           'GRID' , 'CMPL' , 'SUBA' /
+      DATA        NAME  / ' ',' ' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/complex.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      GRTYP ='G'
+      NRECS = 0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('NAME',VALEUR)
+          IF (OK) NAME(1) = VALEUR
+
+          OK = RPBLOC('NAME2',VALEUR)
+          IF (OK) NAME(2) = VALEUR
+
+      END IF
+
+***    Determiner le type et la taille des grilles.
+
+  100 MAXW = GETSIZ2( 1, KBUF,LEN,NWDS,KPAK, LEV,NLEV )
+      IF (MAXW.EQ.0) CALL                           XIT(' Complex',-1 )
+
+      WRITE(KIND,4) KBUF(1)
+
+      IF (KIND.EQ.'CMPL' .OR.
+     +    KIND.EQ.'SPEC' .OR.
+     +    KIND.EQ.'FOUR')                                      THEN
+
+          SPEC = .TRUE.
+
+      ELSE IF (KIND.EQ.'GRID' .OR.
+     +         KIND.EQ.'ZONL' .OR.
+     +         KIND.EQ.'SUBA')                                 THEN
+
+          SPEC = .FALSE.
+
+***        Aller voir le second fichier d'entree.
+
+          MAXW2 = GETSIZ2( 2, LBUF,LEN2,NWDS,LPAK, LEV,NLEV2 )
+          IF (MAXW2.EQ.0) CALL                      XIT(' Complex',-2 )
+
+***        S'assurer que les deux fichiers sont compatibles.
+
+          CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.NE.NLEV2) CALL     XIT(' Complex',-3 )
+
+          MAXW = MAX( MAXW,MAXW2 )
+          LEN  = MAX( LEN ,LEN2  )
+
+      ELSE
+
+***        Type de donnees non considerees.
+
+          CALL                                     XIT(' Complex',-4 )
+
+      END IF
+          
+      NWDS = KBUF(5)*KBUF(6)
+      IF (KIND.EQ.'ZONL') NWDS = KBUF(5)
+
+      CALL HPALLOC( PA,2*LEN+5*NLEV*NWDS,IER,8 )
+      PB = LOC(   A2(2*NLEV*NWDS+1) )
+      PC = LOC(   B0(  NLEV*NWDS+1) )
+      IB = LOC(   C1(2*NLEV*NWDS+1) )
+      JB = LOC( IBUF(  LEN      +1) )
+
+***    Reunir ou separer les composantes.
+
+      IF (SPEC)                                                THEN
+
+  200     CALL GETSET2( 1, A1, LEV,NLEV2, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  CALL                             HPDEALLC( PA,IER,0 )
+                  IF (MAXW.EQ.0)                   GOTO 100
+                  WRITE(6,6020) NRECS
+                  IF (NRECS.EQ.0) CALL             XIT(' Complex',-1 )
+                  CALL                             XIT(' Complex', 0 )
+              END IF
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+              WRITE(KIND,4) IBUF(1)
+
+              IF (KIND.NE.'CMPL'  .AND.
+     +            KIND.NE.'SPEC'  .AND.
+     +            KIND.NE.'FOUR') CALL             XIT(' Complex',-4 )
+
+***            Verifier la consistances des dimensions.
+
+              NWDS2 = IBUF(5)*IBUF(6)
+
+              IF (NWDS*NLEV .LT. NWDS2*NLEV2)                  THEN
+                  CALL                             PRECEDE( 1,1 )
+                  CALL                             HPDEALLC(PA,IER,0 )
+                  GOTO 100
+              END IF
+
+***            Separer les parties reelles et imaginaires.
+
+              DO  I=1,NWDS2*NLEV2
+                  B0(I) =  A1(1,I) 
+                  C1(I) =  A1(2,I)
+              END DO
+
+***            Sauver les resultats.
+
+              IF (PKTYP.EQ.'SQ') GRTYP = GETHIC( 'GRTYP',IBUF )
+
+              IF (GRTYP.EQ.'A' .OR.
+     +            GRTYP.EQ.'B' .OR.
+     +            GRTYP.EQ.'G' )                               THEN
+                  READ(GRID,4) IBUF(1)
+              ELSE
+                  READ(SUBA,4) IBUF(1)
+              END IF
+
+              IF (NAME(1).NE.' ') READ(NAME(1),4) IBUF(3)
+              CALL PUTSET2( 2, B0, LEV,NLEV2, IBUF,MAXW )
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+              IF (NAME(2).NE.' ') READ(NAME(2),4) IBUF(3)
+              CALL PUTSET2( 3, C1, LEV,NLEV2, IBUF,MAXW )
+
+              IF (NAME(2).NE.' '
+     +       .AND.NAME(2).NE.NAME(1)
+     +       .AND.NRECS  .EQ.0) CALL PRTLAB( IBUF )
+
+          NRECS = NRECS+NLEV2
+          GOTO 200
+
+      ELSE
+
+  300     CALL GETSET2( 1, A2, LEV,NLEV2, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  CALL                             HPDEALLC( PA,IER,0 )
+                  IF (MAXW.EQ.0)                   GOTO 100
+                  WRITE(6,6021) NRECS
+                  IF (NRECS.EQ.0) CALL             XIT(' Complex',-1 )
+                  CALL                             XIT(' Complex', 0 )
+              END IF
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+***            Premiere verification de la consistances des dimensions.
+
+              WRITE(KIND,004) IBUF(1)
+
+              IF (KIND.NE.'GRID'  .AND.
+     +            KIND.NE.'ZONL'  .AND.
+     +            KIND.NE.'SUBA') CALL             XIT(' Complex',-4 )
+
+              NWDS2 = IBUF(5)*IBUF(6)
+              IF (KIND.EQ.'ZONL') NWDS = KBUF(5)
+
+              IF (NWDS*NLEV .LT. NWDS2*NLEV2)                  THEN
+                  CALL                             PRECEDE( 1,1 )
+                  CALL                             HPDEALLC(PA,IER,0 )
+                  GOTO 100
+              END IF
+
+              CALL GETSET2( 2, B0, LEV,NLEV3, JBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  CALL                             HPDEALLC( PA,IER,0 )
+                  IF (MAXW.EQ.0)                               THEN
+                      CALL                         PRECEDE( 1,1 )
+                      GOTO 100
+                  END IF
+                  CALL                             XIT(' Complex',-6 )
+              END IF
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+***            Seconde verification de la consistances des dimensions.
+
+              CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+              IF (.NOT.OK .OR.
+     +            NLEV2.NE.NLEV3) CALL             XIT(' Complex',-3 )
+
+***            Reunir les parties reelles et imaginaires.
+
+              DO  I=1,NWDS2*NLEV2
+                  C2(1,I) =  A2(I) 
+                  C2(2,I) =  B0(I)
+              END DO
+
+***            Sauver les resultats.
+
+              READ(CMPL,4) IBUF(1)
+
+              IF (NAME(1).NE.' ') READ(NAME(1),4) IBUF(3)
+              CALL PUTSET2( 3, C2, LEV,NLEV2, IBUF,MAXW )
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          NRECS = NRECS+NLEV2
+          GOTO 300
+
+      END IF
+*-----------------------------------------------------------------------
+
+    4 FORMAT(A4)
+
+ 6020 FORMAT('0Complex wrote ',I5,' sets of records.')
+ 6021 FORMAT('0Complex read ',I5,' sets of records.')
+
+      END
+#     endif

@@ -1,0 +1,253 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      levrev  XIN XOUT OUTPUT
+*
+*
+*     DESCRIPTION...
+*      levrev - REVERSES THE ORDER OF LEVELS OF EACH SET IN A FILE
+*               MAXIMUM, MINIMUM NUMBER OF LEVELS ARE 999, 2
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 17/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/levrev.ptn,v 4.11 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     INPUT FILE...
+*      XIN   = FILE OF (MULTI-LEVEL) SETS
+*
+*     OUTPUT FILE...
+*      XOUT = COPY OF FILE XIN WITH LEVELS REVERSED.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY LEVELS IN FIRST SET OF XIN
+*       2 MORE THAN ONE SIZE FOR ARRAYS IN XIN
+*       3 NOT ENOUGH LEVELS IN LAST SET READ
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM levrev
+*    +            ( XIN,        XOUT,       OUTPUT,
+*    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
+ 
+*     $Log: levrev.ptn,v $
+*     Revision 4.11  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.10  2012/09/07 18:15:17  dugas
+*     Ne plus arreter lorsque NLEV=1.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2008/04/25 21:31:45  dugas
+*     Utiliser WRITLEV2 pour imprimer les niveaux verticaux.
+*
+*     Revision 4.7  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.5  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.4  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1998/07/03 02:26:31  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1997/09/26  17:39:06  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1996/02/29  20:44:21  armnrbd
+*     Imprimer plus d'informations lors du traitement du cas MAXW=0
+*     et aussi quand le programme se mets a ignorer les LABLs.
+*
+*     Revision 4.0  1994/11/17  14:20:53  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:04:15  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:28  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  92/11/09  22:50:09  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.0  92/04/07  15:43:21  armnrbd
+*     Initial revision
+*     
+     
+***    AUTHOR: J.D.HENDERSON - NOV 27 1980
+
+***    HISTORIQUES DES MODIFICATIONS:
+
+***    17 MAI 1991 - B.Dugas, RPN : VERSION CY920.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+ 
+
+      LOGICAL     OK
+      REAL        HOLD,ZERO
+      CHARACTER*4 NAME,TYPE,MESSAG*10
+      INTEGER     HEAD,JBUF(taille_entete),LEV(MAXLEV),IG1,IG2,IHOLD,
+     +            NF,I,L,LEN,NWDS,JPAK,MAXW,NR,NLEV,NLEVG,NLEV0,IER
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: GG
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2,MACSPE,JCLPNT,XIT,PRTLAB,
+     +            GETSET2,PUTSET2,CMPLBL,WRITLEV
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        MESSAG / 'AUCUN' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/levrev.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      CALL JCLPNT( NF, 1,2, 6 )
+
+      NR = 0 ; NLEV0 = 0
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW == 0 .OR. NLEV > MAXLEV) CALL       XIT(' Levrev ',-1 )
+
+      WRITE(TYPE,4) JBUF(1)
+      WRITE(NAME,4) JBUF(3)
+
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(LEN),GG(MAX( MAXW,NWDS*NLEV )) )
+
+      IF (NLEV /= NLEV0)                                       THEN
+          IF (NLEV > 1)                                        THEN
+              WRITE(6,6003) TYPE,NAME
+              CALL WRITLEV2( LEV,NLEV, JBUF )
+              CALL PRTLAB( JBUF )
+          END IF
+          NLEV0 = NLEV
+      END IF
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CALL GETSET2( 1, GG,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,GG )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB( IBUF )
+              WRITE(6,6010) NR
+              CALL                                XIT(' Levrev ', 0 ) 
+
+          END IF
+
+***        BY-PASS (I.E. STRIP) LABE/CHARACTERL RECORDS.
+
+          WRITE(TYPE,4) IBUF(1) 
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR')              THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  WRITE(6,6035)
+                  MESSAG  = 'deja donne'
+              END IF
+              GOTO 100
+          END IF
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.LT.NLEVG)                      THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT(' Levrev ',-2 ) 
+          END IF
+
+***        CHECK THAT WE HAVE ENOUGH LEVELS.
+
+          IF (NLEVG > 1)                                       THEN
+
+***            REVERSE THE LEVELS.
+
+              DO  L=1,NLEVG/2
+                  IG1 = ( L   -1)*NWDS
+                  IG2 = (NLEVG-L)*NWDS
+                  DO  I=1,NWDS
+                      HOLD      = GG(IG1+I)
+                      GG(IG1+I) = GG(IG2+I)
+                      GG(IG2+I) = HOLD
+                  END DO
+
+                  IHOLD          = LEV(      L  )
+                  LEV(      L  ) = LEV(NLEVG-L+1)
+                  LEV(NLEVG-L+1) = IHOLD
+              END DO
+
+          END IF
+
+***        PUT THE RESULT ONTO FILE 2.
+ 
+          IF (NR == 0 .AND. NLEVG > 1) CALL PRTLAB( IBUF )
+          CALL PUTSET2( 2, GG, LEV,NLEVG, IBUF,MAXW )
+
+      NR = NR+NLEVG
+      GOTO 100 
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6003 FORMAT('0Levrev on ',A4,2X,A4)
+ 6007 FORMAT('0...  Levrev input file is empty.')
+ 6010 FORMAT('0 Levrev wrote',I6,' records.')
+ 6035 FORMAT(' Levrev is stripping label/character records...')
+
+      END 
+#     endif

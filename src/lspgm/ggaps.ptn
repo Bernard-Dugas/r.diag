@@ -1,0 +1,576 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggaps  GG PS INPUT OUTPUT [-lx VAL1 -i VAL3 -d60  VAL5 -nhem VAL7
+*                                 -ly VAL2 -j VAL4 -dgrw VAL6 -kind VAL8] 
+*
+*
+*     DESCRIPTION...
+*      ggaps   - CONVERT LAT-LONG FILE TO POLAR STEREOGRAPHIC GRID FILE 
+*
+*
+*     AUTHOR  - J.D.Henderson,  DEC 01/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggaps.ptn,v 4.13 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     PURPOSE - CONVERTS A FILE OF LAT-LONG GRIDS TO A FILE
+*               OF HEMISPHERIC POLAR STEREOGRAPHIC GRIDS. 
+*               INTERPOLATION IS EITHER LINEAR OR CUBIC. 
+*
+*     NOTES: 1) THE INPUT GRID TYPE IS ALWAYS ASSUMED TO BE GAUSSIAN
+*               WHEN DEALING WITH CCCma FILES.
+*            2) FOR RPN/CMC STANDARD FILES, ALL OF THE KNOWN INPUT
+*               GRID TYPES ARE SUPPORTED, EXCEPT THE '#' TYPE.
+*            3) DIGITAL FILTERING WILL BE APPLIED BEFORE INTERPOLATION
+*               IF THE DESTINATION GRID IS AT MUCH LOWER RESOLUTION THAN
+*               THE INPUT. A MESSAGE WILL BE PRINTED WHEN THIS IS DONE.
+*
+*
+*     INPUT FILE... 
+*      GG = LAT-LONG GRIDS. HEMISPHERIC POLAR STEREOGRAPHIC
+*           GRIDS ARE ALSO SUPPORTED IN CMC/RPN FILES.
+*
+*     OUTPUT FILE... 
+*      PS = HEMISPHERIC POLAR STEREOGRAPHIC GRIDS 
+*
+*
+*     INPUT PARAMETERS... 
+*
+*      LX,LY = POLAR-STEREOGRAPHIC GRID DIMENSIONS. IF LX=0, THE FIRST
+*              SIX VALUES ON THE CARD WILL ASSUME THEIR DEFAULT VALUES
+*              WHICH WILL PRODUCE A CCC FILE ON THE STANDARD CMC GRID. 
+*      PI,PJ = (I,J) GRID COORDINATES OF THE POLE (DEFAULT IS (26.,28.)
+*      D60   = GRID LENGTH AT 60 DEGREES (METERS) 
+*             (DEFAULT VALUE 3.81E5 = 381 KM).
+*      DGRW  = ORIENTATION IN THE GRID WITH RESPECT TO THE GREENWICH
+*              MERIDIAN (DEG) (DEFAULT 350.).
+*      NHEM  = 1 or N, FOR N. HEM. (DEFAULT FOR GLOBAL GG)
+*              2 or S, FOR S. HEM. 
+*      KIND  = INTERPOLATION TYPE:
+*              1 = LINEAR,
+*              2 = NEAREST NEIGHBOR (only RPN/CMC Standard files),
+*              OTHERWISE CUBIC.
+*
+*      NOTE THAT IF GG CONTAINS HEMISPHERIC DATA, THE DEFAULT NHEM
+*      VALUE IS THEN THAT OF THE FIRST GRID IN GG
+*
+*      READ( 5,5010 ) LX,LY,PI,PJ,D60,DGRW,NHEM,KIND 
+*5010  FORMAT(10X,2I5,2E5.0,2E10.0,2I5) 
+*
+*
+*     EXAMPLE OF CARD READ... 
+*
+*    GGAPS   51   55   26   28    3.81E5      -10.    1    1 
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON GG
+*       2 UNSUPPORTED INPUT DATA TYPE
+*       3 MISMATCH BETWEEN NHEM AND IBUF(7)
+*       4 ERROR ABORT READING INPUT
+*       
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggaps
+*    +              (GG,       PS,       INPUT,       OUTPUT, 
+*    +         TAPE1=GG, TAPE2=PS, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     ------------------------------------------------------- 
+
+*     $Log: ggaps.ptn,v $
+*     Revision 4.13  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.12  2012/07/26 16:18:33  dugas
+*     Ajouter support des grilles de type '\!'(NCEP GRIB).
+*
+*     Revision 4.11  2010/10/23 16:59:11  dugas
+*     Correction au calculs de XRESI et YRESI pour les grilles de type Y et Z.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2007/08/29 18:32:13  dugas
+*     Ne plus allouer WGHT et faire appel a LISSXY2 plutot que LISSXY.
+*
+*     Revision 4.7  2004/11/26 16:15:06  dugas
+*     Ajouter le support des grilles sources de type Y et Z.
+*     Utiliser explicitement les interpolateurs EZSCINT plutot
+*      que leur mode de compatibilite arriere avec FSCINT.
+*
+*     Revision 4.6  2004/11/12 17:23:34  dugas
+*     - Ajouter un lissage avant interpolation en cas de reduction de resolution.
+*     - Ajouter le support des donnees d'entrees sur grilles de type A, B et L.
+*     - Les donnees RPN/CMC utilisent toujours les interpolateurs EZSCINT.
+*     - Ajouter une interpolation de type plus-proche-voisin (donnees RPN/CMC).
+*
+*     Revision 4.5  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.4  1999/11/10 21:00:42  armnrbd
+*     Corriger les transferts d'arguments de RPBLOC.
+*     Permettre N et S comme valeurs de NHEM en entree.
+*
+*     Revision 4.3  1998/07/03 02:26:25  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1997/09/26  17:38:54  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1995/11/01  21:55:07  armnrbd
+*      Utiliser GGIPS3 plutot que GGIPS2. De plus, la position du
+*      pole peur maintenant etre specifiee plus precisement.
+*
+*     Revision 4.0  1994/11/17  14:20:15  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/13  21:08:43  armnrbd
+*     Ajouter le support de grilles d'entrees hemispheriques.
+*     
+*     Revision 3.1  94/08/13  20:24:34  armnrbd
+*     Ajouter le support de grilles hemispheriques lat-lon.
+*     
+*     Revision 3.0  93/10/13  13:56:06  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/08  21:29:29  21:29:29  armnrbd (Bernard Dugas)
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/10/13  14:59:43  armnrbd
+*     Compaction par defaut passe a 32 bits/mots (-32).
+*     
+*     Revision 1.2  92/03/17  12:33:24  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/10  16:32:51  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:43  armnrbd
+*     Initial revision
+*     
+
+*     NOV 14/91 - B.DUGAS, RPN. (VERSION CY920/IRIX F77)
+*     MAY 11/83 - R.LAPRISE. 
+*     DEC 01/80 - J.D.HENDERSON 
+
+*----------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     MAXJ
+      PARAMETER ( MAXJ = latitude_maximale )
+
+      REAL        X,Y,ZERO
+      LOGICAL     OK,FIRST,MESSAGE
+      CHARACTER   LIGNE*256,TYPE*4,GRTYP,OGRTYP,AHEM*5
+      INTEGER     HEAD,IBUF,JPAK,JBUF(taille_entete),IO,NFF,
+     +            NR,LX,LY,NHEM,KIND,INTERP,IHEM,IER,
+     +            LEN,MAXW,NWDGG,NWDPS,ILG1,ILG,ILAT,
+     +            ILATH,IG1,IG2,IG3,IG4,IGID, I,J,IJ,
+     +            OG1,OG2,OG3,OG4,OGID,MAXL,XYL
+      REAL        SLAT(MAXJ),ANG(MAXJ),PS,GG,
+     +            PI,PJ, D60,DGRW, XLAT,XLON,XG1,
+     +            XRESI,YRESI,RESO,DLAT,DLON,XG2,
+     +            ID60,XG4
+      REAL*8      WOSSL(MAXJ),SL(MAXJ),CL(MAXJ),
+     +            WL(MAXJ),RAD(MAXJ),RAD2DEG,PII
+
+      POINTER   ( PB,IBUF(8) )
+      POINTER   ( PG,  GG(1) )
+      POINTER   ( PP,  PS(1) )
+      POINTER   ( PX,XLON(1) )
+      POINTER   ( PY,XLAT(1) )
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC
+      CHARACTER*4 GETYP,PKTYP,GETHIC
+      INTEGER     GETSIZ,GETHIGH,EZQKDEF,EZDEFSET,EZSINT
+      EXTERNAL    RPBLOC,GETSIZ,GETYP,MACSPE,JCLPNT,GETLIGN,
+     +            BURNF,GAUSSG,TRIGL2,GETFLD2,HPALLOC,HPDEALLC,
+     +            GGIPS3,SETLAB,PUTFLD2,PUTHIC,PUTHIGH,XIT,
+     +            CXGAIG,CIGAXG,EZSETOPT,EZQKDEF,EZSINT,
+     +            EZDEFSET,GETHIC,LLFXY
+
+      DATA        GRTYP / 'G' /, OGRTYP / 'N' /
+      DATA        FIRST,MESSAGE / 2*.TRUE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggaps.ptn,v $'
+
+*---------------------------------------------------------------------- 
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4 
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      NR =  0 
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      PII     = 4.0 * ATAN(1.D0)
+      RAD2DEG = 180./ PII
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          LX   = 0
+          LY   = 0
+          PI   = 0.0
+          PJ   = 0.0
+          D60  = 0.0
+          DGRW = 0.0
+          AHEM = ' '
+          KIND = 0
+
+          OK = RPBLOC('LX',LIGNE)
+          IF (OK) READ( LIGNE, 05,ERR=901,IOSTAT=IO) LX
+          
+          OK = RPBLOC('LY',LIGNE)
+          IF (OK) READ( LIGNE, 05,ERR=901,IOSTAT=IO) LY
+          
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ( LIGNE, 10,ERR=901,IOSTAT=IO) PI
+          
+          OK = RPBLOC('J',LIGNE)
+          IF (OK) READ( LIGNE, 10,ERR=901,IOSTAT=IO) PJ
+          
+          OK = RPBLOC('NHEM',LIGNE)
+          IF (OK) AHEM = LIGNE
+          
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ( LIGNE, 05,ERR=901,IOSTAT=IO) KIND
+          
+          OK = RPBLOC('D60',LIGNE)
+          IF (OK) READ( LIGNE, 10,ERR=901,IOSTAT=IO) D60
+          
+          OK = RPBLOC('DGRW',LIGNE)
+          IF (OK) READ( LIGNE, 10,ERR=901,IOSTAT=IO) DGRW
+          
+      ELSE
+
+***        READ P.S. GRID SIZE FROM CARD. 
+***        KIND=1 FOR LINEAR INTERPOLATION, OTHERWISE CUBIC. 
+***        GRID IS (LX,LY) WITH POLE AT (PI,PJ). 
+***        GRID SIZE IS D60(M) AND ORIENTATION IS DGRW (DEG). 
+***        NHEM = 1,2 FOR N,S HEMISPHERE. 
+***        BLANK CARD DEFAULTS TO STANDARD CMC GRID AND CUBIC INTERP. 
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5010,ERR=901,END=902,IOSTAT=IO)
+     +                      LX,LY,PI,PJ,D60,DGRW,AHEM,KIND 
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF      (AHEM.EQ.' ')                                    THEN
+          NHEM = 0
+      ELSE IF (AHEM.EQ.'N')                                    THEN
+          NHEM = 1
+      ELSE IF (AHEM.EQ.'S')                                    THEN
+          NHEM = 2
+      ELSE
+          READ( AHEM, 05,ERR=901,IOSTAT=IO) NHEM
+      END IF
+
+***    SET DEFAULT VALUES.
+
+      IF (KIND.NE.1 .AND.
+     +    KIND.NE.2)                                           THEN
+          INTERP =  3
+      ELSE
+          INTERP =  KIND
+      END IF
+
+      WRITE(6,6005)  INTERP 
+
+***    SET INTERPOLATION TYPE FOR RPN FILES.
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          IF      (INTERP.EQ.1)                                THEN
+              CALL    EZSETOPT( 'DEGRE_INTERP','LINEAR'  )
+          ELSE IF (INTERP.EQ.2)                                THEN
+              CALL    EZSETOPT( 'DEGRE_INTERP','NEAREST' )
+          ELSE IF (INTERP.EQ.3)                                THEN
+              CALL    EZSETOPT( 'DEGRE_INTERP','CUBIC'   )
+          END IF
+      END IF
+
+      IF (LX.LE.0)                                             THEN
+          LX   =   51 
+          LY   =   55 
+          PI   =   26.
+          PJ   =   28.
+          D60  =    3.81E5 
+          DGRW =  350. 
+      END IF
+
+      IF (DGRW.LT.0) DGRW = DGRW+360.
+      DGRW = AMOD( DGRW,360. )
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+***        DEFINE OUTPUT GRID DESCRIPTORS.
+
+          CALL CXGAIG( OGRTYP, OG1, OG2, OG3, OG4  ,
+     +                         PI , PJ , D60, DGRW )
+          CALL CIGAXG( OGRTYP, PI , PJ , D60, DGRW ,
+     +                         OG1, OG2, OG3, OG4  )
+
+      END IF
+
+      RESO = 2.* RAD2DEG * D60 / 6.37122D6
+
+      NWDPS = LX * LY
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  100 MAXW = GETSIZ( 1, JBUF,LEN,NWDGG,JPAK )
+      IF (MAXW.EQ.0) CALL                          XIT('  Ggaps ',-1 )
+
+      WRITE(TYPE,4) JBUF(1)
+
+      IF ((PKTYP.NE.'SQ' .AND. TYPE.NE.'GRID') .OR.
+     +    (PKTYP.EQ.'SQ' .AND. TYPE.NE.'GRID'
+     +                   .AND. TYPE.NE.'SUBA'))
+     +    CALL                                     XIT('  Ggaps ',-2 ) 
+
+      CALL PRTLAB( JBUF )
+      ILG1 = JBUF(5) 
+      ILAT = JBUF(6) 
+      IHEM = JBUF(7)
+
+      IF (NR.EQ.00)                                            THEN
+
+          IF (NHEM.EQ.0 .AND. IHEM.EQ.0)                       THEN
+              NHEM  =  1
+          ELSE IF (NHEM.EQ.0)                                  THEN
+              NHEM = IHEM
+          ELSE IF (NHEM.NE.IHEM .AND. IHEM.NE.0)               THEN
+              CALL                                 XIT('  Ggaps ',-3 )
+          ENDIF
+
+          WRITE(6,6010) LX,LY,PI,PJ,D60,DGRW,NHEM 
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+
+              IF (NHEM.EQ.1) OGRTYP = 'N'
+              IF (NHEM.EQ.2) OGRTYP = 'S'
+
+              IF (NHEM.NE.1 .AND. NHEM.NE.2) CALL  XIT('  Ggaps ',-4 )
+
+              OGID = EZQKDEF( LX,LY, OGRTYP,OG1,OG2,OG3,OG4, 0 )
+
+          END IF
+
+      END IF
+
+      CALL HPALLOC( PB, LEN+NWDGG+3*NWDPS ,IER,0 )
+      PG = LOC( IBUF(  LEN+1) )
+      PP = LOC(   GG(NWDGG+1) )
+      PX = LOC(   PS(NWDPS+1) )
+      PY = LOC( XLON(NWDPS+1) )
+
+***    COMPUTE LATITUDE VALUES IN DEGREES FROM THE SOUTH POLE. 
+
+      ILATH=ILAT/2 
+      IF (IHEM.NE.0) ILATH = ILAT
+
+      CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL ) 
+      CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL,IHEM ) 
+
+      DO  I=1,ILAT 
+          ANG(I)  = RAD(I)*RAD2DEG
+          SLAT(I) = ANG(I)+90. 
+      END DO
+
+***    READ THE NEXT GAUSSIAN GRID. 
+
+  150 CALL GETFLD2( 1, GG, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              CALL                                 HPDEALLC(PB,IER,0 )
+              IF (MAXW.EQ.0) GOTO 100
+              WRITE(6,6030) NR 
+              CALL                                 XIT('  Ggaps ', 0 ) 
+          ENDIF 
+
+***        CONVERT TO PS GRID. 
+
+          IF (PKTYP.NE.'SQ')                                   THEN
+
+              CALL GGIPS3( PS,LX,LY, PI,PJ, D60,DGRW,NHEM, 
+     +                     GG,ILG1,ILAT, SLAT, INTERP ) 
+
+          ELSE
+
+              IF (FIRST)                                       THEN
+
+                  DO  J=1,LY
+                      Y = J-PJ
+                      IJ = (J-1)*LX
+                      DO  I=1,LX
+                          X = I-PI
+                          IJ = IJ+1
+                          CALL LLFXY( XLAT(IJ),XLON(IJ),
+     +                                X,Y,D60,DGRW,NHEM )
+                          IF (XLON(IJ).LT.0.)
+     +                    XLON(IJ) = 360.+XLON(IJ)
+                          XLON(IJ) = AMOD( XLON(IJ),360. )
+                      END DO
+                  END DO
+
+                  FIRST = .FALSE.
+
+              END IF
+
+              GRTYP = GETHIC('GRTYP',IBUF )
+              IG1   = GETHIGH( 'IG1',IBUF )
+              IG2   = GETHIGH( 'IG2',IBUF )
+              IG3   = GETHIGH( 'IG3',IBUF )
+              IG4   = GETHIGH( 'IG4',IBUF )
+
+              IGID = EZQKDEF( IBUF(5),IBUF(6),
+     +                        GRTYP,IG1,IG2,IG3,IG4, 1 )
+
+***            DETERMINE X AND Y INPUT RESOLUTIONS.
+
+              IF (GRTYP.EQ.'A' .OR.
+     +            GRTYP.EQ.'G')                                THEN
+                  ILG = ILG1-MOD( ILG1,2 )
+                  XRESI = 360./ILG
+                  YRESI = 180./ILAT
+                  IF (IG2.EQ.1) YRESI = 90./ILAT
+              ELSE
+     +        IF (GRTYP.EQ.'B')                                THEN
+                  XRESI = 360./(ILG1-1)
+                  YRESI = 180./(ILAT-1)
+                  IF (IG2.EQ.1) YRESI = 90./(ILAT-1)
+              ELSE
+     +        IF (GRTYP.EQ.'L')                                THEN
+                  CALL CIGAXG( GRTYP, XG1,XG2,DLAT,DLON,
+     +                                IG1,IG2,IG3 ,IG4  )
+                  XRESI = DLON
+                  YRESI = DLAT
+              ELSE
+     +        IF (GRTYP.EQ.'N' .OR. GRTYP.EQ.'S')              THEN
+                  CALL CIGAXG( GRTYP, XG1,XG2,ID60,XG4,
+     +                                IG1,IG2,IG3, IG4  )
+                  XRESI = 360. * ID60 / (6.37122D6*PII)
+                  YRESI = XRESI
+              ELSE
+     +        IF (GRTYP.EQ.'Y' .OR. GRTYP.EQ.'Z')              THEN
+                  XRESI = RESO
+                  YRESI = XRESI
+              END IF
+
+              XYL = 1.0001 * RESO / SQRT( XRESI*YRESI )
+
+***            APPLY SMOOTHING BEFORE INTERPOLATION.
+
+              IF (XYL.GT.1)                                    THEN
+                  IF (MESSAGE)  WRITE(6,6150) XYL
+                  MESSAGE = .FALSE.
+                  CALL LISSXY2( GG, XYL,ILG1,ILAT )
+              END IF
+
+***            INTERPOLATE TO PS.
+
+              IF (GRTYP.EQ.'A' .OR.
+     +            GRTYP.EQ.'B' .OR.
+     +            GRTYP.EQ.'G' .OR.
+     +            GRTYP.EQ.'L' .OR.
+     +            GRTYP.EQ.'!' .OR.
+     +            GRTYP.EQ.'N' .OR.
+     +            GRTYP.EQ.'S' .OR.
+     +            GRTYP.EQ.'Y' .OR.
+     +            GRTYP.EQ.'Z')                                THEN
+                  IER = EZDEFSET( OGID,IGID )
+                  IER = EZSINT( PS,GG )
+              ELSE
+                  CALL                             XIT('  Ggaps ',-2 ) 
+              END IF
+
+          END IF
+
+***        SAVE THE GRIDS. PACKING IS 32 BITS/WORD (NO PACKING).
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              CALL puthic(  OGRTYP,'GRTYP', IBUF )
+              CALL puthigh( OG1   ,'IG1'  , IBUF )
+              CALL puthigh( OG2   ,'IG2'  , IBUF )
+              CALL puthigh( OG3   ,'IG3'  , IBUF )
+              CALL puthigh( OG4   ,'IG4'  , IBUF )
+              CALL SETLAB( IBUF, 'SUBA',-1,' ',-1,LX,LY,NHEM, -32 )
+          ELSE
+              CALL SETLAB( IBUF, 'GRID',-1,' ',-1,LX,LY,NHEM, -32 ) 
+          END IF
+              
+          CALL PUTFLD2( 2, PS, IBUF,MAXW ) 
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR +1 
+      GOTO 150 
+
+***    E.O.F. ON INPUT. 
+
+  901 IF (IO.NE.0) WRITE(6,6100) IO
+  902 CALL                                         XIT('  Ggaps ',-4 )
+*----------------------------------------------------------------------- 
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,2I5,2E5.0,2E10.0,A5,I5) 
+ 6005 FORMAT('0Interp =',I6) 
+ 6010 FORMAT('0Lx,ly,pi,pj,d60,dgrw,nhem =',2I6,2F8.1,E12.4,F8.2,I6) 
+ 6030 FORMAT('0',I6,' records read.') 
+ 6100 FORMAT(' Ggaps reports I/O error number ',I3,' on unit 5.')
+ 6150 FORMAT(1X,I2,' to 1 smoothing applied before',
+     +       ' interpolation to lower resolution grid...')
+
+      END 
+#     endif

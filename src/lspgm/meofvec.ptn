@@ -1,0 +1,916 @@
+#     include "diagmacros.cdk"
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 100000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      meofvec  A [B] AVAL AVEC INPUT OUTPUT \ 
+*                     [ -kind VAL1 [VAL2]  -a VAL3 \ 
+*                         -b  VAL4 -c VAL5 -d VAL6 ]
+*
+*
+*     AUTHOR - B.Dugas, mars 17/94.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/meofvec.ptn,v 4.13 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      MEOFVEC calcule les valeurs propres et optionnellement, les 
+*      vecteurs propres droits de la matrice/fichier A ou bien, dans
+*      le cas symmetrique generalise (KIND=3), du produit matriciel B*A.
+*      B est alors definie positive et A est symmetrique. Dans les deux
+*      autres cas, la matrice A est la seule a etre lue.
+*
+*      Les enregistrements des matrices correspondents aux colonnes 
+*      des matrices. Il doit donc y avoir autant d'echantillons 
+*      que de variables.
+*
+*
+*     FICHIERS DE SORTIE...
+*      AVAL = Valeurs propres de a en ordre descendant d'importance.
+*             Dans le cas general (KIND=1), ces valeurs propres sont
+*             sous formes de paires de conjuguees complexes ou purement
+*             reelles. Les parties reeles et imaginaires sont alors
+*             sauvees separement.
+*      AVEC = Vecteurs propres de a correspondants a aval
+*
+*      NOTE: SI a est un matrice generale, les valeurs propres sont
+*            complexes. Les parties reeles et imaginaires sont alors
+*            sauvees separement dans aval (noms = VALR et VALI).
+*
+*
+*     PARAMETRES...
+*       KIND = >=0 , Le programme ne calculera que les vecteurs propres;
+*        (1)   < 0 , Le programme calculera les vecteurs et valeurs popres;
+*              0,1 , Si la matrice A est generale (DEFAUT);
+*              2   ,    "     "     "    symmetrique;
+*              3   ,    "     "     "    symmetrique
+*                    et la matrice B est definie positive.
+*       KIND  != 0 , Les vecteurs propres sont multitplies par la
+*        (2)         racine carree de leurs valeurs propres a la sortie.
+*                    AVEC contient alors la matrice des facteurs ("factor
+*                    loadings") qui est utilisee par EOFROT
+*                    (SSI KIND(1) = 2).
+*
+*       Les trois parametres suivants n'ont de sens que dans le cas
+*       SYMMETRIQUE. De plus, notez que la paire A,B a preseance sur
+*       le parametre C.
+*
+*       A,B  = Limites inferieures et superieures des valeurs
+*              propres recherchees.
+*       C    = Fraction de la variance totale exclue.
+*       D    = 0,     trier les valeurs propres reelles (lorsque
+*                     KIND=2,3) de la plus grande a la plus petite
+*              sinon, trier ces valeurs propres selon leur module
+*
+*       Si aucun des parametres A,B ou C n'est specifie, le programme
+*       tentera de trouver les modes expliquant 99% de la variance.
+*
+*       Dans ce dernier cas, de meme que lorsqu'on utilise le parametre C,
+*       la matrice doit en plus etre definie positive puisque le programme
+*       utilise la trace comme mesure de la variance totale.
+*              
+*       READ(5,5000) KIND,A,B,C,D
+*5000   FORMAT(10X,I5,3E10.0,I5)
+*
+*
+*     EXEMPLE DE CARTE DE DIRECTIVE...
+*
+* MEOFVEC    -1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*    EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST SET IN FILE A
+*       2 UNABLE TO READ FIRST SET IN FILE B
+*      12 ORDER OF A AND B DIFFER
+*       3 NOT ENOUGH MEMORY
+*       4 UNABLE TO READ A COLUMN FROM A
+*      14 UNABLE TO READ A COLUMN FROM B
+*       5 MORE THAN ONE SIZE IN FILE A
+*      15 MORE THAN ONE SIZE IN FILE B
+*       6 UNABLE TO PERFORM TRANSFORMATION
+*       7 UNABLE TO PERFORM FACTORIZATION
+*       8 UNABLE TO PERFORM BACK-TRANSFORMATION
+*       9 BAD EIGENVALUE RANGE SPECIFICATION
+*      10 ERROR READING DIRECTIVES
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM meofvec
+*    1             (          A,         AVAL,       AVEC,
+*    2              TAPE1=    A, TAPE2=  AVAL, TAPE3=AVEC,
+*    3                    INPUT,       OUTPUT,  
+*    4              TAPE5=INPUT, TAPE6=OUTPUT)
+
+*     $Log: meofvec.ptn,v $
+*     Revision 4.13  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.12  2014/01/28 19:04:10  dugas
+*      - Allocation de memoire 'a la' F90.
+*      - Enlever le code pour le mode MACHINE=1 (i.e. mots reels a 64 bits).
+*      - Enlever le code de la routine DLAGTS. Utiliser la version LAPACK.
+*
+*     Revision 4.11  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.10  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.9  2006/04/26 22:51:43  dugas
+*     Permettre au programme de sauver des "factor loadings", i.e. des
+*      vecteurs propres non-normalises SSI la matrice A est symmetrique
+*      et la matrice B est non definie, ce qui implique que KIND(1)=2.
+*
+*     Revision 4.8  2001/11/19 15:46:02  armnrbd
+*     Inclure la routine DLAGTS pour eviter un probleme de type FPE
+*     qui se produit avec la version SGI de la routine (Overflow).
+*
+*     Revision 4.7  2000/04/07 21:05:19  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*     Debut d'un mode REAL*8 hardware.
+*
+*     Revision 4.6  1998/07/03 02:26:33  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1998/05/21  20:20:51  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.4  1997/12/10  18:09:38  armnrbd
+*     Ajouter la possibilite de trier les valeurs propres
+*      reelles selon leur modules (lorsque KIND=2,3).
+*
+*     Revision 4.3  1997/10/10  19:56:23  armnrbd
+*     Verifier que VL < VU pour le mode symmetrique.
+*
+*     Revision 4.2  1997/02/17  03:46:14  armnrbd
+*     Fonctionnement en mode I/O 64 bits.
+*
+*     Revision 4.1  1996/04/02  11:48:52  armnrbd
+*     Augmenter la valeur de "memoire_maximale" de 1 a 1.5 x10**6.
+*
+*     Revision 4.0  94/11/17  14:21:04  14:21:04  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.7  94/08/11  12:28:49  armnrbd
+*     Corriger l'ecriture des vecteurs pour les modes 1 et 2.
+*     
+*     Revision 3.6  94/05/09  15:45:58  armnrbd
+*     Ajouter le parametre d'I/O de fraction de variance C.
+*     
+*     Revision 3.5  94/05/06  16:09:52  armnrbd
+*     Corriger la lecture de B dans le cas KIND=3.
+*     
+*     Revision 3.4  94/04/25  12:16:16  12:16:16  armnrbd (Bernard Dugas)
+*     Faire appel a DGEBAL de facon explicite dans le cas general.
+*     
+*     Revision 3.3  94/04/18  14:20:33  armnrbd
+*     Corriger un message informatif.
+*     
+*     Revision 3.2  94/04/18  13:49:29  armnrbd
+*     Identifier un probleme dans la definition de LWORK.
+*     
+*     Revision 3.1  94/04/08  11:10:11  armnrbd
+*     Premiere version fonctionnelle.
+*     
+*     Revision 3.0  94/03/31  15:44:12  armnrbd
+*     Premiere version unix.
+*     
+*
+***   Premiere version: 31 mars 1994 - B. Dugas. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXMEM = memoire_maximale
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      INTEGER,    PARAMETER :: MAXVAR = 256
+      INTEGER,    PARAMETER :: MAXLEV = 999
+
+      CHARACTER   LIGNE*80
+      LOGICAL     OK,VCC,LOAD,IO64B
+      CHARACTER*4 TYPE,VARIAB(MAXVAR),VARIAB2(MAXVAR)
+      REAL(8)     VL,VU,VV,ZERO,TRACE,SCALEM,ABNRM
+      INTEGER     JBUF(HEAD),KBUF(HEAD),MEM,NWDS,NWDS2,
+     +            LEV(MAXLEV),LEV2(MAXLEV),STEP(MAXVAR),JPAK,KPAK,
+     +            LEN,LEN2,NF,COL,I,J,WHEREB,IER,IOVAL,NB,
+     +            IOVEC,MAXW,MAXW2,NV,NV2,NVAR,NVAR2,NLEV,NLEV2,
+     +            KIND,IO,IL,LWORK,IU,M,ILO,IHI,PACK,MSOR,
+     +            MEM8,ERR1,ERR2,ERR3,ERR4,ERR5,DEET
+
+      INTEGER,    ALLOCATABLE,DIMENSION(:) :: IBUF,IWORK,FAIL
+      REAL(8),    ALLOCATABLE,DIMENSION(:) ::
+     +            A,B,X,W,RCONDE,RCONDV,SCALE,VAL,VALI,VEC,VECL
+
+#     include "machtype.cdk" 
+
+      INTEGER,    EXTERNAL :: GETSIZ3,ILAENV
+      LOGICAL,    EXTERNAL :: RPBLOC,SETIO64
+      EXTERNAL    SUIVANT,PRECEDE,JCLPNT,
+     +            GETLIGN,HPALLOC,XIT,GETMSET,PUTMSET,
+     +            WRITLEV2,BURNF,SETLAB,CSORTD,LBLCHK
+      EXTERNAL    DGEBAL,DGEESX,DGEBAK,DSYEVX,DSYGV
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        ZERO,TRACE / 2*0.0 /, DEET / 3600 /,
+     +            ERR1,ERR2,ERR3,ERR4,ERR5 / 5*0 /, LOAD / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/meofvec.ptn,v $'
+
+*---------------------------------------------------------------------
+***    PHASE PREPARATOIRE. 
+ 
+      NF = 6
+      CALL JCLPNT( NF, 1,2,3,4, 5,6 )
+
+      IO64B = SETIO64(.TRUE.)
+
+      IF (MACHINE == 1)                                       THEN
+          ! Code REAL=64bits non supporte.
+          WRITE(6,6011)
+          CALL                                      XIT(' Meofvec',-11)
+      END IF
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          I    = 0
+          VL   = 0.0
+          VU   = 0.0
+          VV   = 0.01
+          KIND = 0
+          MSOR = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,E10.0)',ERR=999,END=999,IOSTAT=IO) VL
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,E10.0)',ERR=999,END=999,IOSTAT=IO) VU
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,E10.0)',ERR=999,END=999,IOSTAT=IO) VV
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) KIND
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) I
+          IF (I.NE.0) LOAD = .TRUE.
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) MSOR
+
+      ELSE
+
+***        READ KIND FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 999
+          ELSE
+              READ( LIGNE, 5000, ERR=999,END=999,IOSTAT=IO)
+     +                           KIND,VL,VU,VV,MSOR
+              CALL BURNF
+          END IF
+
+          IF (VV == 0.0) VV = 0.01
+
+      END IF
+
+***    DOIT-ON CALCULER LES VECTEURS PROPRES ?
+
+      VCC = .FALSE. ; IF (KIND < 0) VCC = .TRUE.
+      KIND = ABS( KIND )
+
+      IF (KIND /= 2) LOAD = .FALSE. ; IF (LOAD) WRITE(6,6300)
+
+***    DETERMINER LA TAILLE DES COLONNES DE LA MATRICE A.
+
+      MAXW = GETSIZ3( 1, JBUF, LEN,NWDS,JPAK, .TRUE.,
+     +                   LEV,NLEV, VARIAB,NVAR, MAXVAR )
+
+      IF (MAXW <= 0) CALL                          XIT(' Meofvec',-1 )
+
+      WRITE(6,6150) 'A' ; CALL PRTLAB( JBUF )
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE == 'ZONL') NWDS = JBUF(5)
+
+      NV  = NLEV*NVAR
+      COL = NV*NWDS
+
+***     COMPACTION DE SORTIE.
+
+                    PACK =      JPAK
+      IF (JPAK < 0) PACK = MIN( JPAK, -32 )
+          JBUF(8) = PACK
+
+      CALL LBLCHK( LEN,NWDS,PACK,JBUF )
+
+      IF (KIND == 3)                                           THEN
+
+***        DETERMINER LA TAILLE DES COLONNES DE LA MATRICE B.
+
+          MAXW2 = GETSIZ3( 2, KBUF, LEN2,NWDS2,KPAK, .TRUE.,
+     +                        LEV2,NLEV2, VARIAB2,NVAR2, MAXVAR )
+
+          IF (MAXW2 .LE. 0) CALL                   XIT(' Meofvec',-2 )
+
+          WRITE(6,6150) 'B' ; CALL PRTLAB( KBUF )
+
+          NV2 = NLEV2*NVAR2
+
+          WRITE(TYPE,4) KBUF(1)
+          IF (TYPE == 'ZONL') NWDS2 = KBUF(5)
+
+***        VERIFIER LA CONSISTANCE ENTRE A ET B.
+
+          IF (NV2*NWDS2 /= COL)                                THEN
+              WRITE(6,6012) NV2,NWDS2,COL
+              CALL                                 XIT(' Meofvec',-12 )
+          END IF
+
+***        COMPACTION DE SORTIE.
+
+          IF (PACK < 0 .AND. KPAK < 0)
+     +        PACK = MIN( PACK, KPAK )
+
+          KBUF(8) = PACK
+
+          CALL LBLCHK( LEN2,NWDS2,KPAK,KBUF )
+
+          LEN = MAX( LEN,LEN2 )
+          MAXW = MAX( MAXW,MAXW2 )
+
+      END IF
+
+      IF (KIND == 2 .OR. KIND == 3)                            THEN
+
+***        TAILLE OPTIMALE POUR DSYTRD.
+
+          NB = ILAENV( 1, 'SSYTRD', 'U', COL, -1,-1,-1 )
+
+***        DANS LA PROCHAINE LIGNE, LWORK EST DEUX FOIS
+***        PLUS GRAND QUE NE LE MENTIONNE LA DOCUMENTATION.
+
+          IF (KIND == 2) LWORK = MAX( NB+3, 7 )*COL*2
+          IF (KIND == 3) LWORK = MAX( NB+2, 3 )*COL
+
+      ELSE IF (KIND == 1)                                      THEN
+
+          LWORK = COL*(COL+6)
+
+      END IF
+      
+***    DETERMINONS LA MEMOIRE DONT ON A BESOIN ...
+
+      MEM  = LEN
+      MEM8 = COL * ( COL + 2 )
+
+      IF (KIND == 3)                                           THEN
+
+          MEM  = MEM  + COL
+          MEM8 = MEM8 + COL * COL + LWORK
+
+      ELSE
+
+          IF (KIND == 2)                                       THEN
+              MEM  = MEM  + COL * 6
+              MEM8 = MEM8 + LWORK
+          ELSE IF (KIND == 1)                                  THEN
+              MEM  = MEM  + COL * 2
+              MEM8 = MEM8 + COL * 4 + LWORK
+          END IF
+
+          IF (VCC)                                             THEN
+              MEM8 = MEM8 + COL * ( COL + 1 )
+          ELSE
+              MEM8 = MEM8 + COL * 2
+          END IF
+
+      END IF
+
+      MEM = MEM + MEM8 * MACHINE
+
+      IF (MEM > MAXMEM)                                        THEN 
+          WRITE(6,6003) MEM,MAXMEM
+          CALL                                     XIT(' Meofvec',-3 )
+      END IF 
+ 
+***    ... ET DEMANDONS-LA.
+
+      ALLOC_NABT
+
+      ALLOCATE( A(COL),VAL(COL),X(COL*COL), STAT=ERR1 )
+
+***    ALLOCATION DU TAMPON I/O.
+
+      ALLOCATE( IBUF(LEN), STAT=ERR2 )
+
+      IF (KIND == 3)                                           THEN
+
+***        LES CHAMPS REQUIS PAR LE MODE SYMMETRIQUE GENERALISE.
+
+          ALLOCATE( W(LWORK),B(COL*COL), STAT=ERR3 )
+          ALLOCATE( IWORK(COL),          STAT=ERR4 )
+
+      ELSE
+
+          IF (KIND == 2)                                      THEN
+
+***            LES CHAMPS REQUIS PAR LE MODE SYMMETRIQUE.
+
+              ALLOCATE( W(LWORK),               STAT=ERR3 )
+              ALLOCATE( FAIL(COL),IWORK(5*COL), STAT=ERR4 )
+
+          ELSE IF (KIND == 1)                                   THEN
+
+***            LES CHAMPS REQUIS PAR LE MODE GENERAL.
+
+              ALLOCATE( W(LWORK),VALI(COL),RCONDE(COL),
+     +                  RCONDV(COL),SCALE(COL), STAT=ERR3 )
+              ALLOCATE( IWORK( 2*COL),          STAT=ERR4 )
+
+          END IF
+
+***        LES CHAMPS REQUIS PAR LE CALCUL DES VECTEURS.
+
+          IF (VCC)                                             THEN
+              ALLOCATE( VECL(COL),VEC(COL*COL), STAT=ERR5 )
+          ELSE
+              ALLOCATE( VECL(COL),VEC(COL), STAT=ERR5 )
+          END IF
+
+      END IF
+
+      ALLOC_ABT
+
+      IER = MAX( ERR1,ERR2,ERR3,ERR4,ERR5 )
+
+      IF (IER /= 0)                                            THEN 
+          WRITE(6,6603) MEM
+          CALL                                     XIT(' Meofvec',-3 )
+      END IF 
+ 
+***    ANNONCER CE QUI VA SUIVRE.
+
+      WRITE(6,6200) 'A',(VARIAB(I),I=1,NVAR)
+      CALL WRITLEV2( LEV,NLEV,JBUF )
+
+      IF (KIND == 3)                                           THEN
+          WRITE(6,6200) 'B',(VARIAB2(I),I=1,NVAR2)
+          CALL WRITLEV2( LEV2,NLEV2,KBUF )
+      END IF
+*---------------------------------------------------------------------- 
+***    CONTRUIRE LA MATRICE X.
+ 
+      DO  J=1,COL 
+ 
+***        LIRE LA J-IEME COLONNE DE A.
+ 
+          CALL GETMSET( 1, A, LEV,NLEV, STEP,.TRUE.,
+     +                     VARIAB,NVAR, IBUF,MAXW,OK )
+ 
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6004) J 
+              CALL                                 XIT(' Meofvec',-4 ) 
+          END IF 
+
+***        S'ASSURER DE LA CONSISTANCE DES DIMENSIONS DE X.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6005) 'A' ; CALL PRTLAB2(' First IBUF : ',JBUF )
+                                  CALL PRTLAB2(' Last  IBUF : ',IBUF )
+              CALL                                 XIT(' Meofvec',-5 )
+          END IF
+
+          WHEREB = (J-1)*COL
+          DO  I=1,COL
+              X(WHEREB+I) = A(I)
+          END DO
+
+***        CALCUL DE LA TRACE.
+
+          TRACE = TRACE + A(J)
+
+      END DO
+
+      IF (KIND == 3)                                           THEN
+
+***        CONTRUIRE LA MATRICE B.
+ 
+          DO  J=1,COL 
+ 
+***            LIRE LA J-IEME COLONNE DE B.
+ 
+              CALL GETMSET( 2, A, LEV2,NLEV2, STEP,.TRUE.,
+     +                         VARIAB2,NVAR2, IBUF,MAXW,OK )
+ 
+              IF (.NOT.OK)                                     THEN 
+                  WRITE(6,6014) J 
+                  CALL                             XIT(' Meofvec',-14 ) 
+              END IF 
+
+***            S'ASSURER DE LA CONSISTANCE DES DIMENSIONS DE B.
+
+              CALL CMPLBL( 0,KBUF, 0,IBUF, OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6005) 'B'
+                  CALL PRTLAB2(' First IBUF : ',KBUF )
+                  CALL PRTLAB2(' Last  IBUF : ',IBUF )
+                  CALL                             XIT(' Meofvec',-15 )
+              END IF
+
+              WHEREB = (J-1)*COL
+              DO  I=1,COL
+                  B(WHEREB+I) = A(I)
+              END DO
+
+          END DO
+
+      END IF
+
+      IF (VCC)                                                 THEN
+          IF (KIND == 1) WRITE(6,6100) '  GENERAL  '
+          IF (KIND == 2) WRITE(6,6100) ' SYMMETRIC '
+          IF (KIND == 3) WRITE(6,6100) 'G-SYMMETRIC'
+      ELSE
+          IF (KIND == 1) WRITE(6,6101) '  GENERAL  '
+          IF (KIND == 2) WRITE(6,6101) ' SYMMETRIC '
+          IF (KIND == 3) WRITE(6,6101) 'G-SYMMETRIC'
+      END IF
+
+      CALL puthigh( DEET,'DEET',IBUF )
+
+      IF (KIND == 0 .OR. KIND == 1)                            THEN
+
+***        CALCULER LES VALEURS ET VECTEURS PROPRES D'UNE
+***        MATRICE GENERALE AVEC LES ROUTINES DGEBAL (EQUILIBRAGE),
+***        DGEEVX (FACTORISATION DE SCHUR) ET DGEBAK (INV DE DGEBAL).
+
+***        COMMENCER PAR EQUILIBRER LA MATRICE X.
+
+          CALL DGEBAL( 'B', COL, X,COL, ILO,IHI, SCALE, IER )
+
+***        VERIFIER QUE CETTE PREMIERE ETAPE A ETE REUSSIE.
+
+          IF (IER /= 0)                                        THEN
+              WRITE(6,6006) IER
+              CALL                             XIT(' Meofvec',-6 )
+          END IF
+
+          IF (VCC)                                             THEN
+
+***            VALEURS ET VECTEURS PROPRES DROITS.
+
+              CALL DGEEVX( 'N','N','V','V', COL, X,COL, VAL,VALI,
+     +                      VECL,1, VEC,COL, ILO,IHI, SCALE,ABNRM,
+     +                      RCONDE,RCONDV, W,LWORK, IWORK,IER )
+
+          ELSE
+
+***            VALEURS PROPRES SEULEMENT.
+
+              CALL DGEEVX( 'N','N','N','N', COL, X,COL, VAL,VALI,
+     +                      VECL,1, VEC,1, ILO,IHI, SCALE,ABNRM,
+     +                      RCONDE,RCONDV, W,LWORK, IWORK,IER )
+
+          END IF
+
+***        VERIFIER QUE LE CALCUL CONVERGE.
+
+          IF (IER /= 0)                                        THEN
+              WRITE(6,6007) 'A',IER
+              IF (VCC .AND. IER > 0) 
+     +        WRITE(6,6107) (FAIL(I),I=1,IER)
+              CALL                                 XIT(' Meofvec',-7 )
+          END IF
+
+          IF (VCC)                                             THEN
+
+***            TRANSFORMATION INVERSE DE L'EQUILIBRAGE DES VECTEURS.
+
+              CALL DGEBAK( 'B','R', COL, ILO,IHI, SCALE,COL,
+     +                              VEC,COL, IER )
+
+***            VERIFIER QUE CETTE DERNIERE ETAPE A ETE REUSSIE.
+
+              IF (IER /= 0)                                    THEN
+                  WRITE(6,6008) IER
+                  CALL                             XIT(' Meofvec',-8 )
+              END IF
+
+          END IF
+
+          M = COL
+
+      ELSE IF (KIND == 2)                                      THEN
+
+***        CALCULER LES VALEURS ET VECTEURS PROPRES D'UNE
+***        MATRICE SYMMETRIQUE AVEC LA ROUTINE DSYEVX.
+
+***        DEFINIR VL ET VU S'IL LE FAUT.
+
+          IF (VL*VU == 0)                                      THEN
+              VL = TRACE*VV
+              VU = TRACE
+          END IF
+
+          WRITE(6,6102) VL,VU
+          IF (VL >= VU)                                        THEN
+              WRITE(6,6009)
+              CALL                                 XIT(' Meofvec',-9 ) 
+          END IF
+
+          IF (VCC)                                             THEN
+
+***            VALEURS ET VECTEURS DANS L'INTERVAL VL,VU.
+
+              CALL DSYEVX( 'V','V','U', COL, X,COL, VL,VU, IL,IU,
+     +                      ZERO,M,VAL, VEC,COL, W,LWORK, IWORK,
+     +                      FAIL,IER )
+
+          ELSE
+
+***            TOUTES LES VALEURS PROPRES.
+
+              CALL DSYEVX( 'N','V','U', COL, X,COL, VL,VU, IL,IU,
+     +                      ZERO,M,VAL, VEC,1, W,LWORK, IWORK,
+     +                      FAIL,IER )
+
+          END IF
+
+***        VERIFIER QUE LE CALCUL CONVERGE.
+
+          IF (IER /= 0)                                        THEN
+              WRITE(6,6007) 'A',IER
+              IF (VCC .AND. IER > 0) 
+     +        WRITE(6,6107) (FAIL(I),I=1,IER)
+              CALL                                 XIT(' Meofvec',-7 )
+          END IF
+
+      ELSE IF (KIND == 3)                                      THEN
+
+***        CALCULER LES VALEURS ET VECTEURS PROPRES D'UN
+***        PROBLEME SYMMETRIQUE GENERALISE AVEC LA ROUTINE DSYGV.
+
+          IF (VCC)                                             THEN
+
+***            VALEURS ET VECTEURS.
+
+              CALL DSYGV( 3, 'V','U', COL, X,COL, B,COL,
+     +                                VAL, W,LWORK, IER )
+
+          ELSE
+
+***            SEULEMENT LES VALEURS PROPRES.
+
+              CALL DSYGV( 3, 'N','U', COL, X,COL, B,COL,
+     +                                VAL, W,LWORK, IER )
+
+          END IF
+
+***        VERIFIER LE NIVEAU DE CONVERGENCE DU CALCUL.
+
+          IF (IER /= 0)                                        THEN
+              WRITE(6,6007) 'B',IER
+              IF (IER < 2 .OR. IER > COL)                      THEN
+                  CALL                             XIT(' Meofvec',-7 )
+              ELSE 
+                  M = IER-1
+              END IF
+          ELSE
+              M = COL
+          END IF
+
+      END IF
+
+***    DEFINIR LE UNITES I/O EN
+***    FONCTION DU MODE DE TRAVAIL.
+
+      IF (KIND == 3)                                           THEN
+          IOVAL = 3
+          IOVEC = 4
+      ELSE
+          IOVAL = 2
+          IOVEC = 3
+      END IF
+
+***    SAUVER LES RESULTATS DANS LES FICHIERS AVAL ET AVEC.
+***    LES VALEURS PROPRES VONT DANS UNE OU DEUX PSEUDO COUPE(S).
+***    INVERSER L'ORDRE DES COMPOSANTES.
+
+      IF (KIND == 1)                                           THEN
+
+***        ORDONNER LES VALEURS PROPRES SELON LEUR MODULE.
+
+          DO  J=1,M
+              SCALE(J) = SQRT( VAL(J)*VAL(J)+VALI(J)*VALI(J) )
+              IWORK(J) = J
+          END DO
+
+          CALL CSORTD( SCALE,IWORK,M )
+
+***        INVERSER L'ORDRE DU TRI.
+***        ELIMINER LES VALEURS PROPRES 1000 FOIS
+***        PLUS PETITES QUE LA PLUS GRANDE VALEUR.
+
+          DO  I=1,M/2
+              J            = IWORK(I)
+              IWORK(I)     = IWORK(M-I+1)
+              IWORK(M-I+1) = J
+          END DO
+
+          J      = M
+          SCALEM = SCALE(IWORK(1))/100.
+          DO  I=2,M
+              IF (SCALE(IWORK(I)).LT.SCALEM)                   THEN
+                  J = I-1
+                  GOTO 250
+              END IF
+          END DO
+
+  250     M = J
+          WRITE(6,6250) (I,VAL(IWORK(I)),VALI(IWORK(I)), I=1,M)
+
+***        SAUVER LES PARTIES REELLES.
+
+          DO  I=1,M
+              A(I) = VAL(IWORK(I))
+          END DO
+
+          CALL SETLAB( IBUF,'ZONL',0,'VALR',0,M,1,0,PACK )
+          CALL PUTFLD2( IOVAL, A, IBUF,MAXW )
+
+***        SAUVER LES PARTIES IMAGINAIRES.
+
+          DO  I=1,M
+              A(I) = VALI(IWORK(I))
+          END DO
+
+          CALL SETLAB( IBUF,'ZONL',0,'VALI',0,M,1,0,PACK )
+          CALL PUTFLD2( IOVAL, A, IBUF,MAXW )
+
+      ELSE
+
+***        LAPACK RETOURNE LES VALEURS
+***        PROPRES EN ORDRE ASCENDANT.
+
+          IF (MSOR == 0)                                       THEN
+
+***            INVERSONS LES.
+
+              DO  I=1,M
+                  IWORK(I) = M-I+1
+              END DO
+
+          ELSE
+
+              WRITE(6,6225)
+
+***            TRIONS-LES SELON LEUR
+***            VALEURS ABSOLUES ...
+
+              DO  J=1,M
+                  SCALE(J) = ABS( VAL(J) )
+                  IWORK(J) = J
+              END DO
+
+              CALL CSORTD( SCALE,IWORK,M )
+
+***            ... ET INVERSONS L'ORDRE DU TRI.
+          
+              DO  I=1,M/2
+                  J            = IWORK(I)
+                  IWORK(I)     = IWORK(M-I+1)
+                  IWORK(M-I+1) = J
+              END DO
+
+          END IF
+
+          WRITE(6,6251) (I,VAL(IWORK(I)), I=1,M)
+
+***        SAUVER LES VALEURS PROPRES REELLES.
+
+          DO  I=1,M
+              A(I) = VAL(IWORK(I))
+          END DO
+
+          CALL SETLAB( IBUF,'ZONL',0,' VAL',0,M,1,0,PACK )
+          CALL PUTFLD2( IOVAL, A, IBUF,MAXW )
+
+      END IF
+
+      IF (VCC)                                                 THEN
+
+***        RESTAURER IBUF A SA VALEUR ORIGINALE.
+
+          DO  I=1,8
+              IBUF(I) = JBUF(I)
+          END DO
+
+***        ON SAUVE LES M VECTEURS PROPRES DROITS.
+
+          DO  300 J=1,M
+ 
+               IBUF(2) = J
+
+               TRACE = 1.0
+               IF (LOAD .AND. KIND == 2)
+     +         TRACE = SQRT( VAL(IWORK(J)) )
+
+***            ECRIRE LA J-IEME COLONNE DE Z.
+ 
+              WHEREB = (IWORK(J)-1)*COL
+              IF (KIND == 3)                                   THEN
+                  DO  I=1,COL
+                      A(I) = X(WHEREB+I)
+                  END DO
+              ELSE
+                  DO  I=1,COL
+                      A(I) = VEC(WHEREB+I)*TRACE
+                  END DO
+              END IF
+
+              CALL PUTMSET( IOVEC, A, LEV,NLEV, 
+     +                      VARIAB,NVAR, IBUF,MAXW )
+
+  300     CONTINUE
+
+      END IF
+ 
+*---------------------------------------------------------------------- 
+***    FIN NORMALE. 
+ 
+      CALL                                         XIT(' Meofvec', 0 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR STDIN. 
+ 
+  999 IF (IO.NE.0) WRITE(6,6010) IO
+      CALL                                         XIT(' Meofvec',-10 ) 
+*---------------------------------------------------------------------- 
+
+    4 FORMAT(A4) 
+
+ 5000 FORMAT(10X,I5,3E10.0,I5)
+
+ 6012 FORMAT(/' In file B, NVAR*NLEV,NWDS,COL = ',3I6/)
+ 6003 FORMAT(/' Required and available memory  = ',2I10,' (words).')
+ 6603 FORMAT(/' Unable to allocate required memory, i.e. ',I9,' words.')
+ 6004 FORMAT(/' Error reading A after ',I5,'record(s).'/) 
+ 6014 FORMAT(/' Error reading B after ',I5,'record(s).'/) 
+ 6005 FORMAT(/' More than one size in file ',A,'. ')
+ 6006 FORMAT(/' (DGEBAL) Transformation yields error =',I5)
+ 6007 FORMAT(/' Input matrix ',A1,' factorization returns INFO = ',I6)
+ 6107 FORMAT( ' Failed convergence for index ...'/(1X,20I5)/)
+ 6008 FORMAT(/' (DGEBAK) Back-Transformation yields error =',I5)
+ 6009 format(/' Minimum eigenvalue should be less than the maximum.'/)
+ 6010 FORMAT(/' Meofvec reports I/O error number ',I3,' on unit 5.')
+ 6011 FORMAT(/' 64 bits REALs not supported. Assumed size is 32 bits.'/)
+
+ 6100 FORMAT(/' Meofvec with ',A11,' matrix.'/
+     +        ' Will calculate eigen-vectors.'/)
+ 6101 FORMAT(/' Meofvec with ',A11,' matrix.'/
+     +        ' Will not calculate eigen-vectors.')
+ 6102 FORMAT( ' Minimum, Maximum eigen-values are ',2E15.8/)
+ 6150 FORMAT(/' First record in ',A1,':')
+ 6200 FORMAT(/' In file ',A1,', variable(s) = ',16(A4,1X))
+ 6225 FORMAT(/' Eigenvalues sorted according to their modulus.')
+ 6250 FORMAT(/' Eigenvalues...'/3(I4,1X,2E15.7))
+ 6251 FORMAT(/' Eigenvalues...'/6(I4,1X,E15.7))
+ 6300 FORMAT(/' Meofvec will output factor loadings.')
+ 
+      END 
+#     endif

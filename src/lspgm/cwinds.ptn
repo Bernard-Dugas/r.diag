@@ -1,0 +1,511 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      cwinds  SSVORT SSDIV SSU SSV OUTPUT
+*
+*
+*     DESCRIPTION...
+*      cwinds - CONVERTS SPECTRAL Q,D FILES TO SPECTRAL U,V 
+* 
+*
+*     AUTHOR  - J.D.Henderson, APR 22/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/cwinds.ptn,v 4.15 2014/10/16 11:34:04 dugas Exp $
+*
+* 
+*     PURPOSE - CONVERTS SPECTRAL VORTICITY (Q) AND DIVERGENCE (D) PAIRS
+*               TO MODEL WIND COMPONENTS (U,V)COS(LAT)/A. ALTERNATIVELY,
+*               PAIRS OF HORIZONTAL STREAMFUNCTION (PSI) AND VELOCITY
+*               POTENTIAL (CHI) CAN BE USED FOR THE SAME PURPOSE.
+*               ALL FIELDS ARE GLOBAL. 
+*
+*     NOTE:     WHEN 1) THE SSVORT VARIABLE NAME IS 'QR' OR 'PP',
+*               OR 2) THE SSDIV VARIABLE NAME IS 'DD' OR 'CC', THEN
+*               THE SSU AND SSV OUTPUT VARIABLE NAMES ARE RESPECTIVELY
+*              'UU' AND 'VV' AND ARE IN UNITS OF KNOTS, THIS RATHER THAN
+*               THE DEFAULT 'U' AND 'V' IN UNITS OF M/S.
+*
+*
+*     INPUT FILES...  
+*      SSVORT = SPECTRAL VORTICITY  (OR HORIZONTAL STREAMFUNCTION)
+*      SSDIV  = SPECTRAL DIVERGENCE  (OR VELOCITY POTENTIAL)
+* 
+*     OUTPUT FILES...  
+*      SSU = SPECTRAL WIND COMPONENT U 
+*      SSV = SPECTRAL WIND COMPONENT V
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 UNABLE TO READ SSVORT
+*       2 UNABLE TO READ SSDIV
+*       3 DATA NOT COMPLEX
+*       4 UNABLE TO UNPACK FIRST SSVORT
+*       5 NOT AS MANY RECORDS IN SSDIV AS IN SSVRT
+*       6 SSVORT AND SSDIV NOT THE SAME SIZE
+*       7 VARIABLE NAMES NOT RECOGNIZED
+*       8 UNABLE TO ALLOCATE WORKING MEMORY
+*
+*     NON-FATAL CONDITIONS...
+*     101 CWINDS REQUIRES FULL SPECTRAL FIELDS TO OPERATE
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM cwinds
+*    +     (      SSVORT,       SSDIV,       SSU,       SSV,
+*    +      TAPE1=SSVORT, TAPE2=SSDIV, TAPE3=SSU, TAPE4=SSV,
+*    +      OUTPUT,TAPE6=OUTPUT) 
+
+*     $Log: cwinds.ptn,v $
+*     Revision 4.15  2014/10/16 11:34:04  dugas
+*     Modifications commandees par la compilation avec GFORTRAN et IFORT.
+*
+*     Revision 4.14  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.13  2013/10/16 20:25:43  bernard
+*      - Declarations 'a la' F90
+*      - Utiliser le macro lm_maximal pour definir MAXLM
+*      - Tous les calculs se font en mode 64 bits
+*      - Gestion des allocationa de memoire avec ALLOCATE plutot que HPALLOC/DEHPALLC
+*      - Ne plus faire d'appel a MACSPE
+*
+*     Revision 4.12  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.11  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2004/05/10 15:29:40  dugas
+*     Corriger la documentation automatique
+*
+*     Revision 4.9  2001/11/20 22:59:08  armnrbd
+*     Rendre plus general la verification des noms de variables d'entrees.
+*
+*     Revision 4.8  2000/01/05 16:43:20  armnrbd
+*     Ajouter PSI et CHI comme champs d'entree possible.
+*
+*     Revision 4.7  1999/10/05 20:33:45  armnrbd
+*     Ajouter un message a la sortie d'erreur -4.
+*
+*     Revision 4.6  1998/10/19 14:43:52  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.5  1998/07/03  02:26:22  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1997/09/26  17:38:49  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1997/05/30  18:04:36  armnrbd
+*     Conversions de noms/unites seulement pour fichiers SQ89.
+*
+*     Revision 4.2  1996/02/06  18:17:28  armnrbd
+*     Corriger la boucle de conversion d'unites pour les fichiers SQI.
+*
+*     Revision 4.1  1996/01/08  15:55:10  armnrbd
+*     Tenir compte des unites de vents que l'on trouve sur les fichiers SQI.
+*
+*     Revision 4.0  1994/11/17  14:19:44  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  93/10/25  14:34:04  armnrbd
+*     Plusieurs changements cosmetiques.
+*     
+*     Revision 3.0  93/10/13  13:55:48  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.7  93/09/09  14:51:49  14:51:49  armnrbd (Bernard Dugas)
+*     Implanter le calcul de LRWLMT par CLRLMT.
+*     
+*     Revision 1.6  93/03/09  14:47:43  armnrbd
+*     Corriger une erreur dans la determination de MAXW.
+*     
+*     Revision 1.5  93/03/09  10:25:17  armnrbd
+*     Enlever les REWINDs du code.
+*     
+*     Revision 1.4  93/03/08  13:10:16  armnrbd
+*     Utiliser HPALLOC/HPDEALLC plutot que MEMOIR.
+*     
+*     Revision 1.3  92/11/10  10:59:46  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/06/04  22:33:05  armnrbd
+*     Modifier le calcul de MAXW.
+*     
+*     Revision 1.1  92/03/23  12:05:49  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:38  armnrbd
+*     Initial revision
+*     
+***    MODIFICATION HISTORY:
+***    MAI 21/90 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+***    MAY 06/83 - R.LAPRISE.
+
+***    AUTHOR: APR 22/80 - J.D.HENDERSON.
+
+*---------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLM = lm_maximal
+      INTEGER,    PARAMETER :: HEAD  = taille_entete
+
+      LOGICAL     OK
+      REAL(8)     CONVERT,CONST
+      CHARACTER*4 TYPE,CU,CV,CQ,CD,NAME
+      INTEGER     KBUF(HEAD),LBUF(HEAD),KPAK,LPAK,
+     +            LSR(2,MAXLM), MAXW1,MAXW2,MAXW,LEN1,LEN2,
+     +            LEN3,LEN,IER,I,J,NF,LA,LAW,LR,LRW,LM,KTR,LRWLMT,
+     +            LRLMT,LAF,NWDS,NR,NST,LEVEL,MEM1,MEM2
+
+      real(8),    allocatable, dimension(:) ::  UU,VV,QR,DD,EPSI,ALFA
+      integer,    allocatable, dimension(:) ::  IBUF,JBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+      
+      LOGICAL,    EXTERNAL :: SETIO64
+      INTEGER,    EXTERNAL :: CLRLMT,GETSIZ
+      EXTERNAL    JCLPNT,XIT,CMPLBL,DIMGT2,LBLCHK,
+     +            EPSCAL,GETFLD2,QDAWG2,PUTFLD2,CALPHA
+
+      DATA        CONST / -2.46351E-14 /
+      DATA        CONVERT / 1.9438461 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/cwinds.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5
+      CALL JCLPNT( NF, 1,2, 3,4, 6 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    GET FIRST ARRAY SIZES AND REQUEST NECESSARY MEMORY. 
+***    READ FIRST SET OF I/O BUFFER INTO KBUF,LBUF.
+
+      MAXW1 = GETSIZ( 1, KBUF,LEN1,NWDS,KPAK )
+      IF (MAXW1.EQ.0) CALL                         XIT(' Cwinds ',-1 )
+      MAXW2 = GETSIZ( 2, LBUF,LEN2,NWDS,LPAK )
+      IF (MAXW2.EQ.0) CALL                         XIT(' Cwinds ',-2 )
+
+***    COMPARE ARRAY SIZES.
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK ) 
+
+      IF (.NOT.OK)                                             THEN
+          CALL PRTLAB( KBUF ) ; CALL PRTLAB( LBUF )
+          CALL                                     XIT(' Cwinds ',-6 ) 
+      END IF
+
+      WRITE(TYPE,4) KBUF(1)
+      WRITE(CQ,4) KBUF(3)
+
+      LA    = KBUF(5)
+      LRLMT = KBUF(7)
+
+***    TENIR COMPTE DES CONVERSIONS DE NOMS.
+
+      WRITE(CQ,0004) KBUF(3)
+      WRITE(CD,0004) LBUF(3)
+
+      IF ((CQ.EQ.'VORT' .AND. CD.EQ.'DIV') .OR.
+     +    (CQ.EQ.'PSI'  .AND. CD.EQ.'CHI') )                   THEN
+          CU = 'U'
+          CV = 'V'
+      ELSE IF
+     +   ((CQ.EQ.'QR'   .AND. CD.EQ.'DD' ) .OR.
+     +    (CQ.EQ.'PP'   .AND. CD.EQ.'CC' ) )                   THEN
+          CU = 'UU'
+          CV = 'VV'
+      ELSE
+          WRITE(6,6007) CQ,CD
+          CALL                                     XIT(' Cwinds ',-7 )
+      END IF
+
+***    CHECK THAT DATA ARE FULL SPECTRAL TYPE. GET SPECTRAL PARAMETERS.
+
+      IF (TYPE.NE.'SPEC') CALL                     XIT(' Cwinds ',-3 )
+
+      CALL DIMGT2( LSR, LAF,LR,LM,KTR,LRLMT,  0,-1 )
+
+      IF (LAF.NE.LA)                                            THEN
+          WRITE(6,6110)
+          CALL                                     XIT(' Cwinds ',-101)
+      END IF
+
+      LRW    = LR+1
+      LRWLMT = CLRLMT( LRW,LM,KTR, .TRUE. )
+      LAW    = LA+LM 
+
+      KBUF(5) = LAW
+      KBUF(7) = LRWLMT
+
+      CALL LBLCHK( LEN3, NWDS,KPAK,KBUF )
+
+      LEN  = MAX( LEN1, LEN2, LEN3 )
+      MAXW = LEN-HEAD
+
+***    TOTAL MEMORY, ASSUMING ALL RECORDS ARE OF SAME SIZE.
+
+      MEM1 = 2*LEN + 2*(2*LA) + 2*(2*LAW) + 2*(LM+1)
+      MEM2 = 2*LAW
+
+      allocate( IBUF(LEN),JBUF(LEN), \
+                ALFA(LA*2),QR(LA*2),DD(LA*2), \
+                UU(LAW*2),VV(LAW*2),EPSI(LAW), STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT(' Cwinds ',-8 )
+
+***    DEFINE CONSTANTS.
+
+      CALL DIMGT2( LSR, LA,LR,LM,KTR,LRLMT,  0,0 )
+
+      WRITE(6,6020) LA,LR,LM,KTR,LRLMT
+      CALL EPSCAL( EPSI,LSR,LM )
+
+***    COMPUTE THE COMPLEX ARRAY ALPHA(N,M).
+  
+      CALL CALPHA( ALFA, LSR,LM,LA, 0 )
+
+      DO  I=1,2*LA-1,2
+          ALFA(I) = ALFA(I)*CONST
+      END DO
+
+***    READ THE NEXT VORTICITY FIELD FROM FILE SSVORT. 
+
+      NR = 0
+
+  100 CALL GETFLD2( 1, QR,'SPEC',-1,CQ,-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                          THEN
+              WRITE(6,6010) NR,CQ,CD,CU,CV
+
+              IF (NR.EQ.0) WRITE(6,6004) CQ,NR
+              IF (NR.EQ.0) CALL                    XIT(' Cwinds ',-4 ) 
+
+                           CALL                    XIT(' Cwinds ', 0 )
+          END IF
+
+          NST   = IBUF(2) 
+          LEVEL = IBUF(4) 
+
+***        READ THE NEXT DIVERGENCE FIELD FROM FILE SSDIV. 
+
+          CALL GETFLD2( 2, DD, 'SPEC',NST,CD,LEVEL, 
+     +                     JBUF,MAXW,OK) 
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6004) CD,NR
+              CALL                                 XIT(' Cwinds ',-5 ) 
+          END IF
+
+***        COMPARE ARRAY SIZES.
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK ) 
+
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+              CALL                                 XIT(' Cwinds ',-6 ) 
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+          IF (NR.EQ.0) CALL PRTLAB( JBUF )
+
+***        ACCOUNT FOR STREAMFUNCTION OR VELOCITY POTENTIAL INPUT.
+
+          IF (CQ.EQ.'PSI' .OR. CQ.EQ.'PP')                     THEN
+
+              DO  I=1,2*LA-1,2
+                  QR(I)   = QR(I)  *ALFA(I)
+                  QR(I+1) = QR(I+1)*ALFA(I)
+                  DD(I)   = DD(I)  *ALFA(I)
+                  DD(I+1) = DD(I+1)*ALFA(I)
+              END DO
+
+          END IF
+
+***        COMPUTE THE WIND COMPONENTS U,V FROM Q,D. 
+
+          CALL QDAWG2( UU,VV, QR,DD, EPSI,LSR,LM )
+
+***        NOW PACK UU,VV ONTO FILES SSU,SSV.
+
+          IBUF(5) = LAW 
+          IBUF(6) = 1 
+          IBUF(7) = LRWLMT
+
+          IF (CU.EQ.'UU')                                      THEN
+
+***            CONVERT FROM M/S TO KNOTS.
+
+              DO  I=1,LAW*2
+                  UU(I) = UU(I)*CONVERT
+                  VV(I) = VV(I)*CONVERT
+              END DO
+
+          END IF
+
+          READ(CU,4) IBUF(3)
+          CALL PUTFLD2( 3, UU, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+          READ(CV,4) IBUF(3)
+          CALL PUTFLD2( 4, VV, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1 
+      GOTO 100 
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+
+ 6004 FORMAT(' Problem reading ',A,' spectral array number ',I6)
+ 6007 FORMAT(' Found VORTICITY = ,'A,', and DIVERGENCE = ',A)
+
+ 6010 FORMAT('Cwinds transformed',I6,' pairs of ',
+     +        A,',',A,' to ',A,',',A)
+ 6020 FORMAT('0LA,LR,LM,KTR,LRLMT=',4I8,I10) 
+ 6110 FORMAT(' Cwinds requires full spectral fields to operate.')
+
+      END 
+
+      SUBROUTINE qdawg2 (UR,VR,QR,DR,EPSI,LSR,LM)
+
+      IMPLICIT    none
+
+      REAL(8)     UR(*),VR(*),QR(*),DR(*), EPSI(*)
+      INTEGER     LM,LSR(2,LM)
+
+***    DEC 15/90 - B.DUGAS, RPN. (VERSION CY920/IRIX F77)
+***    AUG 15/79 - J.D.HENDERSON 
+
+***    CONVERTS GLOBAL SPECTRAL RELATIVE VORTICITY (Q) 
+***    AND DIVERGENCE (D) TO WIND COMPONENTS (U) AND (V).
+***    U,V HAVE THE SAME DIMENSIONS AS EPSI. 
+
+C$    integer  Bidon,mpserv
+C$    external mpserv
+
+      COMPLEX*16     U    ,    V    ,    Q    ,    D    , IZ
+      POINTER    (IU,U(*)),(IV,V(*)),(IQ,Q(*)),(ID,D(*))
+
+      REAL(8)     CON,EPS,EPSR,FNS,FMS
+      INTEGER     M,MS,K,KL,KR,IUV,NS,JL
+
+*-------------------------------------------------------------------- 
+      IZ = CMPLX(0.,1.)
+
+      IU = LOC( UR(1) ) ; IV = LOC( VR(1) )
+      IQ = LOC( QR(1) ) ; ID = LOC( DR(1) )
+
+***    FIRST LRW-2 COEFFICIENTS IN EACH WIND ROW.
+***    K INDEXES Q,D. IUV INDEXES U,V,EPSI.
+
+C$doacross local(M,MS,FMS,K,KL,KR,IUV,FNS,NS,CON,JL,EPS,EPSR)
+
+      DO 40 M=1,LM
+          MS  = M-1
+          FMS = DBLE(MS) 
+ 
+          KL  = LSR(1,M) 
+          KR  = LSR(1,M+1)-2 
+
+          IF (KR.GE.KL)                                        THEN
+
+***            NORMAL CASE.
+ 
+              JL  = LSR(2,M) 
+              DO 20 K=KL,KR 
+                  NS = MS+(K-KL)
+
+                  IF(NS.NE.0)                                  THEN
+                      FNS    =  DBLE(NS) 
+                      CON    =  FMS/(FNS*(FNS+1.D0))
+
+                      IUV    =  JL+(K-KL) 
+                      EPS    =  EPSI(IUV)/FNS 
+                      EPSR   =  EPSI(IUV+1)/(FNS+1.D0) 
+                      U(IUV) = -EPS*Q(K-1) + EPSR*Q(K+1) - IZ*D(K)*CON
+                      V(IUV) =  EPS*D(K-1) - EPSR*D(K+1) - IZ*Q(K)*CON
+                  END IF
+
+   20         CONTINUE
+
+***            LAST TWO COEFFICIENTS IN EACH ROW OF U,V. 
+
+              FNS    =   FNS+1.D0
+              CON    =   FMS/(FNS*(FNS+1.D0))
+
+              IUV    =   IUV+1 
+              U(IUV) = -(EPSI(IUV)/FNS)*Q(KR) - IZ*D(KR+1)*CON
+              V(IUV) =  (EPSI(IUV)/FNS)*D(KR) - IZ*Q(KR+1)*CON
+
+              IUV    =   IUV+1 
+              FNS    =   FNS+1.D0
+              U(IUV) = -(EPSI(IUV)/FNS)*Q(KR+1) 
+              V(IUV) =  (EPSI(IUV)/FNS)*D(KR+1) 
+
+          ELSE
+
+***            TRIANGULAR CASE, LAST ROW OF Q,D HAS ONLY ONE COEFF. 
+
+              IUV    =   LSR(2,LM) 
+              K      =   LSR(1,LM) 
+
+              FNS    =   DBLE(LM-1) 
+              CON    =   FMS/(FNS*(FNS+1.D0))
+
+              U(IUV) =  -IZ*D(K)*CON 
+              V(IUV) =  -IZ*Q(K)*CON 
+
+              IUV    =   IUV+1 
+              FNS    =   FNS+1.
+
+              U(IUV) = -(EPSI(IUV)/FNS)*Q(K)
+              V(IUV) =  (EPSI(IUV)/FNS)*D(K)
+
+          END IF
+
+   40 CONTINUE
+
+C$    Bidon = mpserv('BLOCK',Bidon)
+
+***    SET THE MEAN VALUES OF U AND V. 
+
+      U(1)   =   Q(2)*EPSI(2)
+      V(1)   =  -D(2)*EPSI(2)
+
+      RETURN
+      END 
+#     endif

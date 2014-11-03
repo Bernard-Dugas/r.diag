@@ -1,0 +1,178 @@
+#! /bin/ksh
+#
+zxzxzx=${DIAGNOSTIC_EXIT:=DIAGNOSTIC_EXIT}
+if [ -s "${zxzxzx}" ]; then exit 0 ; fi
+#
+TMPDIRN=`r.which_tmpdir`
+LANGUE=${CMCLNG:-english}
+#
+cclargs 0$                              "[sauver un fichier local]"\
+        -dn  "aucun_nom_local"  ",,,,"  "[nom du fichier local]"\
+        -pdn "nil"              "nil"   "[nom permanent du fichier]"\
+        -own "nil"              "$HOME" "[repertoire de residence du fichier permanent]"\
+        -f   "non"              "oui"   "[ecraser le fichier destination s'il existe]"\
+        -na  "non"              "oui"   "[ne pas generer de codes d'erreurs]"\
+        ++ $* > ${TMPDIRN}/cclargs_r.savef.out$$
+# 
+. ${TMPDIRN}/cclargs_r.savef.out$$ && /bin/rm -f ${TMPDIRN}/cclargs_r.savef.out$$
+#
+# usage: r.savef  -dn Local_Filename [-pdn [Permanent_Filename]]
+#                   [-own [Alternate_Directory]] [-f] [-na]
+#
+# notes: 1) le nom Local_Filename pointe a un fichier dans le
+#           repertoire $TMPDIR.
+#        2) le parametre pdn prendra par defaut la valeur de dn.
+#        3) l'option "f" (pour force) etampe les fichiers de meme 
+#           nom exitants deja et ce, sans avis. Ceci n'est pas le
+#           comportement par defaut de savef.
+#
+# auteur:   B. Dugas, RPN/13 avril 1992.
+#
+# modifications: 1) ajouter la cle "na" No-Abort (BD - 15 juin 1992)
+#                2) tenir compte de la variable ECHO_COMMAND_LINE.
+#                   (BD - 03 juin 1993)
+#                3) ajouter le support de DIAGNOSTIC_EXIT.
+#                   (BD - 30 juin 1993)
+#                4) reviser l'utilisation des codes d'erreurs.
+#                   (BD - 08 janvier 1999)
+#                5) utiliser r.which_tmpdir pour trouver le tmpdir
+#                   (BD - mai 1999)
+#                6) modifier l'appel a cclargs (enlever eval)
+#                   (BD - juin 2003)
+#
+if [ "${dn}" = aucun_nom_local ]; then
+     echo " "
+     echo " usage: $0  -dn Local_Filename [-pdn [Permanent_Filename]]"
+     echo "               [-own [Alternate_Directory]] [-f] [-na]"
+     echo " "
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "no specified value for argument dn in $0" > ${zxzxzx}
+          fi
+          exit 1
+     else
+          exit 0
+     fi
+fi
+#
+if [ "${ECHO_COMMAND_LINE:-PAS_DEFINI}" != "PAS_DEFINI" ]; then
+     echo "$0 -dn ${dn} -pdn ${pdn} -own ${own} -f ${f} -na ${na}"
+fi
+#
+if [ "${own}" = nil ]; then own=`pwd` ; fi
+#
+if [ ! -d "${own}" ]; then
+     if [ ${LANGUE} = english  ]; then echo "directory ${own} does not exit" ; fi
+     if [ ${LANGUE} = francais ]; then echo "repertoire ${own} n'existe pas" ; fi
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "directory ${own} does not exit in $0" > ${zxzxzx}
+          fi
+          exit 2
+     else
+          exit 0
+     fi
+fi
+#
+own=`true_path ${own}`
+#
+if [ "${pdn}" = nil ]; then
+     pdn=${own}/${dn}
+else
+     pdn=${own}/${pdn}
+fi
+DN=${TMPDIRN}/${dn}
+#
+if [ ! -f "${DN}" ]; then
+     if [ ${LANGUE} = english  ]; then echo "file ${dn} is not local" ; fi
+     if [ ${LANGUE} = francais ]; then echo "fichier ${dn} n'est pas local" ; fi
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "file ${dn} is not local in $0" > ${zxzxzx}
+          fi
+          exit 3
+     else
+          exit 0
+     fi
+fi
+#
+STATUS=0
+reponseSAVE=non
+etamperSAVE=non
+#
+tty -s
+if [ $? = 0 ]; then
+     interactive=oui
+else
+     interactive=non
+fi
+#
+if [ -f "${pdn}" ]; then
+     if [ ${LANGUE} = english  ]; then echo "file ${pdn} already exists" ; fi
+     if [ ${LANGUE} = francais ]; then echo "fichier ${pdn} existe deja" ; fi
+     if [ "${f}" = oui -a ${interactive} = oui ]; then
+          if [ ${LANGUE} = english  ]; then echo "are you sure you want to replace it ? (y/n) \c" ; fi
+          if [ ${LANGUE} = francais ]; then echo "etes-vous certain de vouloir le remplacer ? (o/n) \c" ; fi
+          while [ "${reponseSAVE}" != oui ]
+              do
+              read reponseSAVE
+              if [ "${reponseSAVE}" = O -o "${reponseSAVE}" = o -o \
+                   "${reponseSAVE}" = Y -o "${reponseSAVE}" = y ]; then
+                   reponseSAVE=oui
+                   etamperSAVE=oui
+              elif [ "${reponseSAVE}" = n -o "${reponseSAVE}" = n ]; then
+                   if [ "${na}" = non ]; then
+                        if [ -f ${zxzxzx} ]; then
+                             echo "file ${pdn} already exists in $0" > ${zxzxzx}
+                        fi
+                        exit 4
+                   else
+                        exit 0
+                   fi
+              else
+                   if [ ${LANGUE} = english  ]; then echo 'PLS answer with a "Y" or a "N" \c' ; fi
+                   if [ ${LANGUE} = francais ]; then echo 'repondre par un "O" ou un "N" S.V.P. \c' ; fi
+                   reponseSAVE=non
+              fi
+          done
+     elif [ "${f}" = oui -a ${interactive} = non ]; then
+          if [ ${LANGUE} = english  ]; then echo "a new ${pdn} has remplaced the old one" ; fi
+          if [ ${LANGUE} = francais ]; then echo "un nouveau ${pdn} remplace le precedent" ; fi
+          etamperSAVE=oui
+     else
+          if [ "${na}" = non ]; then
+               if [ -f ${zxzxzx} ]; then
+                    echo "file ${pdn} already exists in $0" > ${zxzxzx}
+               fi
+               exit 4
+          else
+               exit 0
+          fi
+     fi
+fi
+#
+if [ "${etamperSAVE}" = oui ]; then
+     \rm -f ${pdn} 2> /dev/null
+     if [ $? != 0 ]; then STATUS=5 ; fi
+fi
+#
+if [ "${STATUS}" = 0 ]; then
+     \cp ${DN} ${pdn} 2> /dev/null
+     if [ $? != 0 ]; then STATUS=6 ; fi
+#
+     if [ "${STATUS}" = 0 ]; then
+          \rm -f ${DN} 2> /dev/null
+          if [ $? != 0 ]; then STATUS=7 ; fi
+     fi
+fi
+#
+if [ "${STATUS}" != 0 -a "${na}" = non ]; then
+     if [ ${LANGUE} = english  ]; then echo "error ${STATUS} in $0" ; fi
+     if [ ${LANGUE} = francais ]; then echo "code d'erreur ${STATUS} dans $0" ; fi
+     if [ -f ${zxzxzx} ]; then
+          echo "error ${STATUS} in $0" > ${zxzxzx}
+     fi
+     exit ${STATUS}
+fi
+#
+exit 0

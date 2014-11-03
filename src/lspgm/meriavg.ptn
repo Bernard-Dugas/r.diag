@@ -1,0 +1,662 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      meriavg  GGIN MMOUT OUTPUT \ 
+*               [ -lon VAL1 ] [ -kind VAL2 VAL3 VAL4 VAL5 VAL6 ]
+*
+*
+*     DESCRIPTION...
+*      meriavg  - COMPUTES MULTI-LEVEL MERIDIONAL AVERAGE OF A SET OF GRIDS 
+* 
+*
+*     AUTHOR  - B.Dugas, JAN/06.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/meriavg.ptn,v 4.6 2014/09/25 20:20:51 dugas Exp $
+*
+* 
+*     PURPOSE - COMPUTES A VECTOR OF MERIDIONAL MEANS FOR EACH GRID
+*               AND SAVES THEM ON FILE MMOUT. 
+*
+*     NOTES:  1) EACH MMOUT RECORD IS A LONGITUDINAL VECTOR OF AVERAGES 
+*                RUNNING EAST TO WEST. MAXIMUM NUMBER OF LEVELS IS 999.
+*             2) WHEN DEALING WITH VECTORS COMPONENTS ON A ROTATED TYPE
+*                'Z' FRAMEWORK, ggvecz SHOULD HAVE ALLREADY BEEN APPLIED
+*                TO THESE VECTOR COMPONENTS, OTHERWISE THE RESULT WILL
+*                BE IN ERROR.
+*
+* 
+*     INPUT FILE ... 
+*      GGIN  = (REAL OR COMPLEX) GRIDS TO BE MERIDIONALY AVERAGED. 
+*
+*     OUTPUT FILE ... 
+*      MMOUT = MERIDIONAL AVERAGES OF EACH GRID IN GGIN. 
+*
+*
+*     (OPTIONAL) PARAMETRE (ONLY WITH GEM Z-TYPE INPUT GRIDS) ...
+*
+*      LON  = NUMBER OF LONGITUDES IN THE OUTPUT MERIDIONAL CROSS-SECTIONS.
+*             DEFAULTS TO THE MAXIMUM OF THE TWO HORIZONTAL DIMENSIONS
+*             OF THE INPUT FIELDS.
+*
+*     (OPTIONAL) PARAMETRES (ONLY WITH CCC-TYPE FILES) ...
+*      KIND    = FIRST VALUE DENOTES GRTYP (THE GRID TYPE) (def=G). THE
+*                ONLY SUPPORTED VALUES ARE A,B,G,L RPN/CMC GRIDS. Z GRIDS
+*                ARE NOT SUPPORTED WITH CCC FILES.
+*              = THE FOUR NEXT VALUES ARE THE DECODED VERSION OF THE IGi,
+*                THE RPN/CMC INTERNAL GRID DESCRIPTORS (defs=0.0).
+*
+*      PLEASE REFER TO THE RPN STANDARD FILE ONLINE DOCUMENTATION
+*      FOR DETAILS CONCERNING THE USE OF THESE FIVE ARGUMENTS.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEMS READING GGIN
+*       2 FOUND UNSUPPORTED ARRAY TYPE
+*       3 PREMATURE EOF ON FILE GGIN
+*       4 MORE THAN ONE SIZE IN INPUT FILE
+*       5 ERROR READING INPUT PARAMETRE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM meriavg
+*    +              (      GGIN,       mMOUT,       OUTPUT,
+*    +               TAPE1=GGIN, TAPE2=mMOUT, TAPE6=OUTPUT ) 
+
+*     $Log: meriavg.ptn,v $
+*     Revision 4.6  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.5  2013/10/17 11:07:09  bernard
+*     Declarations 'a la' F90 des elements PARAMETER MAXI, MAXJ et MAXLEV.
+*
+*     Revision 4.4  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.3  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.2  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.1  2006/04/26 22:25:06  dugas
+*     Modification pour compilation sous AIX.
+*
+*     Revision 4.0  2006/02/09 17:03:35  dugas
+*     Version initiale.
+*
+*
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER, PARAMETER :: MAXI = longitude_maximale
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXLEV = 999
+
+      LOGICAL      OK,OUTALL
+      CHARACTER    GRTYP,ZTYP,OTYP
+      CHARACTER*4  KIND,PKTYP,
+     +             CRANK,CWEIGHT
+      CHARACTER*10 VALEUR,MESSAG
+      REAL         ZERO,ALON(MAXI),ALAT(MAXJ),
+     +             XG1,XG2,XG3,XG4
+      REAL*8       AVG,AVGR,AVGI,C,CM,FN,FNM,
+     +             FNP,RADL(MAXJ),WOSSL(MAXJ),
+     +             SL(MAXJ),WL(MAXJ),CL(MAXJ),DAR,
+     +             LAT1,LAT2,AIRE,RESLAT,LATM
+      INTEGER      HEAD,KBUF(taille_entete),
+     +             NR,NF,MAXW,LEN,NWDS,PAK,I,J,L,NIN,NOUT,
+     +             NLEV,NLEV0,ILG,ILG1,ILAT,MEM1,MEM2,MEM3,MEM4,
+     +             IG1,IG2,IG3,IG4, ZIG1,ZIG2,ZIG3,ZIG4,
+     +             ZNI,ZNJ, NLIN,NLOUT, NBIN,IO,IHEM,
+     +             LEV(MAXLEV),IER,CMPL,ILATH,
+     +             NLEV2,MAXW2
+
+      INTEGER,     DIMENSION(:),ALLOCATABLE :: IBUF,RANK
+      REAL(8),     DIMENSION(:),ALLOCATABLE :: F,MM,WEIGHT
+      POINTER    ( PF, C(2,1) ),( PM, CM(2,1) )
+
+      CHARACTER*4  GETYP,GETHIC
+      EXTERNAL     GETYP,GETHIC
+
+      INTEGER,     EXTERNAL :: GETSIZ2,GETHIGH
+      LOGICAL,     EXTERNAL :: SETIO64,RPBLOC
+      EXTERNAL     MACSPE,JCLPNT,GETLIGN,
+     +             XIT,GETSET2,PUTSET2,SETLAB,
+     +             D_MERIPOS,PUTHIC,PUTHIGH,CMPLBL,
+     +             GETZREF,GETZDES,PRECEDE,GAUSSG,TRIGL2
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         MESSAG / 'AUCUN' /, CRANK   / 'RANK' /,
+     +             OUTALL / .FALSE. /, CWEIGHT / 'WGHT' /,
+     +             GRTYP  / 'G' /,
+     +             IG1,IG2,IG3,IG4 / 0,0,0,0 /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/meriavg.ptn,v $'
+
+*---------------------------------------------------------------------
+      DAR  = ASIN( 1.D0 )/90.
+      AIRE = 0
+
+
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NR = 0
+      NF = 4
+
+      CALL JCLPNT( NF, 1,2,3, 6 )
+
+      IF (NF.EQ.3) OUTALL = .TRUE.
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    CHECK PARAMETRE BLOCK.
+
+      NBIN = 0
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+          XG1 = 0.0
+          XG2 = 0.0
+          XG3 = 0.0
+          XG4 = 0.0
+
+          OK = RPBLOC('LON',VALEUR)
+          IF (OK) READ( VALEUR, 5, ERR=900,IOSTAT=IO ) NBIN
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) GRTYP = VALEUR
+
+          OK = RPBLOC('KIND2',VALEUR)
+          IF (OK) READ( VALEUR, 10, ERR=900,IOSTAT=IO ) XG1
+
+          OK = RPBLOC('KIND3',VALEUR)
+          IF (OK) READ( VALEUR, 10, ERR=900,IOSTAT=IO ) XG2
+
+          OK = RPBLOC('KIND4',VALEUR)
+          IF (OK) READ( VALEUR, 10, ERR=900,IOSTAT=IO ) XG3
+
+          OK = RPBLOC('KIND5',VALEUR)
+          IF (OK) READ( VALEUR, 10, ERR=900,IOSTAT=IO ) XG4
+
+          IF (GRTYP.EQ.'L')                                    THEN
+              CALL CXGAIG( GRTYP, IG1,IG2,IG3,IG4,
+     +                            XG1,XG2,XG3,XG4 )
+          ELSE
+              IG1 = XG1
+              IG2 = XG2
+              IG3 = XG3
+              IG4 = XG4
+          END IF
+
+      END IF
+
+***    DETERMINE THE GRID SIZE.
+
+  050 MAXW = GETSIZ2( 1, KBUF,LEN,NWDS,PAK, LEV,NLEV )
+
+      IF (MAXW.EQ.0 .OR. NLEV.GT.MAXLEV
+     +              .OR. NLEV.LE.0    )                        THEN
+          WRITE(6,6001) MAXW,NLEV,MAXLEV
+          CALL                                     XIT(' Meriavg',-1 )
+      END IF
+
+      WRITE(KIND,4) KBUF(1)
+
+      IF (KIND.NE.'GRID' .AND.
+     +    KIND.NE.'CMPL' .AND.
+     +    KIND.NE.'SUBA')                                      THEN
+          WRITE(6,6002) KIND
+          CALL                                     XIT(' Meriavg',-2 )
+      ELSE IF (KIND.EQ.'CMPL')                                 THEN
+          CMPL = 2
+      ELSE
+          CMPL = 1
+      END IF
+
+      ILG1 = KBUF(5) 
+      ILAT = KBUF(6)
+      IHEM = KBUF(7)
+
+      PAK = MIN( -32,PAK )
+
+      NWDS = NWDS/CMPL
+
+      LEN  = MAX( LEN,CMPL*(ILG1+1)*NLEV+HEAD+2 )
+      MAXW = LEN-HEAD
+
+      IF (NBIN.EQ.0) NBIN = MAX( ILAT,ILG1 )
+             
+***    ASK FOR WORKING MEMORY.
+
+      MEM1 = LEN
+      MEM2 = MAX( MAXW, NWDS  *NLEV*CMPL )
+      MEM3 = MAX( ILG1, NBIN )*NLEV*CMPL
+      MEM4 = NWDS
+
+***    NOTE THAT ( F , C ) AS WELL AS ( MM , CM ) ARE
+***    EQUIVALENCED BY THEIR POINTER DEFENITIONS.
+
+      ALLOCATE( F(MEM2),MM(MEM3),WEIGHT(MEM4),
+     +          RANK(MEM4),IBUF(MEM1), STAT=IER )
+
+      PF = LOC( F(1) ) ; PM = LOC( MM(1) )
+
+      IF (NR.NE.0) CALL PRTLAB( KBUF )
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+***        GET FIRST SET'S GRID DESCRIPTORS.
+
+          GRTYP = GETHIC( 'GRTYP',KBUF )
+
+          IG1   = GETHIGH( 'IG1' ,KBUF )
+          IG2   = GETHIGH( 'IG2' ,KBUF )
+          IG3   = GETHIGH( 'IG3' ,KBUF )
+          IG4   = GETHIGH( 'IG4' ,KBUF )
+
+      ELSE IF (GRTYP.EQ.'G')                                   THEN
+
+          IG2   = IHEM
+
+      END IF
+
+      IF (GRTYP.EQ.'A' .OR. GRTYP.EQ.'G')                      THEN
+
+          ILG  = ILG1 - MOD( ILG1,2 )
+
+      ELSE IF (GRTYP.EQ.'B')                                   THEN
+
+          ILG = ILG1-1
+
+      ELSE IF (GRTYP.EQ.'L')                                   THEN
+
+          ILG = ILG1
+
+      ELSE IF (GRTYP.NE.'Z' .OR.
+     +        (GRTYP.EQ.'Z' .AND. PKTYP.NE.'SQ'))              THEN
+
+          WRITE(6,6002) GRTYP
+          CALL                                     XIT(' Meriavg',-2 )
+
+      END IF
+
+      OTYP = GRTYP
+
+***    ACCOUNT FOR DIFFERENT GRID TYPES.
+
+      IF (GRTYP.EQ.'G')                                        THEN
+
+                                 ILATH = ILAT / 2 
+          IF (IHEM.NE.0)         ILATH = ILAT
+
+          CALL GAUSSG( ILATH, SL,WL,CL,RADL,WOSSL ) 
+          CALL TRIGL2( ILATH, SL,WL,CL,RADL,WOSSL,IHEM ) 
+
+          WL = 0.5*WL
+
+      ELSE IF (GRTYP.EQ.'Z')                                   THEN
+
+***        RETRIEVE THE X- AND Y-DIRECTIONAL GEM GRID INFO.
+
+          CALL GETZREF( 1, '>>',ALON )
+          CALL GETZREF( 1, '^^',ALAT )
+
+***        RETRIEVE ASSOCIATED ROTATION AND POLE INFO.
+
+          CALL GETZDES( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, ZNI,ZNJ )
+
+***        DEFINE RANK AND WEIGHT.
+
+          CALL D_MERPOS( RANK,WEIGHT,
+     +                   NBIN,ILG1,ILAT,ALON,ALAT,
+     +                   ZTYP,ZIG1,ZIG2,ZIG3,ZIG4 )
+
+          IF (OUTALL)                                          THEN
+
+***            SAUVER LES CHAMPS UTILISES DANS LE CALCUL ...
+
+              DO  I=1,HEAD
+                  IBUF(I) = KBUF(I)
+              END DO
+
+***            ... EN COMMENCANT PAR LES POSITIONS ...
+
+              READ(CRANK,0004) IBUF(3)
+
+              DO  I=1,NWDS
+                  F(I) = RANK(I)
+              END DO
+
+              CALL PUTFLD2( 3, F, IBUF,MAXW )
+
+***            ... ET EN TERMINANT PAR LES POIDS.
+
+              READ(CWEIGHT,0004) IBUF(3)
+
+              CALL PUTFLD2( 3, WEIGHT, IBUF,MAXW )
+
+          END IF
+
+          OTYP = 'A'
+          IG1  =  0
+          IG2  =  0
+          IG3  =  0
+          IG4  =  0
+
+      ELSE IF (GRTYP.EQ.'A' .OR. GRTYP.EQ.'B')                 THEN
+
+          IF (GRTYP.EQ.'A')                                    THEN
+
+              IF (IHEM.EQ.0)                                   THEN
+
+                  RESLAT = 180./FLOAT( ILAT )
+
+                  IF (IG2.EQ.0)                                THEN
+                      ALAT(1) = -90.+0.5*RESLAT
+                  ELSE IF (IG2.EQ.1)                           THEN
+                      ALAT(1) = +90.-0.5*RESLAT
+                  END IF
+
+              ELSE
+
+                  RESLAT =  90./FLOAT( ILAT )
+
+                  IF (IHEM.EQ.1)                               THEN
+                     IF (IG2.EQ.0)                             THEN
+                         ALAT(1) =       0.5*RESLAT
+                     ELSE IF (IG2.EQ.1)                        THEN
+                         ALAT(1) = +90.0-0.5*RESLAT
+                     END IF
+                  ELSE IF (IHEM.EQ.2)                          THEN
+                     IF (IG2.EQ.0)                             THEN
+                         ALAT(1) = -90.0+0.5*RESLAT
+                     ELSE IF (IG2.EQ.1)                        THEN
+                         ALAT(1) =      -0.5*RESLAT
+                     END IF
+                  END IF
+
+              END IF
+
+          ELSE IF (GRTYP.EQ.'B')                               THEN
+
+              IF (IHEM.EQ.0)                                   THEN
+
+                  RESLAT = 180./(FLOAT( ILAT )-1.)
+
+                  IF (IG2.EQ.0)                                THEN
+                      ALAT(1) = -90.
+                  ELSE IF (IG2.EQ.1)                           THEN
+                      ALAT(1) = +90.
+                  END IF
+
+              ELSE
+
+                  RESLAT =  90./(FLOAT( ILAT )-1.)
+
+                  IF (IHEM.EQ.1)                               THEN
+                      IF (IG2.EQ.0)                            THEN
+                          ALAT(1) =  00.0
+                      ELSE IF (IG2.EQ.1)                       THEN
+                          ALAT(1) = +90.0
+                      END IF
+                  ELSE IF (IHEM.EQ.2)                          THEN
+                      IF (IG2.EQ.0)                            THEN
+                          ALAT(1) = -90.0
+                      ELSE IF (IG2.EQ.1)                       THEN
+                          ALAT(1) =  00.0
+                      END IF
+                  END IF
+
+              END IF
+
+          END IF
+
+          IF (IG2.EQ.1) RESLAT = -RESLAT
+
+      ELSE IF (GRTYP.EQ.'L')                                   THEN
+
+***            DEFINE THE X- AND Y-DIRECTIONAL INFO.
+
+          CALL CIGAXG( GRTYP, XG1,XG2,XG3,XG4,
+     +                        IG1,IG2,IG3,IG4 )
+
+          RESLAT  = XG3
+          ALAT(1) = XG1
+
+      ELSE
+
+***        OTHER UNSUPPORTED ARRAYS SUCH AS POLAR-STEREOGRAPHIC.
+
+          WRITE(6,6002) GRTYP
+          CALL                                     XIT(' Meriavg',-2 )
+
+      END IF
+
+      IF (GRTYP.EQ.'A' .OR.
+     +    GRTYP.EQ.'B' .OR.
+     +    GRTYP.EQ.'L' )                                       THEN
+
+          AIRE = 0.0
+
+          LATM = 0.0
+          FNM  = ALAT(1)-RESLAT
+          FN   = ALAT(1)
+          FNP  = ALAT(1)+RESLAT
+
+          DO  J=1,ILAT
+
+              IF (J.EQ.1)                                      THEN
+                  LAT1 = FN + .5*(FN-FNP)
+                  LAT2 =      .5*(FN+FNP)
+              ELSE IF (J.EQ.ILAT)                              THEN
+                  LAT1 =      .5*(FN+FNM)
+                  LAT2 = FN + .5*(FN-FNM)
+              ELSE
+                  LAT1 =      .5*(FN+FNM)
+                  LAT2 =      .5*(FN+FNP)
+              END IF
+
+              WL(J) = ABS( SIN( LAT2*DAR ) - SIN( LAT1*DAR ) )
+              AIRE  = AIRE+   WL(J)
+              LATM  = LATM+FN*WL(J)
+
+              FNM = FN
+              FN  = FNP
+              FNP = MIN( 90D0, FNP+RESLAT)
+
+          END DO
+
+          WL   =   WL / AIRE
+          LATM = LATM / AIRE
+
+      END IF
+
+***    READ THE NEXT GRID SET FROM THE FILE. STOP AT EOF. 
+
+  100 CALL GETSET2( 1, F, LEV,NLEV0, IBUF,MAXW,OK )
+  
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( F,MM,WEIGHT,RANK,IBUF )
+              IF (MAXW.EQ.0) GOTO 050
+              WRITE(6,6030) ' Meriavg',NR,NLEV
+              IF (NR.EQ.0) CALL                    XIT(' Meriavg',-3 ) 
+              CALL                                 XIT(' Meriavg', 0 )
+          END IF
+
+***        BY-PASS LABEL/CHARACTER RECORDS.
+
+          WRITE(KIND,4) IBUF(1)
+          IF (KIND.EQ.'LABL' .OR. KIND.EQ.'CHAR')              THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  WRITE(6,6035) ' Meriavg',KIND
+                  MESSAG  = 'deja donne'
+              END IF
+              GOTO 100
+          END IF
+
+***        VERIFY DIMENSIONS/KIND.
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+
+          IF (.NOT.OK.OR.
+     +        NLEV0  .GT. NLEV)                                THEN
+              WRITE(6,6004) NR,NLEV0 ; CALL PRTLAB( IBUF )
+              CALL                                 XIT(' Meriavg',-4 )
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***        COMPUTE THE MERIDIONAL MEAN FOR THIS SET.
+
+          IF (GRTYP.EQ.'A' .OR.
+     +        GRTYP.EQ.'B' .OR.
+     +        GRTYP.EQ.'G' .OR.
+     +        GRTYP.EQ.'L' )                                   THEN
+
+              DO  L=0,NLEV0-1
+
+                  NOUT = L*ILG1
+
+                  DO  I=1,ILG1
+
+                      NIN  = L*NWDS + I
+                      NOUT = NOUT   + 1
+
+                      IF (CMPL.EQ.2)                           THEN
+                          AVGR = 0.0
+                          AVGI = 0.0
+                          DO  J=1,ILAT
+                              AVGR = AVGR+C(1,NIN)*WL(J)
+                              AVGI = AVGI+C(2,NIN)*WL(J)
+                              NIN  = NIN + ILG1
+                          END DO
+                          CM(1,NOUT) = AVGR
+                          CM(2,NOUT) = AVGI
+                      ELSE
+                          AVG = 0.0
+                          DO  J=1,ILAT
+                              AVG = AVG +F(NIN)*WL(J)
+                              NIN = NIN + ILG1
+                          END DO
+                          MM(NOUT) = AVG
+                      END IF
+
+                  END DO
+
+              END DO
+
+          ELSE IF (GRTYP.EQ.'Z')                               THEN
+
+              DO  L=1,NLEV0*NBIN
+                  MM(L) = 0.0
+              END DO
+
+              DO  L=0,NLEV0-1
+
+                  NLOUT = L*NBIN
+                  NLIN  = L*NWDS
+
+                  DO  NIN=1,ILG1*ILAT
+                      MM(RANK(NIN)+NLOUT) = 
+     +                MM(RANK(NIN)+NLOUT) +
+     +                F(NIN+NLIN)*WEIGHT(NIN)
+                  END DO
+
+              END DO
+
+          END IF
+
+***        WRITE THE MERIDIONAL MEAN VECTOR SET ONTO FILE 2
+***        USING THE "ZONL" CCC OUTPUT ARRAY TYPE.
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+
+              IF (OTYP.EQ.'L')                                 THEN
+
+                  XG1 = LATM
+                  XG3 = 0.0
+
+                  CALL CXGAIG( OTYP, IG1,IG2,IG3,IG4,
+     +                               XG1,XG2,XG3,XG4 )
+
+              END IF
+
+              CALL PUTHIC ( OTYP,'GRTYP',IBUF )
+              CALL PUTHIGH( IG1 ,'IG1'  ,IBUF )
+              CALL PUTHIGH( IG2 ,'IG2'  ,IBUF )
+              CALL PUTHIGH( IG3 ,'IG3'  ,IBUF )
+              CALL PUTHIGH( IG4 ,'IG4'  ,IBUF )
+
+          END IF
+
+          IF (CMPL.EQ.2)                                       THEN
+             CALL SETLAB( IBUF, 'CMPL', -1,' ',-1, NBIN,    1, -1,PAK )
+          ELSE
+             CALL SETLAB( IBUF, 'ZONL', -1,' ',-1, NBIN,NLEV0, -1,PAK )
+          END IF
+
+          CALL PUTSET2( 2, MM, LEV,NLEV0, IBUF,MAXW )
+ 
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1 
+      GOTO 100
+
+***    ERROR READING INPUT PARAMETRE.
+ 
+  900 IF (IO.NE.0) WRITE(6,6100) ' Meriavg',IO
+  905 CALL                                         XIT(' Meriavg',-5 )
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+   10 FORMAT(BN,E10.0)
+
+ 6001 FORMAT(' Problems reading ggin/uin, MAXW/NLEV/MAXLEV=',3I6)
+ 6002 FORMAT(' Found unsupported array type ',A)
+ 6004 FORMAT(' At set number ',i5,', found ',I3,' level(s) of...')
+ 6006 FORMAT(' Problems reading vin, MAXW/NLEV/MAXLEV=',3I6)
+
+ 6030 FORMAT(2X,A,' read ',I5,' set(s) of ',I3,' record(s).')
+ 6035 FORMAT(1X,A,' is stripping ',A,' records...')
+ 6100 FORMAT(1X,A,' reports I/O error number ',I3,
+     +       ' reading the number of output latitudes.')
+
+      END 
+#     endif

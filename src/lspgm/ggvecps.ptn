@@ -1,0 +1,756 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggvecps  UIN VIN NUOUT NVOUT SUOUT SVOUT INPUT OUTPUT [ -dgrw VAL1 ]
+*      ggvecz   UIN VIN  UOUT  VOUT [THETA]                  [ -kind VAL1 ]
+*
+*
+*     DESCRIPTION...
+*      ggvecps - TRANSFORM LAT-LONG GRID VECTORS TO PS REPRESENTATION
+*      ggvecz  - TRANSFORM LAT-LONG GRID VECTORS TO/FROM ROTATED Z GRIDS
+*
+*
+*     AUTHORS - R.Laprise, L.Lefaivre - MAY 18/84
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggvecps.ptn,v 4.18 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE - 1) GGVECPS IS MEANT TO TRANSFORM WIND VECTORS FROM
+*               LAT-LONG GRIDS TO POLAR STEREOGRAPHIC REPRESENTATION
+*               AND 2) GGVECZ DOES THE SAME THING FOR THE CMC/RPN
+*               GEM FORECAST MODEL NATIVE Z-TYPE GRIDS.
+*
+*     NOTES  1) THE GGVECPS TRANSFORMATION MATRIX INVOLVES A LINEAR
+*               COMBINATION OF SINES AND COSINES OF LONGITUDE.
+*            2) THE GGVECPS INPUT GRID TYPE IS ALWAYS ASSUMED
+*               TO BE GAUSSIAN WHEN DEALING WITH CCCma FILES.
+*            3) FOR RPN/CMC STANDARD FILES, THE GGVECPS INPUT GRID
+*               TYPES CAN BE G (GAUSSIAN), A (LAT-LONG), B (LAT-LONG
+*               WITH POLES AND EQUATOR) AND L (GENERALIZED LAT-LONG).
+*            4) THE INPUT/OUTPUT GRIDS FOR GGVECZ ARE ALWAYS TYPE Z.
+*            5) MISSING VALUE TREATMENT IS SUPPORTED VIA EITHER THE
+*              "MISSING_VALUE" ENVIRONMENT VARIABLE OR THE "-mvalue"
+*               COMMAND-LINE ARGUMENT. PLEASE SEE THE R.DIAG WEB
+*               DOCUMENTAION FOR MORE DETAILS.
+*
+*
+*     INPUT FILES...
+*      UIN   = FILE OF LAT-LONG GRID U WIND COMPONENTS.
+*      VIN   = FILE OF LAT-LONG GRID V WIND COMPONENTS.
+*
+*     OUTPUT FILES (ggvecps)
+*      NUOUT = FILE OF U WINDS TO BE USED FOR NH PS MAPS
+*      NVOUT = FILE OF V WINDS TO BE USED FOR NH PS MAPS
+*      SUOUT = FILE OF U WINDS TO BE USED FOR SH PS MAPS
+*      SVOUT = FILE OF V WINDS TO BE USED FOR SH PS MAPS
+*
+*     OUTPUT FILES (ggvecz)
+*      UOUT  = FILE OF UN-ROTATED U WINDS
+*      VOUT  = FILE OF UN-ROTATED V WINDS
+*      THETA = (OPTIONAL) LOCAL ROTATION ANGLES
+*
+*
+*     PARAMETERS (ggvecps)...
+*
+*      DGRW = GRID ORIENTATION WITH RESPECT TO GRENWICH MERIDIAN.
+*             BLANK INPUT DEFAULTS TO -10.0 DEGREES.
+*
+*      READ( 5,5010 ) DGRW
+*5010  FORMAT(10X,E10.0)
+*
+*
+*     PARAMETERS (ggvecz)...
+*
+*      KIND = 1, FROM ROTATED Z-GRID TO LAT-LONG VECTOR ORIENTATION (DEFAULT)
+*             2, FROM LAT-LONG TO ROTATED Z-GRID VECTOR ORIENTATION
+*
+*
+*
+*     EXAMPLE OF GGVECPS INPUT CARD...
+*
+* GGVECPS      -10.0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NO LEVELS IN FILE UIN
+*       2 PREMATURE EOF ON UIN
+*       3 PREMATURE EOF ON VIN
+*       4 FOUND U AND V NOT THE SAME SIZE
+*       5 ERROR READIND STDIN FOR PARAMETERS
+*       6 PROBLEM WITH VARIABLE NAMES
+*       7 UNSUPPORTED INPUT DATA TYPE
+*       8 OPERATING/INPUT MODE MITMATCH
+*    9,10 ERRORS ALLOCATING WORKING MEMORY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggvecps
+*     PROGRAM GGVECPS
+*    +                (UIN,          VIN,          NUOUT,        NVOUT,
+*    +           TAPE1=UIN,    TAPE2=VIN,   TAPE11=NUOUT, TAPE12=NVOUT,
+*    +                 SUOUT,        SVOUT,        INPUT,        OUTPUT,
+*    +          TAPE13=SUOUT, TAPE14=SVOUT,  TAPE5=INPUT,  TAPE6=OUTPUT)
+*     -----------------------------------------------------------------
+
+*     $Log: ggvecps.ptn,v $
+*     Revision 4.18  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.17  2014/01/09 19:32:00  dugas
+*     Faire un UP2LOW sur le resultat de l'appel a GETVERB.
+*
+*     Revision 4.16  2013/11/28 22:24:33  dugas
+*     Faire des appels a MISPAR apres chaque lecture.
+*
+*     Revision 4.15  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.14  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.13  2006/07/04 17:53:21  dugas
+*     Ajouter le support des donnees manquantes par le biais soit
+*      du parametre "-mvalue valeur [epsilon]", soit de la variable
+*      d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*      nombre reel denotant une valeur manquante et "epsilon" est
+*      le facteur de precision utilise dans les comparaisons. La
+*      valeur par defaut de epsilon est 1%. La seconde methode a
+*      preseance sur la premiere.
+*
+*     Revision 4.12  2005/12/12 22:54:24  dugas
+*     Correction triviale a la doc automatique.
+*
+*     Revision 4.11  2005/11/22 19:13:18  dugas
+*     (Optionnellement) sauver l'angle local de rotation THETA.
+*
+*     Revision 4.10  2005/04/12 17:33:22  dugas
+*     Enlever la declaration a D_GRIDGEF.
+*
+*     Revision 4.9  2005/01/17 19:38:29  dugas
+*     Fonctionner un niveau a la fois, i.e. enlever la boucle 200.
+*
+*     Revision 4.8  2004/11/22 20:58:33  dugas
+*     Modifier le comportement du mode GGVECZ lorsque le parametre kind.NE.0:
+*      Il s'agit maintenant du comportement inverse de celui lorsque KIND.EQ.0
+*      et la matrice de rotation inverse est appliquee sur les grilles Z.
+*
+*     Revision 4.7  2004/11/12 18:01:56  dugas
+*     Ajouter le point d'entree GGVECZ.
+*
+*     Revision 4.6  2001/05/14 14:50:25  armnrbd
+*     Modifier le traitement des noms de variables.
+*
+*     Revision 4.5  1998/07/03 02:26:27  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1998/05/21  20:20:49  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.3  1997/09/26  17:38:56  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/09/04  19:38:25  armnrbd
+*     Utiliser GETSIZ2 pour determiner la taille du probleme.
+*
+*     Revision 4.1  1997/05/30  21:18:33  armnrbd
+*     Conversions de noms/unites seulement pour fichiers SQ89.
+*
+*     Revision 4.0  1994/11/17  14:20:28  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/05/31  11:11:54  armnrbd
+*     Corriger la sortie V dans l'hemisphere Sud.
+*     
+*     Revision 3.1  93/10/24  22:43:01  armnrbd
+*     Implanter RPBLOC.
+*     
+*     Revision 3.0  93/10/13  13:56:15  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  92/04/09  15:31:48  armnrbd
+*     Initial revision
+*     
+
+*     MAY 18/84 - B.DUGAS, R.LAPRISE, N.SARGENT, L.LEFAIVRE.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXI = longitude_maximale
+      INTEGER,    PARAMETER :: MAXJ = latitude_maximale
+
+      LOGICAL     MVALUE,OK,OK2,UMISS,
+     +            VMISS,ROTATE,SAVET,ZMODE
+      CHARACTER   GRTYP,ZTYP,verbe*8
+      REAL        ALON(MAXI),ALAT(MAXJ),
+     +            DXLA,DYLA
+      CHARACTER*4 NOMU,NOMV,PKTYP,TYPE,ATHETA
+      CHARACTER*10 LIGNE*80,ADGRW,VALEUR,AKIND*5
+      REAL*8      CLON(MAXI),SLON(MAXI),DGRW,
+     +            XG1,XG3,LON0,PIS4,ADEG,DEG,UZ,VZ,
+     +            UG,VG,RROT(3,3),FMISS,EPSIL
+      INTEGER     NLEV,IER,NFF,LEV,
+     +            I,IJ,K,NLON,NLONM,NLAT,NWDS,NR,MAXW,
+     +            MAX1,MAX2,LEN1,LEN2,PAK,NLEV2,ZNI,ZNJ,IO,
+     +            IG1,IG2,IG3,IG4, KIND,ZIG1,ZIG2,ZIG3,ZIG4,
+     +            KBUF(taille_entete),LBUF(taille_entete),NBIN
+
+      INTEGER, ALLOCATABLE, DIMENSION(:) :: IBUF,JBUF,RANK
+      REAL(8), ALLOCATABLE, DIMENSION(:) :: U,V,UPS,VPS,COST
+      REAL(8), ALLOCATABLE, DIMENSION(:) :: SINT,THETA,WEIGHT
+
+      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
+      LOGICAL,    EXTERNAL :: RPBLOC,SETIO64
+      INTEGER,    EXTERNAL :: GETSIZ,GETHIGH
+      EXTERNAL    JCLPNT,GETLIGN,GETFLD2,CMPLBL,
+     +            PUTFLD2,XIT,CIGAXG,GETZREF
+     +            GETZDES,D_ZONGINI,MISPAR
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        GRTYP / 'G' /,
+     +            ZTYP  / 'E' /,
+     +            ADGRW / ' ' /,
+     +            NOMU  / ' ' /,
+     +            NOMV  / ' ' /,
+     +            KIND  /  0  /,
+     +            NBIN  /  0  /
+
+      DATA        ATHETA/ 'ROTA'  /
+      DATA        SAVET / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggvecps.ptn,v $'
+
+*---------------------------------------------------------------------
+      NFF = 8
+      CALL JCLPNT( NFF, 1,2, 11,12,13,14, 5,6 )
+
+      PIS4 = ATAN( 1.D0 )
+      IO   = 0
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    WHAT OPERATING MODE: POLAR STEREOGRAPHIC OR Z-GRID ?
+
+      CALL GETVERB( verbe ) ; CALL up2low( VERBE,VERBE )
+
+                             ZMODE = .FALSE.
+      IF (verbe.EQ.'ggvecz') ZMODE = .TRUE.
+
+                 verbe = ' GgVecPs'
+      IF (ZMODE) verbe = ' GgVecZ '
+
+      IF ((     ZMODE .AND. NFF.NE.4
+     +                .AND. NFF.NE.5)  .OR.
+     +    (.NOT.ZMODE .AND. NFF.NE.6) ) CALL       XIT( verbe, -8 )
+
+      IF (ZMODE .AND. NFF.EQ.5) SAVET = .TRUE.
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          IF (ZMODE)                                           THEN
+
+***            Z-GRID TRANSFORMATION MODE.
+
+              AKIND = '1'
+
+              OK = RPBLOC('KIND',VALEUR)
+              IF (OK) AKIND = VALEUR
+
+              IF (AKIND.NE.'1' .AND. AKIND.NE.'2') AKIND = '1'
+
+              READ( AKIND,5, ERR=900,END=905,IOSTAT=IO ) KIND
+
+              WRITE(6,6101) KIND
+
+          ELSE
+
+***            ORIENTATION WITH RESPECT TO GRENWICH MERIDIAN.
+
+              OK = RPBLOC('DGRW',VALEUR)
+              IF (OK) ADGRW = VALEUR
+
+          END IF
+
+      ELSE IF (.NOT.ZMODE)                                     THEN
+
+
+***        READ DGRW IN DEGREES.
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 905
+          ELSE
+              ADGRW = LIGNE(11:20)
+              CALL BURNF
+          END IF
+
+      ELSE
+
+          KIND = 1
+          WRITE(6,6101) KIND
+
+      END IF
+
+      IF (.NOT.ZMODE)                                          THEN
+
+***        ACCOUNT FOR DEFAULT DGRW VALUES AND CONVERT TO RADIANS.
+
+          IF (ADGRW.EQ.' ')                                        THEN
+              DGRW = -10.0
+          ELSE
+              READ(ADGRW,10, ERR=900,END=905,IOSTAT=IO ) DGRW
+          END IF
+
+          WRITE(6,6100) DGRW
+          DGRW  = DGRW*PIS4/45.
+
+      END IF
+
+***    CHECK SIZES AND ALLOCATE MEMORY.
+***    FIND OUT HOW MANY LEVELS IN THE FILES.
+
+      MAX1 = GETSIZ( 1, KBUF,LEN1,NWDS,PAK )
+      MAX2 = GETSIZ( 2, LBUF,LEN2,NWDS,PAK )
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+
+      IF (.NOT.OK   .OR.
+     +    MAX1.LE.0 .OR. MAX2.LE.0) CALL           XIT( verbe ,-1 )
+
+      MAXW = MAX( MAX1,MAX2 )
+
+      ALLOCATE( IBUF(HEAD+MAXW),JBUF(HEAD+MAXW),
+     +          U(MAXW),V(MAXW),UPS(MAXW),VPS(MAXW), STAT=IER )
+      IF (IER /= 0) CALL                           XIT( verbe ,-9 )
+
+      IF (ZMODE)                                               THEN
+          ALLOCATE( THETA(MAXW),COST(MAXW),SINT(MAXW),
+     +              WEIGHT(MAXW),RANK(MAXW), STAT=IER )
+          IF (IER /= 0) CALL                       XIT( verbe ,-10)
+      END IF
+      
+      IF (.NOT.ZMODE)                                          THEN
+
+***        WE SUPPORT TWO DIFFERENT U AND V NAME
+***        CONVENTIONS, BUT ONLY ONE AT A TIME.
+
+          WRITE(NOMU,0004) KBUF(3)
+          WRITE(NOMV,0004) LBUF(3)
+
+          IF ((NOMU.NE.'U' .AND. NOMU.NE.'UU') .OR.
+     +        (NOMV.NE.'V' .AND. NOMV.NE.'VV') .OR.
+     +        (NOMU.EQ.'U' .AND. NOMV.NE.'V' ) .OR.
+     +        (NOMV.EQ.'V' .AND. NOMU.NE.'U' ))
+     +        CALL                                 XIT( verbe ,-6 )
+
+      END IF
+
+      IF (PKTYP.EQ.'SQ') GRTYP = GETHIC( 'GRTYP',KBUF )
+
+***    CHECK THE INPUT GRID TYPE (ONLY ONCE).
+
+      NLON = KBUF(5)
+      NLAT = KBUF(6)
+
+      WRITE(TYPE,0004) KBUF(1)
+      IF (PKTYP.EQ.'SQ')                                     THEN
+
+          GRTYP = GETHIC('GRTYP',KBUF )
+          IG1   = GETHIGH( 'IG1',KBUF )
+          IG2   = GETHIGH( 'IG2',KBUF )
+          IG3   = GETHIGH( 'IG3',KBUF )
+          IG4   = GETHIGH( 'IG4',KBUF )
+
+          IF (GRTYP.NE. 'G' .AND.
+     +        GRTYP.NE. 'A' .AND.
+     +        GRTYP.NE. 'B' .AND.
+     +        GRTYP.NE. 'L' .AND.
+     +        GRTYP.NE. 'Z') CALL                  XIT( verbe ,-7 ) 
+
+      ELSE
+
+          IF (TYPE.NE.'GRID') CALL                 XIT( verbe ,-7 ) 
+
+      END IF
+
+***    DEFINE LAT-LONG GRID PARAEMTRES.
+
+      LON0 = 0.0
+
+      IF (GRTYP.EQ.'A' .OR.
+     +    GRTYP.EQ.'G')                                        THEN
+
+          NLONM = NLON-MOD( NLON,2 )
+          DXLA = 360./ FLOAT( NLONM )
+          DYLA = 180 / FLOAT( NLAT )
+          DEG  = 8.*PIS4/DBLE( NLONM )
+
+      ELSE
+     +IF (GRTYP.EQ.'B')                                        THEN
+
+          DXLA = 360./ FLOAT( NLON-1)
+          DYLA = 180 / FLOAT( NLAT-1)
+          DEG  = 8.*PIS4/DBLE( NLON-1 )
+
+      ELSE
+     +IF (GRTYP.EQ.'L')                                        THEN
+
+          CALL CIGAXG( GRTYP, XG1,DYLA,XG3,DXLA,
+     +                        IG1,IG2, IG3,IG4  )
+
+          DEG   = DXLA*PIS4/45.
+          LON0  = LON0 *PIS4/45.
+
+      END IF
+
+      IF (KIND.NE.0)                                           THEN
+
+          IF (GRTYP.NE.'Z') CALL                   XIT( verbe ,-7 ) 
+
+***        RETRIEVE THE X- AND Y-DIRECTIONAL GEM GRID INFO.
+
+          CALL GETZREF( 1, '>>',ALON )
+          CALL GETZREF( 1, '^^',ALAT )
+
+***        RETRIEVE ASSOCIATED ROTATION AND POLE INFO.
+
+          CALL GETZDES( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, ZNI,ZNJ )
+
+          NBIN = MIN( NLON,NLAT )
+
+***        DEFINE RANK,WEIGHT AND THETA.
+
+          CALL D_ZONGINI( RANK,WEIGHT,THETA,
+     +                    NBIN,NLON,NLAT,ALON,ALAT,
+     +                    ZTYP,ZIG1,ZIG2,ZIG3,ZIG4 )
+
+***        PRE-CALCULATE SIN AND COS THETA.
+
+          DO  I=1,NWDS
+              COST(I) = COS( THETA(I) )
+              SINT(I) = SIN( THETA(I) )
+          END DO
+
+          IF (SAVET)                                           THEN
+
+***            SAVE THETA ROTATION ANGLES (ONCE).
+
+              DO  I=1,HEAD
+                  IBUF(I) = KBUF(I)
+              END DO
+
+              READ(ATHETA,0004) IBUF(3)
+
+              CALL PUTFLD2( 13, THETA, IBUF,MAXW )
+
+              WRITE(6,6300) ; CALL PRTLAB( IBUF )
+
+          END IF
+
+      END IF
+
+***    MAIN LOOP.
+
+      NR = 0
+  100 CONTINUE
+
+***        BRING IN U FIELD
+
+          CALL GETFLD2( 1, U, TYPE,-1,NOMU,-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6150) NR
+              IF (NR.EQ.0)                                     THEN
+                  CALL PRTLAB( IBUF )
+                  CALL                             XIT( verbe ,-2 )
+              ELSE
+                  CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+                  CALL                             XIT( verbe , 0 )
+              END IF
+          END IF
+
+***        CHECK MISSING VALUE PARAMETRES FOR U.
+
+          CALL MISPAR( UMISS,FMISS,EPSIL )
+          IF (UMISS) EPSIL = ABS( FMISS )*EPSIL
+
+          LEV = IBUF(4)
+
+***        BRING IN V FIELD
+
+          CALL GETFLD2( 2, V, TYPE,-1,NOMV,LEV, JBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+               CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+               CALL                                XIT( verbe ,-3 )
+          END IF
+
+***        CHECK MISSING VALUE PARAMETRES FOR V.
+
+          CALL MISPAR( VMISS,FMISS,EPSIL )
+          IF (VMISS) EPSIL = ABS( FMISS )*EPSIL
+
+          MVALUE = (UMISS .OR. VMISS)
+
+***        COMPARE THE TWO FIELDS
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK2 )
+
+          IF (.NOT.(OK.AND.OK2))                               THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+              CALL                                 XIT( verbe ,-4 )
+          END IF
+
+          IF (NR.EQ.0) WRITE(6,6250) IBUF(5),IBUF(6)
+
+          IF (KIND.EQ.1)                                       THEN
+
+              IF (.NOT.MVALUE)                                 THEN
+
+                  DO  IJ=1,NLON*NLAT
+
+                      UZ =  U(IJ)
+                      VZ =  V(IJ)
+
+                      UG = -UZ * SINT(IJ) + VZ * COST(IJ)
+                      VG = -UZ * COST(IJ) - VZ * SINT(IJ)
+
+                      UPS(IJ) = UG
+                      VPS(IJ) = VG
+
+                  END DO
+
+              ELSE
+
+                  DO  IJ=1,NLON*NLAT
+
+                      UZ =  U(IJ)
+                      VZ =  V(IJ)
+
+                      IF (ABS( UZ-FMISS ).GT.EPSIL
+     +               .AND.ABS( VZ-FMISS ).GT.EPSIL)            THEN
+                          UG = -UZ * SINT(IJ) + VZ * COST(IJ)
+                          VG = -UZ * COST(IJ) - VZ * SINT(IJ)
+                      ELSE
+                          UG = FMISS
+                          VG = FMISS
+                      END IF
+
+                      UPS(IJ) = UG
+                      VPS(IJ) = VG
+
+                  END DO
+
+              END IF
+
+          ELSE IF (KIND.EQ.2)                                  THEN
+
+              IF (.NOT.MVALUE)                                 THEN
+
+                  DO  IJ=1,NLON*NLAT
+
+                      UG =  U(IJ)
+                      VG =  V(IJ)
+
+                      UZ = -UG * SINT(IJ) - VG * COST(IJ)
+                      VZ = +UG * COST(IJ) - VG * SINT(IJ)
+
+                      UPS(IJ) = UZ
+                      VPS(IJ) = VZ
+
+                  END DO
+
+              ELSE
+
+                  DO  IJ=1,NLON*NLAT
+
+                      UG =  U(IJ)
+                      VG =  V(IJ)
+
+                      IF (ABS( UG-FMISS ).GT.EPSIL
+     +               .AND.ABS( VG-FMISS ).GT.EPSIL)            THEN
+                          UZ = -UG * SINT(IJ) - VG * COST(IJ)
+                          VZ = +UG * COST(IJ) - VG * SINT(IJ)
+                      ELSE
+                          UZ = FMISS
+                          VZ = FMISS
+                      END IF
+
+                      UPS(IJ) = UZ
+                      VPS(IJ) = VZ
+
+                  END DO
+
+              END IF
+
+          ELSE
+
+***         EVALUATE COS(LON) AND SIN(LON).WE HAVE TO KEEP IN MIND THAT...
+***         1. THE INCREMENT IN LONGITUDE IS 2*PI DIVIDED BY (NLON-1).
+***         2. THE GRIDS START AT 0 LON AND 90 LAT S.
+***         3. THE POLAR STEREOGRAPHIC GRID IS TILTED DGRW DEG FROM THE 
+***            X AXIS TOWARDS THE EAST (WEST) IN THE SOUTHERN (NORTHERN) 
+***            HEMISPHERE.
+
+***            EVALUATE THE POLAR STEREOGRAPHIC U AND V.
+***            FIRST, THE SOUTHERN HEMISPHERE...
+
+              DO  I=1,NLON
+                  ADEG    = LON0+(I-1)*DEG-DGRW
+                  CLON(I) = COS( ADEG )
+                  SLON(I) = SIN( ADEG )
+              END DO
+
+              NWDS = IBUF(5)*IBUF(6)
+
+              IF (.NOT.MVALUE)                                 THEN
+
+                  DO  IJ=1,NWDS
+
+                                  I = IJ-(IJ/NLON)*NLON
+                      IF (I.EQ.0) I = NLON
+
+                      UPS(IJ) = (-1)*U(IJ)*SLON(I)+V(IJ)*CLON(I)
+                      VPS(IJ) = (-1)*U(IJ)*CLON(I)-V(IJ)*SLON(I)
+
+                  END DO
+
+              ELSE
+
+                  DO  IJ=1,NWDS
+
+                                  I = IJ-(IJ/NLON)*NLON
+                      IF (I.EQ.0) I = NLON
+
+                      IF (ABS( U(IJ)-FMISS ).GT.EPSIL
+     +               .AND.ABS( V(IJ)-FMISS ).GT.EPSIL)         THEN
+                          UPS(IJ) = (-1)*U(IJ)*SLON(I)+V(IJ)*CLON(I)
+                          VPS(IJ) = (-1)*U(IJ)*CLON(I)-V(IJ)*SLON(I)
+                      ELSE
+                          UPS(IJ) = FMISS
+                          VPS(IJ) = FMISS
+                      END IF
+
+                  END DO
+
+              END IF
+
+***            OUTPUT U,V FIELDS TO BE USED FOR S.H. POLARSTEREO MAPS.
+
+              CALL PUTFLD2( 13, UPS, IBUF,MAXW )
+              CALL PUTFLD2( 14, VPS, JBUF,MAXW )
+
+***            ... THEN THE NORTHERN HEMISPHERE.
+
+              DO  I=1,NLON
+                  ADEG    = LON0+(I-1)*DEG+DGRW
+                  CLON(I) = COS( ADEG )
+                  SLON(I) = SIN( ADEG )
+              END DO
+
+              
+              IF (.NOT.MVALUE)                                 THEN
+
+                  DO  IJ=1,NWDS
+
+                                  I = IJ-(IJ/NLON)*NLON
+                      IF (I.EQ.0) I = NLON
+
+                      UPS(IJ) = (-1)*U(IJ)*SLON(I)-V(IJ)*CLON(I)
+                      VPS(IJ) =      U(IJ)*CLON(I)-V(IJ)*SLON(I)
+
+                  END DO
+
+              ELSE
+
+                  DO  IJ=1,NWDS
+
+                                  I = IJ-(IJ/NLON)*NLON
+                      IF (I.EQ.0) I = NLON
+
+                      IF (ABS( U(IJ)-FMISS ).GT.EPSIL
+     +               .AND.ABS( V(IJ)-FMISS ).GT.EPSIL)         THEN
+                          UPS(IJ) = (-1)*U(IJ)*SLON(I)-V(IJ)*CLON(I)
+                          VPS(IJ) =      U(IJ)*CLON(I)-V(IJ)*SLON(I)
+                      ELSE
+                          UPS(IJ) = FMISS
+                          VPS(IJ) = FMISS
+                      END IF
+
+                  END DO
+
+              END IF
+
+          END IF
+
+***        OUTPUT U,V FIELDS TO BE USED FOR N.H. POLARSTEREO MAPS
+***        OR FOR THE Z-GRID TRANSFORMATION.
+
+          CALL PUTFLD2( 11, UPS, IBUF,MAXW )
+          CALL PUTFLD2( 12, VPS, JBUF,MAXW )
+
+          NR = NR+1
+
+      GOTO 100
+
+***    PREMATURE EOF ON STDIN.
+
+  900 IF (IO.NE.0) WRITE(6,6005) verbe,IO
+  905 CALL                                         XIT( verbe ,-5 )
+*---------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 6005 FORMAT(1X,A,' reports I/O error number ',I3,
+     +       ' reading input parametres.')
+
+ 6100 FORMAT(1X,'Dgrw =',E15.7)
+ 6101 FORMAT(1X,'Kind =',I2)
+ 6150 FORMAT(1X,I6,' records read.'/)
+ 6250 FORMAT(1X,'Number of longitudes',I6,10X,'number of latitudes',I6)
+ 6300 FORMAT(/' Saving rotation angle THETA')
+      END
+#     endif

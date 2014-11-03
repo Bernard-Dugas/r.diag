@@ -1,0 +1,190 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     spdlon  SPFILE LONDER OUTPUT
+*
+*
+*     DESCRIPTION...
+*     spdlon  - SPECTRAL LONGITUDE DERIVATIVE OF A SPECTRAL ARRAY
+*
+*
+*     AUTHOR  - B.Dugas, RPN, FEB 08/94.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spdlon.ptn,v 4.7 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     PURPOSE - READS A FILE OF SPECTRAL COEFFICIENTS (SPFILE), CONVERTS
+*               THEM TO THE LONGITUDE DERIVATIVE BY MULTIPLYING BY IM.
+*
+*
+*     INPUT FILE...
+*      SPFILE = INPUT FILE OF SPECTRAL COEFFICIENTS
+*
+*     OUTPUT FILE...
+*      LONDER = OUTPUT FILE OF SPECTRAL LONGITUDINALLY DERIVED ARRAYS
+*
+*
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON SPFILE
+*       2 INTERNAL SPECTRAL REPRESENTATION ERROR
+*       3 LM GREATER THAN MAXM (999)
+*       4 ERROR READING SPFILE. CHANGING SIZE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spdlon 
+*    +               (SPFILE,       LONDER,       OUTPUT,
+*    +          TAPE1=SPFILE, TAPE2=LONDER, TAPE6=OUTPUT)
+*     ----------------------------------------------------------------
+
+*     $Log: spdlon.ptn,v $
+*     Revision 4.7  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2013/10/16 21:04:42  bernard
+*     Modifier le format de sortie 6150 pour tenir compte des LRLMT a 9 chiffres.
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.3  2003/05/23 21:28:51  dugas
+*     Augmenter la taille du macro grille_maximale a 300K mots.
+*
+*     Revision 4.2  1998/07/03 02:26:38  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:54  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:21:45  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  94/02/13  21:35:03  armnrbd
+*     Premiere version.
+*     
+*--------------------------------------------------------------------------
+      IMPLICIT      none
+
+      INTEGER       HEAD
+      PARAMETER   ( HEAD = taille_entete )
+      INTEGER       MAXM
+      PARAMETER   ( MAXM = 999 )
+
+      LOGICAL       OK
+      CHARACTER*4   KIND
+      REAL          IM,HOLD
+      INTEGER       NR,NFF,JBUF(HEAD),IER,I,M,N
+      INTEGER       LA,LR,LM,LRLMT,KTR,LSR(2,MAXM),
+     +              MAXW,LEN,NWDS,JPAK
+
+      INTEGER,      DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL,         DIMENSION(:,:), ALLOCATABLE :: A
+
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+      INTEGER       GETSIZ
+      EXTERNAL      GETSIZ
+      EXTERNAL      JCLPNT,XIT
+      EXTERNAL      GETBUF2,DIMGT2,CMPLBL
+      EXTERNAL      GETFLD2,PUTFLD2
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spdlon.ptn,v $'
+
+*-------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+                   NFF  = 3
+      CALL JCLPNT( NFF, 1,2, 6 )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER AND
+***    READ THE FIRST INFORMATION FIELD TO GET THE SIZE (LA)
+***    OF THE SPECTRAL INPUT ARRAYS.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) CALL                          XIT(' Spdlon ',-1 )
+
+      CALL PRTLAB( JBUF )
+
+      WRITE(KIND,'(A4)') JBUF(1)
+      IF (KIND.NE.'SPEC') CALL                     XIT(' Spdlon ',-1 )
+
+      LRLMT = JBUF(7)
+      CALL DIMGT2( LSR, LA,LR,LM,KTR,LRLMT, 0,0 )  
+      WRITE(6,6150) LA,LR,LM,KTR,LRLMT
+
+      ALLOCATE( IBUF(LEN),A(2,NWDS/2+1) )
+
+***    PROBLEM WITH SPECTRAL PARAMETRES: EITHER WE DO NOT HAVE 
+***    RHOMBOIDAL OR TRIANGULAR TRUNCATIONS, OR THE LM VALUE IS
+***    GREATER THAN MAXM.
+  
+      IF (KTR .NE.0 .AND. KTR .NE.2) CALL          XIT(' Spdlon ',-2 )
+      IF (LM.GT.MAXM) CALL                         XIT(' Spdlon ',-3 )
+
+***    READ SPECTRAL ARRAYS.
+
+      NR   = 0
+  100 CALL GETFLD2( 1, A, 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+  
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6000) NR
+              CALL                                 XIT(' Spdlon ', 0 )
+          END IF
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK) CALL PRTLAB( IBUF )
+          IF (.NOT.OK) CALL                        XIT(' Spdlon ',-4 )
+
+***        MULTIPLY EACH COEFFICIENT BY IM.
+  
+          DO 200 M=1,LM
+              IM = (M-1)
+              DO  N=LSR(1,M),LSR(1,M+1)-1
+                  HOLD   = -IM * A(2,N)
+                  A(2,N) =  IM * A(1,N)
+                  A(1,N) =  HOLD
+              END DO
+  200     CONTINUE
+
+          CALL PUTFLD2( 2, A, IBUF,MAXW )
+
+      NR = NR+1
+      GOTO 100
+
+*===================================================================
+
+ 6000 FORMAT('0',I6,' Records derived')
+
+ 6150 FORMAT('0LA,LR,LM,KTR,LRLMT=',4I8,I10)
+  
+      END 
+#     endif

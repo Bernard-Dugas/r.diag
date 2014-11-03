@@ -1,0 +1,282 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      unseas  TSIN TSOUT INPUT OUTPUT [ -i VAL1 -j VAL2 ]
+*
+*
+*     AUTHOR - B.Dugas, JANVIER 29/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/unseas.ptn,v 4.5 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      THIS PROGRAM WILL REMOVE THE FIRST COMPONENT OF A TIME SERIES 
+*      FOURIER EXPANSION  AND THE COMPONENTS OF THE ANNUAL CYCLE AND 
+*      IT'S FIRST  "X" HARMONICS. THE MEAN  IS PUT TO ZERO WHILE THE 
+*      OTHER COMPONENTS ARE GIVEN THE AVERAGE VALUES OF THEIR PRECE- 
+*      DING AND FOLLOWING COMPONENTS. 
+*
+*      THE ONLY INPUT REQUIRED IS THE NUMBER OF ANNUAL CYCLES REPRE- 
+*      SENTED BY THE DATA AND WHO MANY HARMONICS TO MODIFY. 
+*
+*      NO  CHECK IS  MADE OF ANYTHING EXCEPT THAT THE DATA HAS TO BE 
+*      COMPLEX AND THAT THE FIRST FIELD IS LONG ENOUGH ... 
+*
+*
+*     PARAMETRE...
+*      CY (i) = NUMBER OF FULL ANNUAL CYCLES IN DATA
+*      X  (j) = NUMBER OF ANNUAL CYCLE HARMONICS TO ELIMINATE
+*
+*      READ(5,5000) CY,X
+*5000  FORMAT(10X,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*UNSEAS      20    5
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 DATA NOT COMPLEX
+*       2 PROBLEMS WITH INPUT PARAMETERS
+*       3 PROBLEM READING TSIN
+*       4 PREMATURE END OF FILE ON INPUT
+*       5 PREMATURE END OF FILE ON TSIN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+       PROGRAM UNSEAS 
+*    1              (TSIN, TSOUT, INPUT, OUTPUT, 
+*    2               TAPE5=TSIN,  TAPE2=TSOUT, 
+*    3               TAPE5=INPUT, TAPE6=OUTPUT) 
+ 
+*     $Log: unseas.ptn,v $
+*     Revision 4.5  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2007/12/20 21:08:16  dugas
+*     - Corriger l'appel a JCLPNT.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.2  1998/07/03 02:26:45  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:57  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:22:19  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:22  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/08/19  15:20:30  armnrbd
+*     Modifications cosmetiques.
+*     
+*     Revision 1.0  93/02/04  13:40:34  armnrbd
+*     Initial revision
+*      
+***    JAN 29/87 - B.DUGAS 
+ 
+*---------------------------------------------------------------------- 
+      IMPLICIT      none
+
+      INTEGER       HEAD
+      PARAMETER   ( HEAD = taille_entete )
+ 
+      LOGICAL       OK,RPBLOC
+      CHARACTER     KIND*4,LIGNE*80
+      REAL          DEMI,V1,V2,V3,AMP,ZERO
+      INTEGER       CY,X, MAXW,NFIL, LEN,IO,I,NR,CMPL, IER,
+     +              JBUF(HEAD),LENI,NWDS,JPAK
+
+      INTEGER,      DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL,         DIMENSION(:,:), ALLOCATABLE :: TS
+
+      INTEGER       GETSIZ
+      EXTERNAL      JCLPNT,XIT,GETLIGN,BURNF,GETSIZ,
+     +              GETBUF2,GETFLD2,PUTFLD2,RPBLOC
+ 
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+      DATA          ZERO / 0.0 / 
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/unseas.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFIL = 4 
+      CALL JCLPNT( NFIL, 1,2, 5,6 )
+ 
+      DEMI = 0.5
+ 
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          CY = 0
+          X  = 0
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ( LIGNE,5, ERR=901,END=901,IOSTAT=IO) CY
+
+          OK = RPBLOC('J',LIGNE)
+          IF (OK) READ( LIGNE,5, ERR=901,END=901,IOSTAT=IO) X
+
+      ELSE
+
+***        READ-IN THE NUMBER OF ANNUAL CYCLES IN THE DATA AND 
+***        THE NUMBER OF HARMONICS TO MODIFY. 
+ 
+          CALL GETLIGN( 5, LIGNE, 80,OK )
+
+          IF (.NOT.OK)                                         THEN
+             GOTO 901
+          ELSE
+              READ( LIGNE, 5000,ERR=901,END=901,IOSTAT=IO ) CY,X
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    READ IN FIRST INFORMATION BUFFER. 
+ 
+  050 MAXW = GETSIZ( 1, JBUF,LENI,NWDS,JPAK )
+      IF (MAXW.LE.0) GOTO 902
+
+      ALLOCATE( IBUF(LENI),TS(2,0:MAXW/2+1) )
+
+      CALL PRTLAB2(' Unseas on ibuf = ', IBUF )
+ 
+***    CHECK IF CY MAKES SENSE AND IF DATA IS COMPLEX. 
+ 
+      LEN = IBUF(5)*IBUF(6) 
+      WRITE(KIND,4) IBUF(1)
+ 
+      IF (     KIND .NE.'CMPL'
+     +   .AND. KIND .NE.'SPEC'
+     +   .AND. KIND .NE.'FOUR' )CALL               XIT(' Unseas ',-1 ) 
+
+***    IF KIND IS CMPL, WE HAVE A FULLY COMPLEX TRANSFORM AND
+***    THE CONSTRAINTS ON CY AND X HAVE TO ME MODIFIED. WE NOW
+***    CONSIDER THE FACT THAT TS(LEN-K)=TS(-K) AND LIMIT THE
+***    MAXIMUM WAVE NUMBER TO LEN/2.
+
+                          CMPL = 1
+      IF (KIND.EQ.'CMPL') CMPL = 2
+
+      IF (          CY  .LT. 1
+     +   .OR.  X        .LT. 0 
+     +   .OR. (X+1)*CY+2.GT.LEN/CMPL )                         THEN
+          WRITE(6,6002) CY, X 
+          CALL                                     XIT(' Unseas ',-2 ) 
+      END IF 
+ 
+***    READ-IN DATA. 
+ 
+      NR = 0 
+  100 CALL GETFLD2( 1, TS, KIND,-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6010) NR 
+              IF (NR.NE.0)                                     THEN 
+                  CALL                             XIT(' Unseas ', 0 ) 
+              ELSE 
+                  CALL                             XIT(' Unseas ',-3 ) 
+              END IF 
+          END IF 
+ 
+***        DO THE WORK.
+ 
+          TS(1,0) = ZERO 
+          TS(2,0) = ZERO 
+
+          DO  I=CY,(X+1)*CY,CY
+              V1                = TS(1,I-1)*TS(1,I-1)
+     1                          + TS(2,I-1)*TS(2,I-1) 
+              V2                = TS(1,I+1)*TS(1,I+1) 
+     2                          + TS(2,I+1)*TS(2,I+1) 
+              V3                = TS(1,I  )*TS(1,I  ) 
+     3                          + TS(2,I  )*TS(2,I  ) 
+              AMP               = 0.0 
+              IF (V3.NE.0.) AMP = SQRT(DEMI*(V1+V2)/V3) 
+              TS(1,I)           = AMP*TS(1,I) 
+              TS(2,I)           = AMP*TS(2,I) 
+          END DO
+
+          IF (KIND.EQ.'CMPL')                                   THEN
+
+***            WE NOW CONSIDER THE NEGATIVE WAVE NUMBERS.
+
+              DO  I=LEN-CY,LEN-(X+1)*CY,-CY
+                  V1                = TS(1,I-1)*TS(1,I-1) 
+     1                              + TS(2,I-1)*TS(2,I-1) 
+                  V2                = TS(1,I+1)*TS(1,I+1) 
+     2                              + TS(2,I+1)*TS(2,I+1) 
+                  V3                = TS(1,I  )*TS(1,I  ) 
+     3                              + TS(2,I  )*TS(2,I  ) 
+                  AMP               = 0.0 
+                  IF (V3.NE.0.) AMP = SQRT(DEMI*(V1+V2)/V3) 
+                  TS(1,I)           = AMP*TS(1,I) 
+                  TS(2,I)           = AMP*TS(2,I) 
+              END DO
+
+          END IF
+ 
+***        WRITE THE RESULT. 
+ 
+          CALL PUTFLD2( 2, TS, IBUF,MAXW ) 
+ 
+      NR = NR+1 
+      GOTO 100 
+ 
+***    E.O.F. ON INPUT 
+ 
+  901 CALL                                         XIT(' Unseas ',-4 ) 
+ 
+***    PREMATURE E.O.F. ON UNIT 1. 
+ 
+  902 CALL                                         XIT(' Unseas ',-5 ) 
+*-------------------------------------------------------- 
+
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+
+ 5000 FORMAT(10X,2I5) 
+
+ 6002 FORMAT(' Either wrong type or wrong number of cycles'/ 
+     +       ' with unseas CY, X =',2I5) 
+ 6010 FORMAT(' Ending after ',I5,' records were treated.') 
+
+      END 
+#     endif

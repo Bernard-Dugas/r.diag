@@ -1,0 +1,582 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spcsum  IN OUT INPUT OUTPUT [-kind  VAL1 [VAL2] \ 
+*                                   -t1    VAL3 -name VAL4 -lv1 VAL5 \ 
+*                                   -i     VAL6 -j    VAL7 -k   VAL8 \ 
+*                                   -label VAL9]
+*
+*
+*     DESCRIPTION...
+*      spcsum - PRINTS SPECTRAL SUMS OVER M OR N
+*
+*
+*     AUTHORS  - S.Lambert AND T.Shepherd, MAY 13/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spcsum.ptn,v 4.20 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     PURPOSE - SUMS A COMPLEX-VALUED SPECTRAL FILE SC(N,M) EITHER OVER THE
+*               PARAMETER M, PRINTING OUT THE RESULT SUM(N), OR OVER N, WITH
+*               THE RESULT SUM(M). IT ALSO PRODUCES A CROSS-SECTION FILE OF
+*               SPECTRAL DENSITY AS A FUNCTION OF WAVENUMBER AND PRESSURE.
+*
+*     NOTE    - IT CAN BE USED AS A DISPLAY PROGRAM FOR SPCDNS.
+*
+*
+*     INPUT FILE...
+*      IN  = GLOBAL SPECTRAL COEFF FILE
+*
+*     OUTPUT FILE...
+*      OUT = CROSS-SECTION OF HEIGHT VS. WAVENUMBER.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      SUMTYP (kind-1)= 'M', CAUSES SUM OVER N PRODUCING A FUNCTION OF M.
+*                     = 'N', CAUSES SUM OVER M PRODUCING A FUNCTION OF N.
+*      VKIND  (kind-2)= VERTICAL LEVEL TYPE. ONLY USE THIS WITH IN RPN STD FILES
+*                       AND WHEN LEVX CONTAINS DECODED VALUES. FURTHERMORE, THIS
+*                       PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*                       THE CURRENTLY SUPPORTED VALUES ARE:
+*                       'HAUTEUR'   , heights (m) with respect to sea level
+*                       'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                       'ETA'       , first version of the GEM ETA coordinate
+*                       'PRESSION'  , pressure (mb)
+*                       'ARBITRAIRE', arbitrary level (no units apply)
+*                       'HAUTEURS'  , heights (M) with respect to the surface
+*                       'HYBRIDE'   , hybrid GEM coordinate
+*                       'THETA'     , potential temperature coordinate
+*                       'GALCHEN'   , GalChen generalized coordinate
+
+*      LABEL  (label) = 256 CHARACTER LABEL PRINTED UNDER DISPLAY.
+*
+*      NSTEP  (t1)   \
+*      NAME   (name)  = RECORD LABEL WORDS 2,3,4 IDENTIFYING THE FIELD TO SUM.
+*      LEVEL  (lv1)  /
+*      IX     (i)     = 1, CAUSES THE CROSS-SECTION TO CONTAIN LOG10 OF THE
+*                          SPECTRAL DENSITIES INSTEAD OF THE SPECTRAL DENSITIES
+*                          THEMSELVES (WAVE NUMBER ZERO IS OMITTED).
+*      NWAV   (j)     = 1, CAUSES THE NUMBER OF WAVES ON FILE OUT TO BE
+*                          TRUNCATED TO AN EVEN NUMBER.
+*                         (THE DEFAULT IS 0; NO TRUNCATION).
+*      IPNT   (k)     = 1, PRINTS THE VALUES OF THE SPECTRUM,
+*                       0, NO PRINTING.
+*
+*      NOTES: 1) IF PARAMETRES ARE TO BE PASSED VIA THE COMMAND LINE, ONLY
+*                ONE SET OF SUCH PARAMETRES CAN BE PROCESSED BY SPCSUM.
+*             2) THE DEFAULT VALUES FOR BOTH NSTEP AND LEVEL IMPLY THAT
+*                THEY ARE NOT REALLY USED FOR THE DATA SELECTION.
+*             3) A) IF NAME=ALL (THE DEFAULT), ALL RECORDS THAT SATISFY
+*                THE CRITERIA ON NSTEP AND LEVEL WILL BE TREATED. 
+*                B) IF NAME=NEXT, ONLY THE FIRST RECORD IS TREATED 
+*                AND THE VALUES OF NSTEP,LEVEL ARE IGNORED.
+*                C) IF NAME=SKIP, THE NEXT RECORD IS SKIPPED.
+*                THIS IS INVALID IN COMMAND-LINE MODE.
+*
+*      READ( 5,5005 ) SUMTYP   *ONLY ONCE*
+*      READ( 5,5015 ) LABEL    *ONLY ONCE*
+*      READ( 5,5010 ) NSTEP,NAME,LEVEL,IX,NWAV,IPNT
+*5005  FORMAT(10X,4X,A1)
+*5010  FORMAT(10X,I10,1X,A4,4I5)
+*5015  FORMAT(64A4)
+*
+*
+*     EXAMPLES OF INPUT CARDS...
+*
+*   SPCSUM    M
+* DISPLAY LABEL GOES HERE
+*                 36 VORT  500    1    0    1
+*
+*      NOTE THAT BLANK INPUT IS  EQUIVALENCED TO THE FOLLOWING 3 CARDS
+*
+*   SPCSUM    N
+*
+*                 -1  ALL   -1    0    1    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR READING FILE IN
+*       2 ERROR READING SUMTYP
+*       3 ERROR READING LABEL
+*       4 ERROR DECODING NSTEP PARAMETERS
+*       5 NO MORE RECORDS TO SKIP (NAM WAS 'SKIP')
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spcsum
+*     PROGRAM SPCSUM (IN,       OUT,       INPUT,       OUTPUT,
+*    1          TAPE1=IN, TAPE2=OUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ---------------------------------------------------------
+
+*     $Log: spcsum.ptn,v $
+*     Revision 4.20  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.19  2013/10/28 21:14:46  bernard
+*     Compaction 64 bits a la sortie.
+*
+*     Revision 4.18  2013/10/16 20:49:34  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM.
+*
+*     Revision 4.17  2011/06/06 18:49:45  dugas
+*      Sauver la section HIGH de IBUF dans JBUF avant l'ecriture du fichier OUT.
+*
+*     Revision 4.16  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.15  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.14  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.13  2003/10/24 20:58:43  dugas
+*     Implementer du code compatible RS6000
+*
+*     Revision 4.12  2000/09/25 04:04:28  armnrbd
+*     Utiliser le mode IO64.
+*
+*     Revision 4.11  2000/09/22 21:21:57  armnrbd
+*     Modifier les formats 6040 et 6050.
+*
+*     Revision 4.10  1999/11/17 20:42:22  armnrbd
+*     Modifier l'allocation de memoire dynamique.
+*
+*     Revision 4.9  1998/11/30 17:05:12  armnrbd
+*     Corriger les appels a SETLAB.
+*
+*     Revision 4.8  1998/10/20  14:47:50  armnrbd
+*     Appeller la fons\ction Y2KDAT.
+*     Corriger l'usage du code de sortie -4.
+*
+*     Revision 4.7  1998/07/03  02:26:37  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.6  1998/06/11  13:53:04  armnrbd
+*     Corriger le controle d'ecriture sur unite 2.
+*
+*     Revision 4.5  1998/05/21  20:20:54  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.4  1998/02/18  16:45:51  armnrbd
+*     Verifier les niveaux input avec CHKLVLC.
+*
+*     Revision 4.3  1997/09/26  17:39:19  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/04/01  18:10:08  armnrbd
+*     Corriger le traitement du parametre LABEL et de l'option SKIP.
+*
+*     Revision 4.1  1997/01/30  03:20:45  armnrbd
+*     Deplacer la definition de KD.
+*
+*     Revision 4.0  1994/11/17  14:21:43  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:59  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.6  92/11/10  22:00:37  22:00:37  armnrbd (Bernard Dugas)
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.5  92/10/13  15:00:21  armnrbd
+*     Compaction par defaut passe a 32 bits/mots (-32).
+*     
+*     Revision 1.4  92/04/27  10:21:03  armnrbd
+*     Utiliser GETLIGN plutot que READ(5).
+*     
+*     Revision 1.3  92/04/24  23:12:57  armnrbd
+*     Changer le comportement par defaut.
+*     
+*     Revision 1.2  92/03/17  15:01:10  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.1  92/03/13  10:58:10  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:55  armnrbd
+*     Initial revision
+*     
+
+*     AUG 13/90 - F.MAJAESS (MODIFY THE CALL TO "SPECTRA")
+*     NOV 24/83 - B.DUGAS.
+*     MAY 13/83 - R.LAPRISE, S.LAMBERT.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXLM = lm_maximal
+      INTEGER,    PARAMETER :: NAXW = 2*MAXLM+1
+
+      LOGICAL     OK,ERR,PBLOC
+
+      REAL        RLV
+      INTEGER*8   NSTEP
+      REAL*8      B(NAXW)
+      COMPLEX*16  SUM(NAXW)
+      CHARACTER*5 CIX,ANWAV,AIPNT
+      CHARACTER*4 LABEL(64),BLANK,ANAM,NAME,NOM
+      CHARACTER*20 SUMTYP*1, ANSTEP,ALEVEL,CKIND, LIGNE*256
+      INTEGER     LSR(2,MAXLM), NF,KD,IO,I,L,LENLAB,VKIND,VKIND0,
+     +            STAMP,LEVEL,NWAV,IPNT,LRLMT,LA,LR,LM,KTR,KBUF(HEAD),
+     +            NMAX,LP,IX,NRECS,LEN,NWDS,KPAK,MAXW
+
+      COMPLEX*16, DIMENSION(:), ALLOCATABLE :: A
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER*8   Y2KDAT8
+      CHARACTER*4 GETYP,PKTYP
+      LOGICAL     RPBLOC,SETIO64
+      INTEGER     GETSIZ,GETKIND
+      EXTERNAL    RPBLOC,JCLPNT,GETLIGN,GETFLD2,
+     +            DIMGT2,SPECTRA,SETLAB,PUTFLD2,
+     +            Y2KDAT8,GETSIZ,SETIO64,SUIVANT,
+     +            GETKIND,GETYP,XIT,DATE2STAMP
+
+      DATA        BLANK /' '/
+      DATA        PBLOC / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spcsum.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      NRECS =  0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ( 1, KBUF,LEN,NWDS,KPAK )
+      IF (MAXW.LE.0) CALL                          XIT(' Spcsum ',-1 )
+
+      WRITE(ANAM,4) KBUF(1)
+      IF (ANAM.NE.'SPEC') GOTO 050
+
+      VKIND0 = GETKIND( )
+      VKIND  = VKIND0
+      CKIND  = ' '
+
+      ALLOCATE( A(NWDS),IBUF(LEN),JBUF(LEN) )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          PBLOC  = .TRUE.
+
+***        CHECK PARAMETRE BLOCK.
+
+          SUMTYP = ' '
+          DO  I=1,64
+              LABEL(I) = ' '
+          END DO
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) SUMTYP = LIGNE
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) CKIND = LIGNE
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')               THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          ENDIF
+
+          OK = RPBLOC('LABEL',LIGNE)
+          IF (OK) READ( LIGNE, 5015,ERR=903,END=903,IOSTAT=IO) LABEL
+
+          ANSTEP = ' '
+          ANAM   = ' '
+          ALEVEL = ' '
+          CIX    = ' '
+          ANWAV  = ' '
+          AIPNT  = ' '
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) ANSTEP = LIGNE
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) ANAM = LIGNE
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) ALEVEL = LIGNE
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) CIX = LIGNE
+
+          OK = RPBLOC('J',LIGNE)
+          IF (OK) ANWAV = LIGNE
+         
+          OK = RPBLOC('K',LIGNE)
+          IF (OK) AIPNT = LIGNE
+
+      ELSE
+
+***        READ SUM TYPE ('M' OR 'N') ...
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5005,ERR=902,END=902,IOSTAT=IO) SUMTYP
+          END IF
+
+***        ... AND LABEL.
+
+          CALL GETLIGN( 5,LIGNE,256,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 903
+          ELSE
+              READ( LIGNE, 5015,ERR=903,END=903,IOSTAT=IO) LABEL
+          END IF
+
+      END IF
+
+      IF (SUMTYP.EQ.'M')                                       THEN
+          KD = 2
+      ELSE
+          KD = 1
+      END IF
+
+      CALL LOW2UP( LABEL,LABEL )
+      DO  L=64,2,-1
+          IF (LABEL(L).NE.BLANK) GOTO 099
+      END DO
+  099 LENLAB = L
+
+  100 CONTINUE
+
+      IF (.NOT.PBLOC)                                          THEN
+
+***        READ NEXT RECORD TO BE SUMMED.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO) 
+     +                 ANSTEP,ANAM,ALEVEL,CIX,ANWAV,AIPNT
+          END IF
+
+      END IF
+
+***    TAKE CARE OF DEFAULTS.
+
+      IF (ANSTEP.EQ.' ') ANSTEP = ' -1'
+      IF (ANAM  .EQ.' ') ANAM   = 'ALL'
+
+      READ(ANSTEP, 0020,ERR=904) NSTEP
+      NSTEP = Y2KDAT8( NSTEP )
+      CALL DATE2STAMP( NSTEP,STAMP )
+
+      CALL LEADBLK( ANAM )
+
+      IF (ANAM.EQ.'ALL')                                       THEN
+          NAME = 'NEXT'
+      ELSE IF (ANAM.EQ.'SKIP')                                 THEN
+          IF (PBLOC)                                           THEN
+              WRITE(6,'(" -name SKIP is NOT a valid option...")')
+              CALL                                 XIT(' Spcsum ',-101 )
+          ELSE
+              CALL SUIVANT( 1, KBUF, ERR,OK )
+              IF (.NOT.OK .OR. ERR) GOTO 905
+              GOTO 100
+          END IF
+      ELSE
+          NAME = ANAM
+      END IF
+
+      IF (ALEVEL .EQ.' ' .OR. ALEVEL .EQ.'-1')                 THEN
+          ALEVEL = '-1'
+          LEVEL  =  -1
+      ELSE
+          IF (INDEX( ALEVEL,'.' ).EQ.0 .AND. CKIND.EQ.' ')     THEN
+              READ( ALEVEL, 10, ERR=904,END=904 ) LEVEL
+              CALL CONVPR( LEVEL, RLV, VKIND, -2 )
+              IF (PKTYP.EQ.'SQ')  CALL CONVPR( LEVEL, RLV, VKIND, +2 )
+          ELSE
+              READ( ALEVEL, 15, ERR=904,END=904 ) RLV
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL CONVPR( LEVEL, RLV, VKIND,  +2 )
+              ELSE
+                  CALL LVCODE( LEVEL, RLV/1000.,1 ) 
+              ENDIF
+         ENDIF
+      END IF
+
+      LIGNE = '-1'
+      IF (ALEVEL.NE.'-1') call get_ip1_string( LEVEL,LIGNE(1:12) )
+
+      IF (CIX   .EQ.' ') CIX    = '  0'
+      IF (ANWAV .EQ.' ') ANWAV  = '  1'
+      IF (AIPNT .EQ.' ') AIPNT  = '  0'
+
+      READ(CIX,    0005,ERR=904) IX
+      READ(ANWAV,  0005,ERR=904) NWAV
+      READ(AIPNT,  0005,ERR=904) IPNT
+
+  200 CALL GETFLD2( 1, A, 'SPEC',STAMP,NAME,LEVEL, IBUF,MAXW, OK )
+
+      IF (.NOT.OK)                                             THEN
+          IF (IPNT.NE.1)                                       THEN
+              WRITE(6,6030)
+              CALL PRTLAB( IBUF )
+          END IF
+          IF (ANAM.EQ.'ALL')                                   THEN
+              WRITE(6,6060) (LABEL(L),L=1,LENLAB)
+              IF (.NOT.PBLOC) CALL BURNF
+              CALL                                 XIT(' Spcsum ', 0 )
+          END IF
+          WRITE(6,6020) TRIM( ANSTEP ),NAME,LIGNE(1:12)
+          CALL                                     XIT(' Spcsum ',-1 )
+      END IF
+
+      WRITE(NOM,0004) IBUF(3)
+
+      LRLMT = IBUF(7)
+      CALL DIMGT2( LSR, LA,LR,LM,KTR,LRLMT, 0,0 )
+
+***    SUM OVER THE REQUESTED INDEX AND PRINT.
+
+      CALL SPECTRA( A,LM,LR,KTR,LA,LSR,SUM,KD )
+
+      IF (KTR.EQ.0)                                            THEN
+          NMAX = LR+LM-1
+      ELSE IF (KTR.EQ.2)                                       THEN
+          NMAX = LR
+      END IF
+
+      IF (IPNT.EQ.1)                                           THEN
+          IF (KD.EQ.1) WRITE(6,6040)  (I-1,REAL(SUM(I)),I=1,NMAX)
+          IF (KD.EQ.2) WRITE(6,6050)  (I-1,REAL(SUM(I)),I=1,LM)
+          WRITE(6,6030) ; CALL prtlab( IBUF )
+      END IF
+
+***    THIS SECTION WRITES THE REAL PART OF THE ARRAY SUM TO THE FILE
+***    OUT.  THE ORDER OF THE ELEMENTS IS REVERSED FOR USE BY ZXLOOK.
+***    NOTE THAT YOU DO THIS ONLY IF A FILE WAS NAMED IN THE CALLING
+***    JCL STATEMENT.
+
+      IF (NF.EQ.2)                                             THEN
+
+          JBUF(1:taille_entete) = IBUF(1:taille_entete)
+
+                       LP = NMAX
+          IF (KD.EQ.2) LP = LM
+
+***        IX=1 CAUSES THE BASE TEN LOG OF THE SPECTRAL DENSITY TO 
+***        WRITTEN TO THE OUTPUT FILE.
+
+          IF (IX.NE.1)                                         THEN
+              IF (NWAV.EQ.1 .AND. MOD(LP,2).NE.0) LP = LP-1
+              CALL SETLAB(  JBUF,
+     +                    'ZONL',IBUF(2),NOM,IBUF(4),LP,1,0,-64 )
+              DO  I=1,LP
+                  B(I) = REAL( SUM(LP+1-I) )
+              END DO
+          ELSE
+              IF (NWAV.EQ.1 .AND. MOD(LP,2).NE.1) LP = LP-1
+              CALL SETLAB(  JBUF, 
+     +                    'ZONL',IBUF(2),NOM,IBUF(4),LP-1,1,0,-64 )
+              DO  I=2,LP
+                  B(I-1) = LOG10( REAL( SUM(LP+2-I) ) )
+              END DO
+          END IF
+
+          CALL PUTFLD2( 2, B, JBUF,NAXW )
+
+      END IF
+
+      NRECS = NRECS+1
+
+      IF (ANAM.EQ.'ALL')                                       THEN
+          GOTO 200
+      ELSE IF (.NOT.PBLOC)                                     THEN
+          GOTO 100
+      END IF
+
+***    E.O.F. ON INPUT.
+
+  900 WRITE(6,6060) (LABEL(L),L=1,LENLAB)
+      CALL                                         XIT(' Spcsum ', 0 )
+
+  902 CALL                                         XIT(' Spcsum ',-2 )
+  903 CALL                                         XIT(' Spcsum ',-3 )
+  904 CALL                                         XIT(' Spcsum ',-4 )
+
+***    E.O.F. ON FILE IN.
+
+  905 CALL                                         XIT(' Spcsum ',-5 )
+*-----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0015 FORMAT(BN,E10.0)
+ 0020 FORMAT(BN,I20)
+
+ 5005 FORMAT(10X,4X,A1)
+ 5010 FORMAT(10X,A10,1X,A4,4A5)
+ 5015 FORMAT(64A4)
+
+ 6020 FORMAT('0..EOF looking for',A,2X,A4,A)
+ 6030 FORMAT(/15X,'STEP NAME LEVEL  LA          LRLMT   NPACK')
+ 6040 FORMAT('0Sum over m to give G(N)'/(1H,,4(9X,I4,5X,1PE13.6)))
+ 6050 FORMAT('0Sum over n to give G(M)'/(1H,,4(9X,I4,5X,1PE13.6)))
+ 6060 FORMAT(1H+,48X,64A4)
+
+      END
+#     endif

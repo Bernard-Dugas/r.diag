@@ -1,0 +1,492 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      lagcor  TS1 TS2 COREL INPUT OUTPUT [ -m    VAL1 -n   VAL2 \ 
+*                                           -name VAL3 -lv1 VAL4 \ 
+*                                           -kind VAL5 ]
+*
+*
+*     AUTHOR  - B.Dugas, DECEMBRE 21/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/lagcor.ptn,v 4.9 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CE PROGRAMME CALCULE LES COEFFICIENTS DE CORRELATIONS ENTRE 
+*      LES VALEURS DE TS1 A UN POINT (DONC A PARTIR D'UNE SERIE DE 
+*      TS1) ET TOUTES LES SERIES TEMPORELLES CONTENUES DANS TS2. 
+*
+*      LA CORRELATION PEUT ETRE DEPHASEE OU NON. LE PROGRAMME LIT LA
+*      POSITION DU POINT QUE L'ON VEUT CORRELER ET LE DEPHASAGE DESIRE.
+*
+*      LES FICHIERS TS1 ET TS2 CONTIENNENT DES ENREGISTRTEMENTS DE
+*      SERIES TEMPORELLES DONT LES MOYENNES SONT TOUTES SUPPOSEES
+*      NULLES PAR DEFAUT.
+*
+*
+*     PARAMETRES...
+*      BASE (m)   = POSITION HORIZONTALE DU POINT CENTRAL.
+*      LAG  (n)   = DEPHASAGE TEMPOREL A APPLIQUER.
+*      NAME       = NOM DE LA VALRIABLE AU POINT CENTRAL.
+*      KIND       = VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
+*                   FILES AND THEN LV1 AND LV2 ARE ASSUMED TO CONTAIN DECODED
+*                   VALUES. FURTHERMORE, THIS PARAMETRE CAN ONLY BE SPECIFIED
+*                   IN COMMAND-LINE MODE. THE CURRENTLY SUPPORTED VALUES ARE:
+*                   'HAUTEUR'   , heights (m) with respect to sea level
+*                   'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                   'ETA'       , first version of the GEM ETA coordinate
+*                   'PRESSION'  , pressure (mb)
+*                   'ARBITRAIRE', arbitrary level (no units apply)
+*                   'HAUTEURS'  , heights (M) with respect to the surface
+*                   'HYBRIDE'   , hybrid GEM coordinate
+*                   'THETA'     , potential temperature coordinate
+*                   'GALCHEN'   , GalChen generalized coordinate
+*      LEV  (lv1) = POSITION VERTICALE DU POINT CENTRAL.
+*
+*     NOTES: 1) GIVEN AN ORIGINAL ARRAY OF SIZE X*Y AND A CENTRAL
+*               POINT AT POSITION (I,J), BASE IS THEN ASSUMED TO BE
+*               (J-1)*X+I, I.E. IT IS THE ACTUAL (FORTRAN) STORAGE
+*               LOCATION.
+*            2) THE DEFAULT LAG IS ZERO
+*            3) THE DEFAULT VALUES FOR THE NAME AND LEV PARAMETRES
+*               ARE THOSE FOUND IN THE FIRST TIME SERIES IN TS1.
+*
+*      READ( 5,5000 ) BASE,LAG,NAME,LEV
+*5000  FORMAT(10X,I10,I5,1X,A4,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* LAGCOR      155075   10
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 UNSUPPORTED DATA TYPE
+*      3 INPUT PARAMETRES INCONSISTENT WITH DATA
+*      4 UNABLE TO FIND BASE TIME SERIES IN TS1
+*      5 UNABLE TO READ TS2
+*      6 TS2: MORE THAN ONE SIZE OR NOT IN TIME SERIES FORMAT
+*      7 PREMATURE END OF FILE ON TS1
+*      8 PREMATURE END OF FILE ON INPUT
+*      9 MEMORY ALLOCATION PROBLEM
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM LAGCOR
+*    +              ( TS1,  TS2,  COREL,  INPUT, OUTPUT, 
+*    1                TAPE1=TS1,  TAPE2=TS2, TAPE3=COREL, 
+*    2                TAPE5=INPUT,TAPE6=OUTPUT ) 
+ 
+*     $Log: lagcor.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 20:54:53  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2000/04/07 18:28:47  armnrbd
+*     Beaucoup de changements (et de corrections).
+*
+*     Revision 4.4  1998/10/20 18:33:44  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.3  1998/07/03  02:26:31  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/05/21  20:20:50  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.0  1994/11/17  14:20:50  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:26  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/04  09:14:24  09:14:24  armnrbd (Bernard Dugas)
+*     Initial revision
+*     
+***    DECEMBRE 21/85 - B.DUGAS. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXM = 999
+
+      LOGICAL     OK,SPEC 
+      REAL        ZERO,RNIV
+      REAL*8      CORE,HOURS
+      CHARACTER*4 TYPE,CSPEC,CCORE,NOM1,NOM2,PKTYP
+      CHARACTER*10 ALEV,CKIND,LIGNE*80
+      INTEGER     I,L,IBOUT(HEAD),POSIT,LSR(2,MAXM),BASE,LAG,
+     +            IER,NF,IO,ICCC,IRRR,IHEM,LA,LR,LM,KTR,
+     +            NWDS,LEN,NIVEAU,OVLEN,LAT,LON,NSERIE,MAXW,
+     +            IB7,JBUF(HEAD),JLEN,JWDS,JPAK,VKIND,VKIND0,
+     +            DATEO,DEET
+
+      Real*8,     allocatable :: TS1(:),TS2(:),COREL(:)
+      Integer,    allocatable :: IBUF(:)
+
+      CHARACTER*4,external :: GETYP
+      LOGICAL,    external :: RPBLOC,SETIO64
+      INTEGER,    external :: GETSIZ,GETKIND,GETHIGH
+      EXTERNAL    JCLPNT,DIMGT2,BURNF,CORELAT,
+     +            XIT,GETFLD2,PUTFLD2,SETKIND
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        CSPEC , CCORE  /
+     +            'SPEC', 'CORE' /,
+     +             ZERO /   0    /
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/lagcor.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5 
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+
+      DEET= -1
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    GET DEFAULT PACKING TYPE.
+
+      PKTYP  = GETYP( 1 )
+      PKTYP  = PKTYP(1:2)
+
+***    LIRE ET DECODER LE PREMIER TAMPON D'INFORMATION DE TS1. 
+ 
+      MAXW = GETSIZ( 1, JBUF,JLEN,JWDS,JPAK )
+      IF (MAXW.LE.0) GOTO 900
+
+      VKIND0 = GETKIND( )
+      VKIND  = VKIND0
+      CKIND  = ' '
+
+      IBOUT(1:HEAD) = JBUF(1:HEAD)
+
+      CALL PRTLAB2(' Lagcor on : ',JBUF )
+      WRITE(TYPE,4) JBUF(1) 
+ 
+      IF (TYPE.EQ.'COEF')                                      THEN 
+ 
+          CALL DIMGT2( LSR,LA,LR,LM,KTR, JBUF(7), 0,0 ) 
+          SPEC       = .TRUE. 
+
+          READ(CSPEC,4) IBOUT(1)
+
+          IBOUT(5)   = LA 
+          IBOUT(6)   = 1 
+          IBOUT(7)   = JBUF(7) 
+ 
+      ELSE IF (TYPE.EQ.'GRID' .OR.
+     +         TYPE.EQ.'SUBA' .OR.
+     +         TYPE.EQ.'ZONL' )                                THEN
+
+          SPEC       = .FALSE. 
+          IB7        = JBUF(7) 
+          ICCC       = IB7/10000
+          IRRR       = (IB7-ICCC*10000)/10 
+          IHEM       = IB7-ICCC*10000-IRRR*10 
+ 
+          READ(TYPE,4) IBOUT(1)
+ 
+          IBOUT(5)   = ICCC 
+          IBOUT(6)   = IRRR 
+          IBOUT(7)   = IHEM
+
+          IF (PKTYP == 'SQ')                                   THEN
+              CALL PUTHIGH( 0,'IG3', IBOUT )
+              CALL PUTHIGH( 0,'IG4', IBOUT )
+          END IF
+ 
+      ELSE 
+ 
+          CALL                                     XIT(' Lagcor ',-1 ) 
+ 
+      END IF 
+ 
+      READ(CCORE,4) IBOUT(3)
+
+      IBOUT(2)       = 0 
+      IBOUT(4)       = JBUF(4) 
+      IBOUT(8)       = -64
+ 
+      LEN            = JBUF(5) 
+      OVLEN          = 1/FLOAT(LEN) 
+ 
+      NWDS           = IBOUT(5)*IBOUT(6) 
+
+      IF (PKTYP == 'SQ')                                       THEN
+
+          ! Definir les parametres temporels de sortie.
+
+          CALL PUTHIGH( LEN,'NPAS', IBOUT )
+
+          DEET  = GETHIGH( 'DEET' , IBOUT )
+          DATEO = GETHIGH( 'DATEO', IBOUT )
+          HOURS = ((DEET*1.0_8)*LEN)/3600.
+          CALL INCDATR( IBOUT(2),DATEO,HOURS )
+
+      END IF
+
+      IF (SPEC) NWDS = NWDS*2 
+      MAXW = MAX( JWDS, NWDS )
+ 
+***    ALLOUER L'ESPACE DE TRAVAIL.
+
+      ALLOCATE( TS1(MAXW),COREL(MAXW),
+     +          TS2(MAXW),IBUF(MAXW+HEAD),STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT(' Lagcor ',-9 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          BASE =  0
+          LAG  =  0
+          NOM1 = ' '
+          ALEV = ' '
+
+          OK = RPBLOC('M',LIGNE)
+          IF (OK) READ( LIGNE, 0010, ERR=901,END=901,IOSTAT=IO ) BASE
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ( LIGNE, 0005, ERR=901,END=901,IOSTAT=IO ) LAG
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NOM1 = LIGNE
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) CKIND = LIGNE
+
+          IF (CKIND.NE.' ')                                    THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          END IF
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) ALEV = LIGNE
+
+      ELSE
+
+***        QUEL EST LE POINT DE BASE ET LE DEPHASAGE DESIRE ? 
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5000, ERR=901,END=901,IOSTAT=IO)
+     +                           BASE,LAG,NOM1,ALEV
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (ALEV.EQ.' ' .OR. ALEV.EQ.'-1')                       THEN
+          NIVEAU =  -1
+          ALEV   = '-1'
+      ELSE
+          IF (INDEX( ALEV,'.' ).EQ.0 .AND. CKIND.EQ.' ')       THEN
+              READ( ALEV,10, ERR=901,END=901,IOSTAT=IO ) NIVEAU
+              CALL CONVPR( NIVEAU, RNIV, VKIND, -2 )
+              IF (PKTYP.EQ.'SQ') CALL CONVPR( NIVEAU, RNIV, VKIND, +2 )
+          ELSE
+              READ( ALEV,11, ERR=901,END=901,IOSTAT=IO ) RNIV
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL CONVPR( NIVEAU, RNIV, VKIND,  +2 )
+              ELSE
+                  CALL LVCODE( NIVEAU, RNIV/1000.,1 ) 
+              ENDIF
+          ENDIF
+      END IF
+
+      IF (NOM1.EQ.' ' .AND. ALEV.EQ.'-1')                       THEN
+          WRITE(6,6300) BASE, LAG
+      ELSE
+          CALL GET_IP1_STRING( NIVEAU,LIGNE )
+          WRITE(6,6301) BASE, LAG, trim( NOM1 ), TRIM( LIGNE )
+      END IF
+ 
+***    VERIFIER CETTE INFORMATION. 
+ 
+      IF (LAG.GE.LEN .OR. POSIT.GT.NWDS)                       THEN 
+          WRITE(6,6400) 
+          CALL                                     XIT(' Lagcor ',-3 ) 
+      END IF 
+ 
+***    INITIALISER LE CHAMPS COREL. 
+ 
+      COREL(:) = ZERO 
+ 
+*--------------------------------------------------------------------- 
+***    CHERCHER LE POINT DE BASE DANS TS1. 
+ 
+ 
+      CALL GETFLD2( 1, TS1, TYPE,BASE,NOM1,NIVEAU, IBUF,MAXW,OK ) 
+ 
+      IF (.NOT.OK)                                             THEN 
+          WRITE(6,6600) 
+          CALL                                     XIT(' Lagcor ',-4 ) 
+      END IF 
+ 
+ 
+***    ALLER CHERCHER LA PROCHAINE SERIE. 
+ 
+      NSERIE =  0 
+      NOM2   = ' '
+
+  100 CALL GETFLD2( 2, TS2, TYPE,-1,NOM2,-1, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+ 
+              WRITE(6,6030) NSERIE,trim( NOM2 )
+
+              IF (NSERIE.EQ.0) CALL                XIT( ' Lagcor ',-5 ) 
+
+              IBUF(1:head) = IBOUT(1:head) 
+
+              CALL PUTFLD2( 3, COREL, IBUF,MAXW ) 
+
+              CALL                                 XIT(' Lagcor ', 0 ) 
+ 
+          END IF 
+ 
+          IF (IBUF(5).NE.LEN .OR. IBUF(6).NE.1)                THEN 
+              WRITE(6,6500) 
+              CALL                                 XIT(' Lagcor ',-6 ) 
+          END IF
+
+          IF (NSERIE.EQ.0) WRITE(NOM2,4) IBUF(3)
+ 
+***        A QUEL POINT CETTE SERIE EST-T-ELLE VALABLE ? 
+ 
+          POSIT = IBUF(2) 
+ 
+***        EFFECTUER LES CALCULS. 
+ 
+          IF (LAG.EQ.0)                                        THEN 
+              CALL CORELAT( TS1,       TS2,        CORE,LEN ) 
+          ELSE IF (LAG.LT.0)                                   THEN 
+              CALL CORELAT( TS1,       TS2(1-LAG), CORE,LEN+LAG ) 
+          ELSE 
+              CALL CORELAT( TS1(LAG+1),TS2,        CORE,LEN-LAG ) 
+          ENDIF 
+ 
+***        METTRE LA REPONSE A LA BONNE PLACE ET 
+***        RETOURNER CHERCHER LA PROCHAINE SERIE. 
+ 
+          COREL(POSIT)  = CORE 
+          NSERIE        = NSERIE+1 
+ 
+      GOTO 100 
+ 
+***    FIN PREMATUREE DU FICHIER TS1. 
+ 
+  900 CALL                                         XIT(' Lagcor ',-7 ) 
+ 
+***    FIN PREMATUREE DE INPUT. 
+ 
+  901 CALL                                         XIT(' Lagcor ',-8 ) 
+*--------------------------------------------------------------------- 
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+ 5000 FORMAT(10X,I10,I5,1X,A4,A5) 
+
+ 6030 FORMAT('0Lagcor read ',I6,' series of ',A,'.') 
+ 6300 FORMAT('0Base point = ',I12,', time lag = ',I5)
+ 6301 FORMAT('0Base point = ',I12,', time lag = ',I5,
+     +       ', for variable = ',A,', at level =',A)
+ 6400 FORMAT('0Input information out of permissible range.') 
+ 6500 FORMAT('0Second set has wrong time duration.') 
+ 6600 FORMAT('0Did not find base time series.') 
+
+      END 
+      SUBROUTINE CORELAT (TS1,TS2,COEF,LONG) 
+ 
+***    DECEMBRE 21/85 - B. DUGAS. 
+ 
+***    CALCULE LE COEFFICIENT DE CORELATION ENTRE TS1 ET TS2, 
+***    DEUX SERIES TEMPORELLES DE LONGUEUR LONG, ET  RETOURNE 
+***    LA REPONSE DANS COEF. TS1 ET TS2 ONT MOYENNES NULLES. 
+ 
+      IMPLICIT none
+
+      INTEGER  LONG,I
+      REAL*8   COEF,S1,S2
+      REAL*8   TS1(LONG),TS2(LONG),S
+ 
+*----------------------------------------------------------------------- 
+***    ON CALCULE L'ECART TYPE DES DEUX SERIES. 
+ 
+      S1 = 0.0
+      S2 = 0.0
+ 
+      DO  I=1,LONG 
+          S1 = S1 + DBLE( TS1(I) )**2 
+          S2 = S2 + DBLE( TS2(I) )**2 
+      END DO
+ 
+      S = SQRT(S1*S2) 
+ 
+***    ON CALCULE LA CORRELATION PROPREMENT DITE. 
+ 
+      COEF = 0.0
+ 
+      DO  I=1,LONG 
+          COEF = COEF + DBLE( TS1(I) )*TS2(I) 
+      END DO
+ 
+      COEF = COEF/S 
+ 
+*--------------------------------------------------------------------- 
+      RETURN 
+      END 
+#     endif

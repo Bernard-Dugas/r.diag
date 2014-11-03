@@ -1,0 +1,477 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spslope  IN INPUT OUTPUT [ -kind VAL1 [VAL2] [VAL3] \ 
+*                                 -a    VAL4 -b  VAL5 -label VAL6 \ 
+*                                 -name VAL7 -t1 VAL8 -lv1   VAL9]
+*
+*
+*     DESCRIPTION...
+*      spslope - COMPUTES AND PRINTS SPECTRAL M OR N LOGARITHMIC SLOPE
+*
+*
+*     AUTHOR   - T.Shepherd, JUL 18/1979.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spslope.ptn,v 4.10 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     PURPOSE - CALCULATES AND PRINTS AN ARRAY OF LOGARITHMIC SLOPES OF A
+*               SPECTRAL FIELDS  (ASSUMED REAL) IN EITHER M OR N-SPACE,
+*               BETWEEN INITIAL (KI) AND FINAL (KT) WAVENUMBER INDICES.
+*
+*
+*     INPUT FILE...
+*      IN     = GLOBAL SPECTRAL FIELDS.
+* 
+*
+*     INPUT PARAMETERS...
+*
+*      SPECTYP (kind-1) = 'M' OR 'N' TO DETERMINE DIRECTION
+*      WEIGHT  (kind-2) = 'W', THEN THE QUANTITIES X(N) ARE WEIGHTED TO MAKE
+*                         THEM EQUIVALENT TO A TRIANGULAR TRUNCATION.
+*                         OTHERWISE, WEIGHTING IS SKIPPED.
+*                         NOTE THAT THIS LAST FEATURE IS ONLY USED FOR A
+*                         RHOMBOIDAL TRUNCATION, AND AFFECTS ALL N GREATER
+*                         THAN LM.
+*      VKIND   (kind-3) = VERTICAL LEVEL TYPE. ONLY USE THIS WITH IN RPN STD FILES
+*                         AND WHEN LEVX CONTAINS DECODED VALUES. FURTHERMORE, THIS
+*                         PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*                         THE CURRENTLY SUPPORTED VALUES ARE:
+*                         'HAUTEUR'   , heights (m) with respect to sea level
+*                         'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                         'ETA'       , first version of the GEM ETA coordinate
+*                         'PRESSION'  , pressure (mb)
+*                         'ARBITRAIRE', arbitrary level (no units apply)
+*                         'HAUTEURS'  , heights (M) with respect to the surface
+*                         'HYBRIDE'   , hybrid GEM coordinate
+*                         'THETA'     , potential temperature coordinate
+*                         'GALCHEN'   , GalChen generalized coordinate
+*
+*      LABEL            = LABEL (80 CHARACTERS MAX).
+*
+*      NI      (1)      = NUMBER OF PAIRS OF WAVENUMBER INTERVALS REQUIRED.
+*      KI,KT   (a,b)    = PAIRS OF WAVENUMBER LIMITS. (UP TO SEVEN PAIRS, BUT
+*                         ONLY ONE PAIR WHEN THE COMMAND LINE INPUT IS USED)
+*      NSTEP   (t1)    \
+*      NAME    (name)   = RECORD ID FOR FIELDS TO BE SELECTED (DEFAULT ALL)
+*      LEVEL   (lv1)   /
+*
+*      READ(5,5005) SPECTYP,WEIGHT
+*      READ(5,5060) LABEL
+*      READ(5,5010) NI,(KI(I),KT(I),I=1,7)
+*      READ(5,5015) NSTEP,NAME,LEVEL
+*5005  FORMAT(10X,4X,A1,4X,A1)
+*5010  FORMAT(15I5)
+*5015  FORMAT(10X,I10,1X,A4,I5)
+*5060  FORMAT(A80)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+**SPSLOPE     N
+** JANUARY 1980 KE ECMWF/WMO
+**  1   10   20
+**                31    K    1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ SPECTRAL RECORD.
+*       2 SPECTRAL RECORDS MAY NOT BE GLOBAL
+*       3 PROBLEM WITH INDEX LIMITS
+*       4 UNABLE TO READ FIRST  DIRECTIVE CARD
+*       5 UNABLE TO READ SECOND DIRECTIVE CARD
+*       6 UNABLE TO READ THIRD  DIRECTIVE CARD
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spslope 
+*     PROGRAM SPSLOPE (IN,       INPUT,       OUTPUT,
+*    +           TAPE1=IN, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     -----------------------------------------------
+*     $Log: spslope.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2013/10/16 20:51:04  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM.
+*
+*     Revision 4.8  2010/05/06 16:25:30  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2000/09/25 04:04:28  armnrbd
+*     Utiliser le mode IO64.
+*
+*     Revision 4.4  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.3  1998/05/21  20:20:55  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.2  1997/09/26  17:35:15  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1997/09/11  21:01:09  armnrbd
+*     Ajouter le support de RPBLOC.
+*     Utiliser GETSIZ pour determiner la taile du probleme.
+*
+*     Revision 4.0  1995/12/07  15:23:40  armnrbd
+*     Version initiale.
+*
+
+*     JAN 29/92 - E. CHAN   (CONVERT HOLLERITH LITERALS TO ASCII)               
+*     AUG 13/90 - F.MAJAESS (MODIFY THE CALL TO "SPECTRA")                      
+*     NOV 24/83 - B.DUGAS.
+*     DEC 01/80 - J.D.HENDERSON 
+*     JUL 18/79 - TED SHEPHERD. 
+
+*---------------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLM = lm_maximal
+      INTEGER,    PARAMETER :: HEAD  = taille_entete
+
+      REAL        RLV
+      INTEGER*8   NSTEP
+      LOGICAL     OK,CLINE
+      CHARACTER*4 NAM,NAME
+      COMPLEX*16  SUM(MAXLM)
+      CHARACTER*80 LIGNE,LABEL
+      CHARACTER   SPECTYP,WEIGHT
+      REAL*8      SLP(7),A,B,C,D
+      CHARACTER*20 ALEVEL,CKIND,ASTEP
+      INTEGER     NFF,IER,LSR(2,MAXLM+1),KI(7),KT(7),
+     +            KD,NI,STAMP,LEVEL,LRLMT,LA,LR,LM,KTR,IO,
+     +            I,K,N,NMAX1,NMAX,NK,INIT,LAST,JBUF(HEAD),
+     +            LEN,NWDS,JPAK,MAXW,VKIND,VKIND0
+
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: F,G
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER*8   Y2KDAT8
+      CHARACTER*4 GETYP,PKTYP
+      LOGICAL     RPBLOC,SETIO64
+      INTEGER     GETSIZ,GETKIND
+      EXTERNAL    GETSIZ,RPBLOC,HPALLOC,JCLPNT,GETLIGN,
+     +            GETFLD2,XIT,DIMGT2,LEADBLK,SPECTRA,
+     +            Y2KDAT8,GETKIND,SETIO64,GETYP,
+     +            DATE2STAMP
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spslope.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3  
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    DETERMINE SIZES FOR MEMORY ALLOCATIONS.
+
+      MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                          XIT(' Spslope',-1 )
+
+      VKIND0 = GETKIND( )
+      VKIND  = VKIND0
+      CKIND  = ' '
+
+      ALLOCATE( F(MAXW),G(MAXW),IBUF(2*LEN) )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          CLINE = .TRUE.
+
+***        CHECK PARAMETRE BLOCK.
+
+          NI      =  1
+          KI(1)   =  0
+          KT(1)   =  0
+          LABEL   = ' '
+          WEIGHT  = ' '
+          SPECTYP = 'N'
+          NSTEP   = -1
+          NAM     = 'ALL'
+          ALEVEL  = ' '
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ( LIGNE, '(A)',ERR=902,END=902,IOSTAT=IO) SPECTYP
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) READ( LIGNE, '(A)',ERR=902,END=902,IOSTAT=IO) WEIGHT
+
+          OK = RPBLOC('KIND3',LIGNE)
+          IF (OK) CKIND = LIGNE
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')               THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          ENDIF
+
+          OK = RPBLOC('LABEL',LIGNE)
+          IF (OK) LABEL = LIGNE
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 0010,ERR=904,END=904,IOSTAT=IO) KI(1)
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 0010,ERR=904,END=904,IOSTAT=IO) KT(1)
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ( LIGNE, 0020,ERR=900,END=900,IOSTAT=IO) NSTEP
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NAM = LIGNE
+
+          OK = RPBLOC('LV1', LIGNE)
+          IF (OK) ALEVEL = LIGNE
+
+      ELSE
+
+          CLINE = .FALSE.
+
+***        READ SPECTRUM TYPE ('M' OR 'N') AND LABEL.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE,5005,ERR=902,END=902,IOSTAT=IO) SPECTYP,WEIGHT
+          END IF
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 903
+          ELSE
+              LABEL = LIGNE
+          END IF
+
+***        READ INITIAL (KI) AND TERMINAL (KT) INDICES.
+***          MAXIMUM OF SEVEN SETS.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 904
+          ELSE
+              READ( LIGNE, 5010,ERR=904,END=904,IOSTAT=IO) 
+     +                     NI,(KI(I),KT(I),I=1,7)
+          END IF
+
+      END IF
+
+      WRITE(6,6010)SPECTYP,WEIGHT,(KI(I),KT(I),I=1,NI)
+
+      IF (SPECTYP.EQ.'M')                                      THEN
+          KD = 2
+      ELSE
+          KD = 1 
+      END IF
+
+***    READ NEXT RECORD SEARCH DIRECTIVE FROM STDIN.
+
+  100 CONTINUE
+
+          IF (.NOT.CLINE)                                      THEN
+
+              CALL GETLIGN( 5,LIGNE,80,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  GOTO 900
+              ELSE
+                  READ( LIGNE, 5015,ERR=900,END=900,IOSTAT=IO)
+     +                         NSTEP,NAM,ALEVEL
+              END IF
+
+          END IF
+
+          NSTEP = Y2KDAT8( NSTEP )
+          CALL DATE2STAMP( NSTEP,STAMP )
+
+          IF (NAM.NE.'   ') CALL LEADBLK( NAM )
+          IF (NAM.EQ.'   ') NAM  ='ALL'
+                            NAME = NAM
+          IF (NAM.EQ.'ALL') NAME ='NEXT' 
+
+          IF (ALEVEL .EQ.' ' .OR. ALEVEL .EQ.'-1')             THEN
+              ALEVEL = '-1'
+              LEVEL  =  -1
+          ELSE
+              IF (INDEX( ALEVEL,'.' ).EQ.0 .AND. CKIND.EQ.' ') THEN
+                  READ( ALEVEL, 10, ERR=904,END=904 ) LEVEL
+                  CALL CONVPR( LEVEL, RLV, VKIND, -2 )
+                  IF (PKTYP.EQ.'SQ')  CALL CONVPR( LEVEL,RLV,VKIND, +2 )
+              ELSE
+                  READ( ALEVEL, 15, ERR=904,END=904 ) RLV
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( LEVEL, RLV, VKIND,  +2 )
+                  ELSE
+                      CALL LVCODE( LEVEL, RLV/1000.,1 ) 
+                  ENDIF
+              END IF
+          END IF
+
+          LIGNE = '-1'
+          IF (ALEVEL.NE.'-1') call get_ip1_string( LEVEL,LIGNE(1:12) )
+
+***        READ NEXT RECORD FROM FILE IN.
+
+  200     CALL GETFLD2( 1, F, 'SPEC',STAMP,NAME,LEVEL, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)  THEN
+              IF (NAM.EQ.'ALL')                                THEN
+                  WRITE(6,6060) LABEL 
+                  CALL                             XIT(' Spslope', 1 ) 
+              END IF
+              CALL PDATE( ASTEP,NSTEP )
+              WRITE(6,6020) TRIM( ASTEP ),NAME,LIGNE(1:12)
+              CALL                                 XIT(' Spslope',-1 )
+          END IF
+
+***        RETREIVE SPECTRAL PARAMETERS.
+
+          LRLMT = IBUF(7) 
+          CALL DIMGT2( LSR,LA,LR,LM,KTR, LRLMT, 0,0 )
+
+          IF (LA.NE.IBUF(5))                                   THEN
+              WRITE(6,6050) LA,IBUF(5)
+              CALL                                 XIT(' Spslope',-2 )
+          END IF
+
+          DO  I=1,LA 
+              G(I   ) = F(I   ) 
+              G(I+LA) = F(I+LA) 
+          END DO
+
+***        SUM OVER THE APPROPRIATE INDEX,CALCULATE SLOPES, AND PRINT. 
+***        IF KD=1 THEN IT IS IN N-SPACE AND THE SUMS MAY BE WEIGHTED. 
+
+          CALL SPECTRA( G,LM,LR,KTR,LA,LSR,SUM,KD ) 
+
+          IF (KD.EQ.2)                                         THEN
+              NMAX = LM-1 
+          ELSE
+              IF (KTR.EQ.0) NMAX = LR+LM-2 
+              IF (KTR.EQ.2) NMAX = LR-1
+              IF (WEIGHT.EQ.'W'.AND. KTR.EQ.0)                 THEN
+                  NMAX1 = NMAX+1
+                  DO  N=LM,NMAX1 
+                      SUM(N) = SUM(N)*FLOAT( N )/FLOAT( LR-N+1 )
+                  END DO
+              END IF
+          END IF
+
+          DO  300 I=1,NI 
+              NK = KT(I)-KI(I)+1
+              IF (NK.LE.1 .OR. KT(I).GT.NMAX)                  THEN
+                  WRITE(6,6030) KI(I),KT(I) 
+                  CALL                             XIT(' Spslope',-3 )
+              END IF  
+
+              A      = 0.0 
+              B      = 0.0
+              C      = 0.0
+              D      = 0.0
+              INIT   = KI(I)
+              LAST   = KT(I)
+
+              DO  K=INIT,LAST
+                  A  = A+LOG( FLOAT( K ) )*LOG( ABS( SUM(K+1) ) ) 
+                  B  = B+LOG( FLOAT( K ) )
+                  C  = C+LOG( ABS( SUM(K+1) ) )
+                  D  = D+( LOG( FLOAT( K ) ) )**2 
+              END DO
+
+              SLP(I) = (FLOAT( NK )*A-B*C)/(FLOAT( NK )*D-B**2) 
+
+  300     CONTINUE
+
+          call get_ip1_string( IBUF(4),LIGNE(13:24) )
+          call LEADBLK( LIGNE(13:24) )
+          CALL PDATE( ASTEP,IBUF(2) )
+          WRITE(6,6040) ASTEP(1:16),IBUF(3),TRIM( LIGNE(13:24) ),
+     +                         (SLP(I),I=1,NI)
+
+      IF (NAM.EQ.'ALL') GOTO 200
+      IF (.NOT.CLINE)   GOTO 100 
+
+***    E.O.F. ON INPUT.
+
+  900 WRITE(6,6060) LABEL
+      CALL                                         XIT(' Spslope', 0 ) 
+  902 CALL                                         XIT(' Spslope',-4 )
+  903 CALL                                         XIT(' Spslope',-5 )
+  904 CALL                                         XIT(' Spslope',-6 )
+*-----------------------------------------------------------------------
+
+ 0010 FORMAT(BN,I10)
+ 0015 FORMAT(BN,E10.0)
+ 0020 FORMAT(BN,I20)
+
+ 5005 FORMAT(10X,4X,A1,4X,A1)
+ 5010 FORMAT(15I5)
+ 5015 FORMAT(10X,I10,1X,A4,A5)
+ 5060 FORMAT(A80)
+
+ 6010 FORMAT('0',12X,'STEP  NAME LEVEL ',2A1,
+     +       '  (KI,KT)',7(2X,I3,3X,I3,4X))
+ 6020 FORMAT('0... EOF looking for ',A,2X,A4,A)
+ 6030 FORMAT('0... Problem with index limits ',I5,I5)
+ 6040 FORMAT(' ',A16,2X,A4,1X,A,13X,7(1PE13.6,2X))
+ 6050 FORMAT(' Expected record size ',I6,', found ',I6)
+ 6060 FORMAT('0',48X,A80)
+
+      END 
+#     endif

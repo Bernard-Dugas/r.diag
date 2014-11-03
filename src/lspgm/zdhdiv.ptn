@@ -1,0 +1,197 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zdhdiv  ZXIN ZDH ZXOUT
+*
+*
+*     DESCRIPTION...
+*      zdhdiv  - ZONAL CROSS-SECTION DELTA-HAT DIVIDER
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 1980.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zdhdiv.ptn,v 4.8 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     PURPOSE - DIVIDES A CROSS-SECTION BY THE ZONAL MEAN OF DELTA-HAT.
+*
+*     NOTE    - ANY VALUE DIVIDED BY ZERO IS SIMPLY SET TO ZERO.
+*
+*
+*     INPUT FILES...
+*      ZXIN  = ONE ZONAL CROSS-SECTION
+*      ZDH   = ZONAL MEAN OF DELTA-HAT
+*
+*     OUTPUT FILE...
+*      ZXOUT = THE QUOTIENT ZXIN/ZDH  (ZXIN/0=0)
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST SETS
+*       2 ZXIN AND ZDH ARRAYS ARE NOT THE SAME SIZE
+*       3 DATA IS NOT ZONAL
+*       4 NOT THE SAME NUMBER OF RECORDS IN ZXIN AND ZDH
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zdhdiv
+*    +               (ZXIN,       ZDH,       ZXOUT,       OUTPUT,
+*    +          TAPE1=ZXIN, TAPE2=ZDH, TAPE3=ZXOUT, TAPE6=OUTPUT)
+*     -----------------------------------------------------------
+
+*     $Log: zdhdiv.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.4  1998/07/03 02:26:48  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1998/05/29  01:01:58  armnrbd
+*     Corriger les declarations de variables.
+*
+*     Revision 4.2  1998/05/29  00:55:20  armnrbd
+*     BugFix preliminaires (encore).
+*
+*     Revision 4.1  1998/05/29  00:48:42  armnrbd
+*     Deuxieme version RPN.
+*
+C     MAY 14/83 - R.LAPRISE.
+C     NOV 07/80 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      REAL        F,DZM
+      CHARACTER*4 TYPE
+      LOGICAL     OK,OK1,OK2
+      INTEGER     I,NR,NFF,MAXW,MAXW1,MAXW2,
+     +            LEN,LEN1,LEN2,NLAT,IBUF,JBUF,KBUF(taille_entete),
+     +            KPAK,LBUF(taille_entete),LPAK,NLEV,IER,NWDS,
+     +            LEV(MAXLEV),NLEV1,NLEV2
+
+      POINTER   ( PF,   F(1) )
+      POINTER   ( PD, DZM(1) )
+      POINTER   ( IB,IBUF(8) )
+      POINTER   ( JB,JBUF(8) )
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETSIZ2
+      EXTERNAL    JCLPNT,XIT,GETSIZ2,GETZX2,
+     +            CMPLBL,PUTZX2,HPALLOC
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zdhdiv.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCESS I/O UNIT NAME AND ASSIGN THEM.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+***    DETERMINE NECESSARY MEMORY. READ FIRST INFO BUFFERS.
+
+      MAXW1 = GETSIZ2( 1, KBUF,LEN1,NWDS,KPAK, LEV,NLEV )
+      MAXW2 = GETSIZ2( 2, LBUF,LEN2,NWDS,LPAK, LEV,NLEV2 )
+
+      MAXW = MAX( MAXW1,MAXW2 )
+      LEN  = MAX(  LEN1, LEN2 )
+
+      IF (MAXW.EQ.0 .OR. NLEV.GT.MAXLEV
+     +              .OR. NLEV.LE.0    ) CALL       XIT(' Zdhdiv ',-1 )
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+      IF (.NOT.OK .OR. NLEV.NE.NLEV2) CALL         XIT(' Zdhdiv ',-2 )
+
+      WRITE(TYPE,0004) KBUF(1)
+      IF (TYPE.NE.'ZONL') CALL                     XIT(' Zdhdiv ',-3 )
+
+      NLAT = KBUF(5)
+
+      CALL HPALLOC( PF, 2*NLAT*NLEV+2*LEN, IER, 0 )
+      PD = LOC(    F(NLAT*NLEV+1) )
+      IB = LOC(  DZM(NLAT*NLEV+1) )
+      JB = LOC( IBUF(LEN+1) )
+
+***    READ THE NEXT LEVEL OF THE CROSS-SECTION FROM FILE 1.
+
+      NR = 0
+  100 CALL GETZX2( 1, F,NLAT, LEV,NLEV1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (NR.NE.0) CALL PRTLAB( IBUF )
+              WRITE(6,6200) NR
+              IF (NR.EQ.0) CALL                    XIT(' Zdhdiv ',-1 )
+              CALL                                 XIT(' Zdhdiv ', 0 )
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***        READ THE NEXT ZONAL MEAN SET OF DELTA-HAT (FILE 2).
+
+          CALL GETZX2( 2, DZM,NLAT, LEV,NLEV2, JBUF,MAXW,OK )
+
+          IF (.NOT.OK) CALL                        XIT(' Zdhdiv ',-4 )
+          CALL PRTLAB( IBUF )
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK1 )
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK2 )
+          OK = (OK1.AND.OK2)
+
+          IF (.NOT.OK .OR. NLEV1.NE.NLEV2
+     +                .OR. NLEV1.GT.NLEV )
+     +        CALL                                 XIT(' Zdhdiv ',-2 )
+
+***        COMPUTE THE QUOTIENT AND SAVE ON FILE 3.
+
+          DO  I=1,NLAT*NLEV1
+              IF (DZM(I).EQ.0.)                                THEN
+                  F(I) = 0.
+              ELSE
+                  F(I) = F(I)/DZM(I)
+              END IF
+          END DO
+
+          IBUF(6) = NLEV1
+          CALL PUTZX2( 3, F, LEV, IBUF,MAXW )
+
+      NR = NR+NLEV1
+      GOTO 100
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+
+ 6200 FORMAT('0',I6,' records processed.')
+
+      END
+#     endif

@@ -1,0 +1,9 @@
+#!/usr/bin/perl
+print "<PRE>\n";   
+while (<>)    {
+
+# batir la liste avec liens
+  s/\b([a-z]+\w*)\b/<a href="$1.txt">$1<\/a>/; 
+  print;
+}
+print "</PRE>\n";   

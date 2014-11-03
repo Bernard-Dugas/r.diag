@@ -1,0 +1,559 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      xpand  XIN XOUT INPUT OUTPUT [-a VAL1 -b VAL2 -c VAL3 -d VAL4]
+*
+*
+*     DESCRIPTION...
+*      xpand  - MODIFIE LES DIMENSIONS(X,Y) D'UN TABLEAU 4D(X,Y,Z,T)
+*
+*
+*     AUTHOR  - S.BINER, 15 juillet 1993
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/xpand.ptn,v 4.9 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     PURPOSE - MODIFIER LES DIMENSIONS (X,Y) DE CHAQUE PLAN D'UN TABLEAU
+*               4D (X,Y,Z,T).  CES MODIFICATIONS SONT BASEES SUR DES
+*               PARAMETRES LUS SUR LA CARTE D'ENTREE.
+*
+*     NOTE:     LE COMBLEMENT DES LIGNES ET COLONNES SE FAIT EN COPIANT
+*               LA LIGNE OU LA COLONNE ADJACENTE.
+*
+*
+*     INPUT FILE...
+*        XIN = INPUT FILE
+*
+*     OUTPUT FILE...
+*        XOUT = OUTPUT GRID FILE
+*
+*
+*     INPUT PARAMETERS...
+*
+*        NOTE: SI LE NOMBRE EST POSITIF, ON COMBLE CE NOMBRE DE
+*              COLONNES OU LIGNES.  SI LE NOMBRE EST NEGATIF, ON
+*              ENLEVE CE NOMBRE DE COLONNES OU LIGNES.
+*
+*        NXA (a) = NOMBRE DE COLONNES A ENLEVER/COMBLER A LA GAUCHE DU TABLEAU.
+*        NXZ (b) = NOMBRE DE COLONNES A ENLEVER/COMBLER A LA DROITE DU TABLEAU.
+*        NYA (c) = NOMBRE DE LIGNES A ENLEVER/COMBLER EN BAS DU TABLEAU.
+*        NYZ (d) = NOMBRE DE LIGNES A ENLEVER/COMBLER EN HAUT DU TABLEAU.
+*
+*        READ(5,5010) NXA,NXZ,NYA,NYZ
+*5010    FORMAT(10X,4I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*XPAND        1    3   -1   -2
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR READING INPUT PARAMETERS
+*       2 UNABLE TO READ FIRST INFO BUFFER
+*       3 FOUND ILLEGAL DATA TYPE
+*       4 INCONSISTENT INPUT PARAMETERS
+*       5 UNABLE TO READ FIRST RECORD
+*       6 MORE THAN ONE SIZE IN XIN
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM xpand
+*     PROGRAM XPAND (XIN,       XOUT,       INPUT,      OUTPUT
+*    +         TAPE1=XIN, TAPE2=XOUT, TAPE5=INPUT, TAP6=OUTPUT )        
+*     ----------------------------------------------------------
+*     $Log: xpand.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2000/07/06 18:22:07  armnrbd
+*     Corriger la documentation automatique.
+*
+*     Revision 4.5  1998/07/03 02:26:47  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1998/05/12  20:04:54  armnrbd
+*     Corriger l'allocation de IBUF dans le cas ZONL.
+*
+*     Revision 4.3  1998/05/12  18:15:43  armnrbd
+*     Remplacer 20 par HEAD lors de l'allocation des champs.
+*
+*     Revision 4.2  1997/09/26  17:39:32  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1996/11/12  19:18:45  armnrbd
+*     Ajouter un mode approprie aux coupes zonales.
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.0  1996/01/12  19:26:52  armnrbd
+*     Version initiale.
+*
+*        JUL 15/93 - S.BINER
+
+*-------------------------------------------------------------------------------
+      IMPLICIT none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      LOGICAL     OK
+      REAL        F,G,H,TEMP
+      CHARACTER   LIGNE*80,TYPE*4,GRID*4
+      INTEGER     JBUF(HEAD),NWDS,LEN,MAXW,JPAK,JLAT,
+     +            IBUF,NFF,L,WHERE,NXA,NXZ,NYA,NLEV,
+     +            NYZ,IER,IO,NX2,NY2,NR,LEV(MAXLEV),
+     +            KBUF(HEAD),LENO,NWDSO,PACKO
+
+      POINTER   ( P1,    F(1) )
+      POINTER   ( P2,    G(1) )
+      POINTER   ( P3,    H(1) )
+      POINTER   ( P4, TEMP(1) )
+      POINTER   ( P5, IBUF(8) )
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ
+      EXTERNAL    GETSIZ,JCLPNT,RPBLOC,GETLIGN,CMPLBL,FILEV,
+     +            XIT,GETFLD2,TRANSX,TRANSY,PUTFLD2,GETSET2,
+     +            LBLCHK
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        GRID / 'GRID' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xpand.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      NR = 0
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NXA = 0
+          NXZ = 0
+          NYA = 0
+          NYZ = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 10, ERR=901,END=901,IOSTAT=IO ) NXA
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 10, ERR=901,END=901,IOSTAT=IO ) NXZ
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ( LIGNE, 10, ERR=901,END=901,IOSTAT=IO ) NYA
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ( LIGNE, 10, ERR=901,END=901,IOSTAT=IO ) NYZ
+
+      ELSE
+
+***       LECTURE DES CARTES
+
+          READ( LIGNE, 5010, ERR=901,END=901,IOSTAT=IO ) NXA,NXZ,NYA,NYZ
+          CALL BURNF
+
+      END IF
+
+      WRITE(6,6010) NXA,NXZ,NYA,NYZ
+
+***    LIRE LE PREMIER TAMPON INFORMATIF
+***    POUR DETERMINER LA TAILLE DU PROBLEME.
+
+      MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                          XIT('  Xpand ',-2 )
+
+      WRITE(TYPE,0004) JBUF(1)
+
+      IF (TYPE.EQ.'ZONL')                                      THEN
+          GOTO 200
+      ELSE IF (TYPE.NE.'GRID' .AND.
+     +         TYPE.NE.'SUBA')                                 THEN
+          CALL                                     XIT('  Xpand ',-3 )
+      END IF
+
+***    CALCUL DES DIMENSIONS DU TABLEAU DE SORTIE
+
+      NX2 = JBUF(5)+NXA+NXZ
+      NY2 = JBUF(6)+NYA+NYZ
+
+***    VERIFICATION QUE LE NOMBRE DE COLONNES/LIGNES A ENLEVER EST INFERIEUR
+***    AU NOMBRE DE COLONNE/LIGNE DE DEPART, ET CE POUR LES 4 COTES DU PLAN,
+***    AINSI QUE LE TABLEAU DE SORTIE AIT LES DIMENSIONS MINIMALES DE (1,1).
+
+      IF (((NXA.LT.0).AND.(ABS(NXA).GE.JBUF(5))).OR.
+     1    ((NXZ.LT.0).AND.(ABS(NXZ).GE.JBUF(5))).OR.
+     2    ((NYA.LT.0).AND.(ABS(NYA).GE.JBUF(6))).OR.
+     3    ((NYZ.LT.0).AND.(ABS(NYZ).GE.JBUF(6))).OR.
+     4     (NX2.LT.1)                           .OR.
+     5     (NY2.LT.1))                                         THEN
+          WRITE(6,6020) NXA,NXZ,NYA,NYZ,JBUF(5),JBUF(6)
+          CALL                                     XIT('  Xpand ',-4 )
+      END IF
+
+      NWDS = MAX( NWDS, NX2*NY2 )
+
+      CALL HPALLOC( P1, 4*NWDS+HEAD,IER,0 )
+      P2 = LOC(    F(NWDS+1) )
+      P4 = LOC(    G(NWDS+1) )
+      P5 = LOC( TEMP(NWDS+1) )
+
+***    LECTURE DU PROCHAIN CHAMP DE XIN
+
+ 100  CALL GETFLD2( 1, F, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN 
+              IF (NR.EQ.0)                                     THEN
+                  CALL                             XIT('  Xpand ',-5 )
+              ELSE
+                  CALL PRTLAB( IBUF )
+                  WRITE(6,6015) NR
+                  CALL                             XIT('  Xpand ', 0 )
+              END IF
+          END IF
+
+***        VERIFIER LES DIMENSIONS DU PROBLEME.
+
+          CALL CMPLBL ( 0,JBUF, 0,IBUF, OK )
+          IF (.NOT.OK) CALL                        XIT('  Xpand ',-6 )
+
+***        FAIRE LES CHANGEMENTS DU CHAMP F
+***        EN X ET LES METTRE DANS LE CHAMP G
+
+          CALL TRANSX( IBUF(5),IBUF(6), NXA,NXZ, F,G,TEMP )
+
+***        FAIRE LES CHANGEMENTS DU CHAMP G
+***        EN Y ET LES METTRE DANS LE CHAMP F
+
+          CALL TRANSY( NX2,    IBUF(6), NYA,NYZ, F,G,TEMP )
+
+***        ARCHIVER SUR LE FICHIER XOUT
+
+          IBUF(5) = NX2
+          IBUF(6) = NY2
+          CALL PUTFLD2( 2, F, IBUF,MAXW )
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1                                          
+      GOTO 100
+
+***    MODE EXPANSION DE COUPE ZONALE
+*---------------------------------------------------------------------
+
+  200 JLAT = JBUF(5)
+
+***    CALCUL DES DIMENSIONS DU TABLEAU DE SORTIE
+
+      NX2 =    1+NXA+NXZ
+      NY2 = JLAT+NYA+NYZ
+
+***    VERIFICATION QUE LE NOMBRE DE COLONNES/LIGNES A ENLEVER EST INFERIEUR
+***    AU NOMBRE DE COLONNE/LIGNE DE DEPART, ET CE POUR LES 4 COTES DU PLAN,
+***    AINSI QUE LE TABLEAU DE SORTIE AIT LES DIMENSIONS MINIMALES DE (1,1).
+
+      IF ( (NXA.LT.0).OR.
+     1     (NXZ.LT.0).OR.
+     2    ((NYA.LT.0).AND.(ABS(NYA).GE.JLAT)).OR.
+     3    ((NYZ.LT.0).AND.(ABS(NYZ).GE.JLAT)).OR.
+     4     (NX2.LT.1)                        .OR.
+     5     (NY2.LT.1))                                         THEN
+          WRITE(6,6021) NXA,NXZ,NYA,NYZ,JLAT
+          CALL                                     XIT('  Xpand ',-4 )
+      END IF
+
+***    FICHIERS ZONAUX A PLUSIEURS NIVEAUX VERTICAUX ?
+
+      NWDS = MAX( JLAT, NX2*NY2 )
+      NLEV = JBUF(6)
+
+      IF (NLEV.NE.1)                                           THEN
+          CALL FILEV( LEV,NLEV,JBUF, 1 )
+      ELSE
+          LEV(1) = JBUF(4)
+      END IF
+
+***    TAILLE DES CHAMPS DE SORTIES.
+
+      DO  L=1,8
+          KBUF(L) = JBUF(L)
+      END DO
+
+      KBUF(4) = LEV(1)
+      KBUF(5) = NX2
+      KBUF(6) = NY2
+
+      CALL LBLCHK( LENO,NWDSO,PACKO, KBUF )
+
+      LEN  = MAX( LEN,LENO )
+      MAXW = LEN+HEAD
+
+***    ALLOCATION DE LA MEMOIRE DE TRAVAIL.
+
+      CALL HPALLOC( P1, JLAT*NLEV+3*NWDS+LEN,IER,0 )
+      P2 = LOC(       F(JLAT*NLEV+1) )
+      P3 = LOC(       G(NWDS+1) )
+      P4 = LOC(       H(NWDS+1) )
+      P5 = LOC(    TEMP(NWDS+1) )
+
+***    LECTURE DU PROCHAIN CHAMP DE XIN
+
+ 300  CALL GETSET2( 1, F, LEV,NLEV, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN 
+              IF (NR.EQ.0)                                     THEN
+                  CALL                             XIT('  Xpand ',-5 )
+              ELSE
+                  CALL PRTLAB( IBUF )
+                  WRITE(6,6015) NR
+                  CALL                             XIT('  Xpand ', 0 )
+              END IF
+          END IF
+
+***        VERIFIER LES DIMENSIONS DU PROBLEME.
+
+          CALL CMPLBL ( 0,JBUF, 0,IBUF, OK )
+          IF (.NOT.OK) CALL                        XIT('  Xpand ',-6 )
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+          DO 400 L=1,NLEV
+
+***            FAIRE LES CHANGEMENTS DU CHAMP F
+***            EN X ET LES METTRE DANS LE CHAMP G
+
+              WHERE = (L-1)*JLAT+1
+
+              CALL TRANSX( 1,JLAT, NXA,NXZ, F(WHERE),G,TEMP )
+
+***            FAIRE LES CHANGEMENTS DU CHAMP G
+***            EN Y ET LES METTRE DANS LE CHAMP H
+
+              CALL TRANSY( NX2,JLAT, NYA,NYZ, H,G,TEMP )
+
+***            ARCHIVER SUR LE FICHIER XOUT
+
+              READ(GRID,0004) IBUF(1)
+              IBUF(4) = LEV(L)
+              IBUF(5) = NX2
+              IBUF(6) = NY2
+
+              CALL PUTFLD2( 2, H, IBUF,MAXW )
+
+  400     CONTINUE
+
+      NR = NR+NLEV
+      GOTO 300
+
+*---------------------------------------------------------------------
+***    ERREUR DE LECTURE DES PARAMETRES.
+
+ 901  CAll                                         XIT('  Xpand ',-1 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+
+ 0010 FORMAT(BN,I5)
+ 5010 FORMAT(10X,4I5)
+ 6010 FORMAT('0 Cards = ',4I5)
+ 6015 FORMAT('0 Xpand reads',I6,' records.')
+ 6020 FORMAT(4I4,/,2I6)
+ 6021 FORMAT(4I4,/,I6)
+
+      END
+      SUBROUTINE TRANSX (NX1,NY1,NXA,NXZ,F,G,TEMP)
+
+      IMPLICIT none
+
+***    JUILLET 16/93 - S.BINER
+
+***    CE SOUS-PROGRAMME COMBLE/ENLEVE UN NOMBRE 
+***    NXA DE COLONNES A LA GAUCHE DU TABLEAU F
+***    NXZ DE COLONNES A LA DROITE DU TABLEAU F
+***    DEPENDAMMENT DU SIGNE POSITIF/NEGATIF DES PARAMETRES NXA ET NXZ.
+
+***    LA SORTIE EST PLACEE DANS LE TABLEAU G.
+***    TEMP EST UN CHAMP DE TRAVAIL.
+
+*---------------------------------------------------------------------
+
+      INTEGER  NX1,NY1,NXA,NXZ, NX2,I,J
+      REAL     F(NX1,NY1),TEMP((NX1+NXA),NY1),G((NX1+NXA+NXZ),NY1)
+
+*---------------------------------------------------------------------
+***    FAIRE LES CHANGEMENTS DE DEBUT DE X DU TABLEAU
+***    F(X,Y) ET LES  PLACER DANS LE TABLEAU TEMP(X,Y).
+
+      NX2 = NX1+NXA+NXZ
+
+      DO 100 J=1,NY1
+         IF (NXA.GT.0) THEN
+
+***          ON COMBLE A GAUCHE.
+
+              DO  I=1,NXA
+                  TEMP(I,J) = F(1,J)
+              END DO
+              DO  I=NXA+1,NX1+NXA
+                  TEMP(I,J) = F(I-NXA,J)
+              END DO
+
+         ELSE 
+
+***          ON COUPE A GAUCHE.
+
+              DO  I=1,NX1+NXA
+                  TEMP(I,J) = F(I-NXA,J)
+              END DO
+
+          END IF
+ 100  CONTINUE
+
+***    FAIRE LES CHANGEMENT DE FIN DE X DU TABLEAU
+***    TEMP(X,Y) ET LES PLACER DANS LE TABLEAU G(X,Y).
+
+      DO  200 J=1,NY1
+          IF (NXZ.GT.0)                                        THEN
+
+***            ON COMBLE A DROITE.
+
+              DO  I=1,NX1+NXA
+                  G(I,J) = TEMP(I,J)
+              END DO
+              DO  I=NX1+NXA+1,NX2
+                  G(I,J) = TEMP(NX1+NXA,J)
+              END DO
+
+          ELSE 
+
+***            ON COUPE A DROITE.
+
+              DO  I=1,NX2
+                  G(I,J) = TEMP(I,J)
+              END DO
+
+          END IF
+ 200  CONTINUE
+
+***    FIN DE SOUS-PROGRAMME
+
+      RETURN
+*---------------------------------------------------------------------
+
+      END
+      SUBROUTINE TRANSY (NX1,NY1,NYA,NYZ,F,G,TEMP)
+
+      IMPLICIT none
+
+***    JUILLET 16/93 - S.BINER
+
+***    CE SOUS-PROGRAMME COMBLE/ENLEVE UN NOMBRE 
+***    NYA DE LIGNES EN HAUT DU TABLEAU G
+***    NYZ DE LIGNES EN HAUT DU TABLEAU G
+***    DEPENDAMMENT DU SIGNE POSITIF/NEGATIF DES PARMATRES NYA ET NYZ.
+
+***    LA SORTIE EST PLACEE DANS LE TABLEAU F.
+***    TEMP EST UN CHAMP DE TRAVAIL.
+
+*---------------------------------------------------------------------
+
+      INTEGER  NX1,NY1,NYA,NYZ, NY2,I,J
+      REAL     G(NX1,NY1),TEMP(NX1,(NY1+NYA)),F(NX1,(NY1+NYA+NYZ))
+
+*---------------------------------------------------------------------
+***    FAIRE LES CHANGEMENTS DE DEBUT DE Y DU TABLEAU
+***    G(X,Y) ET LES PLACER DANS LE TABLEAU TEMP(X,Y).
+
+      NY2 = NY1+NYA+NYZ
+
+      DO  100 I=1,NX1
+          IF (NYA.GT.0)                                        THEN
+
+***            ON COMBLE EN HAUT.
+
+              DO  J=1,NYA
+                  TEMP(I,J) = G(I,1)
+              END DO
+              DO  J=NYA+1,NY1+NYA
+                  TEMP(I,J) = G(I,J-NYA)
+              END DO
+
+          ELSE 
+
+***            ON COUPE EN HAUT.
+
+              DO  J=1,NY1+NYA
+                  TEMP(I,J) = G(I,J-NYA)
+              END DO
+
+          END IF
+ 100  CONTINUE
+
+***    FAIRE LES CHANGEMENT DE FIN DE Y DU TABLEAU
+***    TEMP(X,Y) ET LES PLACER DANS LE TABLEAU F(X,Y).
+
+      DO  200 I=1,NX1
+          IF (NYZ.GT.0)                                        THEN
+
+***           ON COMBLE EN BAS.
+
+              DO  J=1,NY1+NYA
+                  F(I,J) = TEMP(I,J)
+              END DO
+              DO  J=NY1+NYA+1,NY2
+                  F(I,J) = TEMP(I,NY1+NYA)
+              END DO
+
+          ELSE
+
+***            ON COUPE EN BAS.
+
+              DO  J=1,NY2
+                  F(I,J) = TEMP(I,J)
+              END DO
+
+          END IF
+ 200  CONTINUE
+
+***    FIN DE SOUS-PROGRAMME
+
+      RETURN
+*---------------------------------------------------------------------
+
+      END
+#     endif

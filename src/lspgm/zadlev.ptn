@@ -1,0 +1,879 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     addlev  XIN XOUT INPUT OUTPUT [ -kind VAL1 [VAL2] -N VAL3 -i VAL4 \ 
+*                                   [ -lv1  VAL5 [VAL6 [VAL7] ] ] ]
+*
+*
+*     AUTHOR - B.Dugas, Oct 10/91.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zadlev.ptn,v 4.18 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      THIS PROGRAM EITHER:
+*      1) ADDS (INTERPOLATES) VERTICAL LEVELS IN A GRID ARRAY.
+*      2) INTERPOLATES TO A CONSTANT VERTICAL-INCREMENT GRID ARRAY,
+*         EITHER IN LINEAR- OR LOG-COORDINATE. THE TOP AND
+*         BOTTOM LEVELS REMAIN THE SAME.
+*
+*
+*     INPUT FILE...
+*      XIN  = ANY SET OF MULTI-LEVEL 'ZONL, 'GRID' OR 'SUBA' ARRAYS.
+*
+*     OUTPUT FILE...
+*      XOUT = MODIFIED SET OF ARRAYS.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      KIND(1) = 0   ==> ADD N LEVELS.
+*               -1   ==> PRODUCE A N-LEVEL LINEAR-COORDINATE GRID
+*               -2   ==> PRODUCE A N-LEVEL LOG-COORDINATE GRID
+*               -5   ==> PRODUCE A N-LEVEL GRID, USING
+*                        THE LEVELS SPECIFIED BY LEVX
+*      N       = NUMBER OF LEVELS TO ADD OR PRODUCE IN TARGET ARRAY
+*               (THE MAXIMUM NUMBER OF LEVELS IS NOW SET AT 999)
+*                IF N IS NEGATIVE, EACH -N LEVX VALUES ARE READ WITH
+*                A I10 FORMAT OR AN E10.0 IF ITS VALUE CONTAINS A
+*                DECIMAL POINT.
+*      I       = INTERPOLATION TYPE.
+*                0 ==> LINEAR (DEFAULT). OTHERWISE ==> CUBIC.
+*      LEVX    = NEW LEVELS IN ADD MODE. ONLY THREE NEW LEVELS CAN BE
+*     (lv1)      SPECIFIED IN COMMAND LINE INPUT MODE. THEY MUST BE
+*                INCREASING OR DECREASING, AS IN XIN. ALSO IN THIS
+*                MODE, LEVX MAY ALSO BE THE REAL DECODED LEVEL VALUES. 
+*                IF THAT IS  CASE, THE KIND(2) PARAMETER ABSOLUTELY
+*                          *** HAS TO BE SPECIFIED ***.
+*      KIND(2) = VERTICAL LEVEL TYPE. ONLY USE THIS WITH IN RPN STD FILES
+*                AND WHEN LEVX CONTAINS DECODED VALUES. FURTHERMORE, THIS
+*                PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*                THE CURRENTLY SUPPORTED VALUES ARE:
+*                  'HAUTEUR'   , heights (m) with respect to sea level
+*                  'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                  'ETA'       , first version of the GEM ETA coordinate
+*                  'PRESSION'  , pressure (mb)
+*                  'ARBITRAIRE', arbitrary level (no units apply)
+*                  'HAUTEURS'  , heights (M) with respect to the surface
+*                  'HYBRIDE'   , hybrid GEM coordinate
+*                  'THETA'     , potential temperature coordinate
+*                  'GALCHEN'   , GalChen generalized coordinate
+*
+*
+*      NOTES: 1) IF N IS ZERO AND KIND IS LESS THAN ZERO (I.E. WE
+*                ARE NOT IN ADD MODE), N WILL BE RESET TO 2/3 OF
+*                THE NUMBER LATITUDES IN XIN.
+*             2) ADDLEV AND ZADLEV ARE THE SAME PROGRAM.
+*             3) IF KIND IS EQUAL TO -5, LEVX IS ALWAYS READ FROM
+*                STANDARD INPUT.
+*
+*      READ( 5,5000 ) KIND,N,I
+*      IF (N.GT.0)
+*      READ( 5,5010 ) (LEVX(L),L=1,N)
+*      IF (N.LT.0)
+*      READ( 5,5020 ) (LEVX(L),L=1,-N)
+*5000  FORMAT(10X,3I5)
+*5010  FORMAT(16I5)
+*5020  FORMAT(8E10.0)
+*
+*
+*     EXAMPLE ....
+*
+* ADDLEV     -1   15    0
+*
+*         123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 PROBLEMS READING XIN
+*       2 FOUND UNSUPPORTED DATA TYPE IN FILE XIN
+*       3 UNABLE TO READ/UNPACK A COMPLETE SET
+*       4 MORE THAN ONE SIZE OF ARRAY IN XIN
+*       5 INTERPOLATION PROCESSING OPTION UNKNOWN
+*       6 ERROR READING INPUT PARAMETERS (FIRST LINE)
+*       7 ERROR READING INPUT PARAMETERS (OPTIONAL SECOND LINE)
+*       8 VERTICAL LEVELS DO NOT VARY MONOTONICALLY
+*       9 NEW AND OLD VERTICAL LEVELS NOT THE SAME TYPE
+*      11 INCONSISTENT LEVX VALUES IN INPUT PARAMETERS
+*
+*     NON-FATAL CONDITION... 
+*     101 KIND PARAMETER VALUE NOT RECOGNIZED
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zadlev
+
+*     $Log: zadlev.ptn,v $
+*     Revision 4.18  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.17  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.16  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.15  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.14  2003/12/10 22:41:25  dugas
+*     Corriger le calcul lorsque plusieurs pas de temps sont requis
+*
+*     Revision 4.13  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.12  2002/09/17 17:27:39  dugas
+*     Ajouter le support des gilles hybrides de GEM.
+*
+*     Revision 4.11  2000/07/25 18:04:30  armnrbd
+*     Modif pour tenir compte d'un probleme f90 (EXP) sous Linux.
+*
+*     Revision 4.10  1999/05/03 19:50:13  armnrbd
+*     Ajouter l'option KIND=-5 et le parametre I.
+*
+*     Revision 4.9  1998/11/30 17:05:12  armnrbd
+*     Corriger l'appel a SETLAB.
+*     Modifier la lecture de l'argument LEVX.
+*
+*     Revision 4.8  1998/10/19  15:33:43  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.7  1998/07/03  02:26:48  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.6  1998/07/03  01:11:49  armnrbd
+*     Ajouter le support des grilles horizontales.
+*
+*     Revision 4.5  1998/02/19  18:00:38  armnrbd
+*     Enlever un declaration pour HOLD (de trop).
+*
+*     Revision 4.4  1998/02/18  16:46:27  armnrbd
+*     Verifier les niveaux input avec CHKLVLC.
+*     Forcer PLV < 3 dans le mode input "command line".
+*
+*     Revision 4.3  1997/09/26  17:39:32  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1996/12/10  16:04:56  armnrbd
+*     Enlever les declarations de BOT et TOP.
+*
+*     Revision 4.1  1996/11/26  20:15:04  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.0  1994/11/17  14:22:51  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/01/12  21:41:03  armnrbd
+*     Utliser LVDCODE/LVCODE pour la conversion INT/REAL des niveaux.
+*     
+*     Revision 3.0  93/10/13  13:57:34  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.8  92/11/27  22:58:10  armnrbd
+*     BugFiz et ajout de l'option RPBLOC.
+*     
+*     Revision 1.7  92/10/13  15:00:29  armnrbd
+*     Compaction par defaut passe a 32 bits/mots (-32).
+*     
+*     Revision 1.6  92/05/29  15:49:26  armnrbd
+*     Corriger la documentation automatique.
+*     
+*     Revision 1.5  92/03/17  15:33:13  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.4  92/03/09  15:12:06  armnrbd
+*     Modification a la procedure de documentation.
+*     
+*     Revision 1.3  92/03/06  21:05:06  armnrbd
+*     Autre implantation de la doc automatique.
+*     
+*     Revision 1.2  92/03/06  14:31:23  armnrbd
+*     Modifier implantation de la doc automatique.
+*     
+*     Revision 1.1  92/03/04  09:50:00  armnrbd
+*     Implanter documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:05  armnrbd
+*     Initial revision
+*     
+*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      IMPLICIT    none
+
+      INTEGER     MAXLEV,       MAXLIN
+      PARAMETER ( MAXLEV = 999, MAXLIN = 80)
+
+      CHARACTER*4  TYPE,LIGNE*80,VERBE*8
+      LOGICAL      OK,ADD,LOG,INCREAS,LINEP,BIGF
+      CHARACTER*10 VALEUR,CKIND,VTYPI,CLEVX(MAXLEV)
+      REAL         PR(MAXLEV),PRXI(MAXLEV),PRXO(MAXLEV),ZERO,
+     +             Y(MAXLEV),YX(MAXLEV),DEN(4,MAXLEV-3),HOLDP,DP,HOLD
+      INTEGER      NWDS,JPAK,ILEV,NLEV,INTERP,VTI0,VTI,VT1,
+     +             LEVX(MAXLEV),LEV(MAXLEV),IPRX(MAXLEV),LEN,
+     +             MAXW,MEM,HEAD,JBUF(taille_entete), LIM1,LIM2,
+     +             KIND,N,NF,NR,I,J,K,L,IK,LXI,LXO,IO,IER,NLAT,LEVO,
+     +             PERIOD,VKIND,N0
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:), ALLOCATABLE :: ZO,ZI
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      LOGICAL      RPBLOC
+      INTEGER      GETSIZ,GETSIZ2,GETKIND
+      CHARACTER*4  PKTYP,GETYP,GETKINDC*16
+      EXTERNAL     GETSIZ2,MACSPE,JCLPNT,RPBLOC,GETLIGN,
+     +             BURNF,XIT,GETSET2,PUTSET2,SETLAB,
+     +             CONVPR,LVCODE,WRITLEV,GETKINDC,
+     +             CMPLBL,GETVERB,GETKIND,GETSIZ
+
+      DATA         VTYPI/ 'PRES' /, VTI,VT1/ -1,-1 /
+
+*=====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zadlev.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      CALL GETVERB( VERBE )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      IF (PKTYP.EQ.'SQ')                                      THEN
+          MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+          IF (MAXW.EQ.0) CALL                      XIT( VERBE,-1 )
+      END IF
+
+      NR    =  0
+
+      VTI0  = GETKIND( )
+      VTI   = VTI0
+      CKIND = ' '
+
+      BIGF  =.FALSE.
+      LINEP =.FALSE.
+
+      IF (RPBLOC( ' ',VALEUR ))                               THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          KIND     = 0
+          N        = 0
+          INTERP   = 0
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=910,IOSTAT=IO) KIND
+
+          OK = RPBLOC('KIND2',VALEUR)
+          IF (OK) CKIND = VALEUR
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+              CALL SETKIND( CKIND )
+              VTI = GETKIND( )
+          ENDIF
+
+          OK = RPBLOC('I',VALEUR)
+          IF (OK) READ(VALEUR,10,ERR=910,IOSTAT=IO) INTERP
+
+          OK = RPBLOC('N',VALEUR)
+          IF (OK) READ(VALEUR,10,ERR=910,IOSTAT=IO) N
+
+          IF (KIND.EQ.0)                                       THEN
+
+***            TRY TO RETREIVE "ADD" MODE LEVELS.
+
+              N0 = 0
+
+              OK = RPBLOC('LV1',  VALEUR)
+              IF (OK)                                          THEN
+
+                  N0       = 1
+                  CLEVX(1) = VALEUR
+
+                  OK = RPBLOC('LV12', VALEUR)
+                  IF (OK)                                      THEN
+
+                      N0       = 2
+                      CLEVX(2) = VALEUR
+
+                      OK = RPBLOC('LV13', VALEUR)
+                      IF (OK)                                  THEN
+
+                          N0       = 3
+                          CLEVX(3) = VALEUR
+
+                      END IF
+                  END IF
+
+                  IF (ABS( N ).GT.N0)                          THEN
+                      WRITE(6,6160) ABS( N ),N0
+                      N = MIN( ABS( N ),N0 )
+                  END IF
+
+              END IF
+
+              IF (N0.NE.0) LINEP = .TRUE.
+
+          END IF
+
+      ELSE
+
+***        READ IN NUMBER OF (EXTRA) LEVELS, KIND OF INTERPOLATION.
+
+          CALL GETLIGN( 5, LIGNE,MAXLIN, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 911
+          ELSE
+              READ( LIGNE, 5000, ERR=910,END=911,IOSTAT=IO )
+     +                           KIND,N,INTERP
+          END IF  
+
+      END IF
+
+      IF (N.LT.0)                                              THEN
+          N    = -N
+          BIGF = .TRUE.
+      END IF
+
+      IF (PKTYP.NE.'SQ')                                       THEN
+          VTYPI = 'CCCMA'
+      ELSE
+          VTYPI = getkindc( VTI )
+      END IF
+
+      IF (KIND.EQ.-5 .OR.
+     +   (KIND.EQ. 0 .AND. .NOT.LINEP))                        THEN
+
+***        READ-IN EXTRA LEVELS.
+
+          IF (BIGF)                                            THEN
+              DO  K=1,(N-1)/8+1
+                  CALL GETLIGN( 5,LIGNE,MAXLIN,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 913
+                  ELSE
+                      LIM1 = 8*(K-1)+1
+                      LIM2 = MIN( N, 8*K )
+                      READ( LIGNE, 5020,END=913,ERR=912,IOSTAT=IO) 
+     +                                  (CLEVX(I),I=LIM1,LIM2)
+                  END IF  
+              END DO
+          ELSE
+              DO  K=1,(N-1)/16+1
+                  CALL GETLIGN( 5,LIGNE,MAXLIN,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 913
+                  ELSE
+                      LIM1 = 16*(K-1)+1
+                      LIM2 = MIN( N, 16*K )
+                      READ( LIGNE, 5010,END=913,ERR=912,IOSTAT=IO) 
+     +                                  (CLEVX(I),I=LIM1,LIM2)
+                  END IF  
+              END DO
+          END IF
+
+          CALL BURNF
+ 
+      END IF
+
+***    CHECK LEVX CODING.
+
+      IF (KIND.EQ.0 .OR. KIND.EQ.-5)                           THEN
+          DO  K=1,N
+              PERIOD = INDEX( CLEVX(K), '.' )
+              IF (PERIOD.EQ.0 .AND. CKIND.EQ.' ')              THEN
+                 READ( CLEVX(K),10, ERR=913,END=912,IOSTAT=IO ) LEVX(K)
+                 CALL CONVPR( LEVX(K), PRXI(K), VKIND, -2 )
+                 IF (PKTYP.EQ.'SQ')                            THEN
+                     IF (VKIND.NE.VTI)                         THEN
+                         WRITE(6,6011) TRIM( GETKINDC( VKIND ) ),
+     +                                 TRIM( VTYPI )
+                         CALL                          XIT( VERBE ,-11)
+                     END IF
+                     CALL CONVPR( LEVX(K),PRXI(K),VKIND, +2 )
+                  END IF
+              ELSE
+                  READ( CLEVX(K),11, ERR=913,END=912,IOSTAT=IO ) PRXI(K)
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( LEVX(K), PRXI(K), VTI, +2 )
+                  ELSE
+                      CALL LVCODE( LEVX(K), PRXI(K)/1000.,1 ) 
+                  END IF
+              END IF
+          END DO
+
+      END IF
+
+***    DEFAULT INTERPOLATION IS LINEAR.
+
+      IF (INTERP.EQ.0)                                         THEN
+          INTERP = 1
+      ELSE
+          INTERP = 3
+      END IF
+
+      IF (KIND.GT.3 .OR.KIND.LT.-5)                            THEN
+          WRITE(6,6101) KIND
+          CALL                                     XIT( VERBE,-101)
+      END IF
+
+***    LOG-PRESSURE OR LIN-PRESSURE LEVELS ?
+
+                                      LOG = .FALSE.
+      IF (KIND.EQ.-2 .OR. KIND.EQ.-4) LOG = .TRUE.
+
+***    ADD MODE SELECTED ?
+
+      ADD = .TRUE.
+
+      IF (KIND.LT.0)                                           THEN
+          ADD  = .FALSE.
+          KIND = -KIND
+      END IF
+
+***    ONLY FOR BACKWARD COMPATIBILITY...
+
+      IF (KIND.EQ.1 .OR. KIND.EQ.2)                            THEN
+          INTERP = 1
+      ELSE IF (KIND.EQ.3 .OR. KIND.EQ.4)                       THEN
+          INTERP = 3
+      END IF
+
+      IF (ADD .OR. KIND.EQ.5)                                  THEN
+
+***        LEVX PROCESSING AND IDENTIFICATION.
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              VTYPI = 'CCCMA'
+          ELSE
+              VTYPI = getkindc( VTI )
+          END IF
+
+          IF (N.GT.1)                                          THEN
+
+***            CHECK FOR INCREASING OR DECREASING SET OF NEW LEVELS.
+
+              IF (PRXI(1).LT.PRXI(2))                          THEN
+                  INCREAS = .TRUE.
+              ELSE IF (PRXI(1).GT.PRXI(2))                     THEN
+                  INCREAS = .FALSE.
+              ELSE
+                  WRITE(6,6008)
+                  CALL                             XIT( VERBE,-8 )
+              END IF
+
+              DO  L=3,N
+                  IF ((     INCREAS .AND. PRXI(L).LE.PRXI(L-1))
+     +           .OR.
+     +                (.NOT.INCREAS .AND. PRXI(L).GE.PRXI(L-1))) THEN
+                      WRITE(6,6008)
+                      CALL                         XIT( VERBE,-8 )
+                  END IF
+              END DO
+
+          ELSE
+
+              INCREAS = .TRUE.
+
+          END IF
+
+      END IF
+
+***    READ FIRST SET OF INFO BUFFERS. DETERMINE CONSTANT. 
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW  .LE.0      .OR.
+     +    NLEV+N.GT.MAXLEV .OR. NLEV.LE.0)                     THEN
+          WRITE(6,6001) MAXW,NLEV+N,MAXLEV
+          CALL                                     XIT( VERBE,-1 )
+      END IF
+
+      WRITE(TYPE,4) JBUF(1)
+
+      IF (TYPE.EQ.'ZONL')                                      THEN
+          NWDS = JBUF(5)
+          NLAT = NWDS
+      ELSE
+          NLAT = JBUF(6)
+      END IF
+
+      CALL WRITLEV2( LEV,NLEV, JBUF )
+
+      IF (ADD .OR. KIND.EQ.5)                                  THEN
+
+          IF (ADD)                                             THEN
+              WRITE(6,6120) N
+          ELSE
+              WRITE(6,6130) N
+          END IF
+
+          CALL WRITLEV( PRXI,N,VTYPI )
+
+      ELSE
+
+          IF (N.LE.0)
+     +        N = 2*NLAT/3
+              N = MIN( N,MAXLEV )
+
+          IF (LOG)                                             THEN
+              WRITE(6,6140) N
+          ELSE
+              WRITE(6,6150) N
+          END IF
+      
+      END IF
+
+      IF (TYPE.NE.'ZONL' .AND.
+     +    TYPE.NE.'GRID' .AND.
+     +    TYPE.NE.'SUBA')                                      THEN
+          WRITE(6,6002) TYPE
+          CALL                                     XIT( VERBE,-2 )
+      END IF
+
+***    ASK FOR WORKING MEMORY. ADJUST LEN FOR POSSIBLY
+***    LARGER RECORDS (I.E. MULTI-LEVEL ZONAL ARRAYS).
+
+      IF (ADD)                                                 THEN
+          LEVO =    ( NLEV+N )
+      ELSE
+          LEVO = MAX( NLEV,N )
+      END IF
+
+      MEM = MAX( MAXW, LEVO*NWDS )
+      LEN = MAX( MEM+HEAD , LEN )
+      LEN = MOD( LEN,2 )+LEN+HEAD
+
+      ALLOCATE( IBUF(LEN),ZI(MEM),ZO(MEM) )
+
+***    READ THE NEXT ZONAL ARRAY SET FROM THE FILE. STOP AT EOF. 
+
+  100 CALL GETSET2( 1, ZI, LEV,ILEV, IBUF,MAXW,OK )
+  
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( IBUF,ZI,ZO )
+              IF (MAXW.EQ.0) GOTO 050
+              WRITE(6,6110) NR,NLEV
+              IF (NR.EQ.0) CALL                    XIT( VERBE,-3 ) 
+              CALL                                 XIT( VERBE, 0 )
+          END IF
+
+***        IGNORE LABEL OR CHARACTER RECORDS.
+
+          WRITE(TYPE,4) IBUF(1)
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 100
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***        VERIFY DIMENSIONS.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. ILEV.NE.NLEV)                       THEN
+              WRITE(6,6004) NR+1,NLEV
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT( VERBE,-4 )
+          END IF
+
+***        OLD LEVELS GO INTO PR.
+
+          DO  L=1,NLEV
+              CALL  CONVPR( LEV(L),PR(L),VT1, -2 )
+          END DO
+
+          IF ((ADD .OR. KIND.EQ.5) .AND. VT1.NE.VTI)           THEN
+              WRITE(6,6009)
+              CALL                                 XIT( VERBE,-9 )
+          END IF
+
+***        CHECK CONSISTENCY BETWEEN NEW AND OLD LEVELLING SCHEMES.
+
+          IF ((N.GT.1 .AND. (ADD .OR. KIND.EQ.5)) .AND.
+     +       ((     INCREAS .AND. PR(2).LE.PR(1)) .OR.
+     +        (.NOT.INCREAS .AND. PR(2).GE.PR(1))))            THEN
+
+              WRITE(6,6008)
+              CALL                                 XIT( VERBE,-8 )
+
+          ELSE IF (N.LE.1 .OR. .NOT.(ADD .OR. KIND.EQ.5))      THEN
+
+***            CHECK THAT OLD LEVELS ARE INCREASING
+***            OR DECREASING MONOTONICALLY.
+
+              IF (PR(1).LT.PR(2))                              THEN
+                  INCREAS = .TRUE.
+              ELSE IF (PR(1).GT.PR(2))                         THEN
+                  INCREAS = .FALSE.
+              ELSE
+                  WRITE(6,6008)
+                  CALL                             XIT( VERBE,-8 )
+              END IF
+
+          END IF
+
+          DO  L=3,ILEV
+              IF ((     INCREAS .AND. PR(L).LE.PR(L-1))
+     +       .OR.
+     +            (.NOT.INCREAS .AND. PR(L).GE.PR(L-1)))       THEN
+                  WRITE(6,6008)
+                  CALL                             XIT( VERBE,-8 )
+              END IF
+          END DO
+
+          IF (.NOT.INCREAS)                                    THEN
+
+***            REVERSE LEVEL ORDER.
+
+              DO  L=1,ILEV/2
+                  HOLD          = LEV(ILEV-L+1)
+                  HOLDP         = PR(ILEV-L+1)
+                  LEV(ILEV-L+1) = LEV(L)
+                  PR(ILEV-L+1)  = PR(L)
+                  LEV(L)        = HOLD
+                  PR(L)         = HOLDP
+              END DO
+
+              IF (NR.EQ.0 .AND. (ADD .OR. KIND.EQ.5))         THEN
+                  DO  L=1,N/2
+                      HOLD          = LEVX(N-L+1)
+                      HOLDP         = PRXI(N-L+1)
+                      LEVX(N-L+1)   = LEVX(L)
+                      PRXI(N-L+1)   = PRXI(L)
+                      LEVX(L)       = HOLD
+                      PRXI(L)       = HOLDP
+                  END DO
+              END IF
+
+          END IF
+
+          IF (LOG)                                             THEN
+              DO  L=1,ILEV
+                  PR(L) = ALOG( PR(L) )
+              END DO
+          END IF
+
+          IF (KIND.EQ.5)                                       THEN
+
+***            IPRX IS THE SAME AS LEVX.
+
+              LXO = N
+
+              DO  L=1,LXO
+                  IPRX(L) = LEVX(L)
+                  PRXO(L) = PRXI(L)
+              END DO
+
+          ELSE IF (ADD)                                        THEN
+
+***            MERGE NEW AND OLD LEVELS INTO PRX,IPRX.
+
+              LXI = 0
+              LXO = 0
+              DO 250 L=1,N
+
+  200             LXO = LXO+1
+                  IF (PR(LXI+1).GT.PRXI(L))                    THEN
+                      IPRX(LXO) = LEVX(L)
+                      PRXO(LXO) = PRXI(L)
+                  ELSE
+                      LXI       = LXI+1
+                      IPRX(LXO) = LEV(LXI)
+                      PRXO(LXO) = PR(LXI)
+                      IF (LXI+1.LE.ILEV) GOTO 200
+                  END IF
+
+  250         CONTINUE
+
+              DO  L=LXI+1,ILEV
+                  LXO       = LXO+1
+                  IPRX(LXO) = LEV(L)
+                  PRXO(LXO) = PR(L)
+              END DO
+
+          ELSE
+
+***            GENERATE N EQUALLY SPACED VERTICAL LEVELS.
+
+              LXO         = N
+
+              PRXO(1)     = PR(1)
+              PRXO(LXO)   = PR(ILEV)
+
+              DP          = (PRXO(LXO)-PRXO(1))/(LXO-1)
+
+              DO  L=2,LXO-1
+                  PRXO(L) = PRXO(L-1)+DP
+              END DO
+
+              IF (.NOT.LOG)                                    THEN
+
+***                LIN-COORDINATE SPACING.
+
+                  DO  L=1,LXO
+                      Y(L) = PRXO(L)/1000.
+                  END DO
+
+              ELSE
+
+***                LOG-COORDINATE (HEIGHT) SPACING.
+
+                  DO  L=1,LXO
+                      DP   = PRXO(L)
+                      Y(L) = EXP( DP )
+                      Y(L) = Y(L) / 1000.
+                  END DO
+
+              END IF
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  DO  L=1,LXO
+                      CALL CONVPR( IPRX(L), Y(L), VT1, +1 )
+                  END DO
+              ELSE
+                  CALL LVCODE( IPRX, Y, LXO ) 
+              END IF
+
+          END IF
+
+***        PRECOMPUTE THE LAGRANGIAN DENOMINATORS IN DEN.
+
+          IF (ILEV  .LE.3) INTERP = 1
+          IF (INTERP.EQ.3) CALL LGRDC( DEN,PR,ILEV )
+
+***        INTERPOLATE TO THE OUTPUT LEVELS ONE COLUMN AT A TIME.
+
+          DO 600 J=1,NWDS
+
+              IF (INCREAS)                                     THEN
+                  DO  L=1,ILEV
+                      IK   = (L-1)*NWDS+J
+                      Y(L) = ZI(IK)
+                  END DO
+              ELSE
+                  DO  L=1,ILEV
+                      IK   = (ILEV-L)*NWDS+J
+                      Y(L) = ZI(IK)
+                  END DO
+              END IF
+
+              IF (INTERP.EQ.1)                                 THEN
+                  CALL LINIL( YX, PRXO,LXO,Y,PR,    ILEV,0.,0. )
+              ELSE IF (INTERP.EQ.3)                            THEN
+                  CALL LGRIC( YX, PRXO,LXO,Y,PR,DEN,ILEV,0.,0. )
+              ELSE
+                  WRITE(6,6005) INTERP
+                  CALL                             XIT( VERBE,-5 )
+              END IF
+
+              IF (INCREAS)                                     THEN
+                  DO  L=1,LXO
+                      IK     = (L-1)*NWDS+J
+                      ZO(IK) = YX(L)
+                  END DO
+              ELSE
+                  DO  L=1,LXO
+                      IK     = (LXO-L)*NWDS+J
+                      ZO(IK) = YX(L)
+                  END DO
+              END IF
+
+  600     CONTINUE
+
+          IF (.NOT.INCREAS)                                    THEN
+              DO  L=1,LXO/2
+                  HOLD          = IPRX(LXO-L+1)
+                  IPRX(LXO-L+1) = IPRX(L)
+                  IPRX(L)       = HOLD
+              END DO
+          END IF
+
+***        WRITE THE NEW VECTOR SET ONTO FILE 2.
+
+          IF (TYPE.EQ.'ZONL')
+     +    CALL SETLAB( IBUF, ' ',-1,' ',-1, NWDS,LXO, -1, -32 )
+          CALL PUTSET2( 2, ZO, IPRX,LXO, IBUF,MAXW )
+ 
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1 
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+ 
+  910 IF (IO.NE.0) WRITE(6,6006) IO
+  911 CALL                                         XIT( VERBE,-6 )
+  912 IF (IO.NE.0) WRITE(6,6006) IO
+  913 CALL                                         XIT( VERBE,-7 )
+ 
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+
+ 5000 FORMAT(10X,3I5)
+ 5010 FORMAT(16A5)
+ 5020 FORMAT(8A10)
+
+ 6001 FORMAT(' Problems reading ZXIN, MAXW/NLEV/MAXLEV=',3I6)
+ 6002 FORMAT(' First file should be typed GRID,SUBA or ZONL, found ',A4)
+ 6004 FORMAT(' At set number ',i5,', found ',I3,' level(s) of...')
+ 6005 FORMAT(' Unknown processing option I=',I5)
+ 6006 FORMAT(' Addlev reports I/O error number ',I4,' on unit 5.')
+ 6008 FORMAT(' Levels should be varying monotonically.')
+ 6009 FORMAT(' New and old vertical levels are not the same type.')
+ 6011 FORMAT(' Found level type ',A,' while expecting type ',A)
+
+ 6101 FORMAT(' Unknown KIND=',I6,', immediate exit...')
+ 6110 FORMAT(/' Addlev read ',I5,' set(s) of ',I3,' level(s).')
+ 6120 FORMAT(/' Addlev adding ',I3,' levels.')
+ 6130 FORMAT(' Addlev will output ',I3,' levels.')
+ 6140 FORMAT(' Addlev will output ',I3,' equally spaced',
+     +       ' (linear/height) levels.')
+ 6150 FORMAT(' Addlev will output ',I3,' equally spaced',
+     +       ' (linear/pressure) levels.')
+ 6160 FORMAT(' Asking for plv=',I3,' in command-line mode.'/
+     +       ' Value was reset to ',I3,'.')
+
+      END 
+#     endif

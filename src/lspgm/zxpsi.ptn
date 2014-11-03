@@ -1,0 +1,419 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxpsi  ZXIN ZXOUT OUTPUT
+*
+*
+*     DESCRIPTION...
+*      zxpsi  - COMPUTES MERIDIONAL STREAM-FUNCTION FROM CROSS-SECTION.
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 1980.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxpsi.ptn,v 4.15 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES CROSS-SECTION OF MERIDIONAL STREAM FUNCTION FROM 
+*               CROSS-SECTIONS OF V WIND COMPONENT OR FIELDS OF  VERTICAL 
+*               MOTIONS.
+*
+*
+*     INPUT FILE... 
+*      ZXIN  = CONTAINS CROSS-SECTION DATA ON PRESSURE LEVELS
+*
+*     OUTPUT FILE... 
+*      ZXOUT = THE MERIDIONAL STREAM FUNCTION CROSS-SECTIONS
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ZXIN CONTAINS NON-ZONAL INPUT
+*       2 PREMATURE EOF ON ZXIN
+*       3 MORE THAN ONE SIZE
+*       4 UNABLE TO READ ZXIN
+*       5 LEVELS DO NOT VARY MONOTONICALLY
+*       6 ZXIN NOT ON PRESSURE LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zxpsi
+*    +              (ZXIN,       ZXOUT,       INPUT,       OUTPUT, 
+*    +         TAPE1=ZXIN, TAPE2=ZXOUT, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     ------------------------------------------------------------ 
+
+*     $Log: zxpsi.ptn,v $
+*     Revision 4.15  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.14  2013/10/17 11:28:50  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.13  2009/01/23 22:38:35  dugas
+*     Supporter les coordonnes modeles sigma et hybrides.
+*
+*     Revision 4.12  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.11  2007/12/20 21:09:59  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2005/04/14 18:15:49  dugas
+*     Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.9  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.8  2001/01/19 00:57:52  armnrbd
+*     Corriger le traitement des noms de variables a l'entree.
+*
+*     Revision 4.7  1999/09/21 18:38:27  armnrbd
+*     Modifier la frequence d'affichage du message 6040.
+*
+*     Revision 4.6  1998/07/03 02:26:52  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/10/15  20:24:05  armnrbd
+*     Utiliser HPALLOC pour l'allocation de memoire.
+*     Corriger une mauvaise definition de NLEV.
+*
+*     Revision 4.4  1997/09/26  17:39:37  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1996/11/26  20:38:01  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.2  1996/07/08  20:01:10  armnrbd
+*     Ajout du support des fichiers SQ89.
+*
+*     Revision 4.1  1995/06/08  23:32:02  armnrbd
+*     Remplacer GETZX2 par GETSET2.
+*
+*     Revision 4.0  94/11/17  14:23:11  14:23:11  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.1  94/08/16  21:09:57  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:47  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/23  13:50:57  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/05/01  13:16:35  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:07  armnrbd
+*     Initial revision
+*     
+*     FEV 15/91 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+*     MAY 14/83 - R.LAPRISE. 
+*     NOV 06/80 - J.D.HENDERSON 
+
+*----------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale , MAXLEV = 999
+
+      LOGICAL     OK,W,INCREAS
+      CHARACTER*16 MESSAGE,ENCORE
+      CHARACTER*4 NOM,PSI,TYPE,GRTYP*1
+      REAL        PR(MAXLEV),TPAG,ZERO,DP,FACT,CONST
+      REAL*8      SL(MAXJ),CL(MAXJ),WL(MAXJ),WOSL(MAXJ),RAD(MAXJ)
+      INTEGER     IGL,IGLM,IXL,IXLM,J,L,NS,NFF,MAXW,LEN,NLAT,BOT,TOP,
+     +            NLEV0,NWDS,NLAT0,NLATM,LEV(MAXLEV),NHEM,INC,MEM,
+     +            NLATH,HEAD,JBUF(taille_entete),JPAK,NLEV,IER,VKIND
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: G,XA
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETSIZ2
+      CHARACTER*4 GETYP,GETHIC,PKTYP*2,GETKINDC*16
+      EXTERNAL    MACSPE,JCLPNT,XIT,GETSIZ2,GETSET2,CMPLBL,
+     +            GAUSSG,TRIGL,PUTSET2,GETYP,GETHIC,CONVPR,
+     +            GETKINDC
+
+      DATA        MESSAGE / 'PAS ENCORE DONNE' /,
+     +            ENCORE  / 'PAS ENCORE DONNE' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxpsi.ptn,v $'
+
+*--------------------------------------------------------------------- 
+***    ACCESS MACHINE DEPENDANT CONSTANTS.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCESS I/O UNIT NAME AND ASSIGN THEM.
+
+      NFF=3 
+      CALL JCLPNT( NFF, 1,2, 6 )
+
+***    GET PACKING TYPE.
+
+      PKTYP = GETYP( 1 )
+
+***    DETERMINE NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW.EQ.0 .OR. NLEV.GT.MAXLEV
+     +              .OR. NLEV.LE.0    ) GOTO 999
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.NE.'ZONL') CALL                     XIT('  Zxpsi ',-1 ) 
+
+      NLAT = JBUF(5)
+      NHEM = JBUF(7)
+
+      MEM  = MAX( MAXW, NLAT*NLEV )
+
+      WRITE(NOM,4) JBUF(3) 
+
+      W = (NOM.EQ.'WW' .OR. NOM.EQ.'WP' .OR.
+     +     NOM.EQ.'W'  .OR. NOM.EQ.'OMEG') 
+
+      ALLOCATE( IBUF(LEN),G(MEM),XA(MEM) )
+
+***    GAUSSG COMPUTES THE VALUE OF  THE GAUSSIAN LATITUDES AND 
+***    THEIR SINES AND COSINES. TRIGL MAKES THEM GLOBAL (S TO N).
+
+      NLATH = NLAT/2 
+      IF (NHEM.NE.0) NLATH = NLAT
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          GRTYP = GETHIC( 'GRTYP',JBUF )
+          IF (W .and. GRTYP.NE.'G') WRITE(6,6110) GRTYP
+      END IF
+
+      CALL GAUSSG( NLATH, SL,WL,CL,RAD,WOSL ) 
+      CALL TRIGL2( NLATH, SL,WL,CL,RAD,WOSL,NHEM ) 
+
+***    GET THE CROSS-SECTION. STOP IF THE FILE IS EMPTY. 
+***    LEV WILL CONTAIN THE PRESSURE LEVEL VALUES IN MILLIBARS. 
+
+      NS = 0
+  100 CALL GETSET2( 1, XA,LEV,NLEV0, IBUF,MAXW,OK ) 
+
+      IF (.NOT.OK)                                             THEN
+          DEALLOCATE( IBUF,G,XA )
+          IF (MAXW.EQ.0)                           GOTO 050
+          WRITE(6,6050) NS
+          IF (NS.EQ.0)                                         THEN
+              CALL                                 XIT('  Zxpsi ',-2 ) 
+          ELSE
+              CALL                                 XIT('  Zxpsi ', 0 )
+          END IF
+      END IF
+
+      DO  L=1,NLEV0
+          CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+      END DO
+
+      IF (PKTYP.EQ.'SQ' .AND. VKIND.NE.2)                      THEN
+          WRITE(6,6120) TRIM( GETKINDC( VKIND ) )
+          IF (VKIND.NE.1 .AND. VKIND.NE.5)
+     +        CALL                                 XIT('  Zxpsi ',-6 )
+      END IF
+
+      IF (NS.EQ.0)                                             THEN
+          CALL WRITLEV2( LEV,NLEV0,IBUF )
+          CALL PRTLAB( IBUF )
+      END IF
+
+      IF (VKIND == 1 .OR. VKIND == 5) PR(1:NLEV0) = 1000.*PR(1:NLEV0)
+      
+      NLAT0  = IBUF(5) 
+      NLATM  = NLAT0-1
+
+      CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+      IF (.NOT.OK .OR. NLAT0.NE.NLAT .OR. NLEV0.GT.NLEV)       THEN
+          CALL PRTLAB( IBUF )
+          CALL                                     XIT('  Zxpsi ',-3 ) 
+      END IF
+
+      PSI = 'PSI'
+
+      WRITE(NOM,4) IBUF(3) 
+
+      W = (NOM.EQ.'WW' .OR. NOM.EQ.'WP' .OR.
+     +     NOM.EQ.'W'  .OR. NOM.EQ.'OMEG') 
+
+                     TPAG = 4.*ATAN(1.0D0)*6.371E6/9.80616
+      IF (NHEM.EQ.0) TPAG = TPAG*2.
+
+      IF (.NOT.W)                                              THEN
+
+          IF (NOM    .NE.'VV'  .AND.
+     +        NOM    .NE.'V'   .AND.
+     +        MESSAGE.EQ.'PAS ENCORE DONNE')                   THEN
+              MESSAGE =  'DEJA  DONNE'
+              WRITE(6,6100)
+          END IF
+
+          IF (NOM.EQ.'VV') PSI   = 'PP'
+
+***    MERIDIONAL WIND CASE ********************************
+***    INTEGRATE EACH LATITUDE IN PRESSURE FROM THE TOP DOWN. 
+
+          IF (PR(1).LT.PR(2))                                  THEN
+              INCREAS = .TRUE.
+          ELSE IF (PR(1).GT.PR(2))                             THEN
+              INCREAS = .FALSE.
+          ELSE
+              WRITE(6,6005)
+              CALL                                 XIT('  Zxpsi ',-5 )
+          END IF
+
+          DO  L=3,NLEV0
+              IF ((     INCREAS .AND. PR(L).LE.PR(L-1))
+     +       .OR.
+     +            (.NOT.INCREAS .AND. PR(L).GE.PR(L-1)))       THEN
+                  WRITE(6,6005)
+                  CALL                             XIT('  Zxpsi ',-5 )
+              END IF
+          END DO
+
+          IF (INCREAS)                                         THEN
+              TOP =  1
+              BOT =  NLEV0
+              INC =  1
+          ELSE
+              TOP =  NLEV0
+              BOT =  1
+              INC = -1
+              IF (ENCORE.EQ.'PAS ENCORE DONNE')                THEN
+                  ENCORE =  'DEJA  DONNE'
+                  WRITE(6,6150)
+              END IF
+          END IF
+
+***        SET PR TO THE PRESSURE IN N/M**2. 
+
+          DO 400 L=1,NLEV0
+              PR(L) = PR(L)*100. 
+  400     CONTINUE
+ 
+          IXL = (TOP-1)*NLAT
+          IGL = (TOP-1)*NLAT
+
+***        CORRECTION FOR WINDS IN KNOTS.
+
+          IF (NOM.EQ.'VV') CONST = TPAG*0.514444
+          IF (NOM.NE.'VV') CONST = TPAG
+
+***        NOW INTEGRATE.
+
+          DO 405 J=1,NLAT
+              G(IGL+J) = .5*XA(IXL+J)*PR(TOP)*CONST* CL(J) 
+  405     CONTINUE
+
+          DO 420 L=TOP+INC,BOT,INC
+              IGLM = IGL
+              IXLM = IXL
+
+              IGL  = IGL+NLAT*INC
+              IXL  = IXL+NLAT*INC
+
+              DP   = PR(L)-PR(L-INC) 
+              DO 410 J=1,NLAT
+                  FACT     = CONST* CL(J)* DP
+                  G(IGL+J) = G(IGLM+J)+.5*( XA(IXL+J)+XA(IXLM+J) )*FACT
+  410         CONTINUE
+  420     CONTINUE 
+
+      ELSE
+
+          IF (NOM.EQ.'WW'.OR. NOM.EQ.'WP') PSI = 'PP'
+
+***    VERTICAL MOTION CASE ****************************
+***    INTEGRATE EACH PRESSURE LEVEL FROM NORTH TO SOUTH. 
+***    SET THE NORTHERN MOST LATITUDE EQUALS TO ZERO. 
+
+          IF (NS.EQ.0) WRITE(6,6040) 
+
+          CONST = TPAG*6.371E6
+
+          DO 505 L=1,NLEV0
+              IGL    = L*NLAT
+              G(IGL) = 0. 
+  505     CONTINUE
+
+          IGL = 0
+          IXL = 0
+
+          DO 520 L=1,NLEV0
+
+              DO  J=NLATM,1,-1
+                  G(IGL+J) =   G(IGL+J+1)
+     +                 + .5*( XA(IXL+J+1)*CL(J+1) + XA(IXL+J)*CL(J) )
+     +                 *      CONST *  ( RAD(J+1) -          RAD(J) )
+              END DO
+
+              IGL  = IGL+NLAT
+              IXL  = IXL+NLAT
+
+  520     CONTINUE 
+
+      END IF
+
+***    PUT THE RESULT ON FILE ZXOUT. 
+
+      READ(PSI,4) IBUF(3)
+
+      CALL PUTSET2( 2, G,LEV,NLEV0, IBUF,MAXW )
+      IF (NS.EQ.0) CALL PRTLAB( IBUF )
+
+      NS = NS+1
+      GOTO 100
+
+***    PREMATURE EOF ON UNIT 1.
+
+  999 CALL                                         XIT('  Zxpsi ',-4 )
+
+*--------------------------------------------------------------------- 
+    4 FORMAT(A4)
+
+ 6000 FORMAT(' Zxpsi on ',I5,' levels...'/(20I6))
+ 6005 FORMAT(' Levels should be varying monotonically.')
+
+ 6025 FORMAT(1X,A4,I12,1X,A4,5I8) 
+ 6040 FORMAT(10X,'Calculates mass streamfunction from omega.') 
+ 6050 FORMAT(' End after ',I3,' cross-sections.')
+ 6100 FORMAT(/' Meridional wind case: DID NOT FIND V...'/)
+ 6110 FORMAT(' Expecting gaussian array, found type ',A)
+ 6120 FORMAT(' Expecting pressure levels, found ',A)
+ 6150 FORMAT(' Levels are decreasing.')
+
+      END 
+#     endif

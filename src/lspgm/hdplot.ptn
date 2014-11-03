@@ -1,0 +1,630 @@
+#     if !defined (nombre_de_rapports)
+#         define   nombre_de_rapports 1000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      hdplot  in input output \
+*                  [ -t1 VAL1  -t2 VAL2  -t3    VAL3  -name VAL4 -lv1 VAL5 \ 
+*                    -lx VAL6  -ly VAL7  -scal  VAL8  -a    VAL9 -b  VAL10 \ 
+*                    -c  VAL11 -d  VAL12 -label VAL13 -kind VAL14 ]
+*
+*     DESCRIPTION...
+*      HARMONIC DIAL PLOT
+*
+*
+*     AUTHOR  - R.Laprise, MAY 12/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/hdplot.ptn,v 4.8 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     PURPOSE - PLOTS A POLAR PLOT (HARMONIC DIAL) OF ONE SELECTED WAVENUMBER
+*               OR COMPONENT FROM A TIME SERIES OF COMPLEX FIELDS USING THE 
+*               NCAR PLOT PACKAGE.
+*
+*     NOTE    - PROGRAM READS DATA LABELLED WITH STANDARD 8 WORD LABEL.
+                THE MAXIMUM NUMBER OF POINTS IS nombre_de_rapports .
+*
+*
+*     INPUT FILE...
+*      IN = FILE CONTAINING TIME SERIES OF COMPLEX DATA.
+*
+*
+*     INPUT PARAMETERS...
+*      NT1,NT2       =  FIRST AND LAST STEP NUMBERS IN THE TIME SERIES
+*      (t1,t2)         (-1 OR BLANK INPUT DEFAULTS TO ALL)
+*      INT  (t3)     =  GRAPHING INTERVAL (IN TIME) (DEFAULTS TO 1)
+*      NAME (name)   =  NAME  OF FIELD TO BE PLOTTED (BLANK DEFAULTS TO NEXT)
+*      LVL  (lv1)    =  LEVEL OF FIELD TO BE PLOTTED (BLANK IMPLIES DON'T CARE)
+*      MW   (lx)     =  THE FOURIER WAVE NUMBER (DEFAULTS TO 1)
+*      NW   (ly)     = (IF KIND= 'SPEC'), THE ORDER OF THE SPHERICAL HARMONIC
+*                      (IF KIND= 'FOUR'), THE LATITUDE NUMBER (FROM S.P. TO N.P)
+*                      (IF KIND= 'CMPL'), SAME AS 'FOUR'
+*      SCAL (scal)   =  SCALE FACTOR FOR THE AMPLITUDES
+*                       SCALING IS AUTOMATIC IF XLO=0.
+*      XLO,XHI (a,b) =  X PLOT LIMITS
+*      YLO,YHI (c,d) =  Y PLOT LIMITS
+*      KIND          =  VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
+*                       FILES AND THEN LV1 AND LV2 ARE ASSUMED TO CONTAIN DECODED
+*                       VALUES. FURTHERMORE, THIS PARAMETRE CAN ONLY BE SPECIFIED
+*                       IN COMMAND-LINE MODE. THE CURRENTLY SUPPORTED VALUES ARE:
+*                       'HAUTEUR'   , heights (m) with respect to sea level
+*                       'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                       'ETA'       , first version of the GEM ETA coordinate
+*                       'PRESSION'  , pressure (mb)
+*                       'ARBITRAIRE', arbitrary level (no units apply)
+*                       'HAUTEURS'  , heights (M) with respect to the surface
+*                       'HYBRIDE'   , hybrid GEM coordinate
+*                       'THETA'     , potential temperature coordinate
+*                       'GALCHEN'   , GalChen generalized coordinate
+*
+*      LABEL   = 80 CHARACTER LABEL PRINTED ON THE PLOT
+*
+*     READ(5,5010) NT1,NT2,INT,NAME,LVL,MW,NW,SCAL,XLO,XHI,YLO,YHI
+*     READ(5,5020) LABEL
+*5010 FORMAT(10X,2I10,I5,1X,A4,I5,1X,2I2,5F6.0)
+*5020 FORMAT(10A8)
+*
+*
+*    EXAMPLE OF INPUT CARDS...
+*
+*   HDPLOT         0        96    1 TEMP  500  6 6    1.  -1.0  +1.0  -1
+*  HARMONIC DIAL OF TEMPERATURE WAVE
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FILE IN
+*       2 TOO MANY SAMPLE RECORDS
+*       3 DATA IN FILE IN IS NOT COMPLEX
+*       4 SPEC TYPE: ILLEGAL NW,MW VALUES
+*       5 SPEC TYPE: FIELD TO SMALL
+*       6 FOUR TYPE: FIELD TO SMALL
+*       7 CMPL TYPE: FIELD TO SMALL
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM HDPLOT
+*     PROGRAM HDPLOT (IN,       INPUT,       OUTPUT,
+*    1         TAPE10=IN, TAPE5=INPUT, TAPE6=OUTPUT,
+*    2                                 TAPE8       )
+*     ----------------------------------------------
+
+*     $Log: hdplot.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.3  1998/07/03  02:26:30  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/05/21  20:20:50  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1998/02/18  16:45:51  armnrbd
+*     Verifier les niveaux input avec CHKLVLC.
+*
+*     Revision 4.0  1994/11/17  14:20:41  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/10/27  11:30:13  armnrbd
+*     Permiere version UNIX.
+*     
+*     NOV 24/83 - B.DUGAS.
+*     MAY 12/83 - R.LAPRISE.
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      HEAD
+      PARAMETER  ( HEAD   = taille_entete )
+      INTEGER      MAXCOL
+      PARAMETER  ( MAXCOL = nombre_de_rapports )
+      INTEGER      MAXM
+      PARAMETER  ( MAXM   = 999 )
+
+      INTEGER*8 :: NT1,NT2,INT,NT,ZER=0
+      LOGICAL      IEZ,OK,LAB,ALL
+      CHARACTER*20 ANT1,ANT2,ALVL,CKIND,AINT
+      CHARACTER    LABEL*80,LBLX*5,LBLY*5,NAME*4,KIND*4
+      REAL         X(MAXCOL),Y(MAXCOL),SCAL,XLO,XHI,YLO,YHI,RLVL
+      INTEGER      LSR(2,MAXM),HOLD(8),MAXW,MAXPTS,JBUF(HEAD),NLAT,
+     +             NLON,IER,LEN,NWDS,JPAK,MW,NW,NFF,NPTS,LRLMT,
+     +             LA,LR,LM,KTR,I,K,IO,LVL,VKIND0,VKIND
+
+      INTEGER,     DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:,:), ALLOCATABLE :: F
+
+      LOGICAL      RPBLOC
+      INTEGER*8    Y2KDAT8
+      CHARACTER*4  GETYP,PKTYP
+      INTEGER      GETSIZ,GETKIND
+      EXTERNAL     GETSIZ,RPBLOC,MACSPE,JCLPNT,
+     +             GETLIGN,GETFLD2,XIT,DIMGT2,LOW2UP,XYPLOT,
+     +             Y2KDAT8,GETKIND,GETYP
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA MAXPTS / nombre_de_rapports /
+      DATA LBLX   / 'REAL$' /, 
+     +     LBLY   / 'IMAG$' /
+      DATA ALL    / .TRUE.  /,
+     +     LAB    / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/hdplot.ptn,v $'
+
+*--------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3
+      CALL JCLPNT( NFF, 10, 5,6 )
+
+      PKTYP = GETYP( 10 )
+      PKTYP = PKTYP( 1:2 )
+
+***    DETERMINE SIZES OF F AND IBUF.
+
+      MAXW = GETSIZ( 10, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) GOTO 900
+
+      ALLOCATE( IBUF(LEN),F(2,MAXW/2+1) )
+
+      VKIND0 = GETKIND( )
+      VKIND  = VKIND0
+      CKIND  = ' '
+      ALVL   = ' '
+
+
+  050 IF (RPBLOC( ' ',LABEL ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ANT1 = ' '
+          ANT2 = ' '
+          AINT = ' '
+          NAME = 'ALL'
+          MW   =  1
+          NW   =  1
+          SCAL =  0.
+          XLO  =  0.
+          XHI  =  0.
+          YLO  =  0.
+          XHI  =  0.
+
+          OK = RPBLOC('T1',LABEL)
+          IF (OK) ANT1 = LABEL
+
+          OK = RPBLOC('T2',LABEL)
+          IF (OK) ANT2 = LABEL
+
+          OK = RPBLOC('T3',LABEL)
+          IF (OK) AINT = LABEL
+
+          OK = RPBLOC('NAME',LABEL)
+          IF (OK) NAME = LABEL
+
+          OK = RPBLOC('KIND',LABEL)
+          IF (OK) CKIND = LABEL
+
+          IF (CKIND.NE.' ')                                    THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          END IF
+
+          OK = RPBLOC('LV1',LABEL)
+          IF (OK) ALVL = LABEL
+
+          OK = RPBLOC('LX',LABEL)
+          IF (OK) READ( LABEL,5, ERR=900,END=900,IOSTAT=IO) MW
+
+          OK = RPBLOC('LY',LABEL)
+          IF (OK) READ( LABEL,5, ERR=900,END=900,IOSTAT=IO) NW
+
+          OK = RPBLOC('SCAL',LABEL)
+          IF (OK) READ( LABEL,20, ERR=900,END=900,IOSTAT=IO) SCAL
+
+          OK = RPBLOC('A',LABEL)
+          IF (OK) READ( LABEL,20, ERR=900,END=900,IOSTAT=IO) XLO
+
+          OK = RPBLOC('B',LABEL)
+          IF (OK) READ( LABEL,20, ERR=900,END=900,IOSTAT=IO) XHI
+
+          OK = RPBLOC('C',LABEL)
+          IF (OK) READ( LABEL,20, ERR=900,END=900,IOSTAT=IO) YLO
+
+          OK = RPBLOC('D',LABEL)
+          IF (OK) READ( LABEL,20, ERR=900,END=900,IOSTAT=IO) YHI
+
+          LAB = RPBLOC('LABEL',LABEL)
+          IF (.NOT.LAB) LABEL = ' '
+
+      ELSE
+
+***        READ IN CONTROL INFORMATION AND TITLE FROM CARD.
+
+          CALL PRECEDE( 10,-1 )
+
+          LAB  = .FALSE.
+          ALL  = .FALSE.
+
+          CALL GETLIGN( 5,LABEL,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+               GOTO 900
+
+          ELSE IF (LABEL.EQ.' ')                               THEN
+
+              ALL  = .TRUE.
+              ANT1 = ' '
+              ANT2 = ' '
+              AINT = ' '
+              NAME = 'ALL'
+              ALVL = ' '
+              MW   =  1
+              NW   =  1
+              SCAL =  0.
+              XLO  =  0.
+              XHI  =  0.
+              YLO  =  0.
+              XHI  =  0.
+
+              CALL BURNF
+
+          ELSE
+
+              READ( LABEL, 5010,ERR=900,END=900,IOSTAT=IO)
+     +        ANT1,ANT2,AINT,NAME,ALVL,MW,NW,SCAL,XLO,XHI,YLO,YHI
+
+          END IF
+
+      END IF
+
+***    CHECK FOR DEFAULTS.
+
+      IF (ANT1.NE.' ') CALL LEADBLK( ANT1 )
+      IF (ANT2.NE.' ') CALL LEADBLK( ANT2 )
+      IF (AINT.NE.' ') CALL LEADBLK( AINT )
+
+      IF ((ANT1.EQ.'  ' .AND. ANT2.EQ.'  ') .OR.
+     +    (ANT1.EQ.'-1' .AND. ANT2.EQ.'-1') )                  THEN
+          ANT1 = '0'
+          ANT2 = '999999999'
+          AINT = '1'
+      ELSE IF (ANT1.EQ.' ')                                    THEN
+          ANT1 = ANT2
+      ELSE IF (ANT2.EQ.' ')                                    THEN
+          ANT2 = ANT1
+      END IF
+
+      IF (ALVL.EQ.' ' ) ALVL = '-1'
+      IF (ALVL.EQ.'-1')  LVL =  -1
+
+      READ(ANT1,10,ERR=900,END=900,IOSTAT=IO) NT1
+      READ(ANT2,10,ERR=900,END=900,IOSTAT=IO) NT2
+      READ(AINT,10,ERR=900,END=900,IOSTAT=IO) INT
+
+      IF (ALVL.EQ.' ')                                         THEN
+          ALVL = '-1'
+           LVL =  -1
+      ELSE
+          IF (INDEX( ALVL,'.' ).EQ.0 .AND. CKIND.EQ.' ')       THEN
+              READ( ALVL, 10, ERR=900,END=900,IOSTAT=IO ) LVL
+              CALL CONVPR( LVL, RLVL, VKIND, -2 )
+              IF (PKTYP.EQ.'SQ') CALL CONVPR( LVL, RLVL, VKIND, +2 )
+          ELSE
+              READ( ALVL, 20, ERR=900,END=900,IOSTAT=IO ) RLVL
+              IF (PKTYP.EQ.'SQ')                           THEN
+                  CALL CONVPR( LVL, RLVL, VKIND,  +2 )
+              ELSE
+                  CALL LVCODE( LVL, RLVL/1000.,1 ) 
+              ENDIF
+         ENDIF
+      END IF
+
+      IF (NAME.NE.' ') CALL LEADBLK( NAME )
+      
+      IF (NAME.EQ.'ALL')                                       THEN
+          ALL  = .TRUE.
+          NAME = 'NEXT'
+      END IF
+
+      NT1 = Y2KDAT8( NT1 )
+      NT2 = Y2KDAT8( NT2 )
+
+      IF (.NOT.(ALL.OR.LAB))                                   THEN
+
+          LABEL = ' '
+
+          CALL GETLIGN( 5,LABEL,80,OK )
+          IF (.NOT.OK) GOTO 100
+
+          CALL LOW2UP( LABEL,LABEL )
+
+          LAB   = .TRUE.
+      END IF
+
+***    READ IN DATA.
+
+      NPTS=0
+  100 CALL GETFLD2( 10, F, ' ',-1,NAME,LVL, IBUF,MAXW,OK )
+
+          CALL STAMP2DATE( IBUF(2),NT )
+
+          IF (.NOT.OK  .OR.
+     +       (.NOT.ALL .AND. NT > NT2))                        THEN
+              IF (NPTS.EQ.0) CALL                  XIT(' Hdplot ',-1 )
+              GOTO 500
+          END IF
+
+          IF (.NOT.ALL .AND.
+     +       (NT < NT1 .OR. MOD( NT-NT1,INT ) /= ZER))
+     +        GOTO 100
+
+***        FORM X AND Y TIME SERIES.
+
+          NPTS = NPTS+1
+          IF (NPTS.GT.MAXPTS) CALL                 XIT(' Hdplot ',-2 )
+
+          WRITE(KIND,4) IBUF(1)
+
+          IF (KIND.NE.'SPEC' .AND. 
+     +        KIND.NE.'FOUR' .AND.
+     +        KIND.NE.'CMPL')                                  THEN
+
+              CALL                                 XIT(' Hdplot ',-3 )
+
+          ELSE IF (KIND.EQ.'SPEC')                             THEN
+
+***        SPHERICAL HARMONIC COEFFICIENT CASE.
+
+              IF (NW.LT.MW) CALL                   XIT(' Hdplot ',-4 )
+
+              LRLMT = IBUF(7)
+              CALL DIMGT2( LSR,LA,LR,LM,KTR, LRLMT, 0,0 )
+
+              IF (MW   .GT.LM-1 .OR. 
+     +            NW-MW.GT.LSR(1,MW+2)-LSR(1,MW+1))
+     +            CALL                             XIT(' Hdplot ',-5 )
+
+              K = LSR(1,MW+1)+NW-MW
+
+          ELSE IF (KIND.EQ.'FOUR')                             THEN
+
+***            FOURIER COEFFICIENT CASE.
+
+              LM   = IBUF(5)
+              NLAT = IBUF(6)
+
+              IF (MW.GT.LM-1 .OR.
+     +            NW.GT.NLAT) CALL                 XIT(' Hdplot ',-6 )
+
+              K = (NW-1)*LM +MW+1
+
+          ELSE IF (KIND.EQ.'CMPL')                             THEN
+
+***            GENERIC COMPLEX CASE.
+
+              NLON = IBUF(5)
+              NLAT = IBUF(6)
+
+              IF (MW.GT.NLON .OR.
+     +            NW.GT.NLAT) CALL                 XIT(' Hdplot ',-7 )
+
+              K = (NW-1)*NLON+MW
+
+          END IF
+
+          X(NPTS) =  F(1,K)
+          Y(NPTS) = -F(2,K)
+
+          IF (MW.GT.0)                                         THEN
+              X(NPTS) = 2.*X(NPTS)
+              Y(NPTS) = 2.*Y(NPTS)
+          END IF
+
+          DO  I=1,8
+              HOLD(I) = IBUF(I)
+          END DO
+
+      GOTO 100
+
+***    PLOT TIME SERIES.
+
+  500 CONTINUE
+
+      IF (SCAL.EQ.0.) SCAL = 1.
+
+                         IEZ=.FALSE.
+      IF (XLO.EQ.0. .AND.
+     +    XHI.EQ.0. .AND.
+     +    YLO.EQ.0. .AND.
+     +    YHI.EQ.0. )    IEZ=.TRUE.
+
+      CALL PRTLAB( HOLD )
+
+      CALL XYPLOT( X,Y,NPTS,LABEL,LBLX,LBLY,SCAL,IEZ,XLO,XHI,YLO,YHI )
+      WRITE(6,6030) XLO,XHI,YLO,YHI
+
+***    NEXT PLOT.
+
+      IF (LAB) GOTO 050
+
+***    E.O.F. ON INPUT.
+
+  900 CALL                                         XIT(' Hdplot ', 0 )
+*-----------------------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+   10 FORMAT(BN,I20)
+   20 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,2A10,A5,1X,A4,A5,1X,2I2,5F6.0)
+ 5020 FORMAT(10A8)
+
+ 6020 FORMAT(1X,A4,I12,1X,A4,5I6)
+ 6030 FORMAT(1X,'XLO=',E15.3,',XHI=',E15.3,',YLO=',E15.3,',YHI=',E15.3)
+
+      END
+      SUBROUTINE XYPLOT (X,Y,NPTS,LABEL,LBLX,LBLY, 
+     1                   SCALF,IEZ,XLO,XHI,YLO,YHI) 
+
+***    CCRN APR  2/81 - R.LAPRISE. 
+***    DRAWS AN X-Y PLOT AND LABELS IT. 
+***    IF IEZ  = .TRUE. , THE FOUR CORNERS OF GRAPH ARE COMPUTED AS TO 
+***    FILL THE PICTURE.  OTHERWISE THE LIMITS ARE XLO,XHI,YLO,YHI. 
+
+      IMPLICIT  none
+
+      LOGICAL   IEZ
+      INTEGER   NPTS   
+      CHARACTER LABEL*80,LBLX*5,LBLY*5
+      REAL      X(NPTS),Y(NPTS),XLO,XHI,YLO,YHI,SCALF
+
+      INTEGER   N,NM1
+      REAL      DX,DY,DIF
+      CHARACTER NCHAR,LBLPT*6
+
+      EXTERNAL  SYSDAT,DISPLA,SET,PWRIT,
+     +          AXES,ANOTAT,EZXY,FRAME
+
+      DATA      NCHAR / '*' / 
+
+*----------------------------------------------------------------------- 
+      CALL SYSDAT 
+
+***    SCALE DATA. 
+
+      DO  N=1,NPTS 
+          X(N) = X(N)*SCALF 
+          Y(N) = Y(N)*SCALF 
+      END DO
+
+      CALL DISPLA( 2,1,1 ) 
+
+      IF (IEZ)                                                 THEN
+
+***        COMPUTE EXTREMA. 
+
+          XLO = X(1) 
+          XHI = X(1) 
+          YLO = Y(1) 
+          YHI = Y(1) 
+          DO  N=2,NPTS 
+              XLO = MIN( XLO,X(N) ) 
+              YLO = MIN( YLO,Y(N) ) 
+              XHI = MAX( XHI,X(N) ) 
+              YHI = MAX( YHI,Y(N) ) 
+          END DO
+
+***        AVOID DISTORTION BY MAKING RANGES EQUAL. 
+
+          DX  = XHI-XLO 
+          DY  = YHI-YLO 
+          DIF = 0.5*(DX-DY) 
+
+          IF (DIF.GE.0.)                                       THEN
+              YHI = YHI+DIF 
+              YLO = YLO-DIF 
+          ELSE
+              XHI = XHI-DIF 
+              XLO = XLO+DIF 
+          END IF
+
+      END IF
+
+***    SET LIMITS, GRAPH AND DRAW AXES. 
+
+      CALL SET( 0.1,0.5,0.15,0.55,XLO,XHI,YLO,YHI,1 ) 
+      CALL PWRIT( 004,30,'@4'//LABEL,82,1,0,0 ) 
+
+      IF (XLO.LE.0. .AND. 
+     +    XHI.GE.0. .AND.
+     +    YLO.LE.0. .AND.
+     +    YHI.GE.0. )                                          THEN
+          CALL AXES( 0.,0. ) 
+          CALL PWRIT( XHI,0.,'@4 GM',5,1,0,0 ) 
+      END IF
+
+      CALL ANOTAT( LBLX,LBLY,1,4,1,1,' ' ) 
+      CALL EZXY( X,Y,NPTS,0 ) 
+
+***    LABEL EACH POINT OF GRAPH, FROM 0 TO NPTS-1. 
+
+      DO  100 N=1,NPTS 
+          NM1 = N-1 
+          IF (NM1.LE.9)                                        THEN
+              WRITE(LBLPT,6005) NCHAR,NM1 
+              CALL PWRIT( X(N),Y(N),LBLPT,4,1,0,0 ) 
+          ELSE IF (NM1.LE. 99)                                 THEN
+              WRITE(LBLPT,6010) NCHAR,NM1 
+              CALL PWRIT( X(N),Y(N),LBLPT,5,1,0,0 ) 
+          ELSE IF (NM1.LE.999)                                 THEN
+              WRITE(LBLPT,6015) NCHAR,NM1 
+              CALL PWRIT( X(N),Y(N),LBLPT,6,1,0,0 ) 
+          END IF
+  100 CONTINUE
+
+***    INDICATE END OF PLOT. 
+
+      CALL SET( 0.,1.,0.,1.,0.,1.,0.,1.,1 ) 
+      CALL PWRIT( 0.95,0.95,'@4DONE',6,1,0,0 ) 
+
+      CALL FRAME 
+
+      RETURN 
+*----------------------------------------------------------------------- 
+
+ 6005 FORMAT('@4',A1,I1) 
+ 6010 FORMAT('@4',A1,I2) 
+ 6015 FORMAT('@4',A1,I3) 
+
+      END 
+#     endif

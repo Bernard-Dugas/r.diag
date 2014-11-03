@@ -1,0 +1,400 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxtrig  ZXIN ZXOUT INPUT OUTPUT [-a VAL1 -kind "VAL2" -b VAL3]
+*
+*
+*     DESCRIPTION...
+*      ZXTRIG  - CROSS-SECTION MULTIPLIED BY CONST*TRIG(LAT)**N
+*
+*
+*     AUTHOR  - J.D.Henderson, MAY 25/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxtrig.ptn,v 4.7 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     PURPOSE - MULTIPLIES CROSS-SECTIONS IN ZXIN FILE BY CONST*TRIG(LAT)**N
+*               AND PUTS THE RESULT ON FILE ZXOUT, WHERE TRIG ABOVE CAN BE 
+*               ANY OF SIN,COS OR TAN. 0**0 IS SET TO 1
+*
+*     NOTE    - THE MAXIMUM NUMBER OF LATITUDES AND LEVELS IS 999
+*               
+*
+*     INPUT FILE...
+*      ZXIN = GLOBAL OR HEMISPHERIC CROSS-SECTIONS
+*
+*     OUTPUT FILE...
+*      ZXOUT = CROSS-SECTIONS MULTIPLIED AS REQUESTED
+*
+*
+*     INPUT PARAMETERS...
+*
+*      CONST (a)    = MULTIPLYING CONSTANT. BLANK DEFAULT IS 1.0
+*      KTR   (kind) = 'SIN', 'COS', 'TAN'. BLANK DEFAULT IS 'COS'
+*      N     (b)    = INTEGER POWER TO WHICH TRIG FUNCTION IS RAISED.
+*                     BLANK DEFAULT IS 1
+*
+*      READ( 5,5010 ) CONST,KTR,N
+*5010  FORMAT(10X,E10.0,2X,A3,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*   ZXTRIG      1.E0  COS    2
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 KTR IS NEITHER SIN,COS OR TAN
+*       2 PROBLEMS READING ZXIN
+*       3 FOUND DATA TYPE NOT ZONAL IN ZXIN
+*       4 ABORT ERROR READING ZXIN
+*       5 MORE THAN ONE SIZE IN ZXIN
+*       6 ABORT ERROR READIND INPUT DIRECTIVES
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zxtrig
+*     PROGRAM ZXTRIG (ZXIN,       ZXOUT,       INPUT,       OUTPUT,
+*    1          TAPE1=ZXIN, TAPE2=ZXOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: zxtrig.ptn,v $
+*     Revision 4.7  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2013/10/17 11:34:37  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 21:08:16  dugas
+*     - Corriger l'appel a JCLPNT.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.3  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.2  1998/07/03 02:26:52  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:37  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:23:12  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.3  94/09/06  12:21:27  armnrbd
+*     
+*     Ajouter le support du mode hemispherique.
+*     
+*     
+*     Revision 3.2  94/05/27  20:49:37  20:49:37  armnrbd (Bernard Dugas)
+*     Corriger le calcul de BASE dans la boucle 400.
+*     
+*     Revision 3.1  94/05/12  21:26:33  armnrbd
+*     Modifier le calcul de l'exponientation.
+*     Faire du menage.
+*     
+*     Revision 3.0  93/10/13  13:57:48  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/20  16:59:30  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/03/16  14:58:53  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/03/04  21:05:58  armnrbd
+*     Initial revision
+*     
+
+*     JUN 09/89 - F.MAJAESS (RESTRICT POWER VALUE TO AN INTEGER)
+*     AUG 05/88 - F.MAJAESS (ALLOW READING REAL POWER VALUE)
+*     MAY 14/83 - R.LAPRISE.
+*     MAY 25/81 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale , MAXLEV = 999
+
+      LOGICAL     OK,NEW,RPBLOC
+      REAL        ZERO,TRIG(MAXJ),CONST
+      CHARACTER   KIND*4,LIGNE*80,KTR*3,ACONST*10,AN*5
+      REAL*8      SL(MAXJ),CL(MAXJ),WL(MAXJ),WOSSL(MAXJ),RAD(MAXJ)
+      INTEGER     LEV(MAXLEV),NFF,MAXW,NWDS,LEN,HEAD,JBUF(taille_entete),JPAK,
+     +            NSETS,NLEVG,NLEV,NLAT,NLAT0,NHEM,NHEM0,
+     +            ILATH,J,L,IO,IER,N,BASE
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: XA
+
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETSIZ2
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,GETSIZ2,
+     +            GETZX2,GAUSSG,TRIGL2,PUTSET2,RPBLOC,
+     +            LOW2UP,CMPLBL
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxtrig.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+      NEW    = .TRUE.
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF=4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+***    READ CONST, KTR, N FROM A CARD.
+***    KTR IS THE KIND OF TRIG FUNCTION ('SIN','COS','TAN').
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ACONST = ' '
+          KTR    = ' '
+          AN     = ' '
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) ACONST = LIGNE(1:10)
+
+          OK = RPBLOC('KIND', LIGNE)
+          IF (OK) KTR    = LIGNE(1:3)
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) AN     = LIGNE(1:5)
+
+      ELSE
+
+           CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5010, ERR=902,END=902,IOSTAT=IO ) 
+     +              ACONST,KTR,AN
+              CALL  BURNF
+          END IF  
+
+      END IF
+
+***    ACCOUNT FOR DEFAULT VALUES
+
+      IF (KTR   .EQ.' ') KTR    = 'COS'
+      IF (ACONST.EQ.' ') ACONST = '       1.0'
+      IF (AN    .EQ.' ') AN     = '    1'
+
+      CALL LOW2UP( KTR,KTR )
+
+      IF (KTR.NE.'SIN' .AND.
+     +    KTR.NE.'COS' .AND.
+     +    KTR.NE.'TAN'    )                                    THEN
+          WRITE(6,6001) KTR
+          CALL                                     XIT(' Zxtrig ',-1 )
+      END IF
+
+      READ( ACONST,10, ERR=902,IOSTAT=IO ) CONST
+      READ( AN,     5, ERR=902,IOSTAT=IO ) N
+
+      WRITE(6,6100) CONST,KTR,N
+
+      NSETS = 0
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***    DYNAMICALLY REQUEST WORKING SPACE.
+
+  100 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW.EQ.0 .OR. NLEV.LE.0
+     +              .OR. NLEV.GT.MAXLEV)                      THEN
+          WRITE(6,6002)  MAXW,NLEV,MAXLEV
+          CALL                                     XIT(' Ztrig  ',-2 )
+      END IF
+
+      WRITE(KIND,4) JBUF(1)
+
+      IF (KIND.NE.'ZONL')                                      THEN
+          WRITE(6,6003) KIND
+          CALL                                     XIT(' Zxtrig ',-3 )
+      END IF
+
+      NLAT0 = JBUF(5) 
+      NHEM0 = JBUF(7)
+      NWDS  = NLAT0*NLEV
+
+***    ASK FOR WORKING MEMORY.
+
+      ALLOCATE( IBUF(LEN),XA(NWDS) )
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***    READ THE NEXT SET.
+
+  200 CALL GETZX2( 1, XA, NLAT,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF,XA )
+
+              NEW = .TRUE.
+              IF (MAXW.EQ.0) GOTO 100
+
+              IF (NSETS.EQ.0)                                  THEN
+                  WRITE(6,6004) KTR
+                  CALL                             XIT(' Zxtrig ',-4 )
+              END IF
+
+              WRITE(6,6110) NSETS
+              CALL                                 XIT(' Zxtrig ', 0 )
+
+          END IF
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+          IF (.NOT.OK .OR. NLEVG.GT.NLEV) CALL     XIT(' Zxtrig ',-5 )
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          NHEM = IBUF(7)
+
+          IF (NEW            .OR. 
+     +        NHEM0.NE.NHEM  .OR.
+     +        NLAT0.NE.NLAT  )                                 THEN
+
+              NEW   = .FALSE.
+
+***            FIRST TIME ONLY... GAUSSG COMPUTES GAUSSIAN LATITUDES,
+***            COSINES, ETC.(NORTH HEMISPHERE, N TO S). TRIGL2 CONVERTS
+***            THESE VECTORS TO GLOBAL OR HEMISPHERIC (S TO N).
+
+              NLAT0 = NLAT
+              NHEM0 = NHEM
+
+              ILATH = NLAT/2
+              IF (NHEM.NE.0) ILATH = NLAT
+
+              CALL GAUSSG( ILATH,SL,WL,CL,RAD,WOSSL )
+              CALL TRIGL2( ILATH,SL,WL,CL,RAD,WOSSL,NHEM )
+
+***            SET TRIG TO THE REQUESTED TRIG FUNCTION.
+ 
+              IF (KTR.EQ.'SIN')                             THEN
+                  DO  J=1,NLAT
+                      TRIG(J) = SL(J)
+                  END DO
+              ELSE IF (KTR.EQ.'COS')                        THEN
+                  DO  J=1,NLAT
+                      TRIG(J) = CL(J)
+                  END DO
+              ELSE IF (KTR.EQ.'TAN')                        THEN
+                  DO  J=1,NLAT
+                      TRIG(J) = SL(J) / CL(J)
+                  END DO
+              END IF
+
+***            S'OCCUPER D'UN EXPOSANT NEGATIF.
+
+              IF (N.LT.0)                                   THEN
+                  DO  J=1,NLAT
+                      IF (TRIG(J).NE.0.0)
+     +                    TRIG(J) = 1.0 / TRIG(J)
+                  END DO
+                  N = -N
+              END IF
+
+***            IMPOSER L'EXPOSANT.
+
+              IF (N.EQ.0)                                   THEN
+                  DO  J=1,NLAT
+                      TRIG(J) = 1.0
+                  END DO
+              ELSE IF (N.EQ.2)                              THEN
+                  DO  J=1,NLAT
+                      TRIG(J) = TRIG(J) * TRIG(J)
+                  END DO
+              ELSE IF (N.EQ.3)                              THEN
+                  DO  J=1,NLAT
+                      TRIG(J) = TRIG(J) * TRIG(J) * TRIG(J)
+                  END DO
+              ELSE IF (N.NE.1)                              THEN
+                  DO  J=1,NLAT
+                      TRIG(J) = TRIG(J) ** N
+                  END DO
+              END IF
+
+          END IF
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+***        MULTIPLY THIS SET AND SAVE ON FILE 2.
+
+          DO 400 L=1,NLEVG
+              BASE = (L-1)*NLAT
+              DO 400 J=1,NLAT
+                  XA(BASE+J)=CONST*TRIG(J)*XA(BASE+J)
+  400     CONTINUE
+
+***        PUT THE RESULT ON FILE ZXOUT.
+
+          CALL PUTSET2( 2, XA, LEV,NLEVG, IBUF,MAXW )
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+      NSETS = NSETS+NLEVG
+      GOTO 200
+
+***    E.O.F. ON INPUT.
+
+  902 CALL                                         XIT(' Zxtrig ',-6 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,A10,2X,A3,A5)
+
+ 6001 FORMAT('0KTR must be sin,cos or tan.  KTR=',A3)
+ 6002 FORMAT(' Problems reading ZXIN, NLEV/MAXLEV',3I6)
+ 6003 FORMAT(' First file should be typed ZONL, found ',A4)
+ 6004 FORMAT('0 File empty',I10)
+
+ 6100 FORMAT('0Zxtrig const,ktr,n = ',1PE12.4,3X,A4,I5)
+ 6110 FORMAT(I6,' records read.')
+
+      END
+#     endif

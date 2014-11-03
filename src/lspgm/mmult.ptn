@@ -1,0 +1,598 @@
+#     include "diagmacros.cdk"
+#     if !defined (nombre_de_rapports)
+#         define   nombre_de_rapports  100000
+#     endif
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 1000000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      mmult  A B C OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, OCTOBRE 13/88.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/mmult.ptn,v 4.20 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      MMULT multiplie deux matrices A et B de telle sorte que  C=A*B. 
+*      Les matrices sont entreposees selon leur colonnes. Il faut donc
+*      que le nombre d'enregistrements de  A soit egal au nombre d'ele-
+*      ments dans chaque enregistrement de B (i.e. le nombre de colonnes 
+*      dans A est egal au nombre de lignes dans B). 
+*
+*      Notez que A et B peuvent contenir plus d'une variable et/ou plus
+*      d'un niveau vertical. Une colonne debute par un changement de pas-
+*      de-temps. De plus, les type/nom/niveau/dimension/descripteur de A
+*      sont utilises pour le fichier C. Les pas de temps de B sont utilises
+*      dans C. Enfin, le nombre maximal de colonnes (pas de temps) dans B
+       est ainsi fixe a nombre_de_rapports .
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST SET IN FILE A OR FILE B
+*       2 SPECTRAL/COEFFICIENT DATA TYPE NOT SUPPORTED
+*       3 A,B CONTAIN A MIX OF COMPLEX AND REAL DATA
+*       4 COLUMNS IN A IS NOT EQUAL TO ROWS IN B
+*       5 NO ENOUGH MEMORY
+*       6 PREMATURE EOF IN B
+*       7 MORE THAN ONE SIZE IN B
+*       8 PREMATURE EOF IN A
+*       9 MORE THAN ONE SIZE IN A
+*      10 NO ENOUGH RECORDS IN FILE A
+*      11 NO ENOUGH RECORDS IN FILE B
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM mmult 
+*    1             (      A,       B,       C,       OUTPUT, 
+*    2              TAPE1=A, TAPE2=B, TAPE3=C, TAPE6=OUTPUT) 
+
+*     $Log: mmult.ptn,v $
+*     Revision 4.20  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.19  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.18  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.17  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.16  2006/04/26 22:42:48  dugas
+*     Utiliser NPAS pour determiner la taille de fichiers RPN/CMC.
+*
+*     Revision 4.15  2005/04/14 18:19:48  dugas
+*     Assurer la coherence des donnees a l'entree avec CMPLBL.
+*
+*     Revision 4.14  2004/11/12 16:37:08  dugas
+*     Usage explicite des fonctions de conversions de donnees complexes.
+*
+*     Revision 4.13  2003/05/23 21:15:26  dugas
+*     Augmenter la taille du macro memoire_maximale a 15M mots.
+*
+*     Revision 4.12  2000/07/14 15:51:56  armnrbd
+*     Definir JBUF comme un tampon pour la sortie et le
+*     definir correctement, y compris la zone HIGHBUF.
+*
+*     Revision 4.11  2000/03/22 19:29:20  armnrbd
+*     Ajouter un include pour definir le macro AIMAG (f77 vs f90).
+*
+*     Revision 4.10  2000/03/20 20:25:43  armnrbd
+*     Remplace l'intrinseque IMAG par AIMAG.
+*
+*     Revision 4.9  1999/04/28 19:11:41  armnrbd
+*     Modifier les formats d'impressions de messages.
+*
+*     Revision 4.8  1998/07/03 02:26:33  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.7  1998/05/21  20:20:51  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.6  1997/10/28  15:59:26  armnrbd
+*     Dimensionner IERR avec le parametre HEAD.
+*
+*     Revision 4.5  1997/02/17  03:46:14  armnrbd
+*     Fonctionnement en mode I/O 64 bits.
+*
+*     Revision 4.4  1996/06/28  20:52:34  armnrbd
+*     Traiter le plus possible de colonnes de A a la fois.
+*
+*     Revision 4.3  1996/04/02  11:50:03  armnrbd
+*     Augmenter la valeur de "memoire_maximale" de 1 a 1.5 x10**6.
+*
+*     Revision 4.2  96/02/12  17:27:24  17:27:24  armnrbd (Bernard Dugas)
+*     S'assurer du type du fichier de sortie.
+*     
+*     Revision 4.1  1995/01/27  13:25:01  armnrbd
+*     Definir une valeur IPAK a partir de JPAK et KPAK.
+*
+*     Revision 4.0  94/11/17  14:21:12  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.4  94/10/03  16:32:45  armnrbd
+*     Utiliser les pas de temps de B dans les colonnes de C.
+*     
+*     Revision 3.3  94/05/06  14:44:40  14:44:40  armnrbd (Bernard Dugas)
+*     Conserver les tampons originaux de facon correcte.
+*     
+*     Revision 3.2  94/04/06  13:25:59  13:25:59  armnrbd (Bernard Dugas)
+*     Seconde version a plusieurs niveaux et/ou variables.
+*     
+*     Revision 3.1  94/03/31  15:42:03  armnrbd
+*     Version multi-variables, multi-niveaux.
+*     
+*     Revision 3.0  93/10/13  13:56:35  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/08/19  15:20:20  15:20:20  armnrbd (Bernard Dugas)
+*     Modifications cosmetiques.
+*     
+*     Revision 1.0  93/03/05  13:50:45  armnrbd
+*     Initial revision
+*      
+***   Premiere version: 13 octobre 1988 - B. Dugas. 
+ 
+***    MODIFIEE LE 07 AVRIL 1989 PAR D.DUGAS ... 
+***    ... IBUF(7) DU TAMPON DE SORTIES N'EST PLUS MODIFIE. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: HEAD   = taille_entete
+      INTEGER, PARAMETER :: MAXCOL = nombre_de_rapports
+      INTEGER, PARAMETER :: MAXLEV = 999
+      INTEGER, PARAMETER :: MAXMEM = memoire_maximale
+      INTEGER, PARAMETER :: MAXVAR = 256
+
+      CHARACTER*2 PKTYP
+      COMPLEX*16  CD,CE,CF
+      REAL*8      CL,FR,FI
+      LOGICAL     OK,FULL,ERR
+      CHARACTER*4 TYPE,TYPEO,VARIAB1(MAXVAR),VARIAB2(MAXVAR)
+      INTEGER     KBUF(HEAD),LBUF(HEAD),MAXM,NWDS,NWDS2,KPAK,
+     +            LPAK,LEN,LEN2,M,M1,NF,ILG,ILAT,KHEM,COL,I,J,
+     +            K,L,N,WHEREA,WHEREB,IERR(HEAD),TIME,MAXW,MAXW1,NV,
+     +            MAXW2,NVAR1,NVAR2,NLEV,NLEV1,NLEV2,LIGNES,INI,
+     +            FIN,LEV(MAXLEV),LEV1(MAXLEV),LEV2(MAXLEV),
+     +            TIMEB(MAXCOL+1),CMPL,IPAK,IL,
+     +            NPAS,NPAS0,NPASB(MAXCOL+1),DEET
+
+      LOGICAL,    EXTERNAL :: SETIO64
+      INTEGER,    EXTERNAL :: GETSIZ3,GETHIGH
+      CHARACTER*4,EXTERNAL :: GETYP
+      EXTERNAL    SUIVANT,PRECEDE,JCLPNT,
+     +            XIT,GETFLD2,PUTMSET
+     +            WRITLEV2,CMPLBL
+
+      REAL(8),    ALLOCATABLE,DIMENSION(:)   :: A,B,C
+      REAL(8),    ALLOCATABLE,DIMENSION(:,:) :: D,E,F
+      INTEGER,    ALLOCATABLE,DIMENSION(:)   :: IBUF,JBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        CMPL / 1 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/mmult.ptn,v $'
+
+*---------------------------------------------------------------------
+***    PHASE PREPARATOIRE. 
+ 
+      NF = 4 
+      CALL JCLPNT( NF, 1,2,3, 6 )
+
+      PKTYP = GETYP( 1 )
+      OK = SETIO64(.TRUE.)
+
+***    DETERMINER LA TAILLE DES
+***    COLONNES DES DEUX MATRICES.
+
+      MAXW1 = GETSIZ3( 1, KBUF, LEN,NWDS,KPAK, .TRUE.,
+     +                    LEV1,NLEV1, VARIAB1,NVAR1, MAXVAR )
+
+      MAXW2 = GETSIZ3( 2, LBUF, LEN2,NWDS2,LPAK, .TRUE.,
+     +                    LEV2,NLEV2, VARIAB2,NVAR2, MAXVAR )
+
+      IF (MAXW1 .LE. 0 .OR.
+     +    MAXW2 .LE. 0) CALL                       XIT('  Mmult ',-1 )
+
+          IPAK = KPAK
+      IF (KPAK.LT.0 .AND. LPAK.LT.0)
+     +    IPAK = MIN( KPAK,LPAK )
+
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.EQ.'ZONL')  NWDS = KBUF(5)
+      IF (TYPE.EQ.'CMPL' .OR.
+     +    TYPE.EQ.'FOUR') CMPL  = 2
+
+***    SAUVER TYPE POUR LA SORTIE.
+
+      TYPEO = TYPE
+
+      WRITE(TYPE,4) LBUF(1)
+      IF (TYPE.EQ.'ZONL')  NWDS2 = LBUF(5)
+
+      IF (TYPE .EQ.'COEF' .OR. 
+     +    TYPE .EQ.'SPEC' .OR.
+     +    TYPEO.EQ.'SPEC' .OR.
+     +    TYPEO.EQ.'COEF') CALL                    XIT('  Mmult ',-2 )
+
+***    LES DONNEES SONT SOIT COMPLEXES OU
+***    SOIT REELLES, MAIS PAS LES DEUX.
+
+      IF ((CMPL.EQ.2 .AND. (TYPE.NE.'CMPL' .AND. TYPE.NE.'FOUR')) .OR.
+     +    (CMPL.EQ.1 .AND. (TYPE.EQ.'CMPL' .OR.  TYPE.EQ.'FOUR')) )
+     +    CALL                                     XIT('  Mmult ',-3 )
+
+      M      = NVAR2*NLEV2*NWDS2/CMPL
+      NV     =       NLEV1*NWDS /CMPL
+      LIGNES = NVAR1*NV
+
+***    LIRE TOUS LES ENREGISTREMENTS DE UNIT#2 POUR VERIFIER
+***    QUE LE PROBLEME MATRICIEL EST BIEN POSE. CONSERVER
+***    LES LBUF(2) POUR LA SORTIE.
+
+      DO  K=1,HEAD
+          IERR(K) = LBUF(K)
+      END DO
+
+      IF (PKTYP.EQ.'SQ') DEET = GETHIGH('DEET',LBUF )
+
+      COL   =  0 
+      NPAS0 = -1
+      NPAS  = -1
+      TIME  = -1
+  050 CALL SUIVANT( 2, LBUF, ERR,OK )
+
+          IF (.NOT.OK ) GOTO 100
+          IF (     ERR) GOTO 9911
+
+***        S'ASSURER DE LA CONSISTANCE DES DIMENSIONS DE B.
+
+          CALL CMPLBL( 0,LBUF, 0,IERR, OK )
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6007) ; CALL PRTLAB2(' Last   IBUF : ', LBUF )
+                              CALL PRTLAB2(' First  IBUF : ', IERR )
+              CALL                                 XIT('  Mmult ',-7 )
+          END IF
+
+          IF (PKTYP.EQ.'SQ') NPAS0 = GETHIGH('NPAS',LBUF )
+
+          IF ((LBUF(2).NE.TIME .OR. NPAS.NE.NPAS0) .AND.
+     +         COL    .LT.MAXCOL   )                           THEN
+     +        
+              COL        = COL+1 
+              TIME       = LBUF(2)
+              TIMEB(COL) = TIME
+
+              NPAS       = NPAS0
+              NPASB(COL) = NPAS
+
+          END IF
+
+      GOTO 050 
+ 
+  100 IF (COL.EQ.0) GOTO 9911
+      CALL PRECEDE( 2,-1 )
+ 
+      DO  K=1,HEAD
+          LBUF(K) = IERR(K)
+      END DO
+
+***    LIRE UNIT#1 POUR DETERMINER LE
+***    NOMBRE DE JEUX D'ENREGISTREMENTS.
+ 
+      DO  J=1,HEAD
+          IERR(J) = KBUF(J)
+      END DO
+
+      M1    =  0
+      NPAS0 =  0 
+      NPAS  = -1
+      TIME  = -1
+  150 CALL SUIVANT( 1, KBUF, ERR,OK )
+
+          IF (.NOT.OK ) GOTO 200
+          IF (     ERR) GOTO 9910
+
+***        S'ASSURER DE LA CONSISTANCE DES DIMENSIONS DE A.
+
+          CALL CMPLBL( 0,KBUF, 0,IERR, OK )
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6007) ; CALL PRTLAB2(' Last   IBUF : ', KBUF )
+                              CALL PRTLAB2(' First  IBUF : ', IERR )
+              CALL                                 XIT('  Mmult ',-9 )
+          END IF
+
+          IF (PKTYP == 'SQ') NPAS0 = GETHIGH('NPAS',LBUF )
+
+          IF (TIME /= KBUF(2) .OR. NPAS /= NPAS0)              THEN
+              TIME  = KBUF(2)
+              NPAS  = NPAS0
+              M1    = M1 + 1
+          END IF
+
+      GOTO 150 
+
+  200 IF (M1.EQ.0) GOTO 9910
+      CALL PRECEDE( 1,-1 )
+
+      DO  J=1,HEAD
+          KBUF(J) = IERR(J)
+      END DO
+
+      ILG     = KBUF(5) 
+      ILAT    = KBUF(6) 
+      KHEM    = KBUF(7)
+
+      IF (M1 .NE. M)                                           THEN 
+          WRITE(6,6004) M1,M
+          CALL                                     XIT('  Mmult ',-4 ) 
+      END IF 
+
+      LEN  = MAX( LEN,LEN2 )
+      MAXW = LEN-HEAD
+ 
+***    DETERMINONS LA MEMOIRE DONT ON A BESOIN ...
+ 
+      MAXM = MIN( M,( (MAXMEM - LEN)/CMPL - M - 2*LIGNES )/LIGNES - 1 )
+
+      IF (MAXM.EQ.M)                                           THEN 
+          FULL = .TRUE. 
+      ELSE IF (MAXM.GT.0)                                      THEN
+          FULL = .FALSE. 
+      ELSE
+          WRITE(6,6005) MAXMEM,LIGNES
+          CALL                                     XIT('  Mmult ',-5 )
+      END IF 
+ 
+***    ... ET DEMANDONS-LA.
+
+      IF (CMPL == 1)                                           THEN
+          ALLOCATE( A((MAXM+1)*LIGNES),STAT=IERR(1) )  ! A MAXM COLONNES
+          ALLOCATE( B( M             ),STAT=IERR(2) )  ! B COLONNE
+          ALLOCATE( C(         LIGNES),STAT=IERR(3) )  ! C COLONNE
+          IF (IERR(1) /= 0 .or. loc( A ) == 0  .or.
+     +        IERR(2) /= 0 .or. loc( B ) == 0  .or.
+     +        IERR(3) /= 0 .or. loc( C ) == 0)                 THEN
+             WRITE(6,6005) MAXMEM,LIGNES
+             CALL                                  XIT('  Mmult ',-5 )
+          END IF
+      ELSE ! Cas de donnnes complexes.
+          ALLOCATE( D(2,(MAXM+1)*LIGNES),STAT=IERR(1) )  ! D MAXM COLONNES
+          ALLOCATE( E(2, M             ),STAT=IERR(2) )  ! E COLONNE
+          ALLOCATE( F(2,         LIGNES),STAT=IERR(3) )  ! F COLONNE
+          IF (IERR(1) /= 0 .or. loc( D ) == 0  .or.
+     +        IERR(2) /= 0 .or. loc( E ) == 0  .or.
+     +        IERR(3) /= 0 .or. loc( F ) == 0)                 THEN
+             WRITE(6,6005) MAXMEM,LIGNES
+             CALL                                  XIT('  Mmult ',-5 )
+          END IF
+      END IF
+
+      ALLOCATE( IBUF(LEN),JBUF(LEN),STAT=IERR(4) )  ! IBUF ET JBUF
+
+      DO  J=1,HEAD
+          JBUF(J) = KBUF(J)
+      END DO
+
+      JBUF(8) = IPAK
+
+***    ANNONCER CE QUI VA SUIVRE.
+
+      WRITE(6,6100) 'A',(VARIAB1(I),I=1,NVAR1)
+      CALL WRITLEV2( LEV1,NLEV1,KBUF )
+
+      WRITE(6,6100) 'B',(VARIAB2(I),I=1,NVAR2)
+      CALL WRITLEV2( LEV2,NLEV2,LBUF )
+
+      WRITE(6,6150) LIGNES, COL, M, MAXM
+*---------------------------------------------------------------------- 
+***    EFFECTUONS LE CALCUL DE C UNE COLONNE A LA FOIS. 
+ 
+      DO  300 J=1,COL 
+ 
+***        LECTURE DES DONNEES (SELON LE MODE FULL OU NON) 
+***        ET CALCUL DE LA COLONNE COURANTE DE C. 
+ 
+***        ON COMMENCE PAR LIRE LA J-IEME COLONNE DE B.
+
+          WHEREB = 1
+          DO  N=1,NVAR2
+
+***            LIRE LES PROCHAINS NVAR2*NLEV2 CHAMPS DE B.
+
+              IF (CMPL.EQ.1)                                   THEN
+              CALL GETSET2( 2, B(WHEREB), LEV,NLEV,
+     +                                    IBUF,MAXW,OK )
+              ELSE
+              CALL GETSET2( 2, E(1,WHEREB), LEV,NLEV,
+     +                                      IBUF,MAXW,OK )
+              END IF
+                  
+              IF (.NOT.OK .OR. NLEV.NE.NLEV2)                  THEN 
+                  WRITE(6,6006) J 
+                  CALL                             XIT('  Mmult ',-6 ) 
+              END IF 
+
+              WHEREB = WHEREB+NLEV2*NWDS2/CMPL
+
+          END DO
+
+***        INITIALISER LA J-IEME COLONNE DE C ...
+ 
+          DO  I=1,LIGNES*CMPL
+              C(I) = 0.0 
+          END DO
+ 
+***        ... ET PUIS ON S'OCCUPE DES LIGNES DE A ... 
+ 
+          IF (J.NE.1 .AND. .NOT.FULL) CALL PRECEDE( 1,-1 )
+
+          DO  250 IL=1,M,MAXM
+
+              INI = IL
+              FIN = MIN( IL+MAXM-1, M )
+
+              IF (J.EQ.1 .OR. .NOT.FULL)                       THEN
+
+                  DO  L=INI,FIN
+
+                  WHEREA = LIGNES+L-IL+1
+
+                  DO  K=1,NVAR1
+
+***                    LIRE LES MAXM*NVAR1*NLEV1 CHAMPS DE A OU D.
+
+                      IF (CMPL == 1)                           THEN
+                          CALL GETSET2( 1, A, LEV,NLEV, IBUF,MAXW,OK )
+                      ELSE
+                          CALL GETSET2( 1, D, LEV,NLEV, IBUF,MAXW,OK )
+                      END IF
+
+                      IF (.NOT.OK .OR. NLEV.NE.NLEV1)          THEN 
+                          WRITE(6,6008) ((L-1)*NVAR1+K-1)*NLEV1+NLEV 
+                          CALL                     XIT('  Mmult ',-8 ) 
+                      END IF 
+
+***                    TRANSPOSER LES MAXM COLONNES DE CETTE MATRICE.
+
+                      IF (CMPL.EQ.1)                           THEN
+                      DO  I=1,NV
+                          A(WHEREA) = A(I)
+                          WHEREA    = WHEREA+MAXM
+                      END DO
+                      ELSE
+                      DO  I=1,NV
+                          D(1,WHEREA) = D(1,I)
+                          D(2,WHEREA) = D(2,I)
+                          WHEREA      = WHEREA+MAXM
+                      END DO
+                      END IF
+
+                  END DO
+                  END DO
+
+              END IF 
+
+***            EFFECTUER LE PRODUIT.
+
+              WHEREA = LIGNES+1
+
+              DO  L=1,LIGNES
+
+                  IF (CMPL.EQ.1)                               THEN
+                      CL = C(L)
+                      DO  I=0,FIN-INI
+                          CL = CL+A(WHEREA+I)*B(IL+I)
+                      END DO
+                      C(L) = CL
+                  ELSE
+                      FR = F(1,L)
+                      FI = F(2,L)
+                      DO  I=0,FIN-INI
+                          CD = DCMPLX( D(1,WHEREA+I),D(2,WHEREA+I) )
+                          CE = DCMPLX( E(1,IL    +I),E(2,IL    +I) )
+                          CF = CD*CE
+                          FR = FR+DBLE( CF )
+                          FI = FI+DIMAG( CF )
+                      END DO
+                      F(1,L) = FR
+                      F(2,L) = FI
+                  END IF
+
+                  WHEREA = WHEREA+MAXM
+
+              END DO
+ 
+  250     CONTINUE
+ 
+***        RE-DEFINIR LE TAMPON D'INFORMATION, ... 
+ 
+          JBUF(2) = TIMEB(J)
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              CALL PUTHIGH( NPASB(J),'NPAS' ,JBUF )
+              IF (DEET.EQ.0)                                   THEN
+                  JBUF(2) = NPASB(J)
+              ELSE
+                  CALL PUTHIGH( DEET,'DEET',JBUF )
+              END IF
+          END IF
+ 
+***        ... ET ENFIN, ECRIRE LA COLONNE AVEC LES
+***        MEMES ETIQUETTES QUE TROUVEES PAR GETSIZ3.
+
+          IF (CMPL == 1)                                       THEN
+              CALL PUTMSET( 3, C, LEV1,NLEV1, 
+     +                         VARIAB1,NVAR1, JBUF,MAXW )
+          ELSE
+              CALL PUTMSET( 3, F, LEV1,NLEV1, 
+     +                         VARIAB1,NVAR1, JBUF,MAXW )
+          END IF
+
+  300 CONTINUE 
+ 
+*---------------------------------------------------------------------- 
+***    FIN NORMALE. 
+ 
+      CALL                                         XIT('  Mmult ', 0 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT#1. 
+ 
+ 9910 CALL                                         XIT('  Mmult ',-10 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT#2. 
+ 
+ 9911 CALL                                         XIT('  Mmult ',-11 ) 
+*---------------------------------------------------------------------- 
+
+    4 FORMAT(A4) 
+
+ 6004 FORMAT(/' Number of columns in first matrix =',I6,' and'/ 
+     +        ' Number of lines in second matrix  =',I6,'.'/) 
+ 6005 FORMAT(/' Maxmem, number of columns are ',2I10,', respectively.'/)
+ 6006 FORMAT(/' Error reading unit 2 after ',I6,' record(s).'/) 
+ 6007 FORMAT(/' More than one size in file. ')
+ 6008 FORMAT(/' Error reading unit 1 after ',I5,' record(s).'/) 
+
+ 6100 FORMAT(/' In file ',A,', variable(s) = ',16(A4,1X))
+ 6150 FORMAT(/' The output matrix has ',
+     +          I6,' row(s) and ',I6,' column(s).'/
+     +        ' The A/B common dimension is ',I6,'.'/
+     +        ' A is processed ',I6,' columns at a time.'/)
+
+ 
+      END 
+#     endif
+

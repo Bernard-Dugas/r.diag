@@ -1,0 +1,250 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      rmax  XIN XOUT OUTPUT
+*      rmin  XIN XOUT OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, 11 septembre 1998.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/rmax.ptn,v 4.6 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A SET OF CCC FILE ARITHMETIC PROGRAMS WHICH...
+*
+*      ... PRODUCE FILE XOUT WHICH CONTAINS EITHER OF
+*          THE MAXIMUM OR MINIMUM VALUE OF EACH RECORD IN XIN
+*
+*     NOTES: - XOUT HAS THE SAME STRUCTURE AS FILE XIN
+*            - FOR COMPLEX VALUES, THE MAX/MIN MODULUS IS USED
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 MORE THAN ONE SIZE IN XIN
+*       2 ERROR ABORT READING INPUT
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM rmax
+*    +            ( XIN,        XOUT,      OUTPUT,
+*    +       TAPE1= XIN, TAPE2= XOUT,TAPE6=OUTPUT)
+ 
+*     $Log: rmax.ptn,v $
+*     Revision 4.6  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.5  2014/01/09 19:32:01  dugas
+*     Faire un UP2LOW sur le resultat de l'appel a GETVERB.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.2  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.1  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.0  1998/09/11 14:53:12  armnrbd
+*     Version initiale.
+*
+*---------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+      REAL         ZERO
+      REAL*8       VAL,AMP
+      LOGICAL      OK,SPEC,RMIN
+      CHARACTER    TYPE*4,VERBE*8,MESSAG*10
+      INTEGER      HEAD,JBUF(taille_entete),LEV(MAXLEV),NLEV,WHERE,
+     +             NLEVG,IER,I,L,NF,NR,MAXW,LEN,NWDS,JPAK
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:), ALLOCATABLE :: G
+
+      INTEGER      GETSIZ2
+      EXTERNAL     GETSIZ2,MACSPE,JCLPNT,
+     +             GETSET2,CMPLBL,PUTSET2,
+     +             XIT,GETLIGN,GETVERB
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         MESSAG / 'AUCUN' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/rmax.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      NR = 0
+
+      CALL JCLPNT( NF, 1,2, 6 )
+
+***    WHAT IS THE OPERAITNG MODE ?
+
+      CALL GETVERB( VERBE ) ; CALL up2low( VERBE,VERBE )
+
+                           RMIN = .FALSE.
+      IF (VERBE.EQ.'rmin') RMIN = .TRUE.
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.LE.0) GOTO 902
+
+      WRITE(TYPE,0004) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+      SPEC = (TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR' .OR.
+     +        TYPE.EQ.'CMPL')
+
+      ALLOCATE( IBUF(LEN),G(MAX( MAXW,NWDS*NLEV )) )
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CALL GETSET2( 1, G,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,G )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB( IBUF )
+              WRITE(6,6200) VERBE,NR
+              CALL                                XIT( VERBE , 0 ) 
+
+          END IF
+
+***        BY-PASS (I.E. STRIP) LABEL/CHARACTER RECORDS.
+
+          WRITE(TYPE,0004) IBUF(1) 
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR')              THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  WRITE(6,6300) VERBE
+                  MESSAG  = 'deja donne'
+              END IF
+              GOTO 100
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.LT.NLEVG)                      THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT( VERBE ,-1 )
+          END IF
+
+***        DO THE WORK, ONE LEVEL AT A TIME.
+
+          DO  L=1,NLEVG
+
+              WHERE = (L-1)*NWDS+1
+
+              IF (SPEC)                                        THEN
+
+***                FIND THE MAX/MIN OF THE MODULUS OF COMPLEX VALUES.
+
+                  VAL = SQRT( DBLE( G(WHERE  ) )*G(WHERE  )
+     +                +       DBLE( G(WHERE+1) )*G(WHERE+1) )
+
+                  DO  I=WHERE+2,WHERE+NWDS-1,2
+                      AMP = SQRT( DBLE( G( I ) )*G( I )
+     +                    +       DBLE( G(I+1) )*G(I+1) )
+                      IF (RMIN)                                THEN
+                          VAL = MIN( VAL,AMP )
+                      ELSE
+                          VAL = MAX( VAL,AMP )
+                      END IF
+                      G(I+1) = 0
+                  END DO
+                  DO  I=WHERE,WHERE+NWDS-1,2
+                      G(I)   = VAL
+                      G(I+1) = 0.0
+                  END DO
+
+              ELSE
+
+***                FIND THE MAX/MIN OF EACH RECORD AND SAVE IT.
+
+                  VAL = G(WHERE)
+
+                  DO  I=WHERE+1,WHERE+NWDS-1
+                      AMP = G(I)
+                      IF (RMIN)                                THEN
+                          VAL = MIN( VAL,AMP )
+                      ELSE
+                          VAL = MAX( VAL,AMP )
+                      END IF
+                  END DO
+                  DO  I=WHERE,WHERE+NWDS-1
+                      G(I) = VAL
+                  END DO
+
+              END IF
+
+          END DO
+
+***        SAVE G ON FILE XOUT.
+
+          CALL PUTSET2( 2, G, LEV,NLEVG, IBUF,MAXW )
+
+      NR = NR+NLEVG
+      GOTO 100 
+
+***   E.O.F. ON UNIT #1.
+
+ 902  IF (NLEV.GT.MAXLEV) WRITE(6,6002) NLEV,MAXLEV
+
+      CALL                                         XIT( VERBE ,-2 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+
+ 6002 FORMAT(' Nlev,maxlev= ',I5,1X,I5)
+
+ 6200 FORMAT('0 ',A,' read',I6,' records.')
+ 6300 FORMAT(1X,A,' is stripping label/character records...')
+
+      END 
+#     endif
+
+
+
+

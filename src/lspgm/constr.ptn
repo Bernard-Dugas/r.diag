@@ -1,0 +1,582 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      constr EOF COMP NEWDAT INPUT OUTPUT [ -m VAL1 ]
+*
+*
+*     AUTEUR - B.Dugas, FEVRIER 15/88 .
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/constr.ptn,v 4.4 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      RECONSTRUCTION DES DONNEES  (COMPLEXES OU PAS) A PARTIR DE LA 
+*      MATRICES DES FACTEURS  ET DE COMPOSANTES PRINCIPALES. IL FAUT 
+*      AU MOINS UN FACTEUR ET UNE  COMPOSANTE PRINCIPALE. LES CHAMPS 
+*      SONT EN ORDRE DECROISSANT  D'IMPORTANCE.  ON  UTILISE LE PLUS 
+*      PETIT ENSEMBLE COMPLET. ON LIT M SUR UNIT5 I.E. LE PLUS GRAND 
+*      NOMBRE DE COMPOSANTES A CONSIDERER ( < MAXCMP+1 )(=41)
+*
+*      NEWDAT(I,T) = SUM(J=1,NFAC) (EOF(I,J) * COMP(J,T))
+*
+*      SI EOF *ET* COMP  SONT TOUS  DEUX SOUS LA  FORME DE PAIRES DE 
+*      GRILLES REELLES ET  IMAGINAIRES  (TYPE='REEL'  ET 'IMAG'), ET 
+*      DANS CET ORDRE , ON TRAITE LE CAS COMPLEXE. 
+*
+*
+*     PARAMETRES...
+*
+*      M    = Nombre de facteur a utiliser dans la re-construction
+*
+*      READ( 5,5010 ) M
+*5000  FORMAT(10X,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* CONSTR     21
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 INPUT M > MAXCMP
+*       2 PROBLEM OPENNING EOF
+*       3 PROBLEM OPENNING COMP
+*       4 TOO MANY LEVELS IN EOF
+*       7 READ ERROR ON EOF (REAL PART)
+*       8 FACTORS OUT OF SEQUENCE
+*       9 READ ERROR ON EOF (IMAGINARY PART)
+*      10 READ ERROR ON COMP (REAL PART)
+*      11 PRINCIPAL COMPONENTS OUT OF SEQUENCE
+*      12 READ ERROR ON COMP (IMAGINARY PART)
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM CONSTR 
+*    + (      EOF,       COMP,       NEWDAT,       INPUT,       OUTPUT, 
+*    +  TAPE1=EOF, TAPE2=COMP, TAPE3=NEWDAT, TAPE5=INPUT, TAPE6=OUTPUT) 
+ 
+*     $Log: constr.ptn,v $
+*     Revision 4.4  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.3  2010/02/15 19:06:41  dugas
+*     Mise-a-jour majeure F90.
+*
+ 
+***    HISTORIQUES DES MODIFICATIONS:
+
+*     FEVRIER 15/88 - B. DUGAS (VERSION INITIALE)
+ 
+*---------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER,   PARAMETER :: HEAD=taille_entete
+      INTEGER,   PARAMETER :: MAXLEV=999
+      INTEGER,   PARAMETER :: MAXCMP=40
+
+      LOGICAL    OK, TS 
+      CHARACTER  LIGNE*80,VALEUR*20
+      INTEGER    DEMDIM, DIMCOV, LEV(MAXLEV),TIME,ILG,ILAT,
+     +           WHERE1,WHERE2, WHERE3, WHERE4,NILG,KIND,NWDS,
+     +           PREC(MAXCMP),PREF(MAXCMP),PRES(MAXCMP),OLDTIME,
+     +           MAXW,KBUF(HEAD),LBUF(HEAD),LEN2,NWDS2,PAK2,NEWM,
+     +           DLEN,LEN1,NWDS1,PAK1,MAXW1,MAXW2,IO,NF, IBUF7,
+     +           ERR,NLEV,I,K,L,M,N,LVL,NKR,NKI,CMPR,CMPI,
+     +           EOFR,EOFI,EOFCMPR,EOFCMPI,ILA,ILO
+ 
+      INTEGER :: UN=1,ZERO=0
+      REAL,      DIMENSION(:),ALLOCATABLE :: CMP,VEC,GG
+      INTEGER,   DIMENSION(:),ALLOCATABLE :: IBUF
+ 
+      CHARACTER(4) :: ZONL='ZONL', GRID='GRID',
+     +                REEL='REEL', IMAG='IMAG',
+     +                DATA='DATA', TYPE
+ 
+      CHARACTER  NOMPRG*256
+      COMMON    /PROGNAM/ NOMPRG
+
+      LOGICAL    RPBLOC
+      INTEGER    GETSIZ,GETSIZ2
+      EXTERNAL   JCLPNT,RPBLOC,GETLIGN,BURNF,GETFLD2,
+     +           GETSIZ,GETSIZ2
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/constr.ptn,v $'
+
+*---------------------------------------------------------------------
+      NF = 5 
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+ 
+      M = 0
+
+***    LIRE UNIT 1, 2 ET 5 POUR DETERMINER LES DIMENSIONS DU PROBLEME. 
+ 
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('M',VALEUR)
+          
+          IF (OK) READ( VALEUR,'(BN,I5)',ERR=999,END=9999,IOSTAT=IO ) M
+
+      ELSE
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 9999
+          ELSE
+              READ( LIGNE, 5000,ERR=999,END=9999,IOSTAT=IO ) M
+              CALL BURNF
+          END IF
+
+      END IF
+          
+      IF (M > MAXCMP) CALL                         XIT (' Constr ',-1 ) 
+ 
+***    DETERMINE THE GRID SIZE.
+
+      MAXW2 = GETSIZ2( 2, LBUF,LEN2,NWDS2,PAK2,LEV,NLEV  )
+      MAXW1 = GETSIZ ( 1, KBUF,LEN1,NWDS1,PAK1 )
+
+      IF (MAXW1 <= 0) CALL                         XIT (' Constr ',-2 ) 
+      IF (MAXW2 <= 0) CALL                         XIT (' Constr ',-3 ) 
+      IF (NLEV  >  MAXLEV) CALL                    XIT (' Constr ',-4 ) 
+ 
+      MAXW = MAX( MAXW1,MAXW2 )
+
+      ILG  = KBUF(5) 
+      ILAT = KBUF(6) 
+ 
+***    EST-CE QUE L'ON DES DONNEES DE TYPE TS ? 
+ 
+      IBUF7 = KBUF(7) 
+      IF (IBUF7 > 10000)                                       THEN 
+          NILG = IBUF7/10000 
+          TS   = .TRUE. 
+      ELSE 
+          TS   = .FALSE. 
+      END IF 
+ 
+      DLEN = LBUF(5) 
+      KIND = LBUF(1) 
+      WRITE(TYPE,4) KIND 
+ 
+      IF (TYPE == REEL)                                        THEN 
+ 
+***        SI TYPE = REEL, ON A (PARADOXALEMENT) LE CAS COMPLEXE. 
+ 
+          LEN2   = DLEN*2 
+          NWDS   = ILG*ILAT*2 
+          NWDS2  = NWDS/2 
+          DIMCOV = NWDS*NLEV 
+          DEMDIM = DIMCOV/2 
+ 
+***        DEMANDONS LA MEMOIRE DONT ON A BESOIN SI C'EST POSSIBLE ... 
+ 
+          ALLOCATE( CMP(M*LEN2),VEC(M*DIMCOV),GG(DIMCOV),
+     +              IBUF(MAXW),  STAT=ERR )
+ 
+          OLDTIME = 0 
+          DO  N=1,M 
+              PREC(N) = 0 
+              PREF(N) = 0 
+              PRES(N) = 0 
+          END DO
+ 
+***        LECTURE DES FACTEURS. 
+ 
+          LECTURE_FACTEURS_RC : DO N=1,M 
+
+              DO  L=1,NLEV 
+ 
+                  WHERE1 = DIMCOV*(N-1)+NWDS*(L-1)+1 
+                  WHERE2 = WHERE1+NWDS2 
+                  LVL    = LEV(L) 
+ 
+***                LIRE LA COMPOSANTE REELLE. 
+ 
+                  CALL GETFLD2(1,VEC(WHERE1),'REEL',-1,' ',LVL, 
+     1                         IBUF,MAXW,OK) 
+ 
+                  IF (.NOT.OK)                                 THEN 
+                      IF (N == 1)                              THEN 
+                          WRITE(6,6007) L 
+                          CALL                     XIT(' Constr ',-7 ) 
+                      ELSE 
+                          GOTO 100 
+                      END IF 
+                  END IF 
+ 
+***                QUEL FACTEUR ET DANS QUEL ORDRE ? 
+ 
+                  IF (L == 1)                                  THEN 
+                      TIME    = IBUF(2) 
+                      IF (TIME <= OLDTIME)                     THEN 
+                          WRITE(6,6008) TIME,OLDTIME 
+                          CALL                     XIT(' Constr ',-8 ) 
+                      ELSE 
+                          OLDTIME = TIME 
+                      END IF 
+                      PREF(TIME) = N 
+                  END IF 
+ 
+***                LIRE LA COMPOSANTE IMAGINAIRE CORRESPONDANTE. 
+ 
+                  CALL GETFLD2(1,VEC(WHERE2),'IMAG',TIME,' ',LVL, 
+     +                         IBUF,MAXW,OK) 
+                  IF (.NOT.OK)                                 THEN 
+                      WRITE(6,6009) L, N 
+                      CALL                         XIT(' Constr ',-9 ) 
+                  END IF 
+ 
+              END DO
+
+          END DO LECTURE_FACTEURS_RC
+ 
+***        LECTURE DES COMPOSANTES PRINCIPALES. 
+ 
+  100     OLDTIME = 0 
+ 
+          LECTURE_COMPOSANTES_RC : DO N=1,M 
+ 
+              WHERE1 = LEN2*(N-1)+1 
+              WHERE2 = WHERE1+DLEN 
+ 
+***            LIRE LA COMPOSANTE REELLE. 
+ 
+              CALL GETFLD2(2,CMP(WHERE1),'REEL',-1,' ',1, 
+     +                     IBUF,MAXW,OK) 
+ 
+              IF (.NOT.OK)                                     THEN 
+                  IF (N == 1)                                  THEN 
+                      WRITE(6,6010) 
+                      CALL                         XIT(' Constr ',-10) 
+                  ELSE 
+                      GOTO 200 
+                  END IF 
+              END IF 
+ 
+***            VERIFIER L'ORDRE. 
+ 
+              TIME    = IBUF(2) 
+              IF (TIME <= OLDTIME)                             THEN 
+                  WRITE(6,6011) TIME,OLDTIME 
+                  CALL                             XIT(' Constr ',-11) 
+              ELSE 
+                  OLDTIME = TIME 
+              END IF 
+              PREC(TIME) = N 
+ 
+***            LIRE LA COMPOSANTE IMAGINAIRE. 
+ 
+              CALL GETFLD2(2,CMP(WHERE2),'IMAG',TIME,' ',1, 
+     1                     IBUF,MAXW,OK) 
+ 
+              IF (.NOT.OK)                                     THEN 
+                  WRITE(6,6012) N 
+                  CALL                             XIT(' Constr ',-12) 
+              END IF 
+ 
+          END DO LECTURE_COMPOSANTES_RC
+ 
+***        UTILISER QUE LES PAIRES COMPLETES DE FACTEURS/PCOMPS 
+ 
+  200     NEWM = 0 
+          DO  N=1,M 
+              IF (PREC(N)*PREF(N).NE.0)                        THEN 
+                  NEWM       = NEWM+1 
+                  PRES(NEWM) = N 
+              END IF 
+          END DO
+          M = NEWM 
+ 
+          WRITE(6,6100) M, DLEN, DEMDIM 
+ 
+          READ(DATA,4) IBUF(3) 
+          IBUF(5) = ILG 
+          IBUF(6) = ILAT 
+ 
+***        RECONSTRUCTION DES DONNEES. 
+ 
+          RECONSTRUCTION_DONNEES_RC : DO  K=1,DLEN 
+ 
+              IF (TS)                                          THEN 
+                  ILA     = (K-1)/NILG+1 
+                  ILO     = K-(ILA-1)*NILG 
+                  IBUF(2) = ILA*1000+ILO 
+              ELSE 
+                  IBUF(2) = K 
+              END IF 
+ 
+***            INITIALISER GG. 
+ 
+              DO  I=1,NWDS*NLEV 
+                  GG(I) = 0.0 
+              END DO
+ 
+              DO  N=1,M 
+ 
+                  NKR  = LEN2*(PREC(PRES(N))-1)+K 
+                  NKI  = NKR+DLEN 
+                  CMPR = CMP(NKR) 
+                  CMPI = CMP(NKI) 
+                  DO  L=1,NLEV 
+                      WHERE1 = DIMCOV*(PREF(PRES(N))-1)+NWDS*(L-1) 
+                      WHERE2 = WHERE1+NWDS2 
+                      WHERE3 = NWDS*(L-1) 
+                      WHERE4 = WHERE3+NWDS2 
+ 
+CDIR$ IVDEP 
+ 
+                      DO  I=1,NWDS2 
+                          EOFR         = VEC(WHERE1+I) 
+                          EOFI         = VEC(WHERE2+I) 
+                          EOFCMPR      = EOFR*CMPR+EOFI*CMPI 
+                          EOFCMPI      = EOFR*CMPI-EOFI*CMPR 
+                          GG(WHERE3+I) = GG(WHERE3+I)+EOFCMPR 
+                          GG(WHERE4+I) = GG(WHERE4+I)+EOFCMPI 
+ 
+                      END DO
+                  END DO
+              END DO
+ 
+***            ON ECRIT LES RESULTATS. 
+ 
+              DO  L=1,NLEV 
+ 
+                  IBUF(4) = LEV(L) 
+                  WHERE1  = NWDS*(L-1)+1 
+                  WHERE2  = WHERE1+NWDS2 
+ 
+                  READ(REEL,4) IBUF(1) 
+                  IF (K == DLEN)
+     +            CALL PRTLAB2(' LAST WRITTEN BUFFER SET ...', IBUF )
+                  CALL PUTFLD2( 3,GG(WHERE1), IBUF,MAXW ) 
+ 
+                  READ(IMAG,4) IBUF(1) 
+                  IF (K == DLEN)
+     +            CALL PRTLAB2('                            ', IBUF )
+                  CALL PUTFLD2( 3,GG(WHERE2), IBUF,MAXW ) 
+ 
+              END DO
+ 
+          END DO RECONSTRUCTION_DONNEES_RC
+ 
+      ELSE 
+ 
+***        SI TYPE N'EST PAS REEL, ON A VRAIMENT LE CAS REEL. 
+ 
+          NWDS   = ILG*ILAT 
+          DIMCOV = NWDS*NLEV 
+ 
+***        DEMANDONS LA MEMOIRE DONT ON A BESOIN SI C'EST POSSIBLE ... 
+ 
+          ALLOCATE( CMP(M*DLEN),VEC(M*DIMCOV),GG(DIMCOV),
+     +              IBUF(MAXW), STAT=ERR )
+ 
+          OLDTIME = 0 
+          DO  N=1,M 
+              PREC(N) = 0 
+              PREF(N) = 0 
+              PRES(N) = 0 
+          END DO
+ 
+***        LECTURE DES FACTEURS. 
+ 
+          LECTURE_FACTEURS : DO N=1,M 
+              DO  L=1,NLEV 
+ 
+                  WHERE1 = DIMCOV*(N-1)+NWDS*(L-1)+1 
+                  LVL    = LEV(L) 
+ 
+                  CALL GETFLD2(1,VEC(WHERE1),TYPE,-1,' ',LVL, 
+     +                         IBUF,MAXW,OK) 
+ 
+                  IF (.NOT.OK)                                 THEN 
+                      IF (N == 1)                              THEN 
+                          WRITE(6,6013) L 
+                          CALL                     XIT (' Constr ',-7 ) 
+                      ELSE 
+                          GOTO 1100 
+                      END IF 
+                  END IF 
+ 
+***                QUEL FACTEUR ET DANS QUEL ORDRE ? 
+ 
+                  IF (L == 1)                                  THEN 
+                      TIME    = IBUF(2) 
+                      IF (TIME <= OLDTIME .OR. TIME > M)       THEN 
+                          WRITE(6,6014) TIME,OLDTIME 
+                          CALL                     XIT(' Constr ',-8 ) 
+                      ELSE 
+                          OLDTIME = TIME 
+                      END IF 
+                      PREF(TIME) = N 
+                  END IF 
+
+              END DO
+ 
+          END DO LECTURE_FACTEURS
+ 
+***        LECTURE DES COMPOSANTES PRINCIPALES. 
+ 
+ 1100     OLDTIME = 0 
+ 
+          LECTURE_COMPOSANTES : DO N=1,M 
+ 
+              WHERE1 = DLEN*(N-1)+1 
+ 
+              CALL GETFLD2(2,CMP(WHERE1),TYPE,-1,' ',1, 
+     +                     IBUF,MAXW,OK) 
+ 
+              IF (.NOT.OK)                                     THEN 
+                  IF (N == 1)                                  THEN 
+                      WRITE(6,6015) 
+                      CALL                         XIT(' Constr ',-10) 
+                  ELSE 
+                      GOTO 1200 
+                  END IF 
+              END IF 
+ 
+***            VERIFIER L'ORDRE. 
+ 
+              TIME    = IBUF(2) 
+              IF (TIME <= OLDTIME .OR. TIME > M)               THEN 
+                  WRITE(6,6016) TIME,OLDTIME 
+                  CALL                             XIT(' Constr ',-11) 
+              ELSE 
+                  OLDTIME = TIME 
+              END IF 
+              PREC(TIME) = N 
+ 
+          END DO LECTURE_COMPOSANTES
+ 
+***        UTILISER QUE LES PAIRES COMPLETES DE FACTEURS/PCOMPS 
+ 
+ 1200     NEWM = 0 
+          DO  N=1,M 
+              IF (PREC(N)*PREF(N) /= 0)                        THEN 
+                  NEWM       = NEWM+1 
+                  PRES(NEWM) = N 
+              END IF 
+          END DO
+          M = NEWM 
+ 
+          WRITE(6,6100) M, DLEN, DIMCOV 
+ 
+          READ(DATA,4) IBUF(3) 
+          IBUF(5) = ILG 
+          IBUF(6) = ILAT 
+ 
+***        RECONSTRUCTION DES DONNEES. 
+ 
+          RECONSTRUCTION_DONNEES : DO K=1,DLEN 
+ 
+              IF (TS)                                          THEN 
+                  ILA     = (K-1)/NILG+1 
+                  ILO     = K-(ILA-1)*NILG 
+                  IBUF(2) = ILA*1000+ILO 
+              ELSE 
+                  IBUF(2) = K 
+              END IF 
+ 
+***            INITIALISER GG. 
+ 
+              DO  I=1,NWDS*NLEV 
+                  GG(I) = 0.0 
+              END DO
+ 
+              DO  N=1,M 
+ 
+                  NKR  = DLEN*(PREC(PRES(N))-1)+K 
+                  CMPR = CMP(NKR) 
+                  DO  L=1,NLEV 
+                      WHERE1 = DIMCOV*(PREF(PRES(N))-1)+NWDS*(L-1) 
+                      WHERE3 = NWDS*(L-1) 
+ 
+CDIR$ IVDEP 
+ 
+                      DO  I=1,NWDS 
+                          EOFR         = VEC(WHERE1+I) 
+                          EOFCMPR      = EOFR*CMPR 
+                          GG(WHERE3+I) = GG(WHERE3+I)+EOFCMPR 
+ 
+                      END DO
+                  END DO
+              END DO
+ 
+***            ON ECRIT LES RESULTATS. 
+ 
+              DO  L=1,NLEV 
+ 
+                  IBUF(4) = LEV(L) 
+                  WHERE1  = NWDS*(L-1)+1 
+ 
+                  CALL PUTFLD2( 3,GG(WHERE1),IBUF,MAXW ) 
+ 
+              END DO
+ 
+          END DO RECONSTRUCTION_DONNEES
+ 
+          CALL PRTLAB2(' LAST WRITTEN BUFFER ...', IBUF )
+ 
+      END IF 
+ 
+***    FIN NORMALE DES CALCULS. 
+ 
+      CALL                                         XIT (' Constr ', 0 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR STDIN (UNIT 5). 
+ 
+  999 IF (IO.NE.0) WRITE(6,6100) IO
+ 9999 CALL                                         XIT (' Constr ',-17) 
+C---------------------------------------------------------------------- 
+
+    4 FORMAT(A4) 
+
+ 5000 FORMAT(10X,I5) 
+
+ 6007 FORMAT(' Read error on file EOF for level No ',I5, 
+     +       ' of (real part of) ceof No 1') 
+ 6008 FORMAT(' Factors out of sequence, No.',I5,' found after No.',I5) 
+ 6009 FORMAT(' Read error on file EOF for level No ',I5, 
+     +       ' of (imaginary part of) ceof No ',I5) 
+ 6010 FORMAT(' Read error on file COMP for (real part of) first', 
+     +       ' principal component.') 
+ 6011 FORMAT(' Principal components out of sequence, No ',I5, 
+     +       ' found after No ',I5) 
+ 6012 FORMAT(' Read error on file COMP for', 
+     +       ' (imaginary part of) princicpal component No ',I5) 
+ 6013 FORMAT(' Read error on file EOF for level No ',I5, 
+     +       ' of eof NO 1') 
+ 6014 FORMAT(' Factors out of sequence, No ',I5,' found after No ',I5) 
+ 6015 FORMAT(' Read error on file COMP for first principal component.')
+ 6016 FORMAT(' Principal components out of sequence, No ',I5, 
+     +       ' found after No ',I5) 
+
+ 6100 FORMAT(' Constr working with ',I5,' components, ',I5,' cases', 
+     +       ' and ',I5, ' variables.') 
+ 6110 FORMAT(' Constr reports I/O error number ',I3,' on unit 5.')
+
+      END 
+#     endif

@@ -1,0 +1,202 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      legendre  vort div [ -lrlmt VAL1 ]
+*
+*
+*     AUTHOR  - B.Dugas, fev 1992.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/legendre.ptn,v 4.6 2014/09/25 20:20:50 dugas Exp $
+* 
+*
+*     PURPOSE...
+*      legendre - CREATES A PAIR OF PURE SPECTRAL GRIDS
+*
+*
+*     OUTPUT FILES...
+*      VORT = RELATIVE VORTICITY
+*      DIV  = HORIZONTAL DIVERGENCE
+*
+*
+*     INPUT PARAMETERS...
+*
+*      LRLMT = ONE NUMBER CONTAINING THE REQUIRED RESOLUTION. 
+*              THIS NUMBER CONTAINS SEVEN DIGITS... 
+*              LR = FIRST  THREE DIGITS = M TRUNCATION 
+*              LM = SECOND THREE DIGITS = N TRUNCATION 
+*              T  = TYPE OF TRUNCATION (0=RHOMBOIDAL,2=TRIANGULAR). 
+*
+*      READ( 5,5000 ) LRLMT
+*5000  FORMAT(10X,I10) 
+*
+*
+*     EXAMPLE OF INPUT CARD... 
+* 
+* LEGENDRE    150152
+* 
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM legendre
+
+***    Ce programme cree une paire de grilles spectrales pures.
+
+*     $Log: legendre.ptn,v $
+*     Revision 4.6  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.3  2000/07/06 18:30:11  armnrbd
+*     Utiliser hpalloc plutot que memoir pour l'allocation de memoire.
+*
+*     Revision 4.2  1998/05/29 01:58:58  armnrbd
+*     Ajouter le bloc de documentation.
+*
+*     Revision 4.1  1997/09/26  17:39:06  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:20:52  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:27  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/12/18  10:31:15  armnrbd
+*     Ajouter le parametre "-lrlmt" qui est recuperable avec RPBLOC.
+*     
+*     Revision 1.3  92/11/17  23:06:06  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/11/09  22:43:36  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/10/13  15:00:16  armnrbd
+*     Compaction par defaut passe a 32 bits/mots (-32).
+*     
+*     Revision 1.0  92/02/24  14:41:49  armnrbd
+*     Initial revision
+*     
+       implicit none
+
+       real      zero
+       logical   ok,rpbloc
+       character valeur*10
+       integer   i,nf,len,nwds,maxw,ier
+       integer   head, jbuf(taille_entete),jpak
+       integer   lsr(2,1000), lrlmt,la,lr,lm,ktr
+
+       INTEGER,  DIMENSION(:), ALLOCATABLE :: IBUF
+       REAL,     DIMENSION(:), ALLOCATABLE :: Y
+
+       external  macspe,jclpnt,rpbloc,dimgt2,setlab,
+     +           lblchk,putfld2,xit
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/legendre.ptn,v $'
+
+*-----------------------------------------------------------------------
+       call macspe( head,zero )
+
+       nf = 4
+       call jclpnt( nf, 1,2, 5,6 )
+
+***    Determiner la resolution desiree.
+
+      if (rpbloc( ' ',valeur ))                                then
+
+***        Verifier le bloc de parametres d'appels.
+
+          lrlmt = 0
+
+          ok = rpbloc('LRLMT',valeur)
+          if (ok) read(valeur,1000,end=999) lrlmt
+
+       else
+
+           read(5,5000,end=999) lrlmt
+
+       end if
+
+       if (lrlmt.eq.0) lrlmt = 210212
+
+***     Definir les parametres spectraux.
+
+       call dimgt2( lsr, la,lr,lm,ktr,lrlmt, 0,0 )
+
+       call setlab( Jbuf, 'SPEC',0,'VORT',0,la,1,lrlmt,-32 )
+       call lblchk( len,nwds,jpak, jbuf )
+
+       ALLOCATE( IBUF(LEN),Y(NWDS) )
+
+       do i=1,nwds
+          y(i) = zero
+       end do
+
+***     Le tourbillon est anti-symmetrique
+
+       y( 2*( lsr(1,2)+9 )-1 ) = 1.0e-5
+       y( 2*( lsr(1,5)+3 )   ) = 5.0e-6
+
+***     Ecrire le tourbillon.
+
+       call setlab( ibuf, 'SPEC',0,'VORT',0,la,1,lrlmt,-32)
+       call putfld2( 1, y, ibuf,maxw)
+
+***     Remettre les composantes du tourbillon a zero.
+
+       y( 2*( lsr(1,2)+9 )-1 ) = zero
+       y( 2*( lsr(1,5)+3 )   ) = zero
+
+***     La divergence est symmetrique.
+
+       y( 2*( lsr(1,2)+2 )-1 ) = 2.0e-6
+       y( 2*( lsr(1,4)+4 )   ) = 4.0e-7
+
+***     Ecrire la divergence.
+
+       call setlab( ibuf, 'SPEC',0,' DIV',0,la,1,lrlmt,1)
+       call putfld2( 2, y, ibuf,maxw)
+
+  999  call xit('Legendre', 0 )
+       
+
+*c-------------------------------------------------------------------------
+ 1000  format(BN,I10)
+ 5000  format(10X,I10)
+
+       stop
+       end
+#      endif

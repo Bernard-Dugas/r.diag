@@ -1,0 +1,55 @@
+#!/bin/bash
+print_usage() {
+  echo "
+        ${0##*/} [-h|--help] [--doc] [--src] [--versions] [--man topics|name] 
+                               ** OR **
+        ${0##*/} command [file1 [file2 ... ]] -other_arguments
+       "
+}
+Location=${DIAGNOSTIQUE}
+case ${1:---help} in
+--help | -h )
+  print_usage
+  exit 0
+  ;;
+--man )
+  cd ${Location}/man/pdoc
+  [[ "$2" == topics ]] && ls *.txt | sed 's/[.]txt//' | xargs -l8 printf "%10s %10s %10s %10s %10s %10s %10s %10s\n"  && exit 0
+  [[ -f ${2}.txt ]] && ${PAGER:-less} ${2}.txt
+  exit $?
+  ;;
+--doc )
+  echo ${Location}/man/pdoc
+  exit 0
+  ;;
+--versions )
+  cd ${Location}/bin/${BASE_ARCH}/
+  ls ${0##*/}_*.*.*
+  exit 0
+  ;;
+--src )
+  echo ${Location}/src
+  exit 0
+  ;;
+* )
+  RDIAG=${RDIAG:-${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.r.diag}
+  if [ `echo ${RDIAG} | cut -c1` != "/" ]; then RDIAG=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/$RDIAG ; fi
+  if [[ -x ${RDIAG} ]] ; then
+    if [ ! "${launched_by_r_diag_script}" ]; then
+      export launched_by_r_diag_script=YES
+      ${RDIAG} "$@"
+      exit $?
+    else
+      echo "
+       Recursion detected. PLS re-define your \${RDIAG} variable...
+       Current value is ${RDIAG}
+       "
+      exit 99
+    fi
+  else
+    ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.r.diag "$@"
+    exit $?
+  fi
+  ;;
+esac
+exit

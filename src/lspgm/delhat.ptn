@@ -1,0 +1,326 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      delhat  PSFIL DHFIL INPUT OUTPUT [ -plv VAL1 -def ]
+*
+*
+*     DESCRIPTION...
+*      delhat - COMPUTES THE FUNCION DELTA-HAT FOR ALL PRESSURE LEVELS
+*
+*
+*     AUTHOR  - J.D.Henderson, JUL 08/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/delhat.ptn,v 4.9 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES THE FUNCTION DELTA-HAT FOR A FILE OF SURFACE 
+*               PRESSURE GRIDS (ONE SET FOR EACH PRESSURE GRID)
+*
+*     NOTES   - 1) PRESSURE VALUES ARE READ FROM STDIN
+*               2) DELTA-HAT IS 1.0 ABOVE THE SURFACE AND 0.0 BELOW IT
+*               3) THE MAXIMUM NUMBER OF LEVELS IS SET TO 999
+*
+*
+*     INPUT FILE...
+*      PSFIL = INPUT SERIES OF SURFACE PRESSURE GRIDS (MB).
+*
+*     OUTPUT FILE...
+*      DHFIL = DELTA-HAT AT REQUESTED PRESSURE LEVELS FOR EACH
+*              PRESSURE GRID IN PSFIL.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NLEV (plv) = NUMBER OF PRESSURE LEVELS (DEF=16, MAX=999).
+*                   IF NLEV IS NEGATIVE, EACH -NLEV LEVP VALUES ARE
+*                   READ WITH A I10 FORMAT OR AN E10.0 IF ITS VALUE
+*                   CONTAINS A DECIMAL POINT.
+*
+*      LEV        = VALUES OF THE PRESSURE IN MILLIBARS AS CODED 
+*                   BY ROUTINE LVCODE. THE DEFAULTS ARE SPECIFIED
+*                   IN THE EXAMPLE BELOW.
+*
+*      Notes: 1) The first input line is NOT read if any command-line
+*                parameters are passed.
+*             2) Furthermore, the second line will not be read either
+*                if the "-def" defaults processing mode is requested.
+*
+*      READ( 5,5010 )  NLEV
+*      IF (NLEV.GT.0)
+*      READ( 5,5020 ) (LEV(I),I=1,NLEV)
+*      IF (NLEV.LT.0)
+*      READ( 5,5030 ) (LEV(I),I=1,-NLEV)
+*5010  FORMAT(10X,I5)
+*5020  FORMAT(16I5)
+*5030  FORMAT(8E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*   DELHAT   16
+*  10   20   30   50   70  100  150  200  250  300  400  500  700  850  925 1000
+*
+*        01234567890123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH REQUIRED LEVELS
+*       2 PRESSURE LEVELS DO NOT VARY MONOTONICALLY
+*       3 PREMATURE EOF ON FILE PSFC
+*       4 ERROR READING FIRST LINE INPUT PARAMETERS
+*       5 ERROR READING SECOND LINE INPUT PARAMETERS
+*       6 LEV DOES NOT CONTAIN PRESSURE DATA
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM delhat
+*     PROGRAM DELHAT (PSFIL,       DHFIL,       INPUT,       OUTPUT,
+*    1          TAPE1=PSFIL, TAPE2=DHFIL, TAPE5=INPUT, TAPE6=OUTPUT)
+*     --------------------------------------------------------------
+
+*     APR 02/92 - B.DUGAS  (PORT TO CY920/IRIX f77)
+*     MAY 06/83 - R.LAPRISE.
+*     JUL 08/80 - J.D.HENDERSON.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV,       HEAD
+      PARAMETER ( MAXLEV = 999, HEAD = taille_entete )
+
+      REAL        PR(MAXLEV)
+      CHARACTER*10 CLEVP(MAXLEV)
+      CHARACTER*4 LIGNE*80,CDELH
+      LOGICAL     OK,DEF,MONOTON,BIGF
+      INTEGER     I,K,L,IO,LEV(MAXLEV),IER,
+     +            NFF,NR, NLAT,NLEV,NLG,NWDS,LIM1,LIM2,
+     +            TOP,BOT,INC, MAXW,JBUF(HEAD),
+     +            LEN,JPAK,VKIND
+
+      INTEGER,    DIMENSION(:),ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:),ALLOCATABLE :: PSBAR,DELTA
+
+      DATA        DEF / .FALSE. /
+
+      DATA        ( CLEVP(L), L=1,16 ) /
+     +              '   10','   20','   30','   50',
+     +              '   70','  100','  150','  200',
+     +              '  250','  300','  400','  500',
+     +              '  700','  850','  925',' 1000'
+     +                                 /
+
+      INTEGER     GETSIZ
+      LOGICAL     RPBLOC 
+      CHARACTER*4 GETYP,PKTYP*2
+      EXTERNAL    JCLPNT,CONVPR,GETFLD2,GETYP,
+     +            PUTFLD2,HPALLOC,WRITLEV,GETLIGN,
+     +            BURNF,RPBLOC,MONVERT,GETSIZ
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        CDELH / 'DELH' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/delhat.ptn,v $'
+
+*--------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      BIGF  =.FALSE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NLEV = 16
+
+          OK = RPBLOC('PLV',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=904,ERR=904,IOSTAT=IO) NLEV
+
+          DEF = RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        READ THE PRESSURE LEVELS FROM CARDS.
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 904
+          ELSE
+              READ( LIGNE, 5010,ERR=904,END=904,IOSTAT=IO) NLEV
+          END IF
+
+      END IF
+
+      IF (NLEV.LT.0)                                           THEN
+          NLEV =-NLEV
+          BIGF =.TRUE.
+      END IF
+
+      IF (NLEV.LT.2 .OR. NLEV.GT.MAXLEV) CALL      XIT(' Delhat ',-1 )
+
+      IF (.NOT.(DEF .AND. (NLEV.EQ.16)))                       THEN
+
+          IF (BIGF)                                            THEN
+              DO  K=1,(NLEV-1)/8+1
+                  CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 905
+                  ELSE
+                      LIM1 = 8*(K-1)+1
+                      LIM2 = MIN( NLEV, 8*K )
+                      READ( LIGNE, 5030,END=905,ERR=905,IOSTAT=IO) 
+     +                                  (CLEVP(I),I=LIM1,LIM2)
+                  END IF  
+              END DO
+          ELSE
+              DO  K=1,(NLEV-1)/16+1
+                  CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 905
+                  ELSE
+                      LIM1 = 16*(K-1)+1
+                      LIM2 = MIN( NLEV, 16*K )
+                      READ( LIGNE, 5020,END=905,ERR=905,IOSTAT=IO) 
+     +                                  (CLEVP(I),I=LIM1,LIM2)
+                  END IF  
+              END DO
+          END IF
+
+          CALL BURNF
+
+      END IF
+
+***    CHECK LEV CODING.
+
+      DO  K=1,NLEV
+          IF (INDEX( CLEVP(K),'.' ).EQ.0)                      THEN
+              READ( CLEVP(K),10, ERR=905,END=905,IOSTAT=IO ) LEV(K)
+              CALL CONVPR( LEV(K), PR(K), VKIND, -2 )
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  IF (VKIND.NE.2) CALL             XIT(' Delhat ',-6 )
+                  CALL CONVPR( LEV(K), PR(K), VKIND, +2 )
+              END IF
+          ELSE
+             READ( CLEVP(K),11, ERR=905,END=905,IOSTAT=IO ) PR(K)
+             IF (PKTYP.EQ.'SQ')                                THEN
+                 VKIND = 2
+                 CALL CONVPR( LEV(K), PR(K), VKIND, +2 )
+             ELSE
+                 CALL LVCODE( LEV(K), PR(K)/1000.,1 ) 
+             END IF
+          END IF
+      END DO
+
+      CALL WRITLEV( PR,NLEV,'PRES' )
+
+***     CHECK THAT PR IS MONOTONIC.
+
+      CALL MONVERT( PR,NLEV, TOP,BOT,INC, MONOTON )
+
+      IF (.NOT.MONOTON) CALL                       XIT(' Delhat ',-2 )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST DATA INFO BUFFER.
+
+      NR = 0
+
+  100 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) GOTO 903
+
+      ALLOCATE( PSBAR(MAXW),DELTA(MAXW),IBUF(LEN) )
+
+***    GET THE NEXT SURFACE PRESSURE FIELD INTO PSBAR.
+
+  200 CALL GETFLD2( 1, PSBAR, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( PSBAR,DELTA,IBUF )
+                  GOTO 100
+              END IF
+              WRITE(6,6010) NR
+              IF (NR.EQ.0) CALL                    XIT(' Delhat ',-3 )
+              CALL                                 XIT(' Delhat ', 0 )
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+          NLG  = IBUF(5)
+          NLAT = IBUF(6)
+          NWDS = NLG*NLAT
+
+***        COMPUTE DELTA-HAT FOR EACH PRESSURE LEVEL AND SAVE ON FILE 2.
+
+          DO  300 L=1,NLEV
+
+              DO  I=1,NWDS
+                                         DELTA(I)=1.
+                  IF (PSBAR(I).LT.PR(L)) DELTA(I)=0.
+              END DO
+
+              READ(CDELH,4) IBUF(3)
+                            IBUF(4) = LEV(L)
+CCC                         IBUF(8) = -32
+
+              CALL PUTFLD2( 2, DELTA,IBUF,MAXW )
+
+              IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+  300     CONTINUE
+
+      NR = NR+1
+      GOTO 200
+
+***    PREMATURE E.O.F. ON UNIT #1.
+
+  903 CALL                                         XIT(' Repack ',-3 )
+
+***    E.O.F. ON INPUT.
+
+  904 CALL                                         XIT(' Delhat ',-4 )
+  905 CALL                                         XIT(' Delhat ',-5 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,I5)
+ 5020 FORMAT(16A5)
+ 5030 FORMAT(8A10)
+
+ 6010 FORMAT('0',I6,'  records read.')
+
+      END
+#     endif

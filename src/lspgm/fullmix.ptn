@@ -1,0 +1,365 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      fullmix  INFILE OUT1 OUT2 INPUT OUTPUT [ -n VAL1 -m VAL2 -plv VAL3 ]
+*
+*
+*     AUTHOR - B.Dugas, fevrier 23/88.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fullmix.ptn,v 4.9 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CREATION DE DEUX FICHIERS DE DONNEES PERMETTANT LA COMPARAISONS 
+*      DEUX A DEUX DES TOUS LES ENREGISTREMENTS DU FICHIER INFILE
+*      I.E. ON AURA QUE (SI NOMBRE D'ENREGISTREMENT SUR IN = M) : 
+* 
+*       UNIT#2(1)        = UNIT#1(1)  ET  UNIT#3(1)        = UNIT#1(2), 
+*       UNIT#2(2)        = UNIT#1(1)  ET  UNIT#3(2)        = UNIT#1(3), 
+*                                   . 
+*                                   . 
+*                                   . 
+*       UNIT#2(M-1)      = UNIT#1(1)  ET  UNIT#3(M-1)      = UNIT#1(M), 
+*       UNIT#2(M)        = UNIT#1(2)  ET  UNIT#3(M)        = UNIT#1(3), 
+*                                   . 
+*                                   . 
+*                                   . 
+*       UNIT#2(2M-3)     = UNIT#1(2)  ET  UNIT#3(2M-3)     = UNIT#1(M), 
+*       UNIT#2(2M-2)     = UNIT#1(3)  ET  UNIT#3(2M-2)     = UNIT#1(4), 
+*                                   . 
+*                                   . 
+*                                   . 
+*       UNIT#2(M(M-1)/2) = UNIT#1(M-1) ET UNIT#3(M(M-1)/2) = UNIT#1(M), 
+*
+*      JUSQU'A CE L'ON AIT TOUTES LES M(M-1)/2 PAIRES. 
+*
+*      ON LIT LES NUMEROS DES PREMIERS ET DERNIERS ENREGISTREMENTS 
+*      A CONSIDERER SUR  UNIT#5. SI  LE PREMIER NOMBRE EST VIDE ON 
+*      LES UTLISE TOUS. 
+*
+*
+*     PARAMETRE...
+*      M1  (m)   = PREMIER ENREGISTREMENT CONSIDERE  (DEFAUT = PREMIER)
+*      M2  (n)   = DERNIER ENREGISTREMENT CONSIDERE  (DEFAUT = DERNIER)
+*      NIV (plv) = ORDINAL DU NIVEAU VERTICAL RETENU (DEFAUT = PREMIER)
+*
+*      READ(5,5000) M1,M2,NIV 
+*5000  FORMAT(10X,3I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*FULLMIX      1   10  500
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH LEVELS
+*       2 M1,M2 INCONSISTENT WITH NUMBER OF RECORDS IN INFILE
+*       3 REQUESTED LEVEL NIV UNAVAILABLE
+*       4 PROBLEMS READING FILE IN
+*       5 PREMATURE END OF FILE ON INPUT
+*       6 PREMATURE END OF FILE ON INFILE
+*       7 MORE THAN ONE TYPE OF DATA IN INFILE
+*       8 MEMORY ALLOCATION PROBLEM
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM FULLMIX 
+*    1        (      INFILE,       OUT1,       OUT2,
+*    2         TAPE1=INFILE, TAPE2=OUT1, TAPE3=OUT2, 
+*    3         OUTPUT,TAPE6=OUTPUT,INPUT,TAPE6=INPUT) 
+ 
+*     $Log: fullmix.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2005/04/14 18:19:48  dugas
+*     Assurer la coherence des donnees a l'entree avec CMPLBL.
+*
+*     Revision 4.4  1998/10/20 17:10:00  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.3  1998/07/03  02:26:24  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/05/21  20:20:48  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1997/12/10  18:13:53  armnrbd
+*     Ne plus utiliser RECGET/RECPUT pour l'I/O.
+*
+*     Revision 4.0  1994/11/17  14:20:08  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:02  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/24  15:37:10  armnrbd
+*     Initial revision
+*      
+***   FEVRIER 23/88 - B. DUGAS. 
+ 
+***   MOD PAR BD LE 22 JUIN 1988: 
+***    -  POSSIBILITE DE TENIR COMPTE DES NIVEAUX. 
+ 
+*---------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXLEV = 999
+ 
+      CHARACTER   TYPE*4,LIGNE*80
+      LOGICAL     OK,MULTIZ,ERR,MULTI
+      INTEGER     LEV(MAXLEV),NLEV,
+     +            KBUF(HEAD),NF,NR,M,M1,M2,NIB,
+     +            NIV,IO,I,J,L,KIND,WHERE,NSET,
+     +            MAXW,LEN,NWDS,KPAK,IER
+ 
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: DATA1,DATA2
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ2
+      EXTERNAL    JCLPNT,XIT,GETLIGN,BURNF,SUIVANT,
+     +            PRECEDE,GETSET2,PUTFLD2
+ 
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/fullmix.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5 
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+
+      MULTIZ = .FALSE.
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+      MAXW = GETSIZ2( 1, KBUF,LEN,NWDS,KPAK, LEV,NLEV )
+      IF (MAXW.EQ.0) CALL                          XIT(' Fullmix',-1 )
+
+      ALLOCATE( IBUF(LEN), DATA1(MAXW),
+     +          JBUF(LEN), DATA2(MAXW), STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT(' Fullmix',-8 )
+
+***    LIRE UNIT#1 POUR DETERMINER LE NOMBRE D'INTERVALS TEMPORELS. 
+ 
+       M = 0
+  100  CALL SUIVANT( 1, IBUF, ERR,OK )
+          IF (.NOT.OK ) GOTO 101
+          IF (     ERR) GOTO 999
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Fullmix',-7 )
+          M = M+1
+          GOTO 100
+  101 IF (M.EQ.0) GOTO 999
+      CALL PRECEDE( 1,-1 )
+
+      KIND = IBUF(1)
+      WRITE(TYPE,'(A4)') KIND
+
+      IF (      TYPE .EQ.'ZONL'
+     +   .AND.  NLEV .EQ. IBUF(6)
+     +   .AND.  NLEV .NE.  1    ) MULTIZ = .TRUE.
+                                  MULTI  = .TRUE.
+
+                  NSET = NLEV
+      IF (MULTIZ) NSET = 1
+
+      IF (MOD(M,NLEV).NE. 0 ) CALL                 XIT(' Fullmix',-1 ) 
+
+      M = M/NSET
+ 
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          M1  = 0
+          M2  = 0
+          NIV = 0
+
+          OK = RPBLOC('M',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=998,ERR=998,IOSTAT=IO) M1
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=998,ERR=998,IOSTAT=IO) M2
+
+          OK = RPBLOC('PLV',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=998,ERR=998,IOSTAT=IO) NIV
+
+      ELSE
+
+***        LECTURE DES BORNES DU PROBLEME. 
+ 
+          CALL GETLIGN( 5, LIGNE, 80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 998
+          ELSE
+              READ( LIGNE, 5000, ERR=998,END=998,IOSTAT=IO ) M1,M2,NIV
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (M1.LE.0)                                             THEN 
+          M1 = 1 
+          M2 = M 
+      ELSE IF (M1.GT.M .OR. M2.LE.M1)                          THEN 
+          CALL                                     XIT(' Fullmix',-2 ) 
+      END IF 
+ 
+      M2 = MIN( M,M2 ) 
+ 
+***    VERIFIER L'INFORMATION SUR LE NIVEAU REQUIS. 
+ 
+      NIB = 1
+      IF (NIV.EQ.0)                                            THEN 
+          NIV = LEV(NIB) 
+      ELSE 
+          DO 200 L=1,NLEV 
+              IF (NIV.EQ.LEV(NIB)) GOTO 250 
+              NIB = NIB+1
+  200     CONTINUE 
+          CALL                                     XIT(' Fullmix',-3 ) 
+      END IF 
+ 
+      WHERE = (NIB-1)*IBUF(5)+1
+
+***    LECTURE DES DONNEES. 
+ 
+  250 NR = 0 
+      DO 450 I=M1,M2-1 
+ 
+***        SAUTER (I-1) JEUX DE CHAMPS. 
+ 
+          DO  J=1,I-1
+              CALL GETSET2( 1, DATA1, LEV,NLEV, IBUF,MAXW,OK ) 
+          END DO
+ 
+          IF (MULTIZ .OR. MULTI)                               THEN
+
+***            METTRE LE JEUX SUIVANT DANS DATA1. 
+ 
+              CALL GETSET2( 1, DATA1, LEV,NLEV, IBUF,MAXW,OK )
+
+              IF (.NOT.OK) CALL                    XIT(' Fullmix',-4 ) 
+ 
+***            LIRE LES M2-I JEUX SUIVANTS DANS DATA2 
+***            ET ECRIRE LES PAIRES DE NIVEAUX REQUIS.
+ 
+              DO 350 J=I+1,M2 
+ 
+                  CALL GETSET2( 1, DATA2, LEV,NLEV, JBUF,MAXW,OK )
+
+                  IF (.NOT.OK) CALL                XIT(' Fullmix',-4 ) 
+
+                  IBUF(4) = LEV(NIB)
+                  JBUF(4) = LEV(NIB)
+                  IBUF(6) = 1
+                  JBUF(6) = 1
+
+                  CALL PUTFLD2( 2, DATA1(WHERE), IBUF,MAXW ) 
+                  CALL PUTFLD2( 3, DATA2(WHERE), JBUF,MAXW ) 
+
+                  NR = NR+1 
+ 
+  350         CONTINUE 
+ 
+          ELSE
+
+***            METTRE LE SUIVANT DANS /ICOM/. 
+ 
+              CALL RECGET( 1, TYPE,-1,' ',NIV, IBUF,MAXW,OK ) 
+
+              IF (.NOT.OK) CALL                    XIT(' Fullmix',-4 ) 
+ 
+***            LIRE LES M2-I SUIVANTS DANS /JCOM/ ET ECRIRE LES PAIRES. 
+ 
+              DO 400 J=I+1,M2 
+ 
+                  CALL RECGET( 1, TYPE,-1,' ',NIV, JBUF,MAXW,OK ) 
+
+                  IF (.NOT.OK) CALL                XIT(' Fullmix',-4 ) 
+ 
+                  CALL RECPUT( 2, IBUF ) 
+                  CALL RECPUT( 3, JBUF ) 
+
+                  NR = NR+1 
+ 
+  400         CONTINUE 
+ 
+          END IF
+
+***        REMBOBINNE ET RECOMMENCE POUR LA PROCHAINE SERIES. 
+ 
+          CALL PRECEDE( 1,-1 )
+ 
+  450 CONTINUE 
+ 
+***    FIN NORMALE. 
+ 
+      WRITE(6,6100) NR,M1,M2 ; CALL PRTLAB( IBUF )
+      CALL                                         XIT(' Fullmix', 0 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT#5. 
+ 
+  998 IF (IO /= 0) WRITE(6,6005) IO
+      CALL                                         XIT(' Fullmix',-5 ) 
+
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT#1. 
+ 
+  999 CALL                                         XIT(' Fullmix',-6 ) 
+*---------------------------------------------------------------------- 
+
+ 0005 FORMAT(BN,I5)
+
+ 5000 FORMAT(10X,3I5) 
+
+ 6005 FORMAT(' Fullmix reports I/O error number ',I3,' on unit 5.')
+ 6100 FORMAT(1X,I5,' pairs written, from record #',I6,' TO #',I6,'.'/ 
+     +       ' last ibuf used : ')
+ 
+      END 
+#     endif

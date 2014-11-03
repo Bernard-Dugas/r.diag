@@ -1,0 +1,2186 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...                    / [ -lon  VAL1 -lat VAL2
+*      llagg  LL GG INPUT OUTPUT       _ /    -nhem VAL3 -npg VAL6
+*      llvagg LU LV GU GV INPUT OUTPUT   \    -kind VAL4 [VAL5]
+*      psagg  LL GG INPUT OUTPUT          \   -a VAL7  -b VAL8 -c VAL9
+*      psvagg LU LV GU GV INPUT OUTPUT     \  -i VAL10 -j VAL11 ]
+*
+*
+*     DESCRIPTION...
+*      llagg   - CONVERT LAT-LONG (MASKED/SHIFTED/ROTATED) GRIDS
+*      llvagg  - SAME CONVERSION AS LLAGG BUT FOR WINDS
+*      psagg   - CONVERT POLAR-STEREOGRAPHIC GRIDS
+*      psvagg  - SAME CONVERSION AS PSAGG BUT FOR WINDS
+*
+*
+*     AUTHOR  - J.D.HENDERSON
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/llagg.ptn,v 4.48 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     PURPOSE - CONVERTS A FILE OF LAT-LONG (POSSIBLY MASKED/SHIFTED
+*               AND POSSIBLY WITH ROTATED POLES) OR POLAR-STEREOGRAPHIC
+*               GRIDS TO A ANOTHER FILE OF GLOBAL GRIDS BY INTERPOLATION.
+*
+*     NOTES   - 1) IF KIND.LT.0, THEN INTERPOLATION IS LINEAR WITH VALUES EQUAL
+*                  TO "SPVAL" ARE CONSIDERED TO BE BAD/MISSING DATA AND THEY
+*                  ARE SKIPPED IN THE COMPUTATION.
+*               3) WILL WORK WITH GEM GRIDS. THE PROGRAM THEN USES
+*                  THE RMNLIB ROUTINE EZ_IGSCINT TO INTERPOLATE.
+*               4) ZONAL ARRAYS CAN ALSO BE INTERPOLATED VIA A CALL
+*                  TO LLAGG. THEN, NLG AND ILG BOTH HAVE TO BE ONE.
+*               5) psagg AND psvagg ARE TWO ALIASES FOR llagg AND
+*                  llvagg, RESPECTIVELY, REQUIRING THE PRESENCE
+*                  OF POLAR-STEREOGRAPHIC (PS) INPUT FIELDS.
+*
+*
+*     INPUT FILE (llagg/psagg)...
+*      LL = LAT-LONG GRIDS (POSSIBLY MASKED/SHIFTED/ROTATED) WITH ILG
+*           EQUALLY SPACED LONGITUDES AND ILAT EQUALLY SPACED LATITUDES
+*           OR POLAR-STEREOGRAPHIC ARRAYS.
+*                            
+*     INPUT FILE (llvagg/psvagg)...
+*      LU = LAT-LONG (POSSIBLY MASKED/SHIFTED/ROTATED)
+*      LV   OR POLAR-STEREOGRAPHIC GRID WINDS.
+*
+*                            
+*     NOTES: 1) IF KIND#1 < 0 "SPVAL" VALUES ARE TREATED AS BAD/MISSING DATA
+*                              WITH LAT-LONG DATA POSSIBLY OFF THE POLES,
+*               OTHERWISE,     LAT-LONG DATA ARE CONSIDERED SPANNING THE POLES
+*                              IN THE TOP AND BOTTOM ROWS.
+*            2) THE DEFAULT INPUT GRIDS CAN ALSO BE DESCRIBED AS RPN STANDARD
+*               GRID TYPE B. FURTHERMORE, A (SHIFTED LAT-LONG), G (GAUSSIAN),
+*               L (GENERALIZED LAT-LONG) OR Z (ROTATED, NON-REGULAR LAT-LONG)
+*               GRIDS, AS WELL AS N AND S POLAR-STEREOGRAPHIC RPN GRIDS ARE
+*               SUPPORTED AND ARE INTERPOLATED USING THE EZSCINT PACKAGE.
+*            3) OUTPUT GRID TYPES OTHER THAN GAUSSIAN (I.E. G) CAN ONLY BE
+*               SPECIFIED IN COMMAND-LINE PARAMETRE MODE (WITH KIND#2).
+*            4) DIGITAL FILTERING WILL BE APPLIED BEFORE INTERPOLATION IF THE
+*               DESTINATION GRID IS AT MUCH LOWER RESOLUTION THAN THE INPUT.
+*               AS APPROPRIATE MESSAGE WILL BE PRINTED WHEN THIS IS DONE.
+*            5) IF "-def 1" IS SPECIFIED AND THE INPUT GRID TYPE IS Z (GEM),
+*               THE GRID ORIENTATION IS CONSERVED ON OUTPUT, AND THE RESULTING
+*               Z-GRID HAS UNIFORM RESOLUTION FOLLOWING THE ILG,ILAT VALUES.
+*            6) Missing value treatment is activated by providing a real
+*               number to be used as a missing value flag with the "-mvalue"
+*               global command-line argument. Data that is "close" to this
+*               value will be disregarded by the program.
+*               
+*
+*
+*     OUTPUT FILES...
+*      GG    = GRIDS HAVING ILG EQUALLY SPACED LONGITUDES. Please see
+*              the KIND#2 documentation for the supported grid types.
+*      GU,GV = WINDS ON OUTPUT GRIDS.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      ILG    (lon) = NUMBER OF OUTPUT LONGITUDES (DEF: SAME AS IN GG)
+*      ILAT   (lat) = NUMBER OF OUTPUT LATITUDES  (DEF: SAME AS IN GG)
+*      NHEM         = DESTINATION HEMISPHERIC INFO 
+*                     0=GLOBAL ; 1=NH ; 2=SH
+*      KIND#1      >= 0; INTERPOLATION TYPE
+*                        1 FOR LINEAR,
+*                        2 FOR NEAREST NEIGHBOR (only RPN/CMC Standard files)
+*                        OTHERWISE CUBIC
+*                  <  0; INTERPOLATION IS LINEAR AND THE INPUT LAT-LONG GRID
+*                        IS TREATED AS MASKED AND POSSIBLY SHIFTED (AND VALUES
+*                        READ IN FOR "SPVAL", "SHFTLT" AND "SHFTLG" ARE USED)
+*      KIND#2       = OUTPUT GRID TYPE. POSSIBLE VALUES ARE G (GAUSSIAN),
+*                     A (LAT-LONG), B (LAT-LONG WITH POLES AND EQUATOR)
+*                     OR L (GENERALIZED LAT-LONG).
+*                     THE DEFAULT VALUE IS G.
+*      NPKGG  (npg) = OUTPUT GRID PACKING DENSITY (0 DEFAULTS TO -16)
+*      SPVAL  (a)   = ACTUAL VALUES FOR BAD/MISSING DATA. WHEN
+*                     SPECIFIED, IT IS THE VALUE TO BE USED WHEN
+*                     EXTRAPOLATING IS TO BE DONE.
+*
+*     WHEN KIND#1 .LT. 0 (*** But only for CCCma files ***)
+*
+*      SHFTLT (b)   = THE VALUE IN DEGREES BY WHICH THE LAT-LONG
+*                     GRID IS SHIFTED FROM THE POLES.
+*      SHFTLG (c)   = THE VALUE IN DEGREES BY WHICH THE LAT-LONG
+*                     GRID IS SHIFTED EAST FROM GREENWICH.
+*
+*     OTHERWISE, (I.E. WHEN KIND#1 .GE. 0) IN COMMAND-LINE MODE ONLY...
+*
+*     IF THE DESTINATION FIELDS ARE GENERALIZED LAT-LONG (L) GRIDS,
+*     THE GRID DESCRIPTORS ARE DEFINED AS FOLLOWS:
+*
+*      XLAT0  (b)   = Latitude of the southwest corner of the grid.
+*      XLON0  (c)   = Longitude of the southwest corner of the grid.
+*
+*      DLAT   (i)   = Latitudinal grid length in degrees.  (REQUIRED)
+*      DLON   (j)   = Longitudinal grid length in degrees. (REQUIRED)
+*      
+*
+*      READ(5,5010) ILG,ILAT,KIND,NPKGG,SPVAL,SHFTLT,SHFTLG
+*5010  FORMAT(10X,2I5,I2,I3,I5,3E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*  FOR LAT-LONG GRID SPANNING THE POLES WITH VALUES AT GREENWICH,
+*
+**  LLAGG    64   32    1    2
+*
+*  SAME A ABOVE BUT FOR NH ONLY
+*
+**  LLAGG    64   16 1  1    2
+*
+*  FOR MASKED/SHIFTED LAT-LONG GRID FROM THE POLES AND GREENWICH,
+*
+**  LLAGG    96   48   -1    0     1.E38      1.25      1.25
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FILE LL
+*       2 ILLEGAL GRID TYPE DETECTED
+*       3 MORE THAN ONE SIZE IN FILE LL
+*       4 PROBLEMS WHILE READING DIRECTIVES
+*       5 WIND COMPONENTS ARE NOT THE SAME SIZE
+*       6 LLVAGG DOES NOT SUPPORT ZONAL CROSS-SECTIONS
+*       7 ZONAL CROSS-SECTIONS REQUIRE ILG TO BE ONE
+*       8 CONFLICT BETWEEN REQUESTED AND LL HEMISPHERE
+*       9 ONLY GAUSSIAN OUTPUT FOR CCC INPUT FILES
+*      10 PS INPUT NOT SUPPORTED FOR CCC FILES
+*      11 MISSING GRID DESCRIPTOR PARAMETRE
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM llagg
+*     PROGRAM LLAGG (LL,      GG,       INPUT,       OUTPUT,            )
+*    1         TAPE1=LL,TAPE2=GG, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ------------------------------------------------------
+*     $Log: llagg.ptn,v $
+*     Revision 4.48  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.47  2014/01/10 22:14:55  dugas
+*     Allouer MVLL et MVGG lorsque MVALUE est active au vol.
+*
+*     Revision 4.46  2014/01/09 19:32:00  dugas
+*     Faire un UP2LOW sur le resultat de l'appel a GETVERB.
+*
+*     Revision 4.45  2013/11/28 22:19:44  dugas
+*     Tenir compte des grilles de type 'U' en entree et faire des appels a MISPAR apres chaque lecture.
+*
+*     Revision 4.44  2013/10/16 21:08:55  bernard
+*     Utiliser les macros longitude_maximale et latitude_maximale pour definir les parametres MAXI et MAXJ, respectivement.
+*
+*     Revision 4.43  2012/07/26 16:18:33  dugas
+*     Ajouter support des grilles de type '\!'(NCEP GRIB).
+*
+*     Revision 4.42  2012/05/17 22:06:29  dugas
+*     Ignorer les grilles non supportees.
+*
+*     Revision 4.41  2011/01/13 19:04:26  dugas
+*     - Tenir compte de grille Z a reference PS.
+*     - Faire appel a DSET_IGS plutot que ZIPIG.
+*     - Utiliser EZGDEF_FMEM plutot que EZGDEF.
+*
+*     Revision 4.40  2008/11/24 22:07:25  dugas
+*     Ne pas filtrer en mode interpolation 'PLUS PROCHE VOISIN'.
+*
+*     Revision 4.39  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.38  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.37  2007/08/29 17:23:24  dugas
+*     Ne plus allouer WGHT et faire appel a LISSXY2 plutot que LISSXY.
+*
+*     Revision 4.36  2006/07/24 21:14:23  dugas
+*     Documenter le traitement des valeurs manquantes.
+*
+*     Revision 4.35  2006/07/13 21:44:52  dugas
+*     Corriger l'interpolation des coupes zonales de grilles A et B.
+*
+*     Revision 4.34  2006/07/04 17:53:21  dugas
+*     Ajouter le support des donnees manquantes par le biais soit
+*      du parametre "-mvalue valeur [epsilon]", soit de la variable
+*      d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*      nombre reel denotant une valeur manquante et "epsilon" est
+*      le facteur de precision utilise dans les comparaisons. La
+*      valeur par defaut de epsilon est 1%. La seconde methode a
+*      preseance sur la premiere.
+*
+*     Revision 4.33  2005/11/22 19:11:52  dugas
+*     1) Modifier la documentation automatique.
+*     2) Corriger l'appel a EZQKDEF definissant OGID.
+*     3) Ajouter le message informatif 6006.
+*
+*     Revision 4.32  2005/04/12 18:08:17  dugas
+*     Modifier le comportement du mode "-def 1" pour que la sortie soit alors
+*      une grille de type Z valide et documenter brievement celui-ci.
+*
+*     Revision 4.31  2004/11/26 16:12:18  dugas
+*     Ajouter le support des grilles de type Y.
+*     Utiliser explicitement les interpolateurs EZSCINT plutot
+*      que leur mode de compatibilite arriere avec FSCINT.
+*
+*     Revision 4.30  2004/11/12 17:45:34  dugas
+*     Correction a la documentation automatique.
+*
+*     Revision 4.29  2004/11/12 17:41:24  dugas
+*     - Ajouter un lissage des donnees vectorielles en cas de reduction de resolution.
+*     - Etendre ce lissage avant interpolation a tous  les types de donnees.
+*     - Ajouter le support des donnees sur grilles de type L (Entrees et sorties).
+*     - Les donnees RPN/CMC utilisent toujours les interpolateurs EZSCINT.
+*
+*     Revision 4.28  2004/08/20 17:27:05  dugas
+*     Ajouter un lissage de grilles Z en cas de reduction de resolution.
+*
+*     Revision 4.27  2004/04/30 17:27:25  dugas
+*     Ajouter les alias PSAGG et PSVAGG a LLAGG pour le traitement des
+*      grilles sources PS de type N et S dans les fichiers CMC/RPN.
+*
+*     Revision 4.26  2004/04/16 17:37:16  dugas
+*     Corriger le calcul de ILG dans le cas zonal
+*
+*     Revision 4.25  2003/12/10 22:34:40  dugas
+*     Re-definir XLON et XLAT apres une re-allocation de memoire
+*
+*     Revision 4.24  2003/10/02 19:58:40  dugas
+*     Etendre la definition de SPVAL aux extrapolations
+*      dans le cas des fichiers standarts RPN/CMC qui
+*      seront traites avec les rouutines EZ_...
+*
+*     Revision 4.23  2003/07/04 17:59:40  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*     Ajouter le support des grilles A et B en sortie.
+*     Corriger l'appel a rgll2gd.
+*
+*     Revision 4.22  2003/01/21 22:29:41  dugas
+*     Ajouter le support des grilles de type A et G
+*
+*     Revision 4.21  2002/09/17 18:15:36  dugas
+*     Ajouter le format 6011 pour les vents
+*
+*     Revision 4.20  2002/04/22 15:51:25  dugas
+*     Corriger la documentation interne
+*
+*     Revision 4.19  2001/12/14 15:20:36  dugas
+*     Ajouter le support des grilles L et de l'interpolation proche-voisin
+*
+*     Revision 4.18  2001/11/05 13:55:57  armnrbd
+*     Ajouter du code de compilation conditonnelle tenant compte
+*      de la nouvelle interface des interpolateurs EZxxx.
+*
+*     Revision 4.17  2001/03/16 22:04:56  armnrbd
+*     Utiliser les routines PUTHIGH/GETHIGH associees aux IBUFs.
+*
+*     Revision 4.16  2000/01/05 16:42:13  armnrbd
+*     Definir des valeurs par defauts et ajouter une cle pour ne pas
+*     faire de rotation avec les grilles 'Z' (non-documentee).
+*
+*     Revision 4.15  1999/04/27 02:05:08  armnrbd
+*     Changer la sequence d'appel de GETZDES.
+*
+*     Revision 4.14  1999/04/08 21:56:30  armnrbd
+*     Corriger un appel a PUTXGI.
+*
+*     Revision 4.13  1999/01/06 15:51:41  armnrbd
+*     Corriger la valeur de NR dans le cas de champs ZONL.
+*
+*     Revision 4.12  1998/12/01  19:05:13  armnrbd
+*     Mieux isoler le traitement des grilles SUBA.
+*
+*     Revision 4.11  1998/09/24  17:51:27  armnrbd
+*     Utiliser les appels EZ_ pour certaines interpolations.
+*
+*     Revision 4.10  1998/07/03  02:26:32  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.9  1998/05/28  19:56:56  armnrbd
+*     Modifier la sequence d'appel a GETZREF.
+*
+*     Revision 4.8  1997/09/26  17:39:07  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.7  1997/07/25  21:23:03  armnrbd
+*     Ajouter la cle NHEM pour sorties hemispheriques.
+*
+*     Revision 4.6  1997/04/30  19:51:39  armnrbd
+*     Ajouter le support des coupes zonales.
+*
+*     Revision 4.5  1997/04/28  17:26:32  armnrbd
+*     Corriger la verification des tailles pour les grilles normales.
+*
+*     Revision 4.4  1997/04/09  20:48:18  armnrbd
+*     Ajouter le support direct des grilles RPN de type 'Z'.
+*     Ajouter le point d'entree LLVAGG pour le traitement des vents.
+*
+*     Revision 4.3  1997/02/17  03:36:30  armnrbd
+*     Conserver les enregistrtements de type LABL.
+*
+*     Revision 4.2  1996/11/12  19:06:58  armnrbd
+*     Modifier l'appel a JCLPNT.
+*
+*     Revision 4.1  1995/11/23  02:36:00  armnrbd
+*     Premiere version operationelle.
+*
+*     Revision 4.0  1995/11/22  20:55:50  armnrbd
+*     Version initiale.
+*
+
+*     MAR 03/93 - F.MAJAESS (REVISED TO HANDLE MASKED/SHIFTED LAT-LONG GRID)
+*     JUL 13/92 - E. CHAN  (DIMENSION SELECTED VARIABLES AS REAL*8)             
+*     JAN 29/92 - E. CHAN  (CONVERT HOLLERITH LITERALS TO ASCII)
+*     MAY 12/83 - R.LAPRISE.
+*     MAR 23/81 - J.D.HENDERSON
+
+*----------------------------------------------------------------------------
+      IMPLICIT  none
+
+      INTEGER, PARAMETER :: MAXI = longitude_maximale
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXLEV = 999
+
+      CHARACTER*4 TYPE,TYPE2,NOM,PKTYP
+      CHARACTER   GRTYP,BGRTYP,OGRTYP,RTYP
+      LOGICAL     OK,VRAI,FAUX,WINDS,ROTATE,
+     +            MVALUE,WSTAT,MDONE1,MDONE2,
+     +            SAME,PSOUR,VRES,POLADD,ERROR,
+     +            IN1MISS,IN2MISS,SET_EXTRAP_VALUE
+      CHARACTER   LIGNE*256,VERBE*8,SPVALC*10,g2gtyp*7
+      REAL*8      SL(MAXJ),WOSSL(MAXJ),DEGX,DEGY,LON0,
+     +            WL(MAXJ),CL(MAXJ),RAD(MAXJ),LAT0,HEM
+      REAL        ANG(MAXJ),ALAT,ALON,ZERO,SPVAL,DXLA,DYLA,
+     +            GLL,GG,GLU,GLV,GGU,GGV,XLAT,XLON,PI2DEG,
+     +            SHFTLT,SHFTLG,XRESI,XRESO,YRESI,YRESO,HOLD,PI,
+     +            BGLU,BGLV,BGLL, XG1,XG2,XG3,XG4, DLAT,DLON,D60,
+     +            XLAT0,XLON0,DLAT0,DLON0,OLON(MAXI),OLAT(MAXJ),
+     +            FMISS,EPSIL,EPSILON,MVLL,MVGG,MHOLDG,MHOLDL
+      REAL*8      BALON(MAXI),BALAT(MAXJ),LON8(MAXI),LAT8(MAXJ),
+     +            cxa(MAXI),cxb(MAXI),cxc(MAXI),cxd(MAXI),TOP,
+     +            cya(MAXJ),cyB(MAXJ),cyc(MAXJ),cyd(MAXJ),BOT,
+     +            wlon(MAXI),wtot,RROT(3,3),FMISS8,EPSIL8
+      INTEGER     LBUF(taille_entete),KBUF(taille_entete),LEN,LEN2,NWDS,LPAK,KPAK,MAXW,
+     +            MAXW2,ILG,ILG1,ILAT,ILATH,I,J,IBUF,JBUF,NFF,NPKGG,
+     +            KIND,IER,IO,IHEM,INTERP,NR,NLG1,NLAT,OBUF(taille_entete),OLEN,
+     +            OWDS,OPAK,LENLAB,HEAD,IJ,IG1R,IG2R,IG3R,IG4R,
+     +            LEV(MAXLEV),II,L,NLEV,NHEM, NIR,NJR,NLG,
+     +            DEF, XYL, BNLG1,BNLAT, MAXB,
+     +            INDXX(MAXI),INDXY(MAXJ),BLON,BLAT,
+     +            OLG1,OLG2,OLG3,OLG4,OGID,IGID,
+     +            NILA,NJLA,IP1,IP2,IP3,XYL0,
+     +            I10,I20,I30,I40,DGID
+
+      POINTER   ( P1,  GLL(1) ),( P1,  GLU(1) )
+      POINTER   ( P2,   GG(1) ),( P2,  GLV(1) )
+      POINTER   ( P3, XLAT(1) ),( P5,  GGU(1) ),( P33,ALAT(MAXJ) )
+      POINTER   ( P4, XLON(1) ),( P6,  GGV(1) ),( P44,ALON(MAXI) )
+      POINTER   ( P8, IBUF(8) ),( P9, JBUF(8) )
+      POINTER   ( PA, BGLL(1) ),( PA, BGLU(1) )
+      POINTER                   ( PB, BGLV(1) ),( PHL, MHOLDL(1) )
+      POINTER   ( PC ,MVLL(1) ),( PD, MVGG(1) ),( PHG, MHOLDG(1) )
+
+      REAL, ALLOCATABLE, DIMENSION(:,:) :: LONR,LATR,LATLON_WE,LATLON_SN
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER,    PARAMETER :: NXG=20
+      CHARACTER   GRTYPOUT
+      REAL        XGLST(NXG)
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
+      INTEGER,    EXTERNAL :: GETSIZ,GETHIGH,EZQKDEF,GDLL,
+     +            EZGDEF_FMEM,EZDEFSET,EZUVINT,EZSINT
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,HPALLOC,
+     +            XIT,GETFLD2,GAUSSG,TRIGL2,PUTFLD2,LLIGGM,
+     +            LLIGG2,LBLCHK,GETLAB,PUTLAB,
+     +            GETZREF,GETZDES,PUTHIC,PUTHIGH,GETVERB,
+     +            GETSET2,PUTSET2,PRECEDE,CXGAIG,CIGAXG,
+     +            EZSETOPT,EZSETVA,MISPAR,
+     +            LISSXY2,POLWINDS
+
+      DATA        VRAI, FAUX / .TRUE.,.FALSE. /,
+     +            GRTYP / 'B' /, BGRTYP / 'G' /,
+     +            BLON, BLAT, MAXB / 3*-1 /,
+     +            DEF / 0 /, XYL0 / -1 /,
+     +            I10,I20,I30,I40 / 4*-1 /
+
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/llagg.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 6
+      CALL JCLPNT( NFF, 1,2,3,4, 5,6 )
+***    WHAT OPERATING MODE: STANDARD OR WINDS ?
+
+      CALL GETVERB( VERBE ) ; CALL up2low( VERBE,VERBE )
+
+                             PSOUR = .FALSE.
+                             WINDS = .FALSE.
+      IF (VERBE.EQ.'llvagg' .OR.
+     +    VERBE.EQ.'psvagg') WINDS = .TRUE.
+      IF (VERBE.EQ.'psagg'  .OR.
+     +    VERBE.EQ.'psvagg') PSOUR = .TRUE.
+
+      PI     = 4.0 * ATAN(1.D0)
+      PI2DEG = 180 / PI
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      IF (PSOUR .AND. PKTYP.NE.'SQ')                           THEN
+          WRITE(6,6010)
+          CALL                                     XIT( verbe,-10)
+      END IF
+
+      SPVAL  = 0.0 ; SET_EXTRAP_VALUE = .TRUE.
+
+***    READ OUTPUT GRID SIZE, INTERPOLATION SWITCH, OUTPUT PACKING DENSITY, 
+***         MASK VALUE, LATITUDINAL AND LONGITUDINAL SHIFTS FROM CARD.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          ILG    =  0
+          ILAT   =  0
+          NHEM   =  0
+          NPKGG  =  0
+          KIND   =  0
+
+          SPVALC = ' '
+          SHFTLT = 0.0
+          SHFTLG = 0.0
+
+          XLAT0  = 0.0
+          XLON0  = 0.0
+          DLAT0  = 0.0
+          DLON0  = 0.0
+
+          OK = RPBLOC('LON',LIGNE)
+          IF (OK) READ(LIGNE,0005,ERR=904,IOSTAT=IO) ILG
+
+          OK = RPBLOC('LAT',LIGNE)
+          IF (OK) READ(LIGNE,0005,ERR=904,IOSTAT=IO) ILAT
+
+          OK = RPBLOC('NHEM',LIGNE)
+          IF (OK) READ(LIGNE,0005,ERR=904,IOSTAT=IO) NHEM
+
+          OK = RPBLOC('NPG', LIGNE)
+          IF (OK) READ(LIGNE,0005,ERR=904,IOSTAT=IO) NPKGG
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,0005,ERR=904,IOSTAT=IO) KIND
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) BGRTYP = LIGNE
+
+          OK = RPBLOC('A',SPVALC)
+
+          IF (KIND.GE.0 .AND. BGRTYP.EQ.'L')                   THEN
+
+              OK = RPBLOC('B',LIGNE)
+              IF (OK) READ(LIGNE,0010,ERR=904,IOSTAT=IO) XLAT0
+
+              OK = RPBLOC('C',LIGNE)
+              IF (OK) READ(LIGNE,0010,ERR=904,IOSTAT=IO) XLON0
+
+              OK = RPBLOC('I',LIGNE)
+              IF (OK)                                          THEN
+                  READ(LIGNE,0010,ERR=904,IOSTAT=IO) DLAT0
+              ELSE
+                  WRITE(6,6011) 'DLAT'
+                  CALL                             XIT( verbe,-11 )
+              END IF
+
+              OK = RPBLOC('J',LIGNE)
+              IF (OK)                                          THEN
+                  READ(LIGNE,0010,ERR=904,IOSTAT=IO) DLON0
+              ELSE
+                  WRITE(6,6011) 'DLON'
+                  CALL                             XIT( verbe,-11 )
+              END IF
+
+              IF (DLAT0.LE.0.0  .OR.
+     +            DLON0.LE.0.0) CALL               XIT( verbe,-11 )
+
+              NHEM = 0
+
+          ELSE
+
+              IF (BGRTYP.EQ.'L') CALL              XIT( verbe,-2 )
+
+              OK = RPBLOC('B',LIGNE)
+              IF (OK) READ(LIGNE,0010,ERR=904,IOSTAT=IO) SHFTLT
+
+              OK = RPBLOC('C',LIGNE)
+              IF (OK) READ(LIGNE,0010,ERR=904,IOSTAT=IO) SHFTLG
+
+          END IF
+
+          OK = RPBLOC('DEFAUT',LIGNE)
+          IF (OK) READ(LIGNE,0005,ERR=904,IOSTAT=IO ) DEF
+
+      ELSE
+
+          CALL GETLIGN( 5, LIGNE,80, OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 904
+          ELSE
+              READ( LIGNE, 5010, END=904,IOSTAT=IO ) 
+     +        ILG,ILAT,NHEM,KIND,NPKGG,SPVALC,SHFTLT,SHFTLG
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    CHECK INITIAL MISSING VALUE PARAMETRES.
+
+      CALL MISPAR( MVALUE,FMISS8,EPSIL8 )
+
+      IF (SPVALC.NE.' ')                                       THEN
+          READ( SPVALC, 0010, ERR=904,IOSTAT=IO ) SPVAL
+      ELSE
+          SPVAL = FMISS8
+      END IF
+
+      IF (NHEM.EQ.1) WRITE(6,6004) 'NH'
+      IF (NHEM.EQ.2) WRITE(6,6004) 'SH'
+
+      IF (KIND.NE.1 .AND.
+     +    KIND.NE.2)                                           THEN
+          INTERP =  3
+      ELSE
+          INTERP =  KIND
+      END IF
+
+      IF (NPKGG.EQ.0) NPKGG  = -16
+
+***    SET INTERPOLATION TYPE FOR RPN FILES.
+
+      IF      (INTERP.EQ.1)                                    THEN
+          g2gtyp = 'LINEAR'
+          CALL EZSETOPT( 'DEGRE_INTERP',g2gtyp )
+      ELSE IF (INTERP.EQ.2)                                    THEN
+          g2gtyp = 'NEAREST'
+          CALL EZSETOPT( 'DEGRE_INTERP', g2gtyp )
+      ELSE IF (INTERP.EQ.3)                                    THEN
+          g2gtyp = 'CUB_LAG'
+          CALL EZSETOPT( 'DEGRE_INTERP','CUBIC' )
+      END IF
+
+      IF (MVALUE .OR. SPVALC /= ' ')                           THEN
+          CALL EZSETVAL( 'EXTRAP_VALUE',  SPVAL )
+          CALL EZSETOPT( 'EXTRAP_DEGREE','VALEUR' )
+          SET_EXTRAP_VALUE = .FALSE.
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+      NR   = 0
+      NLG1 = 0
+      NLAT = 0
+      NLEV = 0
+
+ 0100 MAXW = GETSIZ( 1, LBUF,LEN,NWDS,LPAK )
+      IF (MAXW.LE.0) CALL                          XIT( verbe,-1 )
+
+      WRITE(TYPE,0004) LBUF(1)
+
+      IF (TYPE /= 'GRID' .AND.
+     +    TYPE /= 'SUBA')                                      THEN
+          WRITE(6,6350) TYPE
+          CALL SUIVANT( 1, LBUF,ERROR,OK ) ! Bypass non-supported arrays.
+          IF (.NOT.ERROR .AND. OK) GOTO 100
+          CALL                                     XIT( verbe,-1 )
+      END IF
+
+      IF (WINDS)                                               THEN
+
+***        CHECK OTHER WINDS COMPONENT AS WELL.
+
+ 0150    MAXW2 = GETSIZ( 2, KBUF,LEN2,NWDS,KPAK )
+          IF (MAXW2.LE.0) CALL                     XIT( verbe,-1 )
+
+          WRITE(TYPE2,0004) KBUF(1)
+
+          IF (TYPE2 /= 'GRID' .AND.
+     +        TYPE2 /= 'SUBA')                                 THEN
+              WRITE(6,6350) TYPE2
+              CALL SUIVANT( 2, KBUF,ERROR,OK ) ! Bypass non-supported arrays.
+              IF (.NOT.ERROR .AND. OK) GOTO 150
+              CALL                                 XIT( verbe,-1 )
+          END IF
+
+***        CHECK FOR CONSISTENCY BETWEEN COMPONENTS.
+
+          CALL CMPLBL( 0,LBUF, 0,KBUF, OK )
+
+          IF (.NOT.OK) CALL                        XIT( verbe,-5 )
+
+          LEN = MAX( LEN,LEN2 )
+
+      END IF
+
+      DO  I=1,HEAD
+          OBUF(I) = LBUF(I)
+      END DO
+
+      OBUF(8) = NPKGG
+
+***    CHECK FOR ILG AND ILAT DEFAULT VALUES.
+
+      IF (PKTYP.EQ.'SQ')
+     +    GRTYP = GETHIC('GRTYP',OBUF )
+
+      IF (GRTYP.EQ.'Z' .AND.DEF.EQ.1)                          THEN
+          OGRTYP = 'Z'
+      ELSE
+          OGRTYP = BGRTYP
+      END IF
+
+      IF (ILG.EQ.0)                                            THEN
+          IF (TYPE.EQ.'ZONL')                                  THEN
+              ILG = 1
+          ELSE
+              ILG = LBUF(5)
+          END IF
+      END IF
+
+      IF ((OGRTYP.EQ.'A'    .OR.
+     +     OGRTYP.EQ.'B'    .OR.
+     +     OGRTYP.EQ.'G')   .AND.
+     +    MOD( ILG,2 ).NE.0 .AND. ILG.NE.1) ILG   = ILG-1
+
+      IF (ILAT.EQ.0)                                           THEN
+          IF (TYPE.EQ.'ZONL')                                  THEN
+              ILAT = LBUF(5)
+          ELSE
+              ILAT = LBUF(6)
+          END IF
+      END IF
+
+      IF (ILG.NE.1 .AND. TYPE.NE.'ZONL')                       THEN
+
+***        GRID OR SUBA ARRAYS.
+
+                                  ILG1  = ILG+1 
+          IF (PKTYP .EQ.'SQ'
+     +   .AND.OGRTYP.NE.'B' )     ILG1  = ILG
+                                  NLEV  = 1
+
+          OBUF(5) = ILG1
+          OBUF(6) = ILAT
+
+          CALL LBLCHK( OLEN,OWDS,OPAK,OBUF )
+
+      ELSE
+
+***        ZONAL ARRAYS.
+
+          IF (WINDS) CALL                          XIT( verbe,-6 )
+          IF (ILG.NE.1 .OR. TYPE.NE.'ZONL') CALL   XIT( verbe,-7 )
+
+          ILG1    = ILG
+          NLEV    = LBUF(6)
+          NWDS    = LBUF(5)
+
+          OBUF(5) = ILAT
+          OBUF(6) = NLEV
+          OWDS    = ILAT
+          OLEN    = OWDS*NLEV+HEAD+4
+
+      END IF
+
+      IF (NR.EQ.0)                                             THEN
+
+          IF (KIND.LT.0)                                       THEN
+
+              NPKGG = -32
+
+              IF (PKTYP.NE.'SQ')                               THEN
+                  WRITE(6,6005) ILG,ILAT,SPVAL,SHFTLT,SHFTLG 
+              ELSE
+                  WRITE(6,6006) ILG,ILAT,SPVAL
+              END IF
+
+          ELSE
+
+              WRITE(6,6007) ILG,ILAT,INTERP
+
+              SHFTLT = 0.0
+              SHFTLG = 0.0
+
+          END IF
+
+      END IF
+
+      LEN  = MAX( LEN,OLEN )
+      MAXW = LEN-HEAD
+
+***    ALLOCATE (MORE THAN ENOUGH) MEMORY.
+
+      NWDS = 2*NWDS
+
+      IF (WINDS)                                               THEN
+          CALL HPALLOC( P1,4*(NWDS+OWDS)+2*LEN,IER,0 )
+          P2  = LOC(  GLU(NWDS+1) )
+          P3  = LOC(  GLV(NWDS+1) )
+          P33 = LOC( XLAT(OWDS+1) )
+          P4  = LOC( ALAT(NWDS+1) )
+          P44 = LOC( XLON(OWDS+1) )
+          P5  = LOC( ALON(NWDS+1) )
+          P6  = LOC(  GGU(OWDS+1) )
+          P8  = LOC(  GGV(OWDS+1) )
+          P9  = LOC( IBUF(LEN +1) )
+      ELSE
+          CALL HPALLOC( P1,(NLEV+2)*(NWDS+OWDS)+LEN,IER,0 )
+          P2  = LOC(  GLL(NLEV*NWDS+1) )
+          P3  = LOC(   GG(NLEV*OWDS+1) )
+          P33 = LOC( XLAT(     OWDS+1) )
+          P4  = LOC( ALAT(     NWDS+1) )
+          P44 = LOC( XLON(     OWDS+1) )
+          P8  = LOC( ALON(     NWDS+1) )
+      END IF
+
+      IF (MVALUE)                                              THEN
+          CALL HPALLOC( PC,NWDS+OWDS,IER,0)
+          PD = LOC( MVLL(NWDS+1) )
+      END IF
+
+      IF (PSOUR        .AND.
+     +    GRTYP.NE.'N' .AND.
+     +    GRTYP.NE.'S' )                                       THEN
+          CALL                                     XIT( verbe,-2 )
+      ELSE
+     +IF (GRTYP.EQ.'N' .OR.
+     +    GRTYP.EQ.'S' )                                       THEN
+                     verbe = 'psagg'
+          IF (WINDS) verbe = 'psvagg'
+                     PSOUR = .TRUE.
+      ELSE
+     +IF (GRTYP.NE.'A' .AND.
+     +    GRTYP.NE.'B' .AND.
+     +    GRTYP.NE.'G' .AND.
+     +    GRTYP.NE.'L' .AND.
+     +    GRTYP.NE.'!' .AND.
+     +    GRTYP.NE.'U' .AND.
+     +    GRTYP.NE.'Z')                                        THEN
+          WRITE(6,6002) GRTYP
+          CALL                                     XIT( verbe,-2 )
+      END IF
+
+      IHEM = LBUF(7)
+
+      IF (.NOT.PSOUR   .AND.
+     +    IHEM.NE. 0   .AND.
+     +    NHEM.NE. 0   .AND.
+     +    IHEM.NE.NHEM )                                       THEN
+          WRITE(6,6008) NHEM,IHEM
+          CALL                                     XIT( verbe,-8 )
+      END IF
+
+      IF (PSOUR)                                               THEN
+          IHEM = NHEM
+      ELSE
+          IHEM = MAX( IHEM,NHEM )
+      END IF
+
+CCC   IF (NR.EQ.0)                                             THEN
+
+          IF (OGRTYP.EQ.'G')                                   THEN
+
+***            COMPUTE GAUSSIAN LATITUDES.
+
+                                 ILATH = ILAT
+              IF (IHEM.EQ.0)     ILATH = ILAT/2
+
+                                 DEGX  = 360./FLOAT( ILG )
+                                 DEGY  = 180./FLOAT( ILAT )
+              IF (IHEM.NE.0)     DEGY  =  90./FLOAT( ILAT )
+
+              CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL )
+              CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL, IHEM )
+
+              DO  I=1,ILAT
+                  ANG(I)=RAD(I)*PI2DEG
+              END DO
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+                  IJ   = 1
+                  DO  J=1,ILAT
+                      DO  I=1,ILG
+                          XLAT(IJ) = ANG(J)
+                          XLON(IJ) = (I-1)*DEGX
+                          IJ       = IJ+1
+                      END DO
+                  END DO
+
+                  OLG1 = IHEM
+                  OLG2 = 0
+                  OLG3 = 0
+                  OLG4 = 0
+
+              END IF
+
+          ELSE
+     +    IF (PKTYP.EQ.'SQ' .AND.
+     +       (OGRTYP.EQ.'A' .OR.
+     +        OGRTYP.EQ.'B' .OR.
+     +        OGRTYP.EQ.'L')   )                                THEN
+
+              IF (OGRTYP.EQ.'L')                              THEN
+
+                  CALL CXGAIG( OGRTYP, OLG1, OLG2, OLG3, OLG4,
+     +                                 XLAT0,XLON0,DLAT0,DLON0 )
+                  CALL CIGAXG( OGRTYP, XLAT0,XLON0,DLAT0,DLON0,
+     +                                 OLG1, OLG2, OLG3, OLG4  )
+
+                  LAT0 = XLAT0
+                  LON0 = XLON0
+
+                  DEGX = DLON0
+                  DEGY = DLAT0
+
+              ELSE
+
+***                COMPUTE A OU B OUTPUT GRID COORDINATES.
+
+                  DEGX = 360./FLOAT( ILG )
+
+                                 HEM = 180.
+                  IF (IHEM.NE.0) HEM =  90.
+              
+                  IF (OGRTYP.EQ.'A')                           THEN
+
+                      DEGY = HEM/FLOAT( ILAT )
+                      LAT0 = 0.5*DEGY-90.
+
+                  ELSE IF (OGRTYP.EQ.'B')                      THEN
+
+                      DEGY = HEM/FLOAT( ILAT-1 )
+                      LAT0 = -90.
+
+                  END IF
+
+                  IF (IHEM.EQ.1) LAT0 = LAT0+90.
+
+                  LON0 = 0.0
+
+                  OLG1 = IHEM
+                  OLG2 = 0
+                  OLG3 = 0
+                  OLG4 = 0
+
+              END IF
+
+              IJ = 1
+
+              DO  J=1,ILAT
+
+                  ANG(J) = LAT0
+
+                  DO  I=1,ILG
+                      XLAT(IJ) = LAT0
+                      XLON(IJ) = LON0+(I-1)*DEGX
+                      IJ       = IJ+1
+                  END DO
+
+                  LAT0 = LAT0+DEGY
+
+                  IF (OGRTYP.EQ.'B')                           THEN
+
+***                    REPEAT FIRST LONGITUDE AT THE END OF ROW.
+
+                      XLAT(IJ) = XLAT(IJ-ILG)
+                      XLON(IJ) = XLON(IJ-ILG)
+                      IJ       = IJ+1
+
+                      IF (J.EQ.ILAT)                           THEN
+                                         LAT0 = 90.
+                          IF (IHEM.EQ.2) LAT0 = 0.0
+                      END IF
+
+                  END IF
+
+              END DO              
+
+          ELSE IF (DEF.EQ.1 .AND. GRTYP.EQ.'Z')                THEN
+
+              OGRTYP = 'Z'
+
+***            INTERPOLATING Z-GRIDS, KEEPING THE ORIGINAL GRID ORIENTATION.
+
+              DEGX = 360./(ILG-1)
+              DEGY = 180./ ILAT
+
+              DO  I=1,ILG
+                  OLON(I) = (I-1)*DEGX
+              END DO
+
+              DO  J=1,ILAT
+                  OLAT(J) = -90.+(DBLE( J )-0.5)*DEGY
+              END DO
+
+***            DEFINE AND SAVE THE NEW Z-GRID
+***            OUTPUT DESCRIPTORS.
+
+              DXLA = DEGX
+              DYLA = DEGY
+
+              NILA = ILG
+              NJLA = ILAT
+
+              IF (NR.EQ.0) WRITE(6,6300)
+
+          ELSE
+
+              CALL                                 XIT( verbe,-9 )
+
+          END IF
+
+          IF (PKTYP.EQ.'SQ' .AND. OGRTYP.NE.'Z')
+     +        OGID = EZQKDEF( ILG1,ILAT, OGRTYP,OLG1,OLG2,OLG3,OLG4, 0 )
+
+          XRESO = DEGX
+          YRESO = DEGY
+
+CCC   END IF
+
+***    READ THE NEXT LAT-LONG GRID.
+
+  200 CALL GETFLD2( 1, GLL, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0) CALL                  HPDEALLC( P1,IER,0 )
+              IF (MAXW.EQ.0)                       GOTO 100
+              IF (NR.EQ.0)                                     THEN
+                  CALL                             XIT( verbe,-1 )
+              ELSE
+                  IF (.NOT.WINDS) WRITE(6,6100) NR
+                  IF (     WINDS) WRITE(6,6150) NR
+                  CALL                             XIT( verbe, 0 )
+              END IF
+          END IF
+
+***        CHECK MISSING VALUE PARAMETRES FOR FIRST VARIABLE.
+
+          CALL MISPAR( IN1MISS,FMISS8,EPSIL8 )
+
+          IF (IN1MISS)                                         THEN
+              FMISS   = FMISS8
+              EPSIL   = ABS( FMISS )*EPSIL8
+              EPSILON = 0.5
+          END IF
+
+          WRITE(TYPE,0004) IBUF(1)
+
+          IF (WINDS)                                           THEN
+
+***            READ SECOND WIND COMPONENT.
+
+              CALL GETFLD2( 2, GLV, ' ',-1,' ',-1, JBUF,MAXW,OK )
+
+              IF (.NOT.OK .AND. MAXW.EQ.0) CALL    PRECEDE( 1,1 )
+              IF (.NOT.OK .AND. MAXW.EQ.0) CALL    HPDEALLC( P1,IER,0 )
+              IF (.NOT.OK .AND. MAXW.EQ.0)         GOTO 100
+
+***            CHECK MISSING VALUE PARAMETRES FOR THIS VARIABLE.
+
+              CALL MISPAR( IN2MISS,FMISS8,EPSIL8 )
+
+              IF (IN2MISS)                                     THEN
+                 FMISS   = FMISS8
+                 EPSIL   = ABS( FMISS )*EPSIL8
+                 EPSILON = 0.5
+              END IF
+
+***            HERE AGAIN, CHECK FOR CONSISTENCY BETWEEN COMPONENTS.
+
+              IF ((TYPE   .NE.'CHAR' .AND.
+     +             TYPE   .NE.'LABL') .OR.
+     +             IBUF(1).NE.JBUF(1) )                        THEN
+
+                  CALL CMPLBL( 0,IBUF, 0,JBUF, SAME )
+
+                  IF (.NOT.(OK .AND. SAME)) CALL   XIT( verbe,-5 )
+
+              END IF
+
+          ELSE
+              IN2MISS = IN1MISS
+          END IF
+
+          IF (.NOT.MVALUE .AND. (IN1MISS .OR. IN2MISS))        THEN
+              MVALUE = .TRUE.
+              CALL HPALLOC( PC,NWDS+OWDS,IER,0)
+              PD = LOC( MVLL(NWDS+1) )
+          END IF
+
+          IF (SET_EXTRAP_VALUE .AND. MVALUE)                   THEN
+              CALL EZSETVAL( 'EXTRAP_VALUE',  FMISS )
+              CALL EZSETOPT( 'EXTRAP_DEGREE','VALEUR' )
+              SET_EXTRAP_VALUE = .FALSE.
+          END IF
+
+          IF (PKTYP.EQ.'SQ') GRTYP = GETHIC('GRTYP',IBUF )
+
+          IF (GRTYP.NE.'Z' .AND. OGRTYP.EQ.'Z')                THEN
+
+***            REDO SETUP
+
+                         CALL PRECEDE( 1,1 )
+              IF (WINDS) CALL PRECEDE( 2,1 )
+
+              CALL                                 HPDEALLC( P1,IER,0 )
+
+              GOTO 100
+
+          END IF
+
+          IF (TYPE.EQ.'ZONL')                                  THEN
+              IF (WINDS) CALL                      XIT( verbe,-6 )
+              NLEV = IBUF(6)
+              IF (NLEV.GT.1)                                   THEN
+                  CALL PRECEDE( 1,1 )
+                  CALL GETSET2( 1, GLL, LEV,NLEV, IBUF,MAXW,OK )
+              END IF
+          END IF
+
+          IF (TYPE .EQ.'GRID' .OR. 
+     +        TYPE .EQ.'ZONL' .OR.
+     +        GRTYP.EQ.'L'    .OR.
+     +        GRTYP.EQ.'!'    .OR.
+     +        GRTYP.EQ.'U'    .OR.
+     +        GRTYP.EQ.'N'    .OR.
+     +        GRTYP.EQ.'S'    .OR.
+     +        GRTYP.EQ.'Z'    )                                THEN
+
+***            INTERPOLATE.
+
+              IF ((PKTYP .NE.'SQ' .AND.
+     +             GRTYP .EQ.'B'  .AND.
+     +             OGRTYP.EQ.'G') .OR.
+     +             TYPE .EQ.'ZONL' )                           THEN
+
+***                WE USE THE CCCma ROUTINES. FIRST CHECK ARRAY SIZES.
+
+                  CALL CMPLBL( 0,LBUF, 0,IBUF, OK )
+                  IF (.NOT.OK)                                 THEN
+                      CALL PRTLAB( IBUF ) ; CALL PRTLAB( LBUF )
+                      CALL                         XIT( verbe,-3 )
+                  END IF
+              
+                  IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***                TREAT REGULAR LAT-LON GRIDS.
+
+                  IF ((TYPE   .EQ.'GRID'                  .AND.
+     +                (IBUF(5).NE.NLG1.OR.IBUF(6).NE.NLAT)).OR.
+     +               ((IBUF(5).NE.NLAT.OR.IBUF(6).NE.NLEV).AND.
+     +                 TYPE   .EQ.'ZONL'))                     THEN
+
+***                    INPUT GRID SETUP.
+
+                      IF (TYPE.NE.'ZONL')                      THEN
+                          NLG1 = IBUF(5)
+                          NLAT = IBUF(6)
+                          NLEV = 1
+                          DEGX = 360./FLOAT( NLG1-1 )
+                      ELSE
+                          NLG1 = 1
+                          NLAT = IBUF(5)
+                          NLEV = IBUF(6)
+                          DEGX = 0.
+                      END IF
+
+                      DEGY = (180.-2.*SHFTLT)/FLOAT( NLAT-1 )
+
+                      DO  I=1,NLG1
+                          ALON(I) = SHFTLG+FLOAT(I-1)*DEGX 
+                      END DO
+
+                      DO  I=1,NLAT
+                          ALAT(I) = -90.+SHFTLT+FLOAT(I-1)*DEGY 
+                      END DO
+
+                  END IF
+
+                  IF (KIND.LT.0)                               THEN
+
+***                    CONVERT MASKED/SHIFTED LAT-LONG
+***                    GRID TO GAUSSIAN GRID.
+
+                      IF (WINDS)                               THEN
+                          CALL LLIGGM( GGU,ILG1,ILAT, ANG, 
+     +                                 GLU,NLG1,NLAT, ALON,ALAT, SPVAL )
+                          CALL LLIGGM( GGV,ILG1,ILAT, ANG, 
+     +                                 GLV,NLG1,NLAT, ALON,ALAT, SPVAL )
+                      ELSE
+                          DO  L=1,NLEV
+                              II = (L-1)*NLG1*NLAT+1
+                              IO = (L-1)*ILG1*ILAT+1
+                              CALL LLIGGM( GG(IO), ILG1,ILAT, ANG, 
+     +                             GLL(II),NLG1,NLAT, ALON,ALAT, SPVAL )
+                          END DO
+                      END IF
+
+                  ELSE
+
+***                    CONVERT TO GAUSSIAN GRID.
+
+                      IF (WINDS)                               THEN
+                          CALL LLIGG2( GGU,ILG1,ILAT, ANG,
+     +                                 GLU,NLG1,NLAT, INTERP )
+                          CALL LLIGG2( GGV,ILG1,ILAT, ANG,
+     +                                 GLV,NLG1,NLAT, INTERP )
+                      ELSE
+                          DO  L=1,NLEV
+                              II = (L-1)*NLG1*NLAT+1
+                              IO = (L-1)*ILG1*ILAT+1
+                              CALL LLIGG2( GG(IO), ILG1,ILAT, ANG,
+     +                                     GLL(II),NLG1,NLAT, INTERP )
+                          END DO
+                      END IF
+
+                  END IF
+
+              ELSE IF ( PKTYP .EQ.'SQ'   .AND. 
+     +                ((TYPE  .EQ.'SUBA' .AND.
+     +                  GRTYP .NE. 'U'  ).OR.
+     +                  GRTYP .EQ. 'A'   .OR.
+     +                  GRTYP .EQ. 'B'   .OR.
+     +                  GRTYP .EQ. 'G'   .OR.
+     +                  GRTYP .EQ. 'N'   .OR.
+     +                  GRTYP .EQ. 'S'  )   )                  THEN
+
+                  IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+                  NLG1 = IBUF(5)
+                  NLAT = IBUF(6)
+                  NLEV = 1
+
+                  IF (OGRTYP.EQ.'L' .OR. OGRTYP.EQ.'Z')        THEN
+
+***                    NEW OUTPUT IS 'SUBA' TYPE.
+
+                      TYPE = 'SUBA'
+
+                  ELSE
+
+***                    NEW OUTPUT IS 'GRID' TYPE.
+
+                      TYPE = 'GRID'
+
+                  END IF
+
+                  READ(TYPE,0004) IBUF(1)
+                  IF (WINDS) READ(TYPE,0004) JBUF(1)
+
+                  MDONE1 =.FALSE.
+                  MDONE2 =.FALSE.
+
+  300             IF (MVALUE .AND. .NOT.(MDONE1 .OR. MDONE2))  THEN
+
+                      MDONE1 =.TRUE.
+
+***                    CHECK FOR MISSING VALUES. SAVE RESULT IN MVLL.
+
+                      IF (WINDS)                               THEN
+
+                          DO  I=1,NLG1*NLAT
+                              IF (ABS( GLU(I)-FMISS ).GT.EPSIL
+     +                       .AND.ABS( GLV(I)-FMISS ).GT.EPSIL)THEN
+                                  MVLL(I) = 0.
+                              ELSE
+                                  MVLL(I) = 1.
+                              END IF
+                          END DO
+
+                      ELSE
+
+                          DO  I=1,NLG1*NLAT
+                              IF (ABS( GLL(I)-FMISS ).GT.EPSIL)THEN
+                                  MVLL(I) = 0.
+                              ELSE
+                                  MVLL(I) = 1.
+                              END IF
+                          END DO
+
+                          PHL = P1
+                          PHG = P2
+
+                      END IF
+
+***                    SAVE TRUE "LOGICAL WINDS". TURN IT OFF.
+
+                      WSTAT = WINDS
+                      WINDS =.FALSE.
+
+***                    RE-ASSIGN POINTERS TO INTERPOLATE MVLL TO MVGG.
+
+                      PHL = P1
+                      PHG = P2
+
+                      P1  = PC
+                      P2  = PD
+
+                  ELSE IF (MDONE1 .AND. .NOT.MDONE2)           THEN
+
+                      MDONE2 =.TRUE.
+
+***                    RESTORE POINTERS TO THEIR INITIAL VALUES.
+
+                      P1  = PHL
+                      P2  = PHG
+
+***                    RESTORE TRUE "LOGICAL WINDS".
+
+                      WINDS = WSTAT
+                      
+                  END IF
+
+                  IF (GRTYP.EQ.'Z' .OR. GRTYP.EQ.'Y')          THEN
+
+***                    RETRIEVE THE X- AND Y-DIRECTIONAL INFO.
+
+                      CALL GETZREF( 1, '>>',ALON )
+                      CALL GETZREF( 1, '^^',ALAT )
+
+***                    DETERMINE MAXIMUM X AND Y RESOLUTIONS. ALSO
+***                    LOOK FOR VARIABLE RESOLUTION GRIDS, ASSUMING
+***                    A 0.1% MINIMUM Z-GRID EXPANSION.
+
+                      VRES = .FALSE.
+                      XYL  =  1
+
+                      IF (GRTYP.EQ.'Z')                        THEN
+
+                          XRESI = ABS ( ALON(2)-ALON(1) )
+                          DO  I=3,NLG1
+                              HOLD  =      XRESI
+                              XRESI = MIN( XRESI,
+     +                                     ABS( ALON(I)-ALON(I-1) ) )
+                              IF (ABS( XRESI-HOLD ).GT.0.001*HOLD)
+     +                            VRES = .TRUE.
+                          END DO
+
+                          YRESI = ALAT(2)-ALAT(1)
+                          DO  J=3,NLAT
+                              HOLD  =      YRESI
+                              YRESI = MIN( YRESI,
+     +                                    (ALAT(J)-ALAT(J-1) ) )
+                              IF (ABS( YRESI-HOLD ).GT.0.001*HOLD)
+     +                            VRES = .TRUE.
+                          END DO
+
+                          IF (g2gtyp .NE. 'NEAREST')
+     +                    XYL = 1.0001 *SQRT( XRESO * YRESO )/
+     +                                  SQRT( XRESI * YRESI )
+
+                      END IF
+
+                      IF (VRES .and. XYL.GT.1)                 THEN
+
+***                        CALCULATE THE (LARGER) INTERMEDIATE GRID PARAMETRES.
+
+                          BNLG1 = 1
+     +                          + NINT( MIN( ALON(NLG1)-ALON(1),360. ) )
+     +                          /                XRESI
+                          XRESI =       MIN( ALON(NLG1)-ALON(1),360. )
+     +                          /               (BNLG1-1)
+
+***                        INTERMEDIATE GRID LATITUDES AND LONGITUDES
+***                        ARE WITHIN THE BOUNDS OF THE INPUT GRID BUT
+***                        AT ITS HIGHEST RESOLUTION.
+
+                          BALON(1) = ALON(1)
+                          DO  I=2,BNLG1-1
+                              BALON(I) = BALON(I-1)+XRESI
+                          END DO
+                          BALON(BNLG1) = ALON(NLG1)
+
+                          IF (ALAT(1)+90.LT.       ALAT(2)-ALAT(1) .AND.
+     +                        ALAT(1)+90.GT.0.001*(ALAT(2)-ALAT(1)) )
+     +                        THEN
+
+                              BNLAT    = NINT( 180. / YRESI )
+                              YRESI    =       180. / BNLAT
+
+                              BALAT(1) = 0.5*YRESI - 90.
+                              DO  J=2,BNLAT
+                                  BALAT(J) = BALAT(J-1)+YRESI
+                              END DO
+
+                              POLADD = .TRUE.
+
+                          ELSE
+
+                              BNLAT = 1
+     +                          + NINT( MIN( ALAT(NLAT)-ALAT(1),180. ) )
+     +                          /                YRESI
+                              YRESI =   MIN( ALAT(NLAT)-ALAT(1),180. ) 
+     +                          /               (BNLAT-1)
+
+                              BALAT(1) = ALAT(1)
+                              DO  J=2,BNLAT-1
+                                  BALAT(J) = BALAT(J-1)+YRESI
+                              END DO
+                              BALAT(BNLAT) = ALAT(NLAT)
+
+                              POLADD = .FALSE.
+
+                          END IF
+
+                          IF (BNLG1.NE.BLON .OR.
+     +                        BNLAT.NE.BLAT )                  THEN
+
+                              BLON = BNLG1
+                              BLAT = BNLAT
+
+                              lon8 = ALON
+
+                              call grid_to_grid_coef( balon,blon,lon8,
+     +                             nlg1, indxx,cxa,cxb,cxc,cxd,g2gtyp )
+
+***                            grid_to_grid INTERPOLATION SETUP.
+
+                              IF (POLADD)                      THEN
+
+***                                ADD BOTH POLES TO THE SOURCE LIST.
+
+                                  lat8(1) = BALAT(1)
+                                  DO  J=1,nlat
+                                      lat8(j+1) = ALAT(j)
+                                  end do
+                                  lat8(nlat+2) = BALAT(BNLAT)
+
+                                  call grid_to_grid_coef(
+     +                                 balat,blat, lat8,nlat+2,
+     +                                 indxy,cya,cyb,cyc,cyd,g2gtyp )
+
+***                                DETERMINE THE RELATIVE WEIGHTS IN LONGITUDE.
+
+                                  wlon(1)    = 0.5 * (lon8(2)-lon8(1))
+                                  wtot       = wlon(1)
+                                  do  i=2,nlg1-1
+                                     wlon(i) = 0.5*(lon8(i+1)-lon8(i-1))
+                                     wtot    = wtot+wlon(i)
+                                  end do
+                                  wlon(nlg1) = 0.5
+     +                                       * (lon8(nlg1)-lon8(nlg1-1))
+                                  wtot       = wtot+wlon(nlg1)
+
+                                  wlon = wlon / wtot
+
+                              else
+
+                                  lat8 = ALAT
+
+                                  call grid_to_grid_coef(
+     +                                 balat,blat, lat8,nlat,
+     +                                 indxy,cya,cyb,cyc,cyd,g2gtyp )
+
+                              end if
+
+                          END IF
+
+***                        SINCE THE FINAL INTERPOLATION WILL BE
+***                        DONE FROM THE INTERMEDIATE GRID...
+
+                          ALON = BALON
+                          ALAT = BALAT
+
+                      END IF
+
+***                    POSSIBLY PRINT AN INFORMATION MESSAGE 
+***                    CONCERNING PRE-SMOTHING OPERATIONS.
+
+                      IF (XYL.GT.1 .AND. XYL.NE.XYL0)          THEN
+                          WRITE(6,6250) XYL
+                          XYL0 = XYL
+                      END IF
+
+***                    RETRIEVE ASSOCIATED ROTATION AND POLE INFO.
+
+                      CALL GETZDES( RTYP, IG1R,IG2R,IG3R,IG4R, NIR,NJR )
+
+                      IF (OGRTYP.EQ.'Z' .AND.
+     +                    IG1R.NE.I10   .AND. IG2R.NE.I20 .AND.
+     +                    IG3R.NE.I30   .AND. IG4R.NE.I40)     THEN
+
+***                        THIS MODE ONLY WORKS FOR RTYP = 'E','L'. THE
+***                        PS ('N' AND 'S') MODES ARE NOT SUPPORTED.
+
+                          IF (RTYP /= 'E' .AND. RTYP /= 'L')   THEN
+                              WRITE(6,6002) GRTYP
+                              CALL                    XIT( verbe,-2 )
+                          END IF
+
+                          I10 = IG1R
+                          I20 = IG2R
+                          I30 = IG3R
+                          I40 = IG4R
+
+***                        DO NOT UNROTATE GRID. THIS IS A BARELY
+***                        DOCUMENTED Z-GRID INPUT OPTION THAT CAN
+***                        BE ACTIVATED VIA A "-def 1" ARGUMENT.
+
+!!!                       CALL CIGAXG( RTYP, XG1, XG2, XG3, XG4,
+!!!  +                                       IG1R,IG2R,IG3R,IG4R )
+
+                          ALLOCATE( LONR(ILG,ILAT),LATR(ILG,ILAT),
+     +                         LATLON_WE(ILG,2),LATLON_SN(ILAT,2), STAT=IER )
+
+***                        Get lat/lon values on center lines along X and
+***                        along Y from the horizontal grid descriptors.
+
+                          DGID = EZGDEF_FMEM( ILG, 1, 'Z',RTYP,
+     +                                        IG1R,IG2R,IG3R,IG4R,
+     +                                        OLON,OLAT(ILAT/2) )
+                          IER  = GDLL( DGID,LATLON_WE,LATLON_WE(1,2) )
+                          DGID = EZGDEF_FMEM( 1,ILAT, 'Z',RTYP,
+     +                                        IG1R,IG2R,IG3R,IG4R,
+     +                                        OLON(ILG/2),OLAT )
+                          IER  = GDLL( DGID,LATLON_SN,LATLON_SN(1,2))
+
+                          LONR(:,ILAT/2) = LATLON_WE(:,1)
+                          LATR(:,ILAT/2) = LATLON_WE(:,2)
+                          LONR(ILG/2,:)  = LATLON_SN(:,1)
+                          LATR(ILG/2,:)  = LATLON_SN(:,2)
+
+                          IP3 = 0 ; CALL DSET_IGS( IP1,IP2, LONR,LATR,
+     +                                        RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                                        ILG,ILAT )
+
+                          DEALLOCATE( LONR,LATR,LATLON_WE,LATLON_SN, STAT=IER )
+
+!!!                       ROTATE = (XG1.NE.0. .OR. XG3.NE.0.)
+!!! 
+!!!                       IF (ROTATE)
+!!!  +                    CALL D_CROT2( XG2,XG1,XG4,XG3, RROT )
+!!! 
+!!!                       CALL ZIPIG( IP1,IP2,IP3, DXLA,DYLA,
+!!!  +                                NILA,NJLA,ILG,ILAT,
+!!!  +                                RROT,ROTATE )
+
+                          CALL PUTZREF( OLON,OLAT, 'Z',
+     +                                  'E',IG1R,IG2R,IG3R,IG4R,
+     +                                  IP1,IP2,IP3,ILG,ILAT )
+
+                          OGID = EZGDEF_FMEM( ILG,ILAT, 'Z','E',
+     +                                   IG1R,IG2R,IG3R,IG4R,
+     +                                   OLON,OLAT )
+
+                      END IF
+
+***                    INTERPOLATE FROM THE GEM Z-TYPE GRIDS.
+
+                      IF (WINDS)                               THEN
+
+                          IF (XYL.GT.1)                        THEN
+
+                              IF (VRES)                        THEN
+
+                                  IF (MAXB.LT.BNLG1*BNLAT)     THEN
+                                      IF (MAXB.NE.-1)          THEN
+                                          CALL HPDEALLC( pa,ier,0 )
+                                          CALL HPDEALLC( pb,ier,0 )
+                                      END IF
+                                      MAXB  = BNLG1*BNLAT
+                                      CALL HPALLOC( pa, MAXB,IER,0 )
+                                      CALL HPALLOC( pb, MAXB,IER,0 )
+                                  END IF
+
+***                                INTERPOLATE TO INTERMEDIATE UNIFORM
+***                                RESOLUTION GRID BEFORE SMOOTHING.
+
+                                  IF (POLADD)                  THEN
+
+***                                DEFINE (U,V) MEANS AT FIRST AND
+***                                LAST LATITUDES AND ASSIGN THEM TO
+***                                THE APPROPRIATE POLES.
+
+                                      call polwinds( glu,glv,wlon,nlg1,
+     +                                               nlat,lon8,lat8 )
+
+***                                   INTERPOLATE TO INTERMEDIATE UNIFORM
+***                                   RESOLUTION GRID BEFORE SMOOTHING.
+
+                                      call grid_to_grid_interp(
+     +                                 bglu,bnlg1,bnlat,
+     +                                  glu, nlg1, nlat+2, indxx,indxy,
+     +                                 cxa,cxb,cxc,cxd,cya,cyb,cyc,cyd,
+     +                                 g2gtyp )
+
+                                      call grid_to_grid_interp(
+     +                                 bglv,bnlg1,bnlat,
+     +                                  glv, nlg1, nlat+2, indxx,indxy,
+     +                                 cxa,cxb,cxc,cxd,cya,cyb,cyc,cyd,
+     +                                 g2gtyp )
+
+                                  ELSE
+
+                                      call grid_to_grid_interp(
+     +                                 bglu,bnlg1,bnlat,
+     +                                  glu, nlg1, nlat, indxx,indxy,
+     +                                 cxa,cxb,cxc,cxd,cya,cyb,cyc,cyd,
+     +                                 g2gtyp )
+ 
+                                      call grid_to_grid_interp(
+     +                                 bglv,bnlg1,bnlat,
+     +                                  glv, nlg1, nlat, indxx,indxy,
+     +                                 cxa,cxb,cxc,cxd,cya,cyb,cyc,cyd,
+     +                                 g2gtyp )
+
+                                  END IF
+ 
+                                  CALL LISSXY2( BGLU, XYL,BNLG1,BNLAT )
+                                  CALL LISSXY2( BGLV, XYL,BNLG1,BNLAT )
+
+***                                PRODUCE (INTERPOLATED AND
+***                                SMOOTHED) WIND COMPONENTS.
+
+                                  IGID = EZGDEF_FMEM( BNLG1,BNLAT, GRTYP,
+     +                                           RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                                           ALON,ALAT)
+
+                                  IER = EZDEFSET( OGID,IGID )
+                                  IER = EZUVINT( GGU,GGV, BGLU,BGLV )
+
+                              ELSE
+
+                                  CALL LISSXY2( GLU, XYL,NLG1,NLAT )
+                                  CALL LISSXY2( GLV, XYL,NLG1,NLAT )
+
+***                                PRODUCE (SMOOTHED) WIND COMPONENTS.
+
+                                  IGID = EZGDEF_FMEM( NLG1,NLAT, GRTYP,
+     +                                           RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                                           ALON,ALAT)
+
+                                  IER = EZDEFSET( OGID,IGID )
+                                  IER = EZUVINT( GGU,GGV, GLU,GLV )
+
+                              END IF
+
+                          ELSE
+
+***                           PRODUCE WIND COMPONENTS.
+
+                             IGID = EZGDEF_FMEM( NLG1,NLAT, GRTYP,
+     +                                      RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                                      ALON,ALAT)
+
+                             IER = EZDEFSET( OGID,IGID )
+                             IER = EZUVINT( GGU,GGV, GLU,GLV )
+
+                          END IF
+
+                      ELSE
+
+                          IF (XYL.GT.1)                        THEN
+
+                              IF (VRES)                        THEN
+
+                                  IF (MAXB.LT.BNLG1*BNLAT)     THEN
+                                      IF (MAXB.NE.-1) 
+     +                                    CALL HPDEALLC( pa,ier,0 )
+                                      MAXB  = BNLG1*BNLAT
+                                      CALL HPALLOC( pa, MAXB,IER,0 )
+                                  END IF
+
+                                  IF (POLADD)                  THEN
+
+***                                   ADD SOUTH AND NORTH POLE LATITUDES
+***                                   AND ASSIGN THEM THE MEANS OF THE
+***                                   FIRST AND LAST LATITUDES
+
+                                     TOP = 0.
+                                     BOT = 0.
+                                     DO  I=1,NLG1
+                                         BOT = BOT+GLL(I)*wlon(I)
+                                         TOP = TOP+GLL(I+NLG1*(NLAT-1))
+     +                                            *wlon(I)
+                                     END DO
+
+                                     DO  I=NLG1*NLAT,1,-1
+                                         GLL(I+NLG1) = GLL(I)
+                                     END DO
+
+                                     DO  I=1,NLG1
+                                         GLL(I) = BOT
+                                         GLL(I+NLG1*(NLAT+1)) = TOP
+                                     END DO
+                                     
+***                                   INTERPOLATE TO INTERMEDIATE UNIFORM
+***                                   RESOLUTION GRID BEFORE SMOOTHING.
+
+                                     call grid_to_grid_interp(
+     +                                 bgll,bnlg1,bnlat,
+     +                                  gll, nlg1, nlat+2, indxx,indxy,
+     +                                 cxa,cxb,cxc,cxd,cya,cyb,cyc,cyd,
+     +                                 g2gtyp )
+
+                                  ELSE
+ 
+***                                   INTERPOLATE TO INTERMEDIATE UNIFORM
+***                                   RESOLUTION GRID BEFORE SMOOTHING.
+
+                                     call grid_to_grid_interp(
+     +                                 bgll,bnlg1,bnlat,
+     +                                  gll, nlg1, nlat, indxx,indxy,
+     +                                 cxa,cxb,cxc,cxd,cya,cyb,cyc,cyd,
+     +                                 g2gtyp )
+
+                                  END IF
+
+                                  CALL LISSXY2( BGLL, XYL,BNLG1,BNLAT )
+
+                                  IGID = EZGDEF_FMEM( BNLG1,BNLAT, GRTYP,
+     +                                           RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                                           ALON,ALAT)
+
+                                  IER = EZDEFSET( OGID,IGID )
+                                  IER = EZSINT( GG,BGLL )
+
+                              ELSE
+ 
+                                  CALL LISSXY2( GLL, XYL,NLG1,NLAT )
+
+                                  IGID = EZGDEF_FMEM( NLG1,NLAT, GRTYP,
+     +                                           RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                                           ALON,ALAT)
+
+                                  IER = EZDEFSET( OGID,IGID )
+                                  IER = EZSINT( GG,GLL )
+
+                              END IF
+
+                          ELSE
+ 
+                              IGID = EZGDEF_FMEM( NLG1,NLAT, GRTYP,
+     +                                       RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                                       ALON,ALAT)
+
+                              IER = EZDEFSET( OGID,IGID )
+                              IER = EZSINT( GG,GLL )
+
+                          END IF
+
+                      END IF
+
+                  ELSE IF (GRTYP.EQ.'A' .OR.
+     +                     GRTYP.EQ.'B' .OR.
+     +                     GRTYP.EQ.'G' .OR.
+     +                     GRTYP.EQ.'L' .OR.
+     +                     GRTYP.EQ.'!' .OR.
+     +                     GRTYP.EQ.'N' .OR.
+     +                     GRTYP.EQ.'S')                       THEN
+
+***                    RETREIVE RPN/CMC GRID DESCRIPTORS.
+
+                      RTYP = GRTYP
+                      IG1R = GETHIGH( 'IG1',IBUF )
+                      IG2R = GETHIGH( 'IG2',IBUF )
+                      IG3R = GETHIGH( 'IG3',IBUF )
+                      IG4R = GETHIGH( 'IG4',IBUF )
+
+                      IGID = EZQKDEF( NLG1,NLAT,
+     +                                RTYP,IG1R,IG2R,IG3R,IG4R, 0 )
+                      IER  = EZDEFSET( OGID,IGID )
+
+***                    DETERMINE X AND Y INPUT RESOLUTIONS.
+
+                      IF (GRTYP.EQ.'A' .OR.
+     +                    GRTYP.EQ.'G')                        THEN
+                          NLG = NLG1-MOD( NLG1,2 )
+                          XRESI = 360./NLG
+                          YRESI = 180./NLAT
+                          IF (IG2R.EQ.1) YRESI = 90./NLAT
+                      ELSE
+     +                IF (GRTYP.EQ.'B')                        THEN
+                          XRESI = 360./(NLG1-1)
+                          YRESI = 180./(NLAT-1)
+                          IF (IG2R.EQ.1) YRESI = 90./(NLAT-1)
+                      ELSE
+     +                IF (GRTYP.EQ.'L')                        THEN
+                          CALL CIGAXG( GRTYP, XG1, XG2, DLAT,DLON,
+     +                                        IG1R,IG2R,IG3R,IG4R )
+                          XRESI = DLON
+                          YRESI = DLAT
+                      ELSE
+     +                IF (GRTYP.EQ.'N' .OR.
+     +                    GRTYP.EQ.'S')                        THEN
+                          CALL CIGAXG( GRTYP, XG1, XG2, D60, XG4, 
+     +                                        IG1R,IG2R,IG3R,IG4R )
+                          XRESI = 360. * D60 / (6.37122D6*PI)
+                          YRESI = XRESI
+                      ELSE
+     +                IF (GRTYP.EQ.'!')                        THEN
+                          XGLST(8) = -1 ; XGLST(9) = -1
+                          CALL igaxg95( GRTYPOUT,XGLST,NXG,
+     +                                  GRTYP,IG1R,IG2R,IG3R,IG4R )
+                          if (XGLST(8)/= NLG1 .or.
+     +                        XGLST(9)/= NLAT )                THEN
+                              WRITE(6,6012)
+                              CALL                 XIT( VERBE, -12 )
+                          END IF
+                          XRESI = 360. * XGLST(3) / (6.37122D3*PI)
+                          YRESI = 360. * XGLST(4) / (6.37122D3*PI)
+                      END IF
+
+                      IF (g2gtyp .NE. 'NEAREST')
+     +                XYL = 1.0001 * SQRT( XRESO * YRESO )/
+     +                               SQRT( XRESI * YRESI )
+
+***                    POSSIBLY PRINT AN INFORMATION MESSAGE 
+***                    CONCERNING PRE-SMOTHING OPERATIONS.
+
+                      IF (XYL.GT.1 .AND. XYL.NE.XYL0)          THEN
+                          WRITE(6,6250) XYL
+                          XYL0 = XYL
+                      END IF
+
+                      IF (WINDS)                               THEN
+
+                          IF (XYL.GT.1)                        THEN
+
+                              CALL LISSXY2( GLU, XYL,NLG1,NLAT )
+                              CALL LISSXY2( GLV, XYL,NLG1,NLAT )
+
+                          END IF
+
+***                        INTERPOLATE WIND COMPONENTS.
+
+                          IER = EZUVINT( GGU,GGV, GLU,GLV )
+
+                      ELSE
+
+                          IF (XYL.GT.1)
+     +                        CALL LISSXY2( GLL, XYL,NLG1,NLAT )
+
+                          IER = EZSINT( GG,GLL )
+
+                      END IF
+
+                  END IF
+
+***                MISSING VALUE CASE: GO BACK FOR REAL INTERPOLATIONS.
+
+                  IF (MDONE1 .AND. .NOT.MDONE2) GOTO 300
+
+              ELSE IF (PKTYP == 'SQ' .AND. GRTYP == 'U')       THEN
+
+                  IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+                  NLG1 = IBUF(5)
+                  NLAT = IBUF(6)
+                  NLEV = 1
+
+                  IF (OGRTYP.EQ.'L' .OR. OGRTYP.EQ.'Z')        THEN
+                      TYPE = 'SUBA'
+                  ELSE
+                      TYPE = 'GRID'
+                  END IF
+
+                  READ(TYPE,0004) IBUF(1)
+                  IF (WINDS) READ(TYPE,0004) JBUF(1)
+
+***                RETREIVE RPN/CMC GRID DESCRIPTORS.
+
+                  RTYP = GRTYP
+                  IG1R = GETHIGH( 'IG1',IBUF )
+                  IG2R = GETHIGH( 'IG2',IBUF )
+                  IG3R = GETHIGH( 'IG3',IBUF )
+                  IG4R = GETHIGH( 'IG4',IBUF )
+
+***                DEFINE INPUT GRID.
+
+                  IGID = EZQKDEF( NLG1,NLAT,
+     +                            RTYP,IG1R,IG2R,IG3R,IG4R, 1 )
+
+***                INTERPOLATE COMPONENTS.
+
+                  IER  = EZDEFSET( OGID,IGID )
+
+                  IF (WINDS)                                   THEN
+                      IER = EZUVINT( GGU,GGV, GLU,GLV )
+                  ELSE
+                      IER = EZSINT( GG,GLL )
+                  END IF
+
+              END IF
+
+***            OUTPUT RESULT.
+
+              IF (TYPE.NE.'ZONL')                              THEN
+                  IBUF(5) = ILG1
+                  IBUF(6) = ILAT
+                  IBUF(7) = IHEM
+                  IBUF(8) = NPKGG
+              ELSE
+                  IBUF(5) = ILAT
+                  IBUF(7) = IHEM
+                  IBUF(8) = NPKGG
+              END IF
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL PUTHIC ( OGRTYP,'GRTYP',IBUF )
+                  IF (OGRTYP.EQ.'L')                           THEN
+                      CALL PUTHIGH( OLG1  ,'IG1'  ,IBUF )
+                      CALL PUTHIGH( OLG2  ,'IG2'  ,IBUF )
+                      CALL PUTHIGH( OLG3  ,'IG3'  ,IBUF )
+                      CALL PUTHIGH( OLG4  ,'IG4'  ,IBUF )
+                  ELSE IF (OGRTYP.EQ.'Z')                      THEN
+                      CALL PUTHIGH( IP1   ,'IG1'  ,IBUF ) 
+                      CALL PUTHIGH( IP2   ,'IG2'  ,IBUF ) 
+                      CALL PUTHIGH( IP3   ,'IG3'  ,IBUF ) 
+                  ELSE
+                      CALL PUTHIGH( IHEM  ,'IG1'  ,IBUF )
+                      CALL PUTHIGH( 0     ,'IG2'  ,IBUF )
+                      CALL PUTHIGH( 0     ,'IG3'  ,IBUF )
+                      CALL PUTHIGH( 0     ,'IG4'  ,IBUF )
+                  END IF
+              END IF
+
+              IF (WINDS)                                       THEN
+
+                  JBUF(5) = ILG1
+                  JBUF(6) = ILAT
+                  JBUF(7) = IHEM
+                  JBUF(8) = NPKGG
+
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL PUTHIC ( OGRTYP,'GRTYP',JBUF )
+                      IF (OGRTYP.EQ.'L')                       THEN
+                          CALL PUTHIGH( OLG1  ,'IG1'  ,JBUF )
+                          CALL PUTHIGH( OLG2  ,'IG2'  ,JBUF )
+                          CALL PUTHIGH( OLG3  ,'IG3'  ,JBUF )
+                          CALL PUTHIGH( OLG4  ,'IG4'  ,JBUF )
+                      ELSE
+                          CALL PUTHIGH( IHEM  ,'IG1'  ,JBUF )
+                          CALL PUTHIGH( 0     ,'IG2'  ,JBUF )
+                          CALL PUTHIGH( 0     ,'IG3'  ,JBUF )
+                          CALL PUTHIGH( 0     ,'IG4'  ,JBUF )
+                      END IF
+                  END IF
+
+                  IF (MDONE1 .AND. MDONE2)                     THEN
+
+***                    CHECK MVGG TO MISSING VALUE CONTAMINATION.
+
+                      DO  I=1,ILG1*ILAT
+                          IF (ABS( MVGG(I) ).GT.EPSILON)       THEN
+                              GGU(I) = FMISS
+                              GGV(I) = FMISS
+                          END IF
+                      END DO
+
+                  END IF
+
+                  CALL PUTFLD2( 3, GGU, IBUF,MAXW )
+                  IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+                  CALL PUTFLD2( 4, GGV, JBUF,MAXW )
+                  IF (NR.EQ.0) CALL PRTLAB( JBUF )
+
+              ELSE
+
+                  IF (MDONE1 .AND. MDONE2)                     THEN
+
+***                    CHECK MVGG TO MISSING VALUE CONTAMINATION.
+
+                      DO  I=1,ILG1*ILAT
+                          IF (ABS( MVGG(I) ).GT.EPSILON) GG(I) = FMISS
+                      END DO
+
+                  END IF
+
+                  IF (NLEV.EQ.1)                               THEN
+                      CALL PUTFLD2( 2, GG, IBUF,MAXW )
+                  ELSE
+                      CALL PUTSET2( 2, GG, LEV,NLEV, IBUF,MAXW )
+                  END IF
+
+                  IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+              END IF
+
+          ELSE IF (TYPE.EQ.'CHAR')                             THEN
+
+              IF (.NOT.WINDS)                                  THEN
+                  CALL PUTFLD2( 2, GG,  IBUF,MAXW )
+              ELSE
+                  CALL PUTFLD2( 3, GGU, IBUF,MAXW )
+                  CALL PUTFLD2( 4, GGV, IBUF,MAXW )
+              END IF
+
+          ELSE IF (TYPE.EQ.'LABL')                             THEN
+
+              IF (.NOT.WINDS)                                  THEN
+
+***                SAVE THE LAST LABEL READ FROM LL.
+
+                  LENLAB = IBUF(5)
+
+                  CALL GETLAB( 0, LIGNE, IBUF,LENLAB, OK )
+                  WRITE(NOM,0004) IBUF(3)
+
+                  IF (NOM.EQ.'LABL')                           THEN
+                      CALL PUTLAB( 2, LIGNE, IBUF,LENLAB, FAUX,FAUX )
+                  ELSE IF (NOM.EQ.'FILE')                      THEN
+                      CALL PUTLAB( 2, LIGNE, IBUF,LENLAB, VRAI,FAUX )
+                  ELSE IF (NOM.EQ.'INFO')                      THEN
+                      CALL PUTLAB( 2, LIGNE, IBUF,LENLAB, FAUX,VRAI )
+                  END IF
+
+              ELSE
+
+***                SAVE THE LAST LABEL READ FROM LU.
+
+                  LENLAB = IBUF(5)
+
+                  CALL GETLAB( 0, LIGNE, IBUF,LENLAB, OK )
+                  WRITE(NOM,0004) IBUF(3)
+
+                  IF (NOM.EQ.'LABL')                           THEN
+                      CALL PUTLAB( 3, LIGNE, IBUF,LENLAB, FAUX,FAUX )
+                  ELSE IF (NOM.EQ.'FILE')                      THEN
+                      CALL PUTLAB( 3, LIGNE, IBUF,LENLAB, VRAI,FAUX )
+                  ELSE IF (NOM.EQ.'INFO')                      THEN
+                      CALL PUTLAB( 3, LIGNE, IBUF,LENLAB, FAUX,VRAI )
+                  END IF
+
+***                SAVE THE LAST LABEL READ FROM LV.
+
+                  LENLAB = JBUF(5)
+
+                  CALL GETLAB( 0, LIGNE, JBUF,LENLAB, OK )
+                  WRITE(NOM,0004) JBUF(3)
+
+                  IF (NOM.EQ.'LABL')                           THEN
+                      CALL PUTLAB( 4, LIGNE, JBUF,LENLAB, FAUX,FAUX )
+                  ELSE IF (NOM.EQ.'FILE')                      THEN
+                      CALL PUTLAB( 4, LIGNE, JBUF,LENLAB, VRAI,FAUX )
+                  ELSE IF (NOM.EQ.'INFO')                      THEN
+                      CALL PUTLAB( 4, LIGNE, JBUF,LENLAB, FAUX,VRAI )
+                  END IF
+
+
+              END IF
+
+          END IF
+
+      NR = NR+NLEV
+      GOTO 200
+
+***    E.O.F. ON INPUT.
+
+  904 CALL                                         XIT( verbe,-4 )
+*-----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,2I5,I2,I3,I5,A10,2E10.0)
+
+ 6002 FORMAT(' Expecting some other grid type, found type ',A)
+ 6004 FORMAT(' Output ',A2,' grids only.')
+ 6005 FORMAT(' LL-grid masked/shifted, linear interpolation,'/
+     +       ' G-grid size',2I6,', spval=',E12.3,
+     +       ', shftlt= ',E12.3,', shftlg=',E12.3)
+ 6006 FORMAT(' Grid masked, linear interpolation,'/
+     +       ' Grid size',2I6,', spval=',E12.3)
+ 6007 FORMAT(' Grid size',2I6,', interpolation=',I3)
+ 6008 FORMAT(' Hemisphere conflict: requested NHEM=',I2,
+     +       ', found ',I2,' on LL.')
+ 6010 FORMAT(' Polar-stereographic fields are only',
+     +       ' supported in RPN/CMC files.')
+ 6011 FORMAT(' Missing parametre ',A,' for L-type output grid.')
+ 6012 FORMAT(' Problem reading file "gribtable" for GRTYP="!" data.')
+
+ 6100 FORMAT(1X,I6,' records processed.')
+ 6150 FORMAT(1X,I6,' records pairs processed.')
+ 6250 FORMAT(1X,I2,' to 1 smoothing applied before',
+     +       ' interpolation to lower resolution grid...')
+ 6300 FORMAT(/' Interpolating Z-grid, keeping orientation.'/)
+ 6350 FORMAT(' Nop on kind = ',A)
+
+      END
+      subroutine polwinds( uuu,vvv,w, nlon,nlat,
+     +                     lon,lat )
+
+      implicit  NONE
+
+***    Calculer les vents moyens cartesiens proches des
+***    deux poles et les placer dans de nouvelles lignes.
+
+***    Arguments.
+
+      integer   nlon,nlat
+      real      uuu(1),vvv(1)
+      real*8    lon(nlon),lat(0:nlat+1),w(nlon)
+
+***    Variables entieres locales.
+
+      integer   ij1,ij2, nwds
+      integer   i,j, offin,offout
+
+***    Scalaires real*8 locaux.
+
+      real*8    dxm,dym,dzm
+      real*8    sphi0,cphi0,sphi1,cphi1
+      real*8    dphi,dtheta, conv, wtot
+
+***    Vecteurs alloues automatiquement.
+
+      real*8    dx(nlon),dy(nlon),dz(nlon)
+      real*8     x(nlon), y(nlon), z(nlon)
+      real*8    xy(nlon),xyi(nlon),mxy(nlon)
+      real*8    ctheta(nlon),stheta(nlon)
+
+*----------------------------------------------------------------------------
+      conv = asin( 1.d0 )/90.
+      nwds = nlon*nlat
+
+***    Deplacer uuu et vvv d'une ligne. On suppose que 
+***    uuu et vvv sont assez grand pour ne pas provoquer
+***    de debordements de memoire.
+
+      do  j=nlat,1,-1
+          ij1 =  j   *nlon
+          ij2 = (j-1)*nlon
+          do  i=1,nlon
+              ij1      = ij1 + 1
+              ij2      = ij2 + 1
+              uuu(ij1) = uuu(ij2)
+              vvv(ij1) = vvv(ij2)
+          end do
+      end do
+
+      ctheta = cos( conv * lon )
+      stheta = sin( conv * lon )
+
+***    On effectue les calculs pour le pole sud de la grille.
+***    Commencons par sauver les sin et cos des deux premieres
+***    colatitudes (ind 1 = lat source ; ind 0 = lat destination).
+
+      cphi0 = cos( conv * ( 90+lat(0) ) )
+      sphi0 = sin( conv * ( 90+lat(0) ) )
+
+      cphi1 = cos( conv * ( 90+lat(1) ) )
+      sphi1 = sin( conv * ( 90+lat(1) ) )
+
+      offin  = nlon
+      offout = 0
+
+***    Coordonnees cartesiennes des latitudes proches des deux poles.
+
+  100 dxm = 0.0
+      dym = 0.0
+      dym = 0.0
+
+      do  i=1,nlon
+
+          dphi   = vvv(i+offin)
+          dtheta = uuu(i+offin) / sphi1
+
+***        Vents locaux en coordonnees cartesiennes.
+
+          dx(i)  =   cphi1 * ctheta(i) * dphi
+     +             - sphi1 * stheta(i) * dtheta
+          dy(i)  =   cphi1 * stheta(i) * dphi
+     +             + sphi1 * ctheta(i) * dtheta
+          dz(i)  = - sphi1             * dphi
+
+***        Calcul des vents moyens en coordonnees cartesiennes.
+
+          dxm = dxm + dx(i) * w(i)
+          dym = dym + dy(i) * w(i)
+          dzm = dzm + dz(i) * w(i)
+
+***        Re-calcul des positions a la latitude de destination.
+
+          x(i)   = sphi0 * ctheta(i)
+          y(i)   = sphi0 * stheta(i)
+          z(i)   = cphi0
+
+          xy (i) =            ( x(i)*x(i) + y(i)*y(i) )
+          xyi(i) = sphi0    / ( x(i)*x(i) + y(i)*y(i) )
+          mxy(i) = sqrt( 1. / ( x(i)*x(i) + y(i)*y(i) ) )
+
+      end do
+
+      do  i=1,nlon
+
+***        Projection de ces vents moyens en coordonnees spheriques.
+
+          uuu(i+offout) =  xyi(i)
+     +                  * ( -y(i)      * dxm
+     +                    +  x(i)      * dym )
+          vvv(i+offout) =  mxy(i)
+     +                  * (  x(i)*z(i) * dxm
+     +                  +    y(i)*z(i) * dym
+     +                  -   xy(i)      * dzm )
+      end do
+
+      if (offin.eq.nwds) goto 200
+
+***    Passer maintenant les calculs pour le pole nord de la
+***    grille Commencons par sauver les sin et cos des deux
+***    dernieres colatitudes (indice 1 = lat source ;
+***    indice 0 = lat destination).
+
+      cphi0 = cos( conv * ( 90-lat(0) ) )
+      sphi0 = sin( conv * ( 90-lat(0) ) )
+
+      cphi1 = cos( conv * ( 90-lat(1) ) )
+      sphi1 = sin( conv * ( 90-lat(1) ) )
+
+      offin  = nwds
+      offout = nwds+nlon
+
+      goto 100
+
+  200 return
+*----------------------------------------------------------------------------
+
+      end
+#     endif

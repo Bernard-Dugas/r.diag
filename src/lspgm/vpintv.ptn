@@ -1,0 +1,482 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      vpintv  XIN XOUT PSURF INPUT OUTPUT [-lv1 VAL1 -lv2 VAL2 -kind VAL3]
+*
+*
+*     AUTHOR  - B.Dugas, NOV 29 1983.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/vpintv.ptn,v 4.13 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      vpintv - VERTICAL INTEGRAL WITH VARIABLE BOUNDARIES
+*
+*
+*     PURPOSE - DOES VERTICAL INTEGRAL OF XIN WHILE OPTIONNALY TAKING
+*               INTO ACCOUNT VARIABLE SURFACE PRESSURE AND/OR SPECIFIC
+*               INTEGRATION LIMITS.
+*
+*     NOTES:  - 1) PSURF FILE MAY NOT BE USED DEPENDING ON THE VALUE READ
+*                  FOR MODE PARAMETER, (SEE THE DESCRIPTION OF MODE PARA-
+*                  METER BELOW). IF PSURF IS TO BE USED, IT HAS TO BE OF
+*                  THE SAME KIND AS XIN, (EITHER ZONL,SUBA OR GRID).
+*               2) THE PROGRAM ACTUALLY CALCULATES INT( XIN(P) DP/G ),
+*                  WHICH BY THE HYDROSTATIC APPROXIMATION IS VERY
+*                  CLOSE TO A VERTICAL MASS INTEGRAL.
+*               3) MINIMUM NUMBER OF LEVELS IS 2, MAX IS 999.
+*                  THEY SHOULD ALSO BE MONOTONICALLY VARYING.
+*
+*
+*     INPUT FILES...
+*      XIN   = SERIES OF PRESSURE LEVEL SETS TO BE INTEGRATED VERTICALLY
+*      PSURF = LOG OF SURFACE PRESSURE (units: MBs; variable name: 'LNSP' or 'LP')
+*              (OPTIONAL, CHECK MODE PARAMETER DESCRIPTION BELOW).
+*
+*     OUTPUT FILE...
+*      XOUT  = OUTPUT ONE LEVEL VERTICAL INTEGRAL OF XIN.
+*
+*
+*     PARAMETERS...
+*
+*      PB   (lv2)  = 0, DEFAULTS TO 1013.3 MB,
+*                    OTHERWISE, PB IS THE BOTTOM INTEGRATION LIMIT IN MB.
+*      PT   (lv1)  = TOP INTEGRATION LIMIT IN MB IF PB.NE.0
+*                    DEFAULTS TO LEV(1)/2        IF PB.EQ.0
+*      MODE (kind) = 0, VPINTV DOES NOT TAKE INTO ACCOUNT VARYING SURFACE
+*                    PRESSURES AND XIN CAN BE ANY KIND OF FIELD. IN THIS
+*                    CASE, VPINTV DOES NOT EVEN READ PSURF.
+*                    OTHERWISE, VPINTV TAKES INTO ACCOUNT VARYING SURFACE
+*                    PRESSURES AND XIN HAS TO BE SAME KIND AS PSURF
+*                   (EITHER ZONL, SUBA OR GRID).
+*
+*      READ(5,5000) PB,PT,MODE
+* 5000 FORMAT(10X,2E10.0,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*  VPINTV.      850.      100.         0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*  IN THIS CASE VPINTV WILL INTEGRATE FROM 850 TO 100 MB WITHOUT
+*  CONSIDERING LNSP.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 INCONSISTENT INPUT PARAMETERS
+*       2 TOO MAY OR NOT ENOUGH VERTICAL LEVELS
+*       3 DATA TYPE NOT SUPPORTED WITH REQUESTED MODE
+*       4 UNABLE TO READ FILE XIN
+*       5 MORE THAN ONE ARRAY SIZE IN FILE XIN
+*       6 UNABLE TO READ FILE PSURF
+*       7 FILE XIN AND PSURF HAVE INCOMPATIBLE ARRAYS
+*       8 UNABLE TO READ INPUT PARAMETER SECTION
+*       9 LEVELS DO NOT VARY MONOTONICALLY
+*      10 XIN DOES NOT CONTAIN PRESSURE LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM vpintv
+*    +               (XIN,       XOUT,       PSURF,       INPUT,
+*    +                                                    OUTPUT,
+*    +          TAPE1=XIN, TAPE2=XOUT, TAPE3=PSURF, TAPE5=INPUT,
+*    +                                              TAPE6=OUTPUT)
+*     -----------------------------------------------------------
+
+*     $Log: vpintv.ptn,v $
+*     Revision 4.13  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.12  2011/06/15 19:32:09  dugas
+*     Correction pour tenir compte du cas PS > PBOT.
+*
+*     Revision 4.11  2011/01/13 17:25:09  dugas
+*     Supporter le nom de variable 'LP' et ajouter a la documentation.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2004/11/12 16:44:24  dugas
+*     Verifier que PSURF et XIN ont le meme type de donnees.
+*
+*     Revision 4.7  1999/07/09 15:31:03  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.6  1998/07/03 02:26:46  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:39:29  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1996/11/26  20:15:04  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.3  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.2  1996/05/15  20:01:49  armnrbd
+*     Verifier que les niveaux croissent de facon monotone.
+*
+*     Revision 4.1  1995/08/28  01:14:29  armnrbd
+*     Premiere version fonctionnelle.
+*
+*     Revision 4.0  1995/08/28  00:45:53  armnrbd
+*     Initial version.
+*
+
+*     JUN 09/88 - F.MAJAESS (INCREASE THE DIMENSION SO THAT IT CAN
+*                            HANDLE 20 LEVELS OF T-30 RUNS)
+*     NOV 29/83 - B.DUGAS
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      LOGICAL     OK,OLD,INCREAS
+      CHARACTER*4 NAME,TYPE,CLNSP,LIGNE*80,ENCORE*16
+      INTEGER     KBUF(taille_entete),LEV(MAXLEV),
+     +            NFF,NSETS,IO,KPAK,I,L,NC,
+     +            IER,MAXW,LEN,NWDS,NLEV,NLEVG,
+     +            LCOUNT,MODE,TOP,BOT,INC,VKIND
+      REAL        PR(MAXLEV),PRH(0:MAXLEV+1),GINV,
+     +            P,DP,PH,PL,PB,PT,PTOP,PBOT,VAL
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: GG,PS,VOUT
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2
+
+      LOGICAL     RPBLOC
+      CHARACTER   GETYP*4,PKTYP*2
+      EXTERNAL    RPBLOC,MACSPE,XIT,WRITLEV,GETYP,
+     +            GETSET2,PUTFLD2,CMPLBL,CONVPR
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        ENCORE  / 'PAS ENCORE DONNE' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vpintv.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 5
+      CALL JCLPNT( NFF, 1,2,3, 5,6 )
+
+      GINV  = 1./9.80616
+      NSETS = 0
+
+***    GET PACKING TYPE.
+
+      PKTYP = GETYP( 1 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          PB   = 0.0
+          PT   = 0.0
+          MODE = 0
+
+          OK = RPBLOC('LV2',LIGNE)
+          IF (OK) READ( LIGNE,10, END=900,ERR=900,IOSTAT=IO ) PB
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) READ( LIGNE,10, END=900,ERR=900,IOSTAT=IO ) PT
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ( LIGNE,05, END=900,ERR=900,IOSTAT=IO ) MODE
+
+      ELSE
+
+***        READ PB, PT AND MODE FROM UNIT 5 (STDIN).
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE,5000, END=900,ERR=900,IOSTAT=IO ) PB,PT,MODE
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (NINT( PB ).EQ.0)                                     THEN
+          OLD = .TRUE.
+      ELSE
+          OLD = .FALSE.
+      END IF
+
+      IF (.NOT.OLD.AND.PT.GT.PB ) CALL             XIT(' Vpintv ',-1 )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, KBUF,LEN,NWDS,KPAK, LEV,NLEV )
+
+      IF (MAXW.LE.0     .OR.
+     +    NLEV.LE.1     .OR.
+     +    NLEV.GT.MAXLEV   ) CALL                  XIT(' Vpintv ',-2 )
+
+      WRITE(NAME,4) KBUF(3)
+      WRITE(TYPE,4) KBUF(1)
+
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      IF (MODE.NE.  0    .AND.
+     +    TYPE.NE.'ZONL' .AND.
+     +    TYPE.NE.'SUBA' .AND.
+     +    TYPE.NE.'GRID' )
+     +    CALL                                     XIT(' Vpintv ',-3 )
+
+      ALLOCATE( IBUF(LEN),JBUF(LEN),
+     +          GG(NWDS*NLEV),PS(NWDS),VOUT(NWDS) )
+
+      WRITE(6,6005)
+      CALL PRTLAB( KBUF )
+
+      DO  L=1,NLEV
+         CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+         IF (PKTYP.EQ.'SQ' .AND. VKIND.NE.2) CALL  XIT(' VpintV ',-10) 
+     +       
+      END DO
+
+      CALL WRITLEV( PR,NLEV,'PRES' )
+
+***    CHECK THAT THE LEVELS ARE INCREASING OR DECREASING.
+
+      INCREAS = .TRUE.
+      IF (PR(1).LT.PR(2))                                      THEN
+          INCREAS = .TRUE.
+      ELSE IF (PR(1).GT.PR(2))                                 THEN
+          INCREAS = .FALSE.
+      ELSE
+          WRITE(6,6009)
+         CALL                                      XIT(' Vpintv ',-9 )
+      END IF
+
+      DO  L=3,NLEV
+          IF ((     INCREAS .AND. PR(L).LE.PR(L-1))
+     +   .OR.
+     +        (.NOT.INCREAS .AND. PR(L).GE.PR(L-1)))           THEN
+              WRITE(6,6009)
+              CALL                                 XIT(' Vpintv ',-9 )
+          END IF
+      END DO
+
+      IF (INCREAS)                                             THEN
+          TOP =  1
+          BOT =  NLEV
+          INC =  1
+      ELSE
+          TOP =  NLEV
+          BOT =  1
+          INC = -1
+          IF (ENCORE.EQ.'PAS ENCORE DONNE')                    THEN
+              ENCORE =  'DEJA  DONNE'
+              WRITE(6,6040)
+          END IF
+      END IF
+
+      IF (OLD)                                                 THEN
+          PTOP = PR(TOP)/2.
+          PBOT = 1013.3
+      ELSE
+          PTOP = PT
+          PBOT = PB
+      END IF
+
+      WRITE(6,6030) PTOP,PBOT,MODE
+
+      DO  I=1,NWDS
+          PS(I) = PBOT*100.
+      END DO
+
+***    COMPUTE PRESSURE HALF LEVELS FOR INTEGRAL IN P,
+***    TAKING PT AND PB INTO ACCOUNT.
+
+      PTOP = PTOP*100.
+      PBOT = PBOT*100.
+
+      DO  L=TOP,BOT,INC
+          PR(L) = PR(L)*100.
+      END DO
+
+                            PRH(TOP) = PR(TOP)*.5
+      IF (PRH(TOP).LT.PTOP) PRH(TOP) = PTOP
+
+      DO  L=TOP+INC,BOT,INC
+          P = .5*(PR(L-INC)+PR(L))
+          IF (P.LE.PTOP) P = PTOP
+          IF (P.GE.PBOT) P = PBOT
+          PRH(L) = P
+      END DO
+
+      PRH(BOT+INC) = PBOT
+
+***    READ THE NEXT SETS.
+
+  100 CALL GETSET2( 1, GG, LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (NSETS.EQ.0)                                  THEN
+                  WRITE(6,6010)
+                  CALL                             XIT(' Vpintv ',-4 )
+              END IF
+              WRITE(6,6020) NSETS
+              CALL                                 XIT(' Vpintv ', 0 )
+          END IF
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+          IF (.NOT.OK .OR. NLEVG.NE.NLEV) CALL     XIT(' Vpintv ',-5 )
+
+          IF (MODE.NE.0 )                                      THEN
+
+***            READ THE SURFACE PRESSURE IF MODE .NE. 0 .
+
+              NC = 0
+
+  125         CALL GETFLD2( 3, PS,TYPE,IBUF(2),' ',-1, JBUF,MAXW,OK )
+
+              IF (OK)                                              THEN
+
+                  WRITE(CLNSP,0004) JBUF(3)
+
+                  IF (CLNSP.NE.'LNSP' .AND.
+     +                CLNSP.NE.'LP')                               THEN
+                      NC = NC+1
+                      GOTO 125
+                  END IF
+
+              ELSE
+
+                  IF (NC.NE.0) WRITE(6,6006) CLNSP
+                  CALL                             XIT(' Vpintv ',-6 )
+
+              END IF
+
+              CALL CMPLBL( 0,JBUF, 0,KBUF, OK )
+              IF (.NOT.OK )   CALL                 XIT(' Vpintv ',-7 )
+
+              IF (NSETS.EQ.0) CALL PRTLAB( JBUF )
+
+              DO  I=1,NWDS
+                  PS(I) = 100.*EXP( PS(I) )
+              END DO
+
+          END IF
+
+***        INTEGRATE THE GRIDS IN THE VERTICAL AND DIVIDE BY G.
+
+          IF (MODE.EQ.0)                                       THEN
+
+              DO  I=1,NWDS
+                  VOUT(I)=0.
+              END DO
+
+              LCOUNT = (TOP-1)*NWDS
+
+              DO  150 L=TOP,BOT,INC
+
+                  DP = GINV*(PRH(L+INC)-PRH(L))
+
+                  DO  I=1,NWDS
+                      VOUT(I) = VOUT(I)+GG(LCOUNT+I)*DP
+                  END DO
+
+                  LCOUNT  = LCOUNT+NWDS*INC
+
+  150         CONTINUE
+
+          ELSE
+
+              DO  250 I=1,NWDS
+
+                  VAL = 0.
+
+                  DO  L=TOP,BOT,INC
+
+                      IF (PS(I).LE.PRH(L))     GOTO 200
+
+                                               PL = PRH(L)
+                                               PH = PRH(L+INC)
+                      IF (PS(I).LT.PRH(L+INC)) PH = PS(I)
+   
+                      VAL = VAL+GG((L-1)*NWDS+I)*(PH-PL)
+
+                  END DO
+
+                  IF (PS(I) > PH)
+     +                VAL = VAL+GG((BOT-1)*NWDS+I)*(PS(I)-PH)
+
+  200             VOUT(I) = VAL*GINV
+
+  250         CONTINUE
+
+          END IF
+
+***        PUT THE RESULT ONTO FILE 2.
+
+                              IBUF(4) = 0
+          IF (TYPE.EQ.'ZONL') IBUF(6) = 1
+
+          CALL PUTFLD2( 2, VOUT, IBUF,MAXW )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+      NSETS = NSETS+1
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  900 CALL                                         XIT(' Vpintv ',-8 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5000 FORMAT(10X,2E10.0,5X,I5)
+
+ 6005 FORMAT(' Vpintv on ...'/)
+ 6006 FORMAT('0 Found ',A,' while expecting LP or LNSP')
+ 6009 FORMAT(' Levels should be increasing monotonically.')
+ 6010 FORMAT(' ... Vpintv input file seems to be empty.'/)
+ 6020 FORMAT(1X,I6,' sets were processed.'/)
+ 6025 FORMAT(1X,A4,I12,1X,A4,I10,4I8)
+ 6030 FORMAT(/' Integration limits =',E10.4,' ,',E10.4,'. Mode =',I5/)
+ 6040 FORMAT(' Levels are decreasing.')
+
+      END
+#     endif

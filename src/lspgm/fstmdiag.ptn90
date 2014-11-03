@@ -1,0 +1,850 @@
+# if defined (AUTO_DOC)
+!
+! Sequence d'appel...
+!  fstmdiag -s source [-d destination] \ 
+!          [-info [valeur]] [-e] [-f]  \ 
+!          [-nobox] [-help] [-stats]   \ 
+!          [-novar]
+!        
+!
+!
+! Auteur: B.Dugas, RPN - juillet 2011.
+! Derniere revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fstmdiag.ptn90,v 1.04 2014/09/25 20:20:57 dugas Exp $
+!
+!
+! Objet:
+! -----
+!  FSTMDIAG  Calcule les moyennes simples et variances des
+!            variables contenues dans un fichier. Aucune
+!            contrainte commune n'est imposee, et ce 
+!            meme sur les grilles horizontales.
+!
+!            Les variables 1) ayant les memes noms, 2) valides
+!            au meme niveau (i.e. IP1 identiques), 3) ayant les
+!            memes dimensions en x,y,z et 4) ayant la meme
+!            configuration geographique sont
+!            considerees ensemble.
+!
+!
+! Parametres d'appel:
+! ------------------
+!  s         Fichier source
+!  d         Entete commune des fichiers destinations. Ces deux
+!            fichiers (*_moyenne et *_variance) ne doivent pas
+!            exister a l'entree, sauf si la cle f est egalement
+!            specifiee. Par defaut, d = s.
+!  novar     Ne pas calculer les variances, seulement les moyennes
+!  info      Niveau des messages retournes (ERRORS/INFORM/DEBUG).
+!  nobox     Ne pas imprimer de boites d'informations.
+!  stats     Imprimer des statistiques sur les resultats
+!  help      Afficher ce texte sur stdout et quitter.
+!  f         Forcer la re-ecriture du fichier de sortie. 
+!
+!
+! Codes de sortie:
+! ----------------
+!       0 Pas d'erreur
+!       1 Nom de fichier d'entree requis a l'entree
+!       2 Impossible d'associer un nom a une unite d'E/S
+!       3 Le fichier source doit exister au depart
+!       4 Un des fichiers destinations existe deja
+!       5 Erreur durant ecriture (fstecr)
+!       7 Erreur durant la lecture (fstluk)
+!       8 Erreur durant la lecture (fstprm)
+!       9 Erreur d'allocation de memoire
+!      10 TMPDIR ou BIG_TMPDIR non definis
+!      11 Probleme avec deet,npas en sortie
+!
+# endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+# if !defined (NO_SOURCE)
+  PROGRAM fstmdiag
+
+  ! Historique des modifications:
+  !
+  ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.04  2014/09/25 20:20:57  dugas
+  ! Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+  !
+  ! Revision 1.03  2012/11/29 23:26:15  dugas
+  ! Corriger le traitement des heures pour des analyses mensuelles.
+  !
+  ! Revision 1.02  2012/05/17 19:47:43  dugas
+  ! Remplacer les appels a stop par des appels a qqexit.
+  !
+  ! Revision 1.01  2011/08/24 22:12:38  dugas
+  ! Eliminer les erreurs d'arrondissement du calcul de la variance.
+  !
+  ! Revision 1.00  2011/08/04 18:56:10  dugas
+  ! Version initiale.
+  !
+
+  implicit      none
+
+  ! *****
+
+  integer       NBRCLE
+  parameter   ( NBRCLE = 9 )
+
+  integer ::    NMAX=2000,start
+
+  real(8)       amin8,amax8,amean8,avar8
+  real(8)       heures,deltat
+  character(24) cchain
+  character(15) cip1
+
+  logical, dimension(:), allocatable :: done
+  character(len=24), dimension(:), allocatable :: chaine
+  integer, dimension(:), allocatable :: listet, listev, date, &
+           delt, niveau, heure, pas, fset, sindex, niset, njset, &
+           nkset, bits, ig1set, ig2set, ig3set, ig4set
+
+
+  character(20)  uzbigt,bigtmp,tmpdir
+  character(512) evalue,diagext,tmpdirn
+
+  logical              dexit,set_dexit,exist
+  common       /dexit/ dexit,set_dexit,diagext
+
+  character(16) :: cles(NBRCLE),blanc=' '
+  character(512) def1(NBRCLE),def2(NBRCLE), name1,name2,name3
+
+  logical       Vrai,Faux, Forc, Elim, box, Stats, NoVar, Debug
+  integer ::    i,ii,ier,io,ipos, ibuf(1), iu1=1,iu2=2,iu3=3, &
+                ip2tot, key, nil, mdiag, nr,nref,ns, nwds,nwds0=-1
+
+  real,         dimension(:), allocatable :: buff
+  real(8),      dimension(:), allocatable :: buff8,moyenne,variance
+
+  ! *****
+  ! Variables et fonctions necessaires a la lecture des fichiers.
+  ! *****
+
+  character typvar*2,                  nomvar*4,             &
+            etiket*12,                 grtyp*1
+
+  integer   dateo,datevo,datevf,       ni,nj,nk,             &
+            ip1,ip2,ip3,               datyp,nbits,          &
+            infont,infonv,deet,npas,   extra1,extra2,extra3, &
+            ig1,ig2,ig3,ig4,           swa,lng,dltf,ubc
+
+  logical   ReWrit,Force
+
+  ! Declarations pour les fonctions FST.
+
+  integer   inbr1,inbr2,inbr3,ierr1,ierr2,ierr3,ftyp1,ftyp2,ftyp3
+
+  integer   ifrm,iecr,inf,infl,iopt,iprm
+  integer,  external :: fstfrm, fstecr, fstlis, fstprm, fstinf, fstsui, &
+                        fstluk, fstrwd, fstinl, fstnbr, fstouv, fnom,   &
+                        fstopc, xdfopt, fstopl, wkoffit,fclos,          &
+                        exfin,  exdb
+
+  external  ccard,  incdatr, getenvc,convpr, quit
+
+  logical, external :: is_off, is_on
+
+  character nomprg*256
+  common   /PROGNAM/ nomprg
+  external  qqqdoc
+
+  ! ******************
+  ! Parametres d'appel:
+  ! ------------------
+
+  data cles(01)/'S.'    /,def1(01)/' '      /,def2(01)/'TAPE1'  /, &
+       cles(02)/'D.'    /,def1(02)/' '      /,def2(02)/'TAPE2'  /, &
+       cles(03)/'INFO'  /,def1(03)/'ERRORS' /,def2(03)/'INFORM' /, &
+       cles(04)/'NOBOX' /,def1(04)/'NON'    /,def2(04)/'OUI'    /, &
+       cles(05)/'HELP'  /,def1(05)/'NON'    /,def2(05)/'OUI'    /, &
+       cles(06)/'F'     /,def1(06)/'NON'    /,def2(06)/'OUI'    /, &
+       cles(07)/'STATS' /,def1(07)/'NON'    /,def2(07)/'OUI'    /, &
+       cles(08)/'NOVAR' /,def1(08)/'NON'    /,def2(08)/'OUI'    /, &
+       cles(09)/'-.'    /,def1(09)/' '      /,def2(09)/' '      /
+
+  data Force, Elim, box, Stats /  4*.false. /, &
+       Vrai,Faux, NoVar, Debug, ReWrit / .true.,4*.false. /
+
+  !----------------------------------------------------------------
+
+  diagext = 'DIAGNOSTIC_EXIT'
+  uzbigt  = 'USE_BIG_TMPDIR'
+  bigtmp  = 'BIG_TMPDIR'
+  tmpdir  = 'TMPDIR'
+
+  ! First, check for a non-empty DIAGNOSTIC_EXIT file.
+
+      dexit = Faux
+  set_dexit = Faux
+
+  ! The name of this file could also be specified
+  ! with the DIAGNOSTIC_EXIT environment variable.
+
+  call getenvc( diagext,evalue )
+
+  if (evalue.ne.' ')                                       then
+      diagext   = evalue
+      set_dexit = Vrai
+  end if
+
+  inquire( file=diagext, err=100,iostat=io,exist=exist )
+
+  if (exist)                                               then
+
+      ! The file exists.
+
+      open( unit=99, file=diagext, err=100,iostat=io,   &
+                     status='old', access='sequential', &
+                                   form='formatted' )
+
+      ! Any abort code will be written to this file
+      ! rather than generating a physical abort code.
+
+      dexit = Vrai
+
+      ! Try reading the file's first line to see if it is
+      ! empty or not. if it is not empty, quit immediatly.
+
+      read(99,'(a256)',end=100,iostat=io) evalue
+      close ( 99 )
+
+      if (evalue.ne.' ') call qqexit( 0 )
+
+  end if
+
+  ! Quel repertoire tmpdir doit-on utiliser ? A moins
+  ! qu'il soit explicitement desalloue, toujours essayer
+  ! d'utiliser big_tmpdir en premier. Sinon, essayer tmpdir.
+
+  call getenvc( uzbigt,evalue )
+
+  if (is_off( evalue ))                                    then
+      call getenvc( tmpdir,evalue )
+  else if(is_on( evalue ))                                 then
+      call getenvc( bigtmp,evalue )
+  else
+      call getenvc( bigtmp,evalue )
+      if (evalue == blanc) &
+      call getenvc( tmpdir,evalue )
+  end if
+
+  tmpdirn = evalue
+
+  ! tmpdirn doit etre defini
+
+  if (tmpdirn == blanc)                                    then
+      write(6,6010)
+      if (box) nil = exfin( 'FstMDiag','Erreur 10','NON' )
+      call quit( 'FstMDiag',10 )
+  end if
+
+  ! Aller chercher les noms des deux fichiers d'E/S et
+  ! traiter les differents parametres d'entrees.
+
+  100 ipos = -1
+  call ccard( cles,def2,def1,NBRCLE,ipos )
+
+  if (is_on(def1(5)) .or.  &
+     (def1(1) == ' ' .and. &
+      def1(2) == ' ' ))                                  then
+      nomprg = 'fstmdiag.ptn90'
+      call qqqdoc( )
+      call qqexit( 0 )
+  end if
+
+  ! Specifier le type de messages qu'on veut recevoir.
+
+                           iopt = fstopc( 'MSGLVL', def1(3)  , 0 )
+  if (def1(3).eq.'DEBUG' ) iopt = xdfopt( 'MSGLVL','TRIVIAL ', 0 ) 
+  if (def1(3).eq.'INFORM') iopt = xdfopt( 'MSGLVL','INFORM  ', 0 ) 
+  if (def1(3).eq.'WARNIN') iopt = xdfopt( 'MSGLVL','WARNING ', 0 ) 
+  if (def1(3).eq.'ERRORS') iopt = xdfopt( 'MSGLVL','ERROR   ', 0 ) 
+  if (def1(3).eq.'FATALE') iopt = xdfopt( 'MSGLVL','ERRFATAL', 0 ) 
+  if (def1(3).eq.'SYSTEM') iopt = xdfopt( 'MSGLVL','SYSTEM  ', 0 ) 
+  if (def1(3).eq.'CATAST') iopt = xdfopt( 'MSGLVL','SYSTEM  ', 0 ) 
+
+  if (def1(3).eq.'DEBUG' ) Debug = Vrai
+
+  ! Traiter les cles de type "divers".
+
+  if (is_off( def1(4) )) box     = Vrai
+  if (is_on ( def1(6) )) Force   = Vrai
+  if (is_on ( def1(7) )) Stats   = Vrai
+  if (is_on ( def1(8) )) NoVar   = Vrai
+
+  if (Force)             ReWrit  = Vrai
+
+  if (def1(1) == blanc)                                    then
+      if (box) nil = exdb ( 'Fstmdiag', 'Rev. 1.0', 'NON' )
+      write(6,6001)
+      if (box) nil = exfin( 'Fstmdiag', 'Erreur 1', 'NON' )
+      call quit( ' Fstmdiag ',1 )
+  end if
+
+  ! Commencer le traitement.
+
+  if (box) nil = exdb( 'Fstmdiag', 'Rev. 1.0', 'NON' )
+
+  if (Debug)                                               then
+      if (set_dexit) write(6,6201) 'DIAGNOSTIC_EXIT',trim( diagext )
+      write(6,6201) 'BIG_TMPDIR',trim( tmpdirn )
+  end if
+
+  ! Par defaut, def1(2) est egal a def1(1).
+  ! Definissons name1 et name2.
+
+  if (def1(2) == blanc) def1(2) = def1(1)
+  name1 = def1(1) ; name2 = def1(2)
+
+  ! Verifier l'existence et le type des fichiers I/O.
+
+  ftyp1 = wkoffit( '+' // trim( name1 ) )
+
+  ! Verifier que le premier fait reference a un fichier de 
+  ! type valide. Si les autres existent deja (i.e. ne sont pas
+  ! vides, et possiblement) en aviser l'usager et quitter.
+
+  if (ftyp1 < -1)                                          then
+
+      ! Le premier fichier est vide ou inexistant.
+      ! Verifier que le nom du fichier ne contient
+      ! pas de relocalisation de repertoire. Sinon
+      ! aller voir sur TMPDIR pour ce fichier
+
+      if (index( name1, '/' ) == 0)                        then
+          name1 = trim( tmpdirn ) // '/' // name1
+          ftyp1 = wkoffit( '+' // trim( name1 ) )
+      end if
+
+      if (ftyp1 < -1)                                      then
+          write(6,6003) trim( name1 )
+          if (box) nil = exfin( 'Fstmdiag','Erreur 3','NON' )
+          call quit( ' Fstmdiag ',3 )
+      end if
+
+      if (def1(1) == def1(2)) name2 = name1 ! Re-Definir name2
+
+  end if
+
+  if (ftyp1 /= 1 .and. ftyp1 /= 33)                        then
+
+      ! Ce fichier n'est pas un fichier RND.
+
+      write(6,6006)
+      if (box) nil = exfin( 'Fstmdiag','Erreur 6','NON' )
+      call quit( ' Fstmdiag ',6 )
+
+  end if
+
+  ! Definir name3 si on veut produire les variances. 
+  if (.not.NoVar) name3 = trim( name2 ) // '_variance'
+
+  ! On modifie le nom du fichier des moyennes seulement
+  ! si son nom est egal a celui du fichier d'entree ou
+  ! que le calcul de la variance est requis.
+
+  if (def1(1) == def1(2) .or. .not.NoVar) &
+      name2 = trim( name2 ) // '_moyenne'
+
+  ftyp2 = wkoffit( '+' // trim( name2 ) )
+
+  if (ftyp2 > -2 .and. .not.Force)                         then
+
+      ! Le fichier 'moyenne' n'est pas vide.
+
+      write(6,6004) 'moyenne'
+      if (box) nil = exfin( 'Fstmdiag', 'Erreur 4', 'NON' )
+      call quit( ' Fstmdiag ',4 )
+
+  end if
+
+  ftyp3 = wkoffit( '+' // trim( name3 ) )
+
+  if (ftyp3 > -2 .and. .not.Force)                         then
+
+      ! Le fichier n'est pas vide.
+
+      write(6,6004) 'variance'
+      if (box) nil = exfin( 'Fstmdiag', 'Erreur 4', 'NON' )
+      call quit( ' Fstmdiag ',4 )
+
+  end if
+
+  ! Associer des unites I/O aux noms de fichiers.
+
+  ierr1 = fnom( iu1, '+' // trim( name1 ), 'STD+R/O',0 )
+  ierr2 = fnom( iu2, '+' // trim( name2 ), 'STD',    0 )
+  ierr3 = 0 ; if (.not.NoVar) &
+  ierr3 = fnom( iu3, '+' // trim( name3 ), 'STD',    0 )
+
+  if (ierr1 /= 0 .or. ierr2 /= 0 .or. ierr3 /= 0)          then
+      write(6,6002)
+      if (box) nil = exfin( 'Fstmdiag', 'Erreur 2', 'NON' )
+      call quit( ' Fstmdiag ',2 )
+  end if
+
+  ! Ouvrir les fichiers.
+
+  inbr1  = fstouv( iu1,'RND' )
+  inbr2  = fstouv( iu2,'RND' )
+  if (.not.NoVar) &
+  inbr3  = fstouv( iu3,'RND' )
+
+  NMAX = max( NMAX, inbr1+1 )
+
+  if (NoVar)                                               then
+      write(6,6102) trim( name1 ),trim( name2 )
+  else
+      write(6,6103) trim( name1 ),trim( name2 ),trim( name3 )
+  end if
+
+  !--------------------------------------------------------
+  ! Aller lire le directeur. Trouver combien de IP1,NOMVAR,
+  ! ETIKET,DATEO,NPAS,TYPVAR nous avons. La liste des cles
+  ! va dans "listet".
+
+  allocate( listet(NMAX), stat=ier )
+
+  infl = fstinl( iu1, ni,nj,nk, -1,' ',-1,-1,-1,' ',' ', &
+                      listet,infont,NMAX )
+
+  allocate( niveau(infont),  delt(infont),  date(infont), &
+            listev(infont),  fset(infont),   pas(infont), &
+            heure (infont),  done(infont),  bits(infont), &
+            niset (infont), njset(infont), nkset(infont), &
+            ig1set(infont),ig2set(infont),ig3set(infont), &
+            ig4set(infont),chaine(1:infont), stat=ier )
+
+  done = .false. ; nref = 0
+
+  LOOP1 : do i=1,infont ! Sauver certains parametres.
+
+      key  = listet(i) ; iprm = fstprm( key, &
+                     dateo,deet,npas, ni,nj,nk, nbits,datyp,  &
+                     ip1,ip2,ip3, typvar,nomvar,etiket,       &
+                     grtyp,ig1,ig2,ig3,ig4, swa,lng,dltf,ubc, &
+                     extra1,extra2,extra3 )
+
+      if (iprm.lt.0)                                       then
+          write(6,6008) iprm
+          if (box) nil = exfin( 'Fstmdiag','Erreur 8','NON' )
+          call quit( ' Fstmdiag ',8 )
+      end if
+
+      ! Taille des tampons de lectures.
+
+      nwds = ni*nj*nk
+
+      if (nomvar == '>>'   .or. &
+          nomvar == '^^'   .or. &
+          nomvar == '!!'   .or. &
+          nomvar == 'HY'   .or. &
+          nomvar == 'CONF' .or. &
+          nomvar == 'GSET')                                then
+
+          ! Les enregistrements de renvois sont sauves immediatement.
+
+          allocate( buff(max( nwds,4096 )), stat=ier )
+
+          inf  = fstluk( buff, key, ni,nj,nk )
+          iecr = fstecr( buff,ibuf, &
+                        -nbits, iu2, dateo,deet,npas,          &
+                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
+                         etiket,grtyp, ig1,ig2,ig3,ig4,        &
+                         datyp, ReWrit )
+
+          if (iecr < 0)                                    then
+              write(6,6005) iecr,'moyenne'
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
+              call quit( ' Fstmdiag ',5 )
+          end if
+
+          if (.not.NoVar)                                  then
+
+              iecr = fstecr( buff,ibuf, &
+                            -nbits, iu3, dateo,deet,npas,          &
+                             ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
+                             etiket,grtyp, ig1,ig2,ig3,ig4,        &
+                             datyp, ReWrit )
+
+              if (iecr < 0)                                then
+                  write(6,6005) iecr,'variance'
+                  ifrm = fstfrm (iu2) ; ifrm = fstfrm (iu3)
+                  if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
+                  call quit( ' Fstmdiag ',5 )
+              end if
+
+          end if
+
+          deallocate( buff, stat=ier )
+
+          done(i) = .true. ; nref = nref+1
+
+          cycle LOOP1
+
+      end if
+
+      write(chaine(i),0001) typvar,etiket,nomvar,grtyp
+
+      niveau(i) = ip1
+      heure (i) = ip2
+      fset  (i) = ip3
+      date  (i) = dateo
+      pas   (i) = npas
+      delt  (i) = deet
+
+      niset (i) = ni
+      njset (i) = nj
+      nkset (i) = nk
+
+      ig1set(i) = ig1
+      ig2set(i) = ig2
+      ig3set(i) = ig3
+      ig4set(i) = ig4
+
+      bits(i)   = nbits
+
+  end do LOOP1
+
+  !--------------------------------------------------------------
+  ! On sait ce qu'on a. On traite le tout une variable a la fois.
+
+  if (Stats) write(6,6100)
+
+  start = 1
+
+  LOOP3 : do while (start <= infont)
+
+      if (done(start))                                     then
+          if (start < infont)                              then
+              start=start+1
+              cycle LOOP3
+          else
+              goto 999
+          end if
+      end if
+
+      ! Caracteriser le prochain jeux d'enregistrements.
+
+      cchain= chaine(start)
+      ip1   = niveau(start)
+      ip2   = heure (start)
+      ip3   = fset  (start)
+      dateo = date  (start)
+      npas  = pas   (start)
+      deet  = delt  (start)
+
+      ni    = niset (start)
+      nj    = njset (start)
+      nk    = nkset (start)
+
+      ig1   = ig1set(start)
+      ig2   = ig2set(start)
+      ig3   = ig3set(start)
+      ig4   = ig4set(start)
+
+      nwds = ni*nj*nk ; ier = 0
+
+      if (nwds > nwds0)                                    then
+
+          if (allocated( buff )) &
+              deallocate( buff,buff8, moyenne,variance, stat=ier )
+
+          ! Allouer l'espace de travail necessaire.
+
+          if (ier == 0) allocate( buff    (max( 4096,nwds )), &
+                                  buff8   (max( 4096,nwds )), &
+                                  moyenne (max( 4096,nwds )), &
+                                  variance(max( 4096,nwds )),stat=ier )
+
+          nwds0 = nwds
+   
+      end if
+
+      if (ier /= 0)                                        then
+          write(6,6009) max( nwds,4096 )
+          ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+          if (box) nil = exfin( 'Fstmdiag', 'Erreur 9', 'NON' )
+          call quit( ' Fstmdiag ',9 )
+      end if
+
+      ! Trouver l'heure de validite du debut.
+
+      if (npas*deet /= 0 .and. ip3 == 0)                   then
+          heures = npas*DBLE( deet )/3600
+          call incdatr( datevo,dateo,heures )
+      else
+          datevo = dateo
+      end if
+
+      moyenne = 0 ; variance = 0 ; deltat = 0
+      nr = 0 ; ns = 0 ; ip2tot = 0 ; ii = -1
+
+      LOOP2 : do i=start,infont
+
+          ! Lire le prochain enregistrement valide.
+
+          if (done  (i)           .or. &
+              chaine(i) /= cchain .or. &
+              niveau(i) /= ip1    .or. &
+              niset (i) /= ni     .or. &
+              njset (i) /= nj     .or. &
+              nkset (i) /= nk     .or. &
+              ig1set(i) /= ig1    .or. &
+              ig2set(i) /= ig2    .or. &
+              ig3set(i) /= ig3    .or. &
+              ig4set(i) /= ig4)   cycle LOOP2
+
+          ii = i ; key = listet(ii)
+
+          if (bits(ii) <= 32 )                            then
+              inf  = fstluk( buff, key, ni,nj,nk )
+              buff8(1:nwds) = buff(1:nwds)
+          else
+              inf  = fstluk( buff8, key, ni,nj,nk )
+          end if
+
+          if (inf.lt.0)                                    then
+              write(6,6007) inf
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 7','NON' )
+              call quit( ' Fstmdiag ',7 )
+          end if
+
+          done(i) = .true. ! On ne le lira plus cet enregistrement.
+
+          mdiag = max( 1, fset(ii) )
+
+          if (.not.NoVar) &
+          variance(1:nwds) = variance(1:nwds)+mdiag*(buff8(1:nwds)*buff8(1:nwds))
+          moyenne (1:nwds) = moyenne (1:nwds)+mdiag* buff8(1:nwds)
+
+          ns = ns+mdiag
+          nr = nr+1
+
+          ! Trouver l'heure de validite courante
+          ! et le deltat entre les echantillons.
+
+          if (pas(i)*delt(ii) /= 0)                        then
+              if (fset(ii) > 1)                            then
+                  deltat = heure(ii)/(fset(ii)-1)
+                  ip2tot = ip2tot + heure(ii)
+              else if (nr > 1)                             then
+                  if (nr == ns)                            then
+                      deltat = pas(ii)*DBLE( delt(ii) )/3600 - heures
+                  else
+                      ip2tot = ip2tot + deltat
+                  end if
+              end if
+              heures = pas(ii)*DBLE( delt(ii) )/3600
+              call incdatr( datevf,date(ii),heures )
+          else
+              if (nr > 1) call difdatr( date(ii),datevf, deltat )
+              datevf = date(ii)
+          end if
+          
+      end do LOOP2
+
+      if (nr == 0) cycle LOOP3
+
+      iprm = fstprm( key, dateo,deet,npas, ni,nj,nk,                 &
+                     nbits,datyp, ip1,ip2,ip3, typvar,nomvar,etiket, &
+                     grtyp,ig1,ig2,ig3,ig4, swa,lng,dltf,ubc,        &
+                     extra1,extra2,extra3 )
+ 
+      if (iprm.lt.0)                                       then
+          write(6,6008) iprm
+          ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+          if (box) nil = exfin( 'Fstmdiag','Erreur 8','NON' )
+          call quit( ' Fstmdiag ',8 )
+      end if
+
+      ! Finaliser les calculs.
+
+      moyenne  = moyenne/ns
+
+      if (.not.NoVar)                                      then
+          variance = variance/ns
+          variance = variance-(moyenne*moyenne)
+          ! Eliminer les erreurs d'arrondissement
+          variance = max( 0.0_8,variance )
+      end if
+
+      ! Mettre a jour les descripteurs temporels.
+
+      if (ip2tot > 0) ip2 = ip2tot
+
+      dateo = datevo
+      call difdatr( datevf,datevo,heures )
+
+      if (deet /= 0 .or. nr < ns)                          then
+          if (abs( heures-nint( heures ) ) < 0.00027_8)    then ! 0.00027h < 1s
+              npas = nint( heures )
+              deet = 3600
+          else if (deet /= 0)                              then
+              npas = nint( (heures/deet)*3600 )
+          end if
+          if (deltat > 0.0_8 )                             then
+              if (nint( heures*720 ) == nint( deltat*(ns-1)*720 )) &
+                  ip2  = nint( ns*deltat )
+          else if (nr == ns)                               then
+              ip2  = 0
+          end if
+      else if (ns > 1)                                     then
+          if (deltat > 0.0_8 )                             then
+              if (nint( heures*720 ) == nint( deltat*(ns-1)*720 )) then
+                  npas = ns-1
+                  deet = nint( deltat*3600 )
+                  ip2  = nint( ns*deltat )
+              else
+                  ip2  = nint( heures )
+                  deet = 3600
+                  npas = ip2
+              end if
+          else
+              deet = 0
+              npas = 1
+              ip2  = 0
+          end if
+      else
+          deet = 0
+          npas = 1
+          ip2  = 0
+      end if
+
+      do while (deet > 16777215) 
+          if (mod( deet,60 ) == 0)                         then
+              deet = deet/60 ; npas = npas*60
+          else
+              write(6,6011) deet,npas
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 11','NON' )
+              call quit( ' Fstmdiag ',11 )
+          end if
+      end do 
+
+      ! Ecrire les resultats...
+
+      ip3 = ns
+
+      ! ... en commencant par les moyennes.
+
+      if (nbits <= 32)                                     then
+          nbits = 32 ; datyp = 5 ; buff(1:nwds) = moyenne(1:nwds)
+          iecr = fstecr( buff,ibuf,                             &
+                        -nbits, iu2, dateo,deet,npas,           &
+                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
+                         etiket,grtyp, ig1,ig2,ig3,ig4,         &
+                         datyp, ReWrit )
+      else
+          iecr = fstecr( moyenne,ibuf,                          &
+                        -nbits, iu2, dateo,deet,npas,           &
+                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
+                         etiket,grtyp, ig1,ig2,ig3,ig4,         &
+                         datyp, ReWrit )
+      end if
+
+      if (iecr < 0)                                        then
+          write(6,6005) iecr,'moyenne'
+          ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+          if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
+          call quit( ' Fstmdiag ',5 )
+      end if
+
+      if (Stats)                                           then
+          call xxx_fmmm8( amin8,amax8,amean8,avar8, moyenne, nwds )
+          call get_ip1_string( ip1,cip1 )
+          write(6,6101) 'MOY',nr,typvar,nomvar,etiket,cip1, &
+                        ni,nj,amin8,amax8,amean8,avar8
+      end if
+
+      ! Et maintewnant, ecrire les variances (toujours a 64 bits).
+
+      if (.not.NoVar)                                      then
+
+          nbits = 64 ; datyp = 5
+          iecr = fstecr( variance,ibuf,                         &
+                        -nbits, iu3, dateo,deet,npas,           &
+                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
+                         etiket,grtyp, ig1,ig2,ig3,ig4,         &
+                         datyp, ReWrit )
+
+          if (iecr < 0)                                    then
+              write(6,6005) iecr,'variance'
+              ifrm = fstfrm (iu2) ; ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
+              call quit( ' Fstmdiag ',5 )
+          end if
+
+          if (Stats)                                        then
+              call xxx_fmmm8( amin8,amax8,amean8,avar8, variance, nwds )
+              call get_ip1_string( ip1,cip1 )
+              write(6,6101) 'VAR',nr,typvar,nomvar,etiket,cip1, &
+                            ni,nj,amin8,amax8,amean8,avar8
+          end if
+
+      end if
+
+      start = start+1
+
+  end do LOOP3
+
+  !------------------------------------------------------------------
+  ! On fait le menage...
+
+ 999  ifrm = fstfrm (iu1) ; ierr1 = fclos( iu1 )
+  ifrm = fstfrm (iu2) ; ierr2 = fclos( iu2 )
+
+  if (.not.NoVar)                                          then
+      ifrm = fstfrm (iu3) ; ierr3 = fclos( iu3 )
+  end if
+
+  write(6,6000) infont-nref
+  if (box) nil = exfin( 'Fstmdiag','*Reussite*','NON' )
+  call qqexit( 0 )
+
+!-----------------------------------------------------------------------
+ 0001 format(a2,a12,a4,2x,a1,3x)
+
+ 6000 format(/'   Traitement de ',i6,' champs effectuee.'/)
+
+ 6001 format(/'   Deux noms de fichiers sont requis a l''entree...'/)
+ 6002 format(/'   Impossible d''associer un nom a une unite d''E/S...'/)
+ 6003 format(/'   Le fichier source doit exister au depart...'/3x,A/)
+ 6004 format(/'   Le fichier destination "',A,'" existe deja'/ &
+              "   Il faut l'effacer ou invoquer le parametre -f"/) 
+ 6005 format(/'   Erreur ',i5,' durant ecriture (fstecr) de la ',A/)
+ 6006 format(/"   Le fichier source n'est pas de type RND."/)
+ 6007 format(/'   Erreur ',i5,' durant la lecture (fstluk).'/)
+ 6008 format(/'   Erreur ',i5,' durant la lecture (fstprm).'/)
+ 6009 format(/"   Erreur d'allocation de memoire, nwds =",I6/)
+ 6010 format(/'   TMPDIR ou BIG_TMPDIR non definis.'/)
+ 6011 format(/'   Probleme avec deet,npas en sortie =',2i10/)
+
+ 6100 format(//4x,' NR TV NAME ETIKET',19x,'LEV',5x,'NI',4x,'NJ', &
+            11x,'MIN',11x,'MAX',10x,'MEAN',6x,'VARIANCE'//)
+
+ 6101 format(A,1x,I3,1x,4(A,1x),2I6,1p4e14.6)
+ 6102 format(/3x,'Source...      ',A/3x,'Destination... ',A/)
+ 6103 format(/3x,'Source...      ',A/3x,'Destination... ',A/18x,A/)
+
+ 6201 format(/'Debug ',A,'=',A/)
+
+  end
+# endif

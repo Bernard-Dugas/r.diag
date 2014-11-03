@@ -1,0 +1,553 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      tfilter  INFIL [GAINSQ/OUTFIL] INPUT OUTPUT [-a VAL1 -b VAL2 -kind VAL3]
+*
+*
+*     AUTHORS - F. Zwiers, N.E. Sargent AND B. Dugas, OCT 31/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/tfilter.ptn,v 4.11 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      TIME FILTER A SET OF SERIES BY CONVOLUTION FILTERS.
+*
+*
+*     PURPOSE - APPLY A GRID POINT TIME FILTER TO A TIME SERIES OF FIELDS.
+*               THE FILTER IS EITHER HIGH-PASS OR LOW-PASS DEPENDING ON THE
+*               INPUT CARD VALUES.
+*
+*               THE FILTER APPLIED IS EITHER :
+*
+*               1) - AN IDEAL LOW-PASS FILTER WITH CUTOFF FREQUENCY F
+*                    (CYCLES PER UNIT TIME) MODIFIED BY A HANNING WINDOW.
+*                    SEE 'THE SPECTRAL ANALYSIS OF TIME SERIES',
+*                    L.H. KOOPMANS, ACADEMIC PRESS, 1974.
+*
+*               OR
+*
+*               2) - SEQUENTIALLY APPLIED SYMMETRIC MOVING AVERAGE FILTERS.
+*
+*
+*     NOTE    - THE PROGRAM COMPUTES AND DISPLAYS THE SQUARED GAIN OF THE
+*               FILTER RESULTING FROM THE CHOICE OF F AND K.
+*
+*
+*     INPUT FILE...
+*      INFIL  = A SEQUENCE OF (MULTI-LEVEL,MULTI-VARIABLE) SETS OF FIELDS.
+*               THE FILE IS SUPPOSED TO BE SORTED ACCORDING TO A
+*               TIMESTEP/NAME/LEVEL RULE, FROM MOST TO LEAST SIGNIFICANT
+*
+*     OUTPUT FILES...
+*      GAINSQ = A ONE RECORD OF FILE OF TYPE 'ZONL' WHICH CONTAINS THE
+*               SQUARED GAIN OF THE FILTER APPLIED TO INFIL. ONLY USED
+*               WHEN FILTER IF NEGATIVE
+*                              ********* OR *********
+*      OUTFIL = IF FILTER <= 0, THEN THIS FILE CONTAINS THE FILTERED TIME
+*               SERIES. THE FILTERED SERIES COUL BE 2*K SHORTER THAN THE
+*               UNFILTERED VERSION. ONLY USED WHEN FILTER IS POSITIVE
+*
+*      ******** NOTE THAT ONLY ONE OF THESE TWO FILES IS WRITTEN ********
+* 
+*
+*     PARAMETERS...
+*
+*       ABS(F) (a) = IS THE CUTOFF FREQUENCY IN CYCLES PER SAMPLE TIME
+*                  > 0, CHOOSES A  LOW-PASS FILTER
+*                  < 0, CHOOSES A HIGH-PASS FILTER
+*       K      (b) > 0, THE NUMBER OF NON-ZERO WEIGHTS USED BY THE IDEAL FILTER.
+*                       THE SIZE OF K IS RESTRICTED BY THE NUMBER OF RECORDS IN
+*                       INFIL WHICH CAN BE STORED IN MEMORY SIMULTANEOUSLY AND
+*                       THE LENGTH OF THE ARRAY USED TO STORE THE WEIGHTS. A
+*                       LARGE VALUE OF K WILL PRODUCE A FILTER WITH A VERY SHARP
+*                       CUTOFF AT FREQUENCY F. AND, A SMALL VALUE OF K RESULTS
+*                       IN A FILTER WITH A GRADUAL CUTOFF AT FREQUENCY F.
+*       K          < 0, CHOOSES SEQUENTIALLY APPLIED SYMMETRIC FILTERS WITH A
+*                       NUMBER OF WEIGHTS DETERMINED BY F. THE LENGTH OF SUCH A
+*                       FILTER (AND THE CORRESPONDING MEMORY REQUIREMENTS) IS
+*                       INVERSELY PROPORTIONAL TO F.
+*
+*       FILTER    >= 0, APPLY FILTER TO DATA IN INFIL.
+*       (kind)     = 1, ADDITIONALY, SUPPOSE THAT THE DATA IS PERIODIC IN TIME
+*                       AND THAT INFIL CONTAINS A INTEGER NUMBER OF FULL CYCLES.
+*                       INFIL IS THEN TREATED AS A CIRCULAR BUFFER AND OUTFIL
+*                       WILL HAVE THE SAME NUMBER OF RECORDS AS INFIL.
+*                 <  0, ONLY COMPUTE AND DISPLAY THE SQUARED GAIN OF THE FILTER.
+*                       THIS OPTION IS USEFUL WHEN CHOOSING FILTER PARAMETERS.
+*
+*       READ(5010) F,K,FILTER
+*5010   FORMAT(10X,E10.0,5X,I5,10X,I5)
+*
+*       NOTE:        F,K AND FILTER CAN BE READ ON THE COMMAND LINE USING
+*                    THE a, b AND kind PARAMETER KEYS, RESPECTIVELY.
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* TFILTER.     -.001        20              0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 BADLY SPECIFIED F AND/OR K
+*       2 UNABLE TO ALLOCATE ENOUGH WORKING MEMORY
+*       3 TIME SERIES SHORTER THAN 2*K+1
+*       4 ERROR READING INPUT PARAMETERS
+*       5 PREMATURE EOF ON SERIES
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM tfilter 
+*     PROGRAM TFILTER (INFIL,       GAINSQ,       OUTFIL,       INPUT,
+*    1                                                          OUTPUT,
+*    2           TAPE1=INFIL, TAPE2=GAINSQ, TAPE3=OUTFIL, TAPE5=INPUT,
+*    3                                                    TAPE6=OUTPUT) 
+*     -----------------------------------------------------------------
+
+*     $Log: tfilter.ptn,v $
+*     Revision 4.11  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.10  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2004/11/09 00:24:12  dugas
+*     Ajouter la documentation des parametres de la ligne de commande.
+*
+*     Revision 4.6  2003/05/23 20:15:01  dugas
+*     Corriger la documentation automatique et faire un
+*      usage correct de la taille de l'entete de IBUF.
+*
+*     Revision 4.5  2000/04/07 20:31:28  armnrbd
+*      Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.4  1998/07/03 02:26:43  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1996/05/28  13:40:33  armnrbd
+*     Augmenter MAXTS a 15meg.
+*
+*     Revision 4.2  1995/10/26  17:44:07  armnrbd
+*     Ajouter de la decumentation sur le mode de fonctionnement multi-variable.
+*
+*     Revision 4.1  1995/07/06  03:24:40  armnrbd
+*     Corriger l'appel a la routine SUIVANT.
+*
+*     Revision 4.0  95/07/06  02:48:11  02:48:11  armnrbd (Bernard Dugas)
+*     Initial version.
+*     
+*
+***    HISTORIQUES DES MODIFICATIONS:
+
+*     JUL 22/92 - E. CHAN  (REPLACE UNFORMATTED I/O WITH I/O ROUTINES)
+*     JAN 29/92 - E. CHAN  (CONVERT HOLLERITH LITERALS TO ASCII)                
+*     OCT 31/85 - F. ZWIERS, N.E. SARGENT, B.DUGAS.                             
+*
+*-------------------------------------------------------------------------
+      IMPLICIT     none
+
+***    MAXPNT correspond a la valeur de NFREQ que
+***    l'on trouve dans la routine GAINSQ.
+
+      INTEGER,     PARAMETER :: HEAD   = taille_entete
+      INTEGER,     PARAMETER :: MAXPNT = 199
+      INTEGER,     PARAMETER :: MAXLEV = 999
+
+      CHARACTER    LIGNE*80,PKTYP*2
+      LOGICAL      OK,LOPASS,ERR
+      CHARACTER(4) VARIAB(MAXLEV)
+      REAL         F,L0,WEIGHT,B(MAXPNT),
+     +             TWOPI,SUMW,LAMBDA(MAXPNT)
+      INTEGER      BASE,FILTER,LEV(MAXLEV),JBUF(MAXPNT+HEAD),
+     +             NF,IO,LEN,NWDS,JPAK,MAXW,I,J,K,L,NVAR,K0,
+     +             NLEV,NWGHTS,SETSIZ,STEP(MAXLEV),JR,JRP,
+     +             IER,IFIRST,ADD,NOMBRE,TIME,TOTAL,
+     +             NPAS,NPAS0
+
+      INTEGER,     ALLOCATABLE :: IBUF(:),IW(:),IX(:)
+      REAL,        ALLOCATABLE :: W(:),X(:),Y(:)
+
+      LOGICAL,     EXTERNAL :: RPBLOC
+      CHARACTER,   EXTERNAL :: GETYP*4
+      INTEGER,     EXTERNAL :: GETSIZ3,GETHIGH
+      EXTERNAL     JCLPNT,GETLIGN,BURNF,GETMSET,
+     +             PUTMSET,XIT,FWGHTS,GAINSQ,
+     +             PUTFLD2,WRITLEV2,SUIVANT,
+     +             PRECEDE
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/tfilter.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+      TWOPI = 8.0*ATAN(1.0D0)
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          F      = 0.0
+          K      = 0
+          FILTER = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE,'(BN,E10.0)', ERR=900,END=900,IOSTAT=IO) F
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE,'(BN,I5)', ERR=900,END=900,IOSTAT=IO) K
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ( LIGNE,'(BN,I5)', ERR=900,END=900,IOSTAT=IO)
+     +                  FILTER
+
+      ELSE
+
+***        GET AND CHECK THE TFILTER CARD. 
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010, ERR=900,END=900,IOSTAT=IO) F,K,FILTER
+              CALL BURNF
+          END IF
+
+      END IF
+
+      WRITE(6,6050) F,K,FILTER
+  
+      IF (F.LT.0.0)                                            THEN 
+          LOPASS = .FALSE.
+          F      = ABS(F) 
+      ELSE
+          LOPASS = .TRUE. 
+      ENDIF 
+  
+      IF (     F   .EQ. 0.0 .OR. 
+     +    ABS( F ) .GE. 0.5 .OR. 
+     +         K   .EQ. 0    )                                 THEN 
+          WRITE(6,6060) 
+          CALL                                     XIT(' Tfilter',-1 )
+      ENDIF 
+  
+***    COMPUTE FILTER WEIGHTS
+  
+      L0      = TWOPI*F
+      K0      = K
+      
+      IF (K0.LT.0)                                             THEN
+          JR  = INT(1.0/(2.0*F))
+          JRP = 2*JR/3
+          K0  = JR+JRP
+      END IF
+
+      NWGHTS  = 2*K0 + 1
+
+      ALLOCATE( W(NWGHTS),IW(NWGHTS) )
+
+      IF (K.GE.0)                                              THEN 
+  
+          CALL FWGHTS( L0, K,W,LOPASS,SUMW )
+
+          IF (FILTER.LT.0)                                     THEN
+
+***            DISPLAY THE SQUARED GAIN
+
+              CALL GAINSQ( L0, K,LAMBDA,B,SUMW ) 
+  
+***            OUTPUT THE SQUARED GAIN FOR PLOTTING
+  
+              CALL SETLAB( JBUF, 'ZONL',1,'TFUN',1,MAXPNT,1,0,-32 )
+              CALL PUTFLD2( 2, B, JBUF,MAXPNT )
+
+          END IF
+  
+      ELSE
+  
+          CALL FWGHTS( L0, K,W,LOPASS,SUMW )
+  
+      ENDIF 
+
+***    PRINT THE WEIGHTS THEMSELVES.
+
+      WRITE(6,6170) (I-K0-1,W(I),I=1,NWGHTS)
+  
+***    DECIDE WHETHER OR NOT TO CONTINUE 
+  
+      IF (FILTER.LT.0) CALL                        XIT(' Tfilter', 0 ) 
+*-------------------------------------------------------------------------- 
+  
+***    CHECK INFIL 
+  
+      MAXW = GETSIZ3( 1, JBUF,LEN,NWDS,JPAK, .TRUE.,
+     +                   LEV,NLEV, VARIAB,NVAR, MAXLEV )
+
+      IF (MAXW.LE.0) GOTO 910
+
+      WRITE(6,6020) ; CALL PRTLAB( JBUF )
+      WRITE(6,6025) (VARIAB(I),I=1,NVAR)
+
+      CALL WRITLEV2( LEV,NLEV,JBUF )
+
+      SETSIZ = NVAR*NLEV*NWDS
+
+***    ALLOCATE WORKING MEMORY.
+
+      ALLOCATE( IBUF(LEN),IX(NWGHTS*HEAD),
+     +                     X(NWGHTS*SETSIZ),Y(SETSIZ), STAT=IER )
+
+      IF (IER /= 0 .OR. loc( X ) == 0)                         THEN
+          WRITE(6,6002) (NWGHTS+1)*SETSIZ
+          CALL                                     XIT(' Tfilter' ,-2 )
+      END IF
+
+***    INITIALISE MEMORY POINTER VECTOR IW.
+
+      DO  I=1,NWGHTS 
+          IW(I) = I 
+      END DO
+  
+***    LIRE INFIL POUR DETERMINER LE
+***    NOMBRE DE JEUX D'ENREGISTREMENTS.
+ 
+      NPAS0  =  0 
+      NPAS   = -1
+      TIME   = -1
+      NOMBRE =  0 
+  050 CALL SUIVANT( 1, IBUF, ERR,OK )
+          IF (.NOT.OK ) GOTO 100
+          IF (     ERR) GOTO 910
+          IF (PKTYP == 'SQ') NPAS0 = GETHIGH('NPAS',IBUF )
+          IF (TIME /= IBUF(2) .OR. NPAS /= NPAS0)              THEN
+              TIME   = IBUF(2)
+              NPAS   = NPAS0
+              NOMBRE = NOMBRE + 1
+          END IF
+      GOTO 050 
+
+  100 IF (NOMBRE.EQ.0)                                         THEN
+          GOTO 910
+      ELSE IF (NOMBRE.LT.NWGHTS)                               THEN
+          WRITE (6,6160) NWGHTS
+          CALL                                     XIT(' Tfilter',-3 )
+      END IF
+
+***    REMBOBINNER.
+
+      CALL PRECEDE( 1,-1 )
+
+      IF (FILTER.NE.1)                                         THEN
+
+***        LOAD UP MEMORY WITH THE FIRST 2*K + 1 SETS
+  
+          DO  150 I=1,NWGHTS 
+  
+              ADD = (IW(I)-1)*SETSIZ + 1
+              CALL GETMSET( 1, X(ADD), LEV,NLEV, STEP,.TRUE.,
+     +                         VARIAB,NVAR, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN 
+                  WRITE (6,6160) NWGHTS 
+                  CALL                             XIT(' Tfilter',-3 )
+              END IF 
+  
+              BASE = (IW(I)-1)*HEAD
+              DO  J=1,HEAD
+                  IX(BASE+J) = IBUF(J)
+              END DO
+  
+  150     CONTINUE
+
+***        TOTAL NUMBER OF OUTPUT SET IS NOMBRE-2*K
+
+          TOTAL = NOMBRE-2*K
+
+      ELSE IF (FILTER.EQ.1)                                    THEN
+
+***        LOAD UP MEMORY WITH THE LAST K AND THE FIRST K + 1 SETS.
+***        START BY SKIPPING TO THE END...
+
+          DO  I=1,NOMBRE-K
+              CALL GETMSET( 1, X, LEV,NLEV, STEP,.TRUE.,
+     +                         VARIAB,NVAR, IBUF,MAXW,OK )
+          END DO
+
+          DO  200 I=1,K
+
+              ADD = (IW(I)-1)*SETSIZ + 1
+              CALL GETMSET( 1, X(ADD), LEV,NLEV, STEP,.TRUE.,
+     +                         VARIAB,NVAR, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN 
+                  WRITE (6,6160) NWGHTS 
+                  CALL                             XIT(' Tfilter',-3 )
+              END IF 
+  
+              BASE = (IW(I)-1)*HEAD
+              DO  J=1,HEAD
+                  IX(BASE+J) = IBUF(J)
+              END DO
+  
+  200     CONTINUE
+
+***        ... AND PROCEDING TO THE BEGINNING.
+
+          CALL PRECEDE( 1,-1 )
+
+          DO  250 I=1,K+1
+
+              ADD = (IW(K+I)-1)*SETSIZ + 1
+              CALL GETMSET( 1, X(ADD), LEV,NLEV, STEP,.TRUE.,
+     +                         VARIAB,NVAR, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE (6,6160) NWGHTS
+                  CALL                             XIT(' Tfilter',-3 )
+              END IF
+
+              BASE = (IW(K+I)-1)*HEAD
+              DO  J=1,HEAD
+                  IX(BASE+J) = IBUF(J)
+              END DO
+
+  250     CONTINUE
+
+***        TOTAL NUMBER OF OUTPUT SET IS NOMBRE
+
+          TOTAL = NOMBRE
+
+      END IF
+  
+***    X(IW(K)) HOLDS NWGHTS RECORDS, THE CENTER OF WHICH IS 
+***    IW(K+1) (IN A CIRCULAR FASHION). IX(IW(K)) HOLDS THE
+***    CORRESPONDING LABELS. 
+  
+*                       * ========= * 
+*                       * TIME LOOP * 
+*                       * ========= * 
+  
+***    APPLY FILTER TO CURRENT SET OF NWGHTS RECORDS.
+***    OUTPUT FROM THE FILTER IS TO BE PUT IN Y. 
+  
+      DO  400 TIME=1,TOTAL
+
+          BASE       = (IW(1)-1)*SETSIZ
+  
+          WEIGHT = W(1) 
+          DO  J=1,SETSIZ
+              Y(J) = X(BASE+J)*WEIGHT 
+          END DO
+  
+          DO 350 I=2,NWGHTS 
+              BASE   = (IW(I)-1)*SETSIZ
+              WEIGHT = W(I) 
+              DO  J=1,SETSIZ
+                  Y(J) = Y(J)+WEIGHT*X(BASE+J)
+              END DO
+  350     CONTINUE
+  
+***        USE SAME LABEL AS FOR X.
+  
+          BASE = (IW(K+1)-1)*HEAD
+          DO  I=1,HEAD
+              IBUF(I)=IX(BASE+I)
+          END DO
+
+          CALL PUTMSET( 2, Y, LEV,NLEV, VARIAB,NVAR, IBUF,MAXW )
+  
+***        SHUFFLE RECORD POINTERS.
+  
+          IFIRST     = IW(1)
+          DO  L=1,NWGHTS-1 
+              IW(L)  = IW(L+1)
+          END DO
+          IW(NWGHTS) = IFIRST 
+  
+***        GET A NEW FIELD AND PUT IT IN POSITION IW(NWGHTS).
+  
+          ADD  = (IW(NWGHTS)-1)*SETSIZ+1
+          BASE = (IW(NWGHTS)-1)*HEAD
+  
+***        ACCOUNT FOR THE CIRCULAR NATURE OF INFIL.
+
+          IF (TIME.EQ.NOMBRE-K) CALL PRECEDE( 1,-1 )
+
+          CALL GETMSET( 1, X(ADD), LEV,NLEV, STEP,.TRUE.,
+     +                     VARIAB,NVAR, IBUF,MAXW,OK )
+
+          IF (.NOT.OK) GOTO 450
+
+          DO  I=1,HEAD
+              IX(BASE+I) = IBUF(I)
+          END DO
+
+  400 CONTINUE
+
+  450 WRITE(6,6000) TOTAL
+      CALL                                         XIT(' Tfilter', 0 ) 
+  
+***    EOF ON UNIT 5 (INPUT).
+  
+  900 WRITE(6,6030) 
+      CALL                                         XIT(' Tfilter',-4 )
+  
+***    PREMATURE EOF ON UNIT 1 (INFIL).
+  
+  910 WRITE(6,6110) 
+      CALL                                         XIT(' Tfilter',-5 )
+*-----------------------------------------------------------------------------
+  
+ 5010 FORMAT(10X,E10.0,5X,I5,10X,I5)
+
+ 6000 FORMAT(/'Tfilter: wrote ',I6,' sets.')
+ 6002 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' words.'/)
+ 6020 FORMAT(/' First record of the input file:')
+ 6025 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6030 FORMAT(/'The input card is missing or incomplete.')
+ 6050 FORMAT(/'Tfilter: F=',E13.4,', K=',I5,', FILTER=',I3)
+ 6060 FORMAT(/'Tfilter: parameter out of range.'/)
+ 6110 FORMAT(/'The input time series is empty.'/)
+ 6160 FORMAT(/'Insufficient data on infil to begin filtering.'/ 
+     +       ' Need at least ',I6,' sets in infil.'/)
+ 6170 FORMAT(/'Filter weights...'/(1x,5(I5,1X,E14.7)))
+
+      END 
+#     endif

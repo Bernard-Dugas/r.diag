@@ -1,0 +1,260 @@
+Quadts test:  Quadlevel =     6
+Digits1 =    32  Digits2 =    32  Epsilon1 =   -32 Epsilon2 =   -32
+initqts: Tanh-sinh quadrature initialization
+ 0 768
+initqts: Table spaced used =     251
+Quadrature initialization completed: cpu time =    0.000000
+
+Continuous functions on finite itervals:
+
+Problem 1: Int_0^1 t*log(1+t) dt = 1/4
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   2.499605565626265642937956650365E  -1
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   2.499999999962861931752600367694E  -1
+quadts: Iteration  3 of  6; est error = 10^  -23; approx value =
+   2.499999999999999999999994079541E  -1
+quadts: Iteration  4 of  6; est error = 10^  -33; approx value =
+   2.500000000000000000000000000000E  -1
+Quadrature completed: CPU time =    0.000000
+Result =
+   2.500000000000000000000000000000E  -1
+Actual error = -4.043414x10^  -32
+
+Problem 2: Int_0^1 t^2*arctan(t) dt = (pi - 2 + 2*log(2))/12
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   2.104723124581668627558485022252E  -1
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   2.106572512378272684316281924203E  -1
+quadts: Iteration  3 of  6; est error = 10^  -22; approx value =
+   2.106572512258069878271517634196E  -1
+quadts: Iteration  4 of  6; est error = 10^  -32; approx value =
+   2.106572512258069881080923021830E  -1
+quadts: Iteration  5 of  6; est error = 10^  -33; approx value =
+   2.106572512258069881080923021830E  -1
+Quadrature completed: CPU time =    0.000000
+Result =
+   2.106572512258069881080923021830E  -1
+Actual error = -4.005934x10^  -32
+
+Problem 3: Int_0^(pi/2) e^t*cos(t) dt = 1/2*(e^(pi/2) - 1)
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   1.905309488698257830527909238859E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   1.905238687997661482581173300284E   0
+quadts: Iteration  3 of  6; est error = 10^  -17; approx value =
+   1.905238690482675827737211562087E   0
+quadts: Iteration  4 of  6; est error = 10^  -33; approx value =
+   1.905238690482675827736517833353E   0
+Quadrature completed: CPU time =    0.000000
+Result =
+   1.905238690482675827736517833353E   0
+Actual error =  2.317279x10^  -30
+
+Problem 4: Int_0^1 arctan(sqrt(2+t^2))/((1+t^2)sqrt(2+t^2)) dt = 5*Pi^2/96
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   5.139748784314219123378733676734E  -1
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   5.140418936267092496270487473101E  -1
+quadts: Iteration  3 of  6; est error = 10^  -17; approx value =
+   5.140418958900707602881076687394E  -1
+quadts: Iteration  4 of  6; est error = 10^  -33; approx value =
+   5.140418958900707613976297395770E  -1
+Quadrature completed: CPU time =    0.000000
+Result =
+   5.140418958900707613976297395770E  -1
+Actual error = -1.610077x10^  -31
+
+Continuous functions on finite itervals, but non-diff at an endpoint
+
+Problem 5: Int_0^1 sqrt(t)*log(t) dt = -4/9
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+  -4.444392576516707717488134233629E  -1
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+  -4.444444444441117476326162579634E  -1
+quadts: Iteration  3 of  6; est error = 10^  -25; approx value =
+  -4.444444444444444444444444444122E  -1
+quadts: Iteration  4 of  6; est error = 10^  -33; approx value =
+  -4.444444444444444444444444444447E  -1
+Quadrature completed: CPU time =    0.000000
+Result =
+  -4.444444444444444444444444444447E  -1
+Actual error =  2.526820x10^  -31
+
+Problem 6: Int_0^1 sqrt(1-t^2) dt = pi/4
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   7.854273838441508557994186844093E  -1
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   7.853981633989281068079393217818E  -1
+quadts: Iteration  3 of  6; est error = 10^  -24; approx value =
+   7.853981633974483096156608912069E  -1
+quadts: Iteration  4 of  6; est error = 10^  -33; approx value =
+   7.853981633974483096156608458201E  -1
+Quadrature completed: CPU time =    0.000000
+Result =
+   7.853981633974483096156608458201E  -1
+Actual error = -2.650080x10^  -31
+
+Functions on finite intervals with integrable singularity at an endpoint.
+
+Problem 7: Int_0^1 sqrt(t)/sqrt(1-t^2) dt = 2*sqrt(pi)*gamma(3/4)/gamma(1/4)
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   1.198138873892717152320308047912E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   1.198140234734772952051637403123E   0
+quadts: Iteration  3 of  6; est error = 10^  -17; approx value =
+   1.198140234735592205600813469657E   0
+quadts: Estimated error = 10^  -17
+Increase secondary prec (Ndigits2) for greater accuracy. Current value =  32
+Quadrature completed: CPU time =    0.000000
+Result =
+   1.198140234735592205600813469657E   0
+Actual error =  1.839109x10^  -18
+
+Problem 8: Int_0^1 log(t)^2 dt = 2
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   2.000010783144524300179818284259E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   2.000000000000407064154154548064E   0
+quadts: Iteration  3 of  6; est error = 10^  -25; approx value =
+   2.000000000000000000000000000025E   0
+quadts: Iteration  4 of  6; est error = 10^  -29; approx value =
+   2.000000000000000000000000000000E   0
+quadts: Estimated error = 10^  -29
+Increase secondary prec (Ndigits2) for greater accuracy. Current value =  32
+Quadrature completed: CPU time =    0.010000
+Result =
+   2.000000000000000000000000000000E   0
+Actual error =  4.655327x10^  -31
+
+Problem 9: Int_0^(pi/2) log(cos(t)) dt = -pi*log(2)/2
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+  -1.088721155239041938600668717670E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+  -1.088793045146372183847035105992E   0
+quadts: Iteration  3 of  6; est error = 10^  -23; approx value =
+  -1.088793045151801065250343518968E   0
+quadts: Iteration  4 of  6; est error = 10^  -31; approx value =
+  -1.088793045151801065250344449118E   0
+quadts: Estimated error = 10^  -31
+Increase secondary prec (Ndigits2) for greater accuracy. Current value =  32
+Quadrature completed: CPU time =    0.000000
+Result =
+  -1.088793045151801065250344449118E   0
+Actual error = -6.902533x10^  -31
+
+Problem 10: Int_0^(pi/2) sqrt(tan(t)) dt = pi*sqrt(2)/2
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   2.221441920026155773642590571857E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   2.221441469077981398449081856535E   0
+quadts: Iteration  3 of  6; est error = 10^  -20; approx value =
+   2.221441469079182677906146077596E   0
+quadts: Estimated error = 10^  -20
+Increase secondary prec (Ndigits2) for greater accuracy. Current value =  32
+Quadrature completed: CPU time =    0.000000
+Result =
+   2.221441469079182677906146077596E   0
+Actual error =  4.456018x10^  -16
+
+Functions on an infinite interval (requiring a two-step solution
+
+Problem 11: Int_0^inf 1/(1+t^2) dt = pi/2
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   1.579530840849787429211059327067E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   1.570808435407886648998624201182E   0
+quadts: Iteration  3 of  6; est error = 10^  -10; approx value =
+   1.570796326818231589674487489357E   0
+quadts: Iteration  4 of  6; est error = 10^  -21; approx value =
+   1.570796326794896619231408354825E   0
+quadts: Iteration  5 of  6; est error = 10^  -33; approx value =
+   1.570796326794896619231321691640E   0
+Quadrature completed: CPU time =    0.000000
+Result =
+   1.570796326794896619231321691640E   0
+Actual error = -6.162976x10^  -32
+
+Problem 12: Int_0^inf e^(-t)/sqrt(t) dt = sqrt(pi)
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   1.768484804433928945255240796730E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   1.772372618590189470039977054100E   0
+quadts: Iteration  3 of  6; est error = 10^   -7; approx value =
+   1.772453852512306009752329816819E   0
+quadts: Iteration  4 of  6; est error = 10^  -18; approx value =
+   1.772453850905517991966924326061E   0
+quadts: Estimated error = 10^  -18
+Increase secondary prec (Ndigits2) for greater accuracy. Current value =  32
+Quadrature completed: CPU time =    0.000000
+Result =
+   1.772453850905517991966924326061E   0
+Actual error = -1.964669x10^  -15
+
+Problem 13: Int_0^inf e^(-t^2/2) dt = sqrt(pi/2)
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   1.355945005329238760544423100999E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   1.250649995100404943839031805117E   0
+quadts: Iteration  3 of  6; est error = 10^   -5; approx value =
+   1.253316950943202768823952000230E   0
+quadts: Iteration  4 of  6; est error = 10^  -11; approx value =
+   1.253314137982401162677525583570E   0
+quadts: Iteration  5 of  6; est error = 10^  -15; approx value =
+   1.253314137315500251474740778135E   0
+quadts: Iteration  6 of  6; est error = 10^  -32; approx value =
+   1.253314137315500251207882642405E   0
+Quadrature completed: CPU time =    0.000000
+Result =
+   1.253314137315500251207882642405E   0
+Actual error =  4.560602x10^  -31
+
+Oscillatory functions on an infinite interval.
+
+Problem 14: Int_0^inf e^(-t)*cos(t) dt = 1/2
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   6.762249070289945971267761877674E  -1
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   5.114569048209806138361137663315E  -1
+quadts: Iteration  3 of  6; est error = 10^   -4; approx value =
+   4.999783715160299317597035201389E  -1
+quadts: Iteration  4 of  6; est error = 10^   -9; approx value =
+   4.999999849761915344510867062765E  -1
+quadts: Iteration  5 of  6; est error = 10^  -13; approx value =
+   4.999999999999817230200539721041E  -1
+quadts: Iteration  6 of  6; est error = 10^  -24; approx value =
+   5.000000000000000000000000078252E  -1
+quadts: Estimated error = 10^  -24
+Increase Quadlevel for greater accuracy. Current Quadlevel =   6
+Quadrature completed: CPU time =    0.000000
+Result =
+   5.000000000000000000000000078252E  -1
+Actual error = -7.825158x10^  -27
+
+Problem 15: Int_0^inf sin(t)/t = pi/2
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+   1.852261929378776542184587189573E   0
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+   1.851937052906575524494820462110E   0
+quadts: Iteration  3 of  6; est error = 10^  -18; approx value =
+   1.851937051982466170361632487416E   0
+quadts: Iteration  4 of  6; est error = 10^  -33; approx value =
+   1.851937051982466170361053370159E   0
+quadts: Iteration  1 of  6; est error = 10^    0; approx value =
+  -4.608821078836576185727711165294E  -6
+quadts: Iteration  2 of  6; est error = 10^    0; approx value =
+  -4.643993375813397900631551274438E  -6
+quadts: Iteration  3 of  6; est error = 10^  -11; approx value =
+  -4.645183734647216810636825244441E  -6
+quadts: Iteration  4 of  6; est error = 10^  -12; approx value =
+  -4.645214628254319133080868315189E  -6
+quadts: Iteration  5 of  6; est error = 10^  -14; approx value =
+  -4.645214035491210440710784363214E  -6
+quadts: Iteration  6 of  6; est error = 10^  -16; approx value =
+  -4.645214041804261700561837344744E  -6
+quadts: Estimated error = 10^  -16
+Increase Quadlevel for greater accuracy. Current Quadlevel =   6
+Quadrature completed: CPU time =    0.000000
+Result =
+Actual error =  8.031548x10^  -13
+Prob 15 error may be 40,000 X higher than estimated error.

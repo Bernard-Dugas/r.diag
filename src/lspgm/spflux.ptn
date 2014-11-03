@@ -1,0 +1,498 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spflux  IN OUT INPUT OUTPUT [-kind  VAL1 [VAL2] -label VAL3 \ 
+*                                   -t1    VAL4 -name VAL5 -lv1 VAL6]
+*
+*
+*     DESCRIPTION...
+*      spflux - COMPUTE AND PRINT SPECTRAL M OR N FLUX
+*
+*
+*     AUTHOR  - T.Shepherd, JUL 18/79.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spflux.ptn,v 4.10 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES THE LEITH FLUX FUNCTION OF A COMPLEX-VALUED SPECTRAL
+*               FILE SC(N,M) AND PRODUCES A CROSS-SECTION OF THE M OR N FLUX
+*               AS A FUNCTION OF HEIGHT AND WAVENUMBER. SO, IT CAN BE EITHER
+*               THE M-FLUX, PRINTING OUT THE RESULT FLUX(M), OR THE N-FLUX
+*               WITH THE RESULT FLUX(N).
+*
+*               FLUX(M+1)=FLUX(M)-INTR(M) WHERE INTR(M) IS THE APPROPRIATE
+*               INTERACTION TERM AND FLUX(0)=0 (IN MATH NOTATION). THIS IS A
+*               CHANGE FROM THE PREVIOUS VERSION WHERE FLUX(0)=-INTR(0) AND
+*               FLUX(M=+1)=FLUX(M)-INTR(M+1) WHICH CLEARLY DOESNT WORK FOR
+*               THE M CASE (IE FLUX(0) NOT =0).
+*
+*               FLUX(N+1)=FLUX(N)-INTR(N+1) IS USED FOR THE N CASE SINCE 
+*               THERE ISN'T A PROBLEM IN THIS CASE AND FOR CONSISTENCY WITH 
+*               PAST USAGE.
+*
+*
+*     INPUT FILE...
+*      IN   = GLOBAL SPECTRAL FILE.
+*
+*     OUTPUT FILE...
+*      OUT  = CONTAINS THE REQUESTED FLUX CROSS-SECTIONS
+*
+*
+*     INPUT PARAMETERS...
+*
+*      FLUXTYP (kind-1) = M FOR M-FLUX, OR N FOR N-FLUX.
+*      VKIND   (kind-2) = VERTICAL LEVEL TYPE. ONLY USE THIS WITH IN RPN STD FILES
+*                         AND WHEN LEVX CONTAINS DECODED VALUES. FURTHERMORE, THIS
+*                         PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*                         THE CURRENTLY SUPPORTED VALUES ARE:
+*                         'HAUTEUR'   , heights (m) with respect to sea level
+*                         'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                         'ETA'       , first version of the GEM ETA coordinate
+*                         'PRESSION'  , pressure (mb)
+*                         'ARBITRAIRE', arbitrary level (no units apply)
+*                         'HAUTEURS'  , heights (M) with respect to the surface
+*                         'HYBRIDE'   , hybrid GEM coordinate
+*                         'THETA'     , potential temperature coordinate
+*                         'GALCHEN'   , GalChen generalized coordinate
+*      LABEL   (label)  = 256 CHARACTER LABEL.
+*      NSTEP,NAME,LEVEL = RECORD LABEL ID FOR FIELD TO BE PROCESSED.
+*       ( t1,name,lv1 )   NAME = Blank or 'ALL' PROCESSES THE COMPLETE FILE.
+*
+*      READ( 5,5005 ) FLUXTYP  *ONLY ONCE*
+*      READ( 5,5015 ) LABEL    *ONLY ONCE*
+*      READ( 5,5010 ) NSTEP,NAME,LEVEL
+*5005  FORMAT(10X,4X,A1)
+*5010  FORMAT(10X,I10,1X,A4,I5)
+*5015  FORMAT(64A4)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*   SPFLUX    M
+*  LABEL CARD GOES HERE
+*                 36 VORT  500
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR READING IN
+*       2 ERROR READING FLUXTYP
+*       3 ERROR READING LABEL
+*       4 ERROR DECODING NSTEP PARAMETERS
+*       5 NO MORE RECORDS TO SKIP (NAM WAS 'SKIP')
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spflux
+*     PROGRAM SPFLUX (IN,       OUT,       INPUT,       OUTPUT,
+*    1          TAPE1=IN, TAPE2=OUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ---------------------------------------------------------
+
+*     $Log: spflux.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2013/10/16 20:49:03  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM.
+*
+*     Revision 4.8  2011/06/06 18:49:45  dugas
+*      Sauver la section HIGH de IBUF dans JBUF avant l'ecriture du fichier OUT.
+*
+*     Revision 4.7  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2000/09/25 04:04:28  armnrbd
+*     Utiliser le mode IO64.
+*
+*     Revision 4.3  1998/10/20 14:49:38  armnrbd
+*     Appeller la fonction Y2KDAT.
+*     Implanter le support de RPBLOC.
+*     Corriger l'usage du code de sortie -4.
+*
+*     Revision 4.2  1998/07/03  02:26:39  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:54  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:21:48  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:01  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.6  92/11/10  22:09:55  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.5  92/10/13  15:00:24  armnrbd
+*     Compaction par defaut passe a 32 bits/mots (-32).
+*     
+*     Revision 1.4  92/04/28  12:30:38  armnrbd
+*     Corriger le codes EXIT dans documentation.
+*     
+*     Revision 1.3  92/04/27  10:21:44  armnrbd
+*     Utiliser GETLIGN plutot que READ(5).
+*     
+*     Revision 1.2  92/03/17  15:01:09  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.1  92/03/13  12:21:58  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:55  armnrbd
+*     Initial revision
+*     
+
+*     AUG 13/90 - F.MAJAESS (MODIFY THE CALL TO "SPECTRA")
+*     NOV   /86 - G.J.B.  (REDEFINE FLUX SO CONSISTENT FOR M CASE)
+*     NOV 24/83 - B.DUGAS.
+*     JUL 18/79 - TED SHEPHERD.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXLM = lm_maximal
+      INTEGER,    PARAMETER :: NAXW = 2*MAXLM+1
+
+      REAL        RLV
+      INTEGER*8   NSTEP
+      REAL*8      B(NAXW)
+      LOGICAL     OK,ERR,PBLOC
+      COMPLEX*16  SUM1(NAXW),SUM2(NAXW)
+      CHARACTER*4 BLANK,ANAM,NAME,LABEL(64)
+      CHARACTER*20 FLUXTYP*1, ANSTEP,ALEVEL,CKIND, LIGNE*256
+      INTEGER     LSR(2,MAXLM),LR,LM,LA,KTR,NFF,I,IO,KD,
+     +            L,LP,LENLAB,STAMP,LEVEL,LRLMT,M,N,MAXW,
+     +            NMAX,IER,LEN,NWDS,KPAK,VKIND0,VKIND,
+     +            KBUF(HEAD)
+
+      COMPLEX*16, DIMENSION(:), ALLOCATABLE :: A
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+
+      INTEGER*8   Y2KDAT8
+      CHARACTER*4 GETYP,PKTYP
+      LOGICAL     RPBLOC,SETIO64
+      INTEGER     GETSIZ,GETKIND
+      EXTERNAL    JCLPNT,GETLIGN,LOW2UP,XIT,GETFLD2,
+     +            DIMGT2,SPECTRA,SETLAB,PUTFLD2,BURNF,RPBLOC,
+     +            Y2KDAT8,GETSIZ,SETIO64,GETYP,GETKIND,DATE2STAMP
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        BLANK /' '/
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spflux.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ( 1, KBUF,LEN,NWDS,KPAK )
+      IF (MAXW.LE.0) CALL                          XIT(' Spcsum ',-1 )
+
+      WRITE(ANAM,4) KBUF(1)
+      IF (ANAM.NE.'SPEC') GOTO 050
+
+      VKIND0 = GETKIND( )
+      VKIND  = VKIND0
+      CKIND  = ' '
+
+      ALLOCATE( A(NWDS),IBUF(LEN),JBUF(LEN) )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          PBLOC  = .TRUE.
+
+***        CHECK PARAMETRE BLOCK.
+
+          FLUXTYP = ' '
+          DO  I=1,64
+              LABEL(I) = ' '
+          END DO
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) FLUXTYP = LIGNE
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) CKIND = LIGNE
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')               THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          ENDIF
+
+          OK = RPBLOC('LABEL',LIGNE)
+          IF (OK) READ( LIGNE, 5015,ERR=903,END=903,IOSTAT=IO) LABEL
+
+          ANSTEP = ' '
+          ANAM   = ' '
+          ALEVEL = ' '
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) ANSTEP = LIGNE
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) ANAM = LIGNE
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) ALEVEL = LIGNE
+
+      ELSE
+
+***        READ SUM TYPE ('M' OR 'N') ...
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5005,ERR=902,END=902,IOSTAT=IO) FLUXTYP
+          END IF
+
+***        ... AND LABEL.
+
+          CALL GETLIGN( 5,LIGNE,256,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 903
+          ELSE
+              READ( LIGNE, 5015,ERR=903,END=903,IOSTAT=IO) LABEL
+          END IF
+
+      END IF
+
+      IF (FLUXTYP.EQ.'M')                                      THEN
+          KD = 2
+      ELSE
+          KD = 1
+      END IF
+
+      CALL LOW2UP( LABEL,LABEL )
+      DO L=64,2,-1
+         IF (LABEL(L).NE.BLANK) GOTO 99
+      END DO
+   99 LENLAB = L
+
+  100 CONTINUE
+
+      IF (.NOT.PBLOC)                                          THEN
+
+***        RECORD FROM WHICH TO CALCULATE THE FLUX ?
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO) 
+     +                     ANSTEP,ANAM,ALEVEL
+          END IF
+
+      END IF
+
+      IF (ANSTEP.EQ.' ') ANSTEP = ' -1'
+      IF (ANAM  .EQ.' ') ANAM   = 'ALL'
+
+      READ(ANSTEP,20,ERR=904) NSTEP
+      NSTEP = Y2KDAT8( NSTEP )
+      CALL DATE2STAMP( NSTEP,STAMP )
+
+      CALL LEADBLK( ANAM )
+
+      IF (ANAM.EQ.'ALL')                                       THEN
+          NAME = 'NEXT'
+      ELSE IF (ANAM.EQ.'SKIP')                                 THEN
+          IF (PBLOC)                                           THEN
+              WRITE(6,'(" -name SKIP is NOT a valid option...")')
+              CALL                                 XIT(' SPflux ',-101 )
+          ELSE
+              CALL SUIVANT( 1, KBUF, ERR,OK )
+              IF (.NOT.OK .OR. ERR) GOTO 904
+              GOTO 100
+          END IF
+      ELSE
+          NAME = ANAM
+      END IF
+
+      IF (ALEVEL .EQ.' ' .OR. ALEVEL .EQ.'-1')                 THEN
+          ALEVEL = '-1'
+          LEVEL  =  -1
+      ELSE
+          IF (INDEX( ALEVEL,'.' ).EQ.0 .AND. CKIND.EQ.' ')     THEN
+              READ( ALEVEL, 10, ERR=904,END=904 ) LEVEL
+              CALL CONVPR( LEVEL, RLV, VKIND, -2 )
+              IF (PKTYP.EQ.'SQ')  CALL CONVPR( LEVEL, RLV, VKIND, +2 )
+          ELSE
+              READ( ALEVEL, 15, ERR=904,END=904 ) RLV
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL CONVPR( LEVEL, RLV, VKIND,  +2 )
+              ELSE
+                  CALL LVCODE( LEVEL, RLV/1000.,1 ) 
+              END IF
+         ENDIF
+      END IF
+
+      LIGNE = '-1'
+      IF (ALEVEL.NE.'-1') call get_ip1_string( LEVEL,LIGNE(1:12) )
+
+  200 CALL GETFLD2( 1, A, 'SPEC',STAMP,NAME,LEVEL, IBUF,MAXW, OK )
+
+      IF (.NOT.OK)                                             THEN
+          IF (ANAM.EQ.'ALL')                                   THEN
+              WRITE(6,6060) (LABEL(L),L=1,LENLAB)
+              IF (.NOT.PBLOC) CALL BURNF
+              CALL                                 XIT(' Spflux ', 1 )
+          END IF
+          WRITE(6,6020) TRIM( ANSTEP ),NAME,LIGNE(1:12)
+          CALL                                     XIT(' Spflux ',-1 )
+      END IF
+
+      LRLMT = IBUF(7)
+      CALL DIMGT2( LSR, LA,LR,LM,KTR,LRLMT, 0,0 )
+
+***    SUM OVER THE APPROPRIATE INDEX, CALCULATE THE FLUX, AND PRINT.
+
+      CALL SPECTRA( A,LM,LR,KTR,LA,LSR,SUM1,KD )
+
+      SUM2(1) = CMPLX( 0.0,0.0 )
+
+      IF (KD.NE.2)                                             THEN
+
+          IF (KTR.EQ.0)                                        THEN
+              NMAX = LR+LM-1
+          ELSE IF (KTR.EQ.2)                                   THEN
+              NMAX = LR
+          END IF
+
+          DO  N=2,NMAX
+              SUM2(N) = SUM2(N-1)-SUM1(N)
+          END DO
+
+          WRITE(6,6040) (I-1,REAL(SUM2(I)),I=1,NMAX)
+
+      ELSE
+
+          DO  M=2,LM
+              SUM2(M) = SUM2(M-1)-SUM1(M-1)
+          END DO
+          WRITE(6,6050) (I-1,REAL(SUM2(I)),I=1,LM)
+
+      END IF
+
+      WRITE(6,6030)
+      CALL PRTLAB( IBUF )
+
+***    WRITE OUT THE REAL PART OF THE ARRAY SUM2 TO THE FILE OUT.
+***    THE ORDER OF THE ELEMENTS IS REVERSED FOR USE BY ZXLOOK.
+
+      IF (KD.EQ.2)                                             THEN
+          LP = LM
+      ELSE
+          LP = NMAX
+      END IF
+
+      JBUF(1:taille_entete) = IBUF(1:taille_entete)
+      CALL SETLAB( JBUF, 'ZONL',IBUF(2),' ',IBUF(4),LP,1,0,-32 )
+
+      DO  I=1,LP
+          B(I) = REAL( SUM2(LP+1-I) )
+      END DO
+
+      CALL PUTFLD2( 2, B, JBUF,NAXW )
+
+      IF (ANAM.EQ.'ALL')                                       THEN
+          GOTO 200
+      ELSE IF (.NOT.PBLOC)                                     THEN
+          GOTO 100
+      END IF
+
+
+***    E.O.F. ON INPUT.
+
+  900 WRITE(6,6060) (LABEL(L),L=1,LENLAB)
+      CALL                                         XIT(' Spflux ', 0 )
+
+  902 CALL                                         XIT(' Spflux ',-2 )
+  903 CALL                                         XIT(' Spflux ',-3 )
+  904 CALL                                         XIT(' Spflux ',-4 )
+
+***    E.O.F. ON FILE IN.
+
+  905 CALL                                         XIT(' Spflux ',-5 )
+*-----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0015 FORMAT(BN,E10.0)
+ 0020 FORMAT(BN,I20)
+
+ 5005 FORMAT(10X,4X,A1)
+ 5010 FORMAT(10X,A10,1X,A4,A5)
+ 5015 FORMAT(64A4)
+
+ 6020 FORMAT('0..Eof looking for',A,2X,A4,A)
+ 6030 FORMAT(/15X,'STEP NAME LEVEL  LR  LM      KSM     NPACK')
+ 6040 FORMAT('0Flux as a function of N'/(1H,,4(11X,I2,5X,1PE13.6)))
+ 6050 FORMAT('0Flux as a function of M'/(1H,,4(11X,I2,5X,1PE13.6)))
+ 6060 FORMAT(1H+,48X,64A4)
+
+      END
+#     endif

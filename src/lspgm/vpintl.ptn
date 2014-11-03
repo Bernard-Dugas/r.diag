@@ -1,0 +1,371 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      vpintl  XIN XOUT OUTPUT [ -def ]
+*
+*
+*     DESCRIPTION...
+*      vpintl  - VERTICAL PRESSURE INTEGRAL OF FIELDS LEVEL BY LEVEL
+*
+*
+*     AUTHOR   - D.Neelin, MAY 14 1983.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/vpintl.ptn,v 4.13 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     PURPOSE - VERTICAL INTEGRATION OF A FILE OF PRESSURE LEVEL SETS.
+*               THE RESULTS ARE SAVED LEVEL BY LEVEL AND THE QUADRATURE
+*               RULE IS TRAPEZOIDAL.
+*
+*     NOTE    - 1) THE FILE XIN MAY CONTAIN SEVERAL FIELDS.
+*               2) LEVELS SHOULD VARY MONOTONICALLY.
+*               3) THE PROGRAM ACTUALLY CALCULATES INT( XIN(P) DP/G ),
+*                  WHICH BY THE HYDROSTATIC APPROXIMATION IS VERY
+*                  CLOSE TO A VERTICAL MASS INTEGRAL.
+*               4) WHEN THE -def KEY IS SPECIFIED, THE DOMAIN TOP
+*                  IS GIVEN BY THE FIRST DATA LEVEL. OTHERWISE,
+*                  VPINTL WILL USE 0.
+*
+*
+*
+*     INPUT FILE...
+*      XIN = FILE OF PRESSURE LEVEL SETS
+*
+*     OUTPUT FILE...
+*      XOUT = VERTICAL PRESSURE INTEGRALS OF THE SETS IN XIN.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NOT ENOUGH OR TOO MANY LEVELS IN FIRST SET OF XIN
+*       2 MORE THAN ONE SIZE FOR ARRAYS IN XIN
+*       3 NOT ENOUGH LEVELS IN LAST SET READ
+*       4 LEVELS DO NOT VARY MONOTONICALLY
+*       5 XIN DOES NOT CONTAIN PRESSURE LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM vpintl
+*    +            ( XIN,        XOUT,       OUTPUT,
+*    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
+ 
+*     $Log: vpintl.ptn,v $
+*     Revision 4.13  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.12  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.11  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2006/07/13 21:42:49  dugas
+*     Corriger l'allocation memoire du champs ACC.
+*
+*     Revision 4.9  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.8  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.7  1999/07/09 15:31:03  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.6  1998/07/03 02:26:46  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:39:29  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1996/11/26  20:15:04  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.3  1996/05/15  20:01:49  armnrbd
+*     Verifier que les niveaux croissent de facon monotone.
+*
+*     Revision 4.2  1996/02/29  20:44:21  armnrbd
+*     Imprimer plus d'informations lors du traitement du cas MAXW=0
+*     et aussi quand le programme se mets a ignorer les LABLs.
+*
+*     Revision 4.1  1995/07/06  02:53:20  armnrbd
+*     Ajouter option pour modifier conditions aux frontieres.
+*
+* 
+*     Revision 4.0  94/11/17  14:22:22  14:22:22  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.1  94/08/16  21:08:36  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:23  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  92/11/23  13:50:54  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/10/13  15:57:27  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.1  92/03/23  13:08:19  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:02  armnrbd
+*     Initial revision
+*     
+
+***    HISTORIQUES DES MODIFICATIONS:
+
+***   17 MAI 1991 - B.Dugas, RPN : VERSION CY920.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+ 
+      LOGICAL     OK,ALTB,INCREAS
+      REAL        PR(MAXLEV),ZERO,GINV,DP
+      CHARACTER   NAME*4,TYPE*4,VALEUR*10,MESSAG*10,ENCORE*16
+      INTEGER     HEAD,JBUF(taille_entete),JPAK,LEV(MAXLEV),
+     +            IL1,IL2,I,L,MAXW,LEN,NWDS,NLEV,IER,
+     +            NLEVG,NR,NSET,NF,TOP,BOT,INC,VKIND
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: GG,ACC
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2
+
+      LOGICAL     RPBLOC
+      CHARACTER   GETYP*4,PKTYP*2
+      EXTERNAL    MACSPE,XIT,RPBLOC,GETYP,
+     +            CONVPR,GETSET2,PUTSET2,CMPLBL
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        MESSAG / 'AUCUN' /,
+     +            ENCORE / 'PAS ENCORE DONNE' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vpintl.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      CALL JCLPNT( NF, 1,2, 6 )
+
+***    GET PACKING TYPE.
+
+      PKTYP = GETYP( 1 )
+
+      ALTB = .FALSE.
+      GINV = 1./9.80616
+      NSET = 0
+      NR   = 0
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ALTB = RPBLOC('DEFAUT',VALEUR)
+
+          WRITE(6,6000)
+
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (NLEV.EQ.0) WRITE(6,6100)
+      IF (NR.EQ.0) CALL PRTLAB( JBUF )
+
+      IF (MAXW.LE.0     .OR.
+     +    NLEV.LE.2     .OR.
+     +    NLEV.GT.MAXLEV   ) CALL                  XIT(' Vpintl ',-1 )
+
+      WRITE(TYPE,4) JBUF(1)
+      WRITE(NAME,4) JBUF(3)
+
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(LEN),GG(MAX( MAXW,NWDS*NLEV) ),
+     +                   ACC(MAX( MAXW,NWDS*NLEV) ))
+
+      IF (NR.EQ.0) WRITE(6,6300) TYPE,NAME
+      IF (NR.EQ.0) CALL WRITLEV2( LEV,NLEV,JBUF )
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CALL GETSET2( 1, GG,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,GG,ACC )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB( IBUF )
+              WRITE(6,6500) NR
+
+              CALL                                 XIT(' Vpintl ', 0 ) 
+
+          END IF
+
+***        BY-PASS (I.E. STRIP) LABEL/CHARACTER RECORDS.
+
+          WRITE(TYPE,4) IBUF(1)
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR')              THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  WRITE(6,6600)
+                  MESSAG  = 'deja donne'
+              END IF
+              GOTO 100
+          END IF
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.LT.NLEVG)                      THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT(' Vpintl ',-2 ) 
+          END IF
+
+***        CHECK THAT WE HAVE ENOUGH LEVELS.
+
+          IF (NLEVG.LT.2)                                      THEN
+              WRITE(6,6003) NSET+1,NLEVG
+              CALL                                 XIT(' Vpintl ',-3 )
+          END IF
+
+***        CHECK THAT THE LEVELS ARE INCREASING OR DECREASING.
+
+          DO  L=1,NLEVG
+              CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+              IF (PKTYP.EQ.'SQ' .AND. VKIND.NE.2)
+     +            CALL                             XIT(' Vpintl ',-5 ) 
+          END DO
+
+          INCREAS = .TRUE.
+          IF (PR(1).LT.PR(2))                                      THEN
+              INCREAS = .TRUE.
+          ELSE IF (PR(1).GT.PR(2))                                 THEN
+              INCREAS = .FALSE.
+          ELSE
+              WRITE(6,6004)
+              CALL                                 XIT(' Vpintl ',-4 )
+          END IF
+
+          DO  L=3,NLEVG
+              IF ((     INCREAS .AND. PR(L).LE.PR(L-1))
+     +       .OR.
+     +            (.NOT.INCREAS .AND. PR(L).GE.PR(L-1)))           THEN
+                  WRITE(6,6004)
+                  CALL                             XIT(' Vpintl ',-4 )
+              END IF
+          END DO
+
+          IF (INCREAS)                                             THEN
+              TOP =  1
+              BOT =  NLEVG
+              INC =  1
+          ELSE
+              TOP =  NLEVG
+              BOT =  1
+              INC = -1
+              IF (ENCORE.EQ.'PAS ENCORE DONNE')                    THEN
+                  ENCORE =  'DEJA  DONNE'
+                  WRITE(6,6700)
+              END IF
+          END IF
+
+***        CONVERT MB TO PASCALS (DIVIDE BY G ONCE AND FOR ALL).
+
+          DO 150 L=1,NLEVG
+              PR(L) = GINV*PR(L)*100.
+  150     CONTINUE
+ 
+***        INTEGRATE THE GRIDS IN THE VERTICAL USING THE TRAPEZOIDAL 
+***        RULE. FIRST INTEGRAL FROM (0 OR PR(1)) TO LEV(1).
+ 
+          IF (ALTB)                                            THEN
+              DP = 0.
+          ELSE
+              DP = PR(TOP)/2
+          END IF
+
+          IL1 = (TOP-1)*NWDS
+
+          DO 200 I=1,NWDS
+              ACC(I) = GG(IL1+I)*DP
+  200     CONTINUE
+
+          DO 300 L=TOP+INC,BOT,INC
+
+              IL2 = IL1
+              IL1 = IL1+INC*NWDS
+
+              DP  = 0.5 * (PR(L)-PR(L-INC))
+
+              DO 250 I=1,NWDS
+                  ACC(IL1+I) = ACC(IL2+I)+(GG(IL1+I)+GG(IL2+I))*DP
+  250         CONTINUE
+
+  300     CONTINUE
+
+***        PUT THE RESULT ONTO FILE 2.
+ 
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+          CALL PUTSET2( 2, ACC, LEV,NLEVG, IBUF,MAXW )
+
+      NSET = NSET+1
+      NR   = NR+NLEVG
+      GOTO 100 
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6003 FORMAT('0 At set no. ',I5,', vpintl found NLEV=',I6)
+ 6004 FORMAT(' Levels should be increasing monotonically.')
+
+ 6000 FORMAT(' Vpintl will use its alternate boundary conditions.')
+ 6100 FORMAT('...  Vpintl input file is empty.')
+ 6300 FORMAT(' Vpintl on ',A4,2X,A4)
+ 6500 FORMAT(/' Vpintl wrote',I6,' records.')
+ 6600 FORMAT(' Vpintl is stripping label/character records...')
+ 6700 FORMAT(' Levels are decreasing.')
+
+      END 
+#     endif

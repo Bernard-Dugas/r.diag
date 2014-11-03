@@ -1,0 +1,1753 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 200000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      crvplot  YAXIS XAXIS INPUT OUTPUT \ 
+*               [ -t1 VAL1 -name  VAL2  -lv1   VAL3 -a VAL4 -b VAL5 \ 
+*                 -i  VAL6  VAL7  VAL8  -j     VAL9  VAL10 VAL11    \ 
+*                 -k  VAL12 VAL13 VAL14 -label VAL15 VAL16 VAL17    \                          
+*                 -c  VAL18  -d   VAL19 -l     VAL20 VAL21          \ 
+*                 -m  VAL22 VAL23       -n     VAL24 VAL25          \ 
+*                 -kind     VAL26       -def                        ]
+*
+*
+*     DESCRIPTION...
+*      crvplot - PLOT CURVES IN THE X - Y PLANE
+*
+*
+*     AUTHORS - F.Zwiers, R.Laprise, 1985.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/crvplot.ptn,v 4.20 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     PURPOSE - READ GROUPS OF MULTI-VALUED FUNCTIONS FROM FILE YAXIS AND
+*               PLOTS THEM AGAINST FUNCTION FROM FILE XAXIS (IF PRESENT).
+*
+*       NOTES - 1) YAXIS AND XAXIS MUST HAVE PROPER CCC 8-WORD LABEL
+*                 (MEANING THAT IT IS EITHER A ZONAL OR A TIME SERIES ARRAY).
+*               2) SPECIFYING "-def" ON THE COMMAND LINE ACTIVATES A MODE
+*                  IN WHICH THE PROGRAM WILL PLOT ALL RECORDS IN YAXIS.
+*               3) THE DEFAULT IS TO REWIND FILE(S) YAXIS (AND XAXIS)
+*                  BETWEEN EACH SET OF INPUT CARDS. HOWEVER, NOTE THAT
+*                  ONLY ONE SET OF DIRECTIVES CAN BE DEFINED WHEN THE
+*                  PROGRAM IS IN IN COMMAND-LINE MODE.
+*               4) CRVPLOT CAN ONLY HANDLE REAL DATA.
+*
+*
+*     INPUT FILES...
+*      YAXIS = FUNCTIONS TO BE PLOTTED ON YAXIS
+*      XAXIS = FUNCTIONS TO BE PLOTTED ON XAXIS (OPTIONNAL)
+*
+*
+*     CARDS READ...
+*
+*      ==================================================
+*      UP TO FOUR INPUT CARDS ARE READ. EACH SET OF INPUT
+*      CARDS DEFINES THE NUMBER OF CURVES ON THAT PLOT.
+*      ==================================================
+*
+*      CARD 1:
+*      -------
+*
+*      **** TAKE NOTE OF ISAMPL BELOW ****
+*
+*      READ (5,5010,END=901) NT,NAME,LVL,FYLO,FYHI,NSKIP,NPNTS,
+*     1                      NC,PTYPE,LTYPE,PUB,MLTRX,LSPC,
+*     2                      NFRM,IRWND,IXAXS,ISCAT,ISAMPL
+* 5010 FORMAT(10X,I10,1X,A4,I5,2E10.0,3I5,1X,2I2,I1,I2,I2,5I1)
+*
+*      NT   (t1)   = TIMESTEP NUMBER  (DEFAULT IS -1).
+*      NAME        = NAME OF VARIABLE (DEFAULT IS 'NEXT').
+*      LVL  (lv1)  = VERTICAL LEVEL   (DEFAULT IS -1).
+*
+*      FYLO (a)    = LOWER VALUE OF Y-AXIS
+*      FYHI (b)    = UPPER VALUE OF Y-AXIS
+*                    IF YLO=YHI, THEN AUTOMATIC
+*                    SCALING IS DONE ON THE Y-AXIS
+*
+*      NSKIP (i-1) = NO OF POINTS TO BE OMITTED AT THE BEGINNING OF EACH CURVE
+*                    NSKIP=1 WILL SKIP WAVENUMBER 0 FOR SPECTRUM
+*                    NSKIP>0 OMITS NSKIP POINTS FROM THE LEFT END OF EACH CURVE
+*                    NSKIP<0 OMITS NSKIP POINTS FROM THE RIGHT END OF EACH CURVE
+*                    ** NOTE**: THE SKIPPING OPERATION IS PERFORMED *AFTER* THE
+*                    DATA HAS BEEN ARRANGED AS SPECIFIED BY LSPC (SEE LSPC BELOW).
+*      NPNTS (i-2) = MAX. NO. OF POINTS PER CURVE.
+*      NC    (i-3) = MAX. NO. OF CURVES PER PLOT (NC <= 26, DEFAULT IS 1).
+*
+*      LTYPE (j-1) =(1 ==> LIN-LIN), (2 ==> LIN-LOG), (3 ==> LOG-LIN), 
+*                   (4 ==> LOG-LOG) (DEFAULT IS LIN-LIN).
+*      PTYPE (j-2) = 0 (1) FOR STANDARD (CONTROLLED) LABELLING. IF PTYPE=1,
+*                       THEN AN ADDITIONAL INPUT CARD IS READ (SEE BELOW).
+*      PUB   (j-3) = 0, NORMAL PRINTING (DEFAULT)
+*                  = 1, 'PUBLICATION' QUALITY PRINTING
+*
+*      LSPC  (k-1) = CONTROLS THE ORDER IN WHICH THE DATA POINTS ARE PLOTTED.
+*                    ABS(LSPC) = 1 TO REVERSE THE ORDER OF VECTORS IN
+*                                  THE DISPLAY. PLEASE USE LSPC=1 WHEN
+*                                  PROCESSING DATA FROM SPCSUM.
+*                    LSPC < 0      TO TRANSPOSE (I.E. SWITCH X AND Y)
+*                                  THE DATA SET BEFORE DRAWING.
+*      MLTRX (k-2) = 0, THE NC Y-VECTORS ARE CONSIDERED TO BE OF FIXED
+*                       LENGTH. IF THE FILE XAXIS IS PRESENT, THEN THE
+*                       X-VECTOR IS READ ONLY ONCE FOR THE FULL SET OF
+*                       NC CURVES.
+*                  = 1, THE NC Y-VECTORS ARE CONSIDERED TO BE OF
+*                       VARIABLE LENGTH. IF FILE XAXIS IS PRESENT,
+*                       THEN READ AN X-VECTOR FOR EVERY Y-VECTOR.
+*      NFRM  (k-3) = DETERMINES THE NUMBER OF FRAMES PER PAGE.
+*                  = 1, ONE PLOT PER PAGE, (DEFAULT).
+*                  = 2, TWO PLOTS PER PAGE ORIENTED HORIZONALLY.
+*                  = 3, TWO PLOTS PER PAGE ORIENTED VERTICALLY.
+*                  = 4, FOUR PLOTS PER PAGE
+*
+*      IRWND       = 0, REWIND FILE YAXIS (AND XAXIS) AFTER A SET
+*                       OF CARDS HAS BEEN READ.
+*                  = 1, DO NOT REWIND FILE YAXIS (AND XAXIS) AFTER A SET OF
+*                       CARDS HAS BEEN READ (DEFAULT IN COMMAND-LINE MODE).
+*                  = 2, ONLY REWIND FILE YAXIS AFTER READING A SET OF CARDS
+*
+*      IXAXS (l-1) = 1, TO READ THE X-AXIS SCALE FROM A THIRD INPUT CARD.
+*                  = 0, THE DEFAULT, IMPLIES NOT TO DO THIS.
+*      ISCAT (l-2) = 0 (1) FOR CONTINUOUS (DISCRETE) PLOT POINTS.
+*
+*      ISAMPL      = 9, PRODUCE A CURVE PATTERNS PLOT SKIPPING TO THE
+*                       NEXT EOR OR EOF MARK (I.E. CALLS BURNF).
+*
+*
+*      CARD 2:
+*      -------
+*      READ (5,5020,END=902) IAX,JAX,TITLE
+* 5020 FORMAT(2A20,A40)
+*
+*      IAX   (label-1) = 20 CHAR. LABEL OF X-AXIS
+*      JAX   (label-2) = 20 CHAR. LABEL OF Y-AXIS
+*      TITLE (label-3) = 40 CHAR. LABEL OF PLOT
+*
+*      NOTE - TO CENTER THESE LABELS ON THE PLOT YOU SHOULD
+*             CENTER THEM WITHIN THEIR FIELDS.
+*
+*      CARD 3
+*      ------
+*
+*      IF (IXAXS NE 0) READ (5,5030,END=903) FXLO,FXHI
+* 5030 FORMAT(30X,2E10.0)
+*
+*      FXLO (c) = LOWER VALUE OF X-AXIS
+*      FXHI (d) = UPPER VALUE OF X-AXIS
+*
+*      NOTES - 1) IF THE INPUT FILE XAXIS IS PRESENT AND FXLO.EQ.FXHI
+*                 THEN AUTOMATIC SCALING IS DONE ON THE X-AXIS.
+*              2) IF THE INPUT FILE XAXIS IS MISSING AND FXLO.NE.FXHI
+*                 THEN THE ORDINATE VALUES ARE PLOTTED AGAINST ABSCISSA
+*                 VALUES: X(I)=FXLO + (I-1)*(FXHI-FXLO)/(LNT-1), WHERE
+*                 LNT IS THE ACTUAL NUMBER OF POINTS IN THE CURVE.
+*
+*      CARD 4
+*      ------
+*
+*      IF (PTYPE NE 0) READ(5,5040) MGRX,MINRX,MGRY,MINRY
+* 5040 FORMAT(10X,4I5)
+*             (I.E. SPECIFY X-AXIS SCALE AND CONTROL AXIS LABELLING)
+*
+*      FOR LINEAR X-AXIS:
+*
+*      MGRX  (m-1) = NUMBER OF MAJOR DIVISIONS ALONG THE X-AXIS
+*                    (RESULTING IN MGRX+1 LABELS ON THE X-AXIS).
+*      MINRX (m-2) = NUMBER OF MINOR DIVISIONS WITHIN EACH MAJOR
+*                    DIVISIONS (RESULTING IN MINRX-1 TICS).
+*
+*      FOR LOG    X-AXIS:
+*
+*      MGRX  (m-1) = EXPONENT OF 10 BETWEEN SUCCESSIVE MAJOR DIVISIONS
+*                    (MGRX=1 RESULTS IN ORDINARY LOG GRAPH PAPER).
+*      MINRX (m-1) = CONTROL OVER PLOTTING OF SUBCYCLE DIVISIONS
+*                    MGRX=1 AND MINRX<=10 ==> 8 NORMAL SUBCYCLE DIVISIONS
+*                                               ARE PLOTTED
+*                    MGRX>1 OR  MINRX >10 ==> SUBCYCLE DIVISIONS SUPPRESSED
+*
+*      MGRY  (n-1) = LIKE MGRX,  EXCEPT FOR Y-AXIS
+*      MINRY (n-2) = LIKE MINRX, EXCEPT FOR Y-AXIS
+*
+*      COMMAND-LINE ONLY
+*      -----------------
+*
+*      KIND      = VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
+*                  FILES AND THEN LV1 AND LV2 ARE ASSUMED TO CONTAIN DECODED
+*                  VALUES. FURTHERMORE, THIS PARAMETRE CAN ONLY BE SPECIFIED
+*                  IN COMMAND-LINE MODE. THE CURRENTLY SUPPORTED VALUES ARE:
+*                  'HAUTEUR'   , heights (m) with respect to sea level
+*                  'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                  'ETA'       , first version of the GEM ETA coordinate
+*                  'PRESSION'  , pressure (mb)
+*                  'ARBITRAIRE', arbitrary level (no units apply)
+*                  'HAUTEURS'  , heights (M) with respect to the surface
+*                  'HYBRIDE'   , hybrid GEM coordinate
+*                  'THETA'     , potential temperature coordinate
+*                  'GALCHEN'   , GalChen generalized coordinate
+*
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*  CRVPLOT        -1 NEXT    1    40000.    60000.    0   32    1  1 1
+*  LATITUDE         HEIGHT (GPM)        FJ - Z(500) - 2W
+*                                  -90.0      90.0
+*             4    2   10    2
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 PROBLEM READING COMMAND-LINE ARGUMENTS
+*       3 ILLEGAL TYPE OF DATA FOUND ON FILE YAXIS
+*       4 REQUESTED CURVES NOT THE SAME SIZE ON THE SAME GRAPH
+*       5 NOT ENOUGH POINTS FOUND (< 2)
+*       6 XAXIS DOES NOT HAVE AS MANY POINTS AS YAXIS
+*       7 FXLO >= FXHI, EVEN AFTER AUTOMATIC SCALING PERFORMED
+*       8 FYLO >= FYHI, EVEN AFTER AUTOMATIC SCALING PERFORMED
+*       9 ERROR ABORT READING INPUT CARD 1
+*      10 ERROR ABORT READING INPUT CARD 2
+*      11 ERROR ABORT READING INPUT CARD 3
+*      12 ERROR ABORT READING INPUT CARD 4
+*      13 NEGATIVE OR NULL VALUE WITH LOG SCALING IN Y AXIS
+*      14 MGRX OR MGRY READ AS 0 ON INPUT (PTYPE.NE.0) 
+*      15 PROPBLEM READING FILE YAXIS
+*
+*     NON-FATAL CONDITIONS...
+*     101 NO MORE DATA CORRESPOND TO REQUEST
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM crvplot
+*    +                (YAXIS,       XAXIS,       INPUT,       OUTPUT,
+*    +           TAPE1=YAXIS, TAPE2=XAXIS, TAPE5=INPUT, TAPE6=OUTPUT,
+*    +                                                  TAPE8       )
+*     ---------------------------------------------------------------
+
+*     $Log: crvplot.ptn,v $
+*     Revision 4.20  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.19  2013/10/28 21:16:14  bernard
+*     Corriger le traitement du code qui produit le tritre automatiquement (debordement).
+*
+*     Revision 4.18  2010/05/06 16:25:30  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*
+*     Revision 4.17  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.16  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.15  2005/05/06 18:31:03  dugas
+*     Verfier que FXLO<FXHI et FYLO<FYHI.
+*
+*     Revision 4.14  2004/11/12 16:29:12  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.13  2002/12/06 16:14:54  dugas
+*     Modifier/corriger documentation automatique
+*
+*     Revision 4.12  2002/02/02 00:29:46  dugas
+*     Forcer la majusculisation du parametre NAME
+*
+*     Revision 4.11  2000/07/06 18:21:19  armnrbd
+*     Ajouter l'option NSKIP < 0
+*
+*     Revision 4.10  1999/07/13 18:39:03  armnrbd
+*     Remettre la majusculisation du titre.
+*
+*     Revision 4.9  1999/07/13 03:39:27  armnrbd
+*     Remplacer NEXT par ' ' pour la valeur par defaut de NAME.
+*
+*     Revision 4.8  1999/05/12 14:27:47  armnrbd
+*     Ajouter le support complet de RPBLOC.
+*
+*     Revision 4.7  1999/05/06 17:38:01  armnrbd
+*     Ajouter le mode ALL et le support de RPBLOC.
+*
+*     Revision 4.6  1998/10/19 19:52:17  armnrbd
+*     Modifier la documentation.
+*     Appeller les fonctions CHKLVLC et Y2KDAT.
+*
+*     Revision 4.5  1998/05/21  20:20:46  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.4  1998/01/21  15:54:15  armnrbd
+*     Corriger le calcul de FXLO et FXHI.
+*
+*     Revision 4.3  1997/11/06  21:56:08  armnrbd
+*     Determiner FYLO et FYHI en double precision.
+*     Si l'axe des Y est en LOG, faire ce travail
+*      sur le log des valeurs de Y.
+*
+*     Revision 4.2  1995/05/31  14:05:28  armnrbd
+*     Premiere version de sorties de hautes qualites.
+*
+*     Revision 4.1  95/03/17  10:56:22  10:56:22  armnrbd (Bernard Dugas)
+*     Permettre plusieurs courbes sur une meme figure, tout en specifiant
+*     l'enregistrement de depart. 
+*     
+*     Revision 4.0  94/11/17  14:19:42  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.4  94/10/03  16:29:30  armnrbd
+*     Passer de 3000 a 100000 pour MAXWDS.
+*     
+*     Revision 3.3  94/08/31  19:17:42  armnrbd
+*     S'assurer que les etiquettes sont en lettres majuscules.
+*     
+*     Revision 3.2  94/08/16  21:00:39  21:00:39  armnrbd (Bernard Dugas)
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.1  94/05/05  14:08:48  armnrbd
+*     Corriger un Bogue avec le format de sortie 6025.
+*     
+*     Revision 3.0  93/10/13  13:55:47  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/12/02  15:38:41  armnrbd
+*     Implanter l'option de transposition avec LSPC<0.
+*     
+*     Revision 1.3  92/04/09  12:03:26  armnrbd
+*     Ajouter valeurs de defauts pour NC,NT,NPNTS et NAME.
+*     
+*     Revision 1.2  92/03/17  11:29:00  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/10  11:40:47  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:38  armnrbd
+*     Initial revision
+*     
+
+*     SEP 25/91 - B.Dugas, RPN. (Version CY920/IRIX f77)
+
+*     SEP 14/88 - F.ZWIERS  (FIX A PROBLEM IN CHOOSING UPPER AND LOWER
+*                            AXES LIMITS)
+*     MAR 31/88 - F.MAJAESS (CHANGE ABORT EXIT TO WARNING EXIT FOR THE
+*                            CASE WHERE THERE IS PROBLEM IN READING THE
+*                            INPUT CARD(S))
+*     MAR 09/88 - F.MAJAESS (ALLOW VARIABLE LENGTH CURVES TO BE PLOTTED
+*                            ON THE SAME PLOT. ALSO, ADD AN OPTION WHICH
+*                            ALLOWS PRODUCING CURVE PATTERNS PLOT)
+*     OCT 22/87 - M.LAZARE (MODIFY DIMENSIONS TO HANDLE UP TO 5 SETS OF
+*                           5-YEAR PLOTS)
+*     MAY 07/87 - M.LAZARE (CHANGE BUG IN SECTION WHERE REVERSE ORDER
+*                           OF ARRAYS FOR MULTI-CURVE PLOT)
+*     JUL 17/86 - F.ZWIERS (INCREASE MAX NUMBER OF CURVES PER PLOT
+*                 TO 26, ALLOW UP TO 4 PLOTS PER PAGE)
+*     FEB 21/86 - R.LAPRISE, B.DUGAS, F.ZWIERS. (X VS Y OR Y ONLY AND
+*                                                SCATTER PLOT OPTION)
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD   = taille_entete )
+
+      INTEGER*8   NT
+      LOGICAL     OK,XAXS,SCAL,SKPBGNG
+      REAL*8      FYLO8,FYHI8,VAL8
+      REAL        U(2),V(2),
+     +            AMGRX,AMGRY,RLVL,     XLEN,YLEN,  DX,FXLOI,FXHII,
+     +            FXLO,FYLO,FXHI,FYHI,  FXLOO,FYLOO,   FXHIO,FYHIO,DY,
+     +            XL,XH,XLO,XHI,        YL,YH,YLO,YHI, EPSX,EPSY, FMAX
+      INTEGER     LNT(26),LNTT,CBASE,   CWDS,NWDS,CHRSIZ,IBUF(HEAD),
+     +            I,J,L,M,IO,           LVL, LEN,IPAK,
+     +            NC,NF,NP,NSTAMP,      IBAC,MAXNC, MAXW,MAXWDS,
+     +            NCRV,NCURV,NFOLD,NFRM,NPLT,NPLOT,NPNTS,NSKIP,NDIV,
+     +            PTYPE,LTYPE,LSPC,     IRWND,IXAXS,ISCAT,ISAMPL,IPATNE,
+     +            PUB,MLTRX,MGRX,MINRX, MGRY,MINRY,  JUMP,DEBU,   LX,LY,
+     +            LGMAXX,LGMAXY,        IER, VKIND,VKIND0
+      CHARACTER   TYPE*4,NAME*4,LIGNE*80,ANT*20,ALVL*15,
+     +            XFORM*11,YFORM*11,AXAXS,ITITLE*40,
+     +            ICHR(26)*1,PAT(26)*16,TITLE*40, 
+     +            IAX*20,JAX*20,LNAME*4,CKIND*10,
+     +            IP1OUT*15,CDATE*20,CWORK*60
+
+      REAL,       DIMENSION(:), ALLOCATABLE :: X,Y,GX,GY
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUFX,IBUFY
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     MAJR,MINR,NORM,VALU,LABL,VTIK(4),VHIC(5)
+      CHARACTER   ETIK(4)*4,THIC(5)*4
+
+      CHARACTER*4  GETYP,PKTYP
+      EXTERNAL     GETYP
+
+      INTEGER*8   Y2KDAT8
+      INTEGER     GETKIND,GETSIZ
+      LOGICAL     RPBLOC,PRBLOC,ALL
+      EXTERNAL    MACSPE,JCLPNT,SYSDAT,OPTN,BURNF,PLOTLGD,XIT,
+     +            GETFLD2,DISPLA,LABMOD,SET,PWRIT,PERIML,DASHD,
+     +            CURVED,LINE,FRAME,PRECEDE,LOW2UP,GETSIZ,
+     +            Y2KDAT8,RPBLOC,GETKIND,SETKIND,
+     +            DATE2STAMP
+
+      DATA        ALL    /.FALSE./,
+     +            PRBLOC /.FALSE./
+
+      DATA        IBAC   /  1 /, 
+     +            MAXNC  / 26 /
+      DATA        IPATNE / 26 /
+
+      DATA        ICHR   / 'A','B','C','D','E','F','G','H','I','J',
+     1                     'K','L','M','N','O','P','Q','R','S','T',
+     2                     'U','V','W','X','Y','Z' /
+
+      DATA        PAT( 1) / '$$$$$$$$$$$$$$$$' /,
+     B            PAT( 2) / '$$$"$$$"$$$"$$$"' /,
+     C            PAT( 3) / '$"$"$"$"$"$"$"$"' /,
+     D            PAT( 4) / '$$$$$"$"$$$$$"$"' /,
+     E            PAT( 5) / '$"$$$$$$$$$"$"$"' /,
+     F            PAT( 6) / '$$"$"$$"$"$$"$"$' /,
+     G            PAT( 7) / '$$$$"$$$$"$$$$"$' /,
+     H            PAT( 8) / '$$$$$$"$"$$$$$$$' /,
+     I            PAT( 9) / '$$$$$$$"$$$$$$$"' /,
+     J            PAT(10) / '$$$$$$$"$$$$$$$$' /
+      DATA        PAT(11) / '$A$$$$$$$$$$$$$$' /,
+     B            PAT(12) / '$$$$B$$$$$$$$$$$' /,
+     C            PAT(13) / '$$$$$$$C$$$$$$$$' /,
+     D            PAT(14) / '$$$$$$$$$$D$$$$$' /,
+     E            PAT(15) / '$$$$$$$$$$$$$E$$' /,
+     F            PAT(16) / 'F$$$$$$$$$$$$$$$' /,
+     G            PAT(17) / '$$$G$$$$$$$$$$$$' /,
+     H            PAT(18) / '$$$$$$H$$$$$$$$$' /,
+     I            PAT(19) / '$$$$$$$$$I$$$$$$' /,
+     J            PAT(20) / '$$$$$$$$$$$$J$$$' /
+      DATA        PAT(21) / '$$$$$$$$$$$$$$$K' /,
+     B            PAT(22) / '$$L$$$$$$$$$$$$$' /,
+     C            PAT(23) / '$$$$$M$$$$$$$$$$' /,
+     D            PAT(24) / '$$$$$$$$N$$$$$$$' /,
+     E            PAT(25) / '$$$$$$$$$$$O$$$$' /,
+     F            PAT(26) / '$$$$$$$$$$$$$$P$' /
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/crvplot.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+                   NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+                   XAXS = .FALSE.
+      IF (NF.EQ.2) XAXS = .TRUE.
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    DETERMINER LA TAILLE DU PROBLEME.
+
+      MAXW = GETSIZ( 1, IBUF,LEN,NWDS,IPAK )
+      IF (MAXW.LE.0) CALL                      XIT(' Crvplot ',-15 )
+
+      MAXW   = MAX( MAXW, grille_maximale )
+      MAXWDS = MAXW
+
+      VKIND0 = GETKIND( )
+      VKIND  = VKIND0
+      CKIND  = ' '
+
+      CALL SYSDAT
+ 
+***    ALLOCATE X,Y AND GX,GY AND IBUFX,IBUFY.
+
+      ALLOCATE(     X(MAXWDS)    ,     Y(MAXWDS)    ,
+     +             GX(MAXW)      ,    GY(MAXW)      ,
+     +          IBUFX(MAXW+HEAD) , IBUFY(MAXW+HEAD) )
+
+***    DEFINE BUNDLES.
+
+      MAJR = 1
+      MINR = 2
+      LABL = 3
+      VALU = 4
+      NORM = 5
+
+      ETIK(1) ='SIZE'
+      ETIK(2) ='INTE'
+      ETIK(3) ='ENHA'
+      ETIK(4) ='CASE'
+      VTIK(1) = 480
+      VTIK(2) =  3
+      VTIK(3) =  1
+      VTIK(4) =  4
+
+      THIC(1) ='SIZE'
+      THIC(2) ='INTE'
+      THIC(3) ='ENHA'
+      THIC(4) ='CASE'
+      THIC(5) ='THIC'
+      VHIC(1) = 360
+      VHIC(2) =  3
+      VHIC(3) =  1
+      VHIC(4) =  4
+      VHIC(5) =  2
+
+      CALL BNDLSET( THIC ,VHIC,5,NORM)
+      CALL BNDLSET('THIC',  4, 1,MAJR)
+      CALL BNDLSET('THIC',  2, 1,MINR)
+      CALL BNDLSET( ETIK, VTIK,4,LABL)
+
+      CALL ISPSET(4HLABL, LABL )
+      CALL ISPSET(4HNULB,  1   )
+
+      CALL ISPSET(4HRNDV, 1.0  )
+      CALL ISPSET(3HNHL,   5   )
+      CALL ISPSET(3HNLB,   5   )
+      CALL ISPSET(3HNPV,   5   )
+
+***    READ CONTROL INFORMATION AND LABELS ON 2,3 OR 4 INPUT CARDS.
+ 
+      NPLOT = 0
+      NPLT  = 0
+      NFOLD = 1
+      NSKIP = 0
+
+  110 CALL OPTN( 4HCASE,4 )
+ 
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ANT    = '        -1'
+          NAME   = ' '
+          ALVL   = '   -1'
+
+          FYLO   = 0.0
+          FYHI   = 0.0
+
+          NSKIP  =  0
+          NPNTS  = MAXW
+          NC     =  1
+
+          PTYPE  =  0
+          LTYPE  =  0
+          PUB    =  0
+
+          LSPC   =  0
+          MLTRX  =  0
+          NFRM   =  0
+
+          AXAXS  = '0'
+          ISCAT  =  0
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NAME = LIGNE
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) ANT  = LIGNE
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) ALVL = LIGNE
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) CKIND = LIGNE
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          ENDIF
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE,20, END=905,ERR=905,IOSTAT=IO ) FYLO
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE,20, END=905,ERR=905,IOSTAT=IO ) FYHI
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) NSKIP
+
+          OK = RPBLOC('I2',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) NPNTS
+
+          OK = RPBLOC('I3',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) NC
+
+          OK = RPBLOC('J',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) LTYPE
+
+          OK = RPBLOC('J2',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) PTYPE
+
+          OK = RPBLOC('J3',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) PUB
+
+          OK = RPBLOC('K',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) LSPC
+
+          OK = RPBLOC('K2',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) MLTRX
+
+          OK = RPBLOC('K3',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) NFRM
+
+          OK = RPBLOC('L',LIGNE)
+          IF (OK) AXAXS = LIGNE
+
+          OK = RPBLOC('L2',LIGNE)
+          IF (OK) READ( LIGNE,05, END=905,ERR=905,IOSTAT=IO ) ISCAT
+
+          ALL = RPBLOC('DEFAUT',LIGNE)
+
+***        THE FOLLOWING PARAMETERS ARE SET BUT NOT READ.
+
+          IRWND  =  1
+          ISAMPL =  0
+
+          PRBLOC = .TRUE.
+
+      ELSE
+
+***        GET BASIC PLOT PARAMETERS INCLUDING THE RANGE.
+
+          CALL GETLIGN( 5,LIGNE,80, OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010,ERR=901,END=901,IOSTAT=IO)
+     +                     ANT,NAME,ALVL(1:5),FYLO,FYHI,NSKIP,
+     +                     NPNTS,NC,PTYPE,LTYPE,PUB,MLTRX,LSPC,
+     +                     NFRM,IRWND,AXAXS,ISCAT,ISAMPL
+          END IF
+
+          IF (ANT  .EQ.'    ') ANT   = '        -1'
+          IF (ALVL .EQ.'    ') ALVL  = '   -1'
+          IF (AXAXS.EQ.'    ') AXAXS = '0'
+          IF (NC   .EQ.  0   ) NC    =  1
+          IF (NPNTS.EQ.  0   ) NPNTS =  MAXW
+
+
+      END IF
+
+                           SCAL = .FALSE.
+      IF (FYLO .EQ. FYHI)  SCAL = .TRUE.
+
+      CALL LOW2UP( NAME,NAME )
+      IF (NAME .NE.'    ') CALL LEADBLK( NAME )
+      IF (NAME .EQ.'ALL ') ALL  = .TRUE.
+      IF (ALL  .OR.
+     +    NAME .EQ.'-1  ') NAME = ' '
+
+      READ(ANT, 12) NT
+      NT  = Y2KDAT8( NT )
+      CALL DATE2STAMP( NT,NSTAMP )
+
+      IF (INDEX( ALVL, '.' ).EQ.0 .AND. CKIND.EQ. ' ')         THEN
+          READ(ALVL,10,ERR=905,IOSTAT=IO)  LVL
+          IF (LVL.NE.-1)                                       THEN
+              CALL CONVPR( LVL, RLVL, VKIND, -2 )
+              IF (PKTYP.EQ.'SQ')
+     +        CALL CONVPR( LVL, RLVL, VKIND, +2 )
+          END IF
+      ELSE
+          READ(ALVL,15,ERR=905,IOSTAT=IO) RLVL
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              CALL CONVPR( LVL, RLVL, VKIND,  +2 )
+          ELSE
+              CALL LVCODE( LVL, RLVL/1000.,1 ) 
+          ENDIF
+      END IF
+
+      IF (ALVL.NE.'   -1')                                     THEN
+          CALL GET_IP1_STRING( LVL,ALVL )
+          CALL LEADBLK( ALVL )
+      END IF
+
+      READ(AXAXS,1) IXAXS
+
+***    CHECK IF A SAMPLE CURVE PATTERNS PLOT IS TO BE PRODUCED
+***    (ISAMPL.EQ.9).
+ 
+      IF (ISAMPL.EQ.9)                                         THEN
+
+          WRITE(6,6010) TRIM( ANT ),NAME,TRIM(ALVL),FYLO,FYHI,NSKIP,
+     +                  NPNTS,NC,PTYPE,LTYPE,PUB,MLTRX,LSPC,
+     +                  NFRM,IRWND,IXAXS,ISCAT,ISAMPL
+
+          CALL                                     BURNF
+          CALL                                     PLOTLGD(PAT,IPATNE)
+          CALL                                     XIT(' Crvplot', 0 )
+
+      END  IF
+ 
+***    GET THE LABELS.
+
+      IF (PRBLOC)                                              THEN
+
+          IAX    = '         X'
+          JAX    = '         Y'
+          ITITLE = 'AUTOMATIC'
+
+          OK = RPBLOC('LABEL',LIGNE)
+          IF (OK) IAX = LIGNE
+
+          OK = RPBLOC('LABEL2',LIGNE)
+          IF (OK) JAX = LIGNE
+
+          OK = RPBLOC('LABEL3',LIGNE)
+          IF (OK) ITITLE = LIGNE
+
+      ELSE
+
+          CALL GETLIGN( 5,LIGNE,80, OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+
+              READ( LIGNE, 5020,ERR=902,END=902,IOSTAT=IO)
+     +                     IAX,JAX,ITITLE
+
+          END IF
+
+      END IF
+ 
+***    CAPITALIZE LABELS.
+
+      CALL LOW2UP( IAX,IAX )
+      CALL LOW2UP( JAX,JAX )
+      CALL LOW2UP( ITITLE,ITITLE )
+
+***    GET THE DOMAIN IF NECESSARY.
+
+      IF (IXAXS.NE.0)                                          THEN
+
+          IF (PRBLOC)                                          THEN
+
+              FXLOI = 0.0
+              FXHII = 0.0
+
+              OK = RPBLOC('C',LIGNE)
+              IF (OK) READ( LIGNE,20, END=903,ERR=903,IOSTAT=IO ) FXLOI
+
+              OK = RPBLOC('D',LIGNE)
+              IF (OK) READ( LIGNE,20, END=903,ERR=903,IOSTAT=IO ) FXHII
+
+          ELSE
+
+              CALL GETLIGN( 5,LIGNE,80, OK )
+
+              IF (.NOT.OK)                                     THEN
+                  GOTO 903
+              ELSE
+                  READ( LIGNE, 5030,ERR=903,END=903,IOSTAT=IO )
+     +                         FXLOI,FXHII
+              END IF
+ 
+          END IF
+
+      ELSE
+
+***        DEFAULT DOMAIN (RESULTS IN EQUIDISTANT POINTS ON
+***        THE X-AXIS.
+
+          FXLOI = 0.0
+          FXHII = 0.0
+
+      END IF
+ 
+***    GET AXIS LABELLING INFORMATION IF NECESSARY.
+
+      IF (PTYPE.NE.0)                                          THEN
+
+          IF (PRBLOC)                                          THEN
+
+              MGRX  = 0
+              MINRX = 0
+              MGRY  = 0
+              MINRY = 0
+
+              OK = RPBLOC('M',LIGNE)
+              IF (OK) READ( LIGNE,5, END=904,ERR=904,IOSTAT=IO ) MGRX
+
+              OK = RPBLOC('M2',LIGNE)
+              IF (OK) READ( LIGNE,5, END=904,ERR=904,IOSTAT=IO ) MINRX
+
+              OK = RPBLOC('N',LIGNE)
+              IF (OK) READ( LIGNE,5, END=904,ERR=904,IOSTAT=IO ) MGRY
+
+              OK = RPBLOC('N2',LIGNE)
+              IF (OK) READ( LIGNE,5, END=904,ERR=904,IOSTAT=IO ) MINRY
+
+          ELSE
+
+              CALL GETLIGN( 5,LIGNE,80, OK )
+
+              IF (.NOT.OK)                                     THEN
+                  GOTO 904
+              ELSE
+                  READ( LIGNE, 5040,ERR=904,END=904,IOSTAT=IO)
+     +                         MGRX,MINRX,MGRY,MINRY
+              END IF
+
+          END IF
+ 
+          IF (MGRX.EQ.0 .OR. MGRY.EQ.0)                        THEN
+              WRITE(6,6014) MGRX,MGRY
+              CALL                                 BURNF
+              CALL                                 XIT(' Crvplot',-14 )
+          END IF
+
+      END IF
+
+***    VERIFY IF SKIPPING TO BE DONE FROM THE
+***    END INSTEAD OF THE BEGINNING.
+
+                      SKPBGNG =.TRUE.
+      IF (NSKIP.LT.0) SKPBGNG =.FALSE.
+
+      NSKIP = MAX( ABS( NSKIP ),0 )
+
+      IF (LTYPE.GT.4 .OR. LTYPE.LT.1) LTYPE = 1
+      IF (NFRM .GT.4 .OR. NFRM .LT.1) NFRM  = 1
+
+      IF (NFRM.NE.NFOLD)                                       THEN
+          NPLOT = 0
+          NFOLD = NFRM
+      END IF
+ 
+      WRITE(6,6010) TRIM( ANT ),NAME,TRIM(ALVL),FYLO,FYHI,NSKIP,
+     +              NPNTS,NC,PTYPE,LTYPE,PUB,MLTRX,LSPC,
+     +              NFRM,IRWND,IXAXS,ISCAT,ISAMPL
+      WRITE(6,6020) IAX,JAX,ITITLE
+
+      IF (IXAXS.NE. 0  ) WRITE(6,6030) FXLOI,FXHII
+      IF (PTYPE.NE. 0  ) WRITE(6,6040) MGRX,MINRX,MGRY,MINRY
+ 
+      IF (XAXS       .AND. 
+     +    IXAXS.GT.0 .AND. 
+     +    NSKIP.GT.0)                                          THEN
+
+CCC        THIS CONDITION NO LONGER GENERATES AN ABORT,
+CCC        BUT YOU STILL GET AN INFORMATIVE MESSAGE.
+
+                                                   WRITE(6,6050)
+CCC       CALL                                     BURNF
+CCC       CALL                                     XIT(' Crvplot',-1 )
+
+      END IF
+
+      IF (PUB.NE.0)                                            THEN
+
+***      ACCOUNT FOR PUBLICATION QUALITY.
+
+        CALL ISPSET(4HMAJR, MAJR )
+        CALL ISPSET(4HMINR, MINR )
+        CALL ISPSET(3HNHI,   -1  )
+        CALL ISPSET(4HILAB,   0  )
+        CALL ISPSET(4HECOL,   1  )
+        CALL ISPSET(4HOFFM,   1  )
+
+      END IF
+
+*-----------------------------------------------------------------------
+***    REWIND INPUT FILES IF NECESSARY.
+
+  150 NCURV = 0
+
+      FXLO  = FXLOI
+      FXHI  = FXHII
+
+      TITLE = ITITLE
+
+      IF (IRWND.EQ.0)                                          THEN
+          DO  I=1,NF
+              CALL PRECEDE( I,-1 )
+          END DO
+      END IF
+
+      IF (IRWND.EQ.2) CALL PRECEDE( 1,-1 )
+ 
+***    READ UP TO NC CURVES FROM FILE CURV BASED ON INPUT CARD INFO.
+ 
+      CWDS = 0
+ 
+  200 CONTINUE
+
+          CALL GETFLD2( 1, GY, ' ',NSTAMP,NAME,LVL, IBUFY,MAXW,OK )
+
+          IF (.NOT.OK .AND. NCURV.EQ.0)                        THEN
+              IF (.NOT.PRBLOC) CALL                BURNF
+              CALL                                 XIT(' Crvplot',-101)
+          END IF
+
+          IF (OK)                                              THEN
+
+              WRITE(TYPE,4) IBUFY(1)
+
+              IF (NCURV.EQ.0 .AND. NC.GT.1) NSTAMP = -1
+              IF (NCURV.EQ.0) WRITE(LNAME,4) IBUFY(3)
+
+              IF (TYPE.EQ.'SPEC' .OR. TYPE.EQ.'FOUR' .OR.
+     +            TYPE.EQ.'CMPL' .OR. TYPE.EQ.'LABL' .OR.
+     +            TYPE.EQ.'CHAR' .OR. IBUFY(6).NE.1)           THEN
+                  IF (.NOT.PRBLOC) CALL            BURNF
+                  CALL                             XIT(' Crvplot',-3 )
+              END IF
+
+              NCURV = NCURV+1
+ 
+***            SET LENGTH OF CURVE BASED ON FIRST RECORD.
+ 
+              IF (NCURV.EQ.1 .AND. MLTRX.EQ.0)                 THEN
+                  DO  I=1,HEAD
+                      IBUF(I) = IBUFY(I)
+                  END DO
+              END IF
+ 
+              IF (NCURV   .GT.     1   .AND.
+     +            MLTRX   .EQ.     0   .AND.
+     +            IBUFY(5).NE.IBUF(5) ) CALL       XIT(' Crvplot',-4 )
+ 
+              NWDS       = IBUFY(5)*IBUFY(6)
+              LNT(NCURV) = MIN0( NWDS-NSKIP,NPNTS )
+
+              IF (LNT(NCURV).LT.2) CALL            XIT(' Crvplot',-5 )
+ 
+              CWDS = CWDS+LNT(NCURV)
+              IF (CWDS.GT.MAXWDS) GOTO 300
+ 
+***            ACCUMULATE CURVE VALUES IN MULTI-CURVE ARRAY.
+***            THE ORDER OF ARRAY IS REVERSED IF ABS(LSPC)=1.
+ 
+              CBASE = CWDS-LNT(NCURV)
+
+              CALL GET_IP1_STRING( IBUFY(4),IP1OUT )
+              CALL leadblk( IP1OUT ) ; CALL PDATE( CDATE,IBUFY(2) )
+              WRITE(6,6045) TRIM( CDATE ),IBUFY(3),TRIM( IP1OUT )
+
+              IF (ABS( LSPC ).EQ.1)                            THEN
+
+                               M = NWDS+1
+                  IF (SKPBGNG) M = M-NSKIP
+                      
+                  DO  L=1,LNT(NCURV)
+                      Y(CBASE+L) = GY(M-L)
+                  END DO
+
+              ELSE
+
+                               M = 0
+                  IF (SKPBGNG) M = NSKIP
+
+                  DO  L=1,LNT(NCURV)
+                      Y(CBASE+L) = GY(M+L)
+                  END DO
+
+              END IF
+ 
+          ELSE
+ 
+              NC = NCURV
+              GOTO 300
+ 
+          END IF
+ 
+***        READ X-AXIS IF NECESSARY
+ 
+          IF (XAXS.AND.((MLTRX.NE.0).OR.
+     +                 ((MLTRX.EQ.0).AND.(NCURV.EQ.1))))       THEN
+
+              CALL GETFLD2( 2, GX, ' ',-1,' ',-1, IBUFX,MAXW,OK )
+
+              IF ((IBUFX(1).NE.IBUFY(1) .AND.
+     +             IBUFX(5).NE.IBUFY(5) .AND.
+     +             IBUFX(6).NE.IBUFY(6)) .OR.  
+     +            .NOT.OK) CALL                    XIT(' Crvplot',-6 )
+ 
+***            ACCUMULATE X-VALUES (REVERSE IF ABS(LSPC)=1).
+ 
+              IF (ABS( LSPC ).EQ.1)                            THEN
+
+                               M = NWDS+1
+                  IF (SKPBGNG) M = M-NSKIP
+
+                  DO  L=1,LNT(NCURV)
+                      X(CBASE+L) = GX(M-L)
+                  END DO
+
+              ELSE
+
+                               M = 0
+                  IF (SKPBGNG) M = NSKIP
+
+                  DO  L=1,LNT(NCURV)
+                      X(CBASE+L) = GX(M+L)
+                  END DO
+
+              END IF
+ 
+              CALL GET_IP1_STRING( IBUFX(4),IP1OUT )
+              CALL leadblk( IP1OUT ) ; CALL PDATE( CDATE,IBUFX(2) )
+              WRITE(6,6045) TRIM( CDATE ),IBUFX(3),trim( IP1OUT )
+
+          END IF
+ 
+      IF (NCURV.LT.NC) GOTO 200
+  300 CONTINUE
+ 
+***    SET UP X-AXIS SCALE.
+ 
+      IF (XAXS)                                                THEN
+
+***        X-VALUES WERE READ FROM FILE XAXIS.
+
+          IF (FXLO.EQ.FXHI)                                    THEN
+
+***            AUTOMATIC SCALING WAS SPECIFIED ON THE INPUT CARDS.
+
+              FXLO = X(1)
+              FXHI = X(1)
+
+              IF (MLTRX.EQ.0)                                  THEN
+                  LNTT = LNT(1)
+              ELSE
+                  LNTT = CWDS
+              END IF
+
+              DO  I=2,LNTT
+                  FXLO = AMIN1( FXLO,X(I) )
+                  FXHI = AMAX1( FXHI,X(I) )
+              END DO
+
+              WRITE(6,6026)
+              WRITE(6,6056) FXLO,FXHI
+
+          END IF
+
+          IF (FXLO.GE.FXHI) CALL                   XIT(' Crvplot',-7 )
+
+          IF ((NCURV.GT.1).AND.(MLTRX.EQ.0))                   THEN
+
+              CBASE = LNT(1)
+              DO 415 J=2,NCURV
+                  DO 412 I=1,LNT(J)
+                      X(CBASE+I) = X(I)
+  412             CONTINUE
+                  CBASE = CBASE+LNT(J)
+  415         CONTINUE
+
+          END IF
+
+      ELSE
+
+***        X-VALUES WERE NOT READ FROM THE FILE XAXIS.
+
+          IF (FXLO.EQ.FXHI)                                    THEN
+
+***            DOMAIN NOT SPECIFIED (INTEGERS USED ON ABCISSA).
+
+              FXLO  = 1.0
+              FXHI  = 1.0
+              CBASE =  0
+
+              DO 425 J=1,NCURV
+                  IF (FLOAT(LNT(J)).GT.FXHI) FXHI = FLOAT( LNT(J) )
+                  DO 420 I=1,LNT(J)
+                      X(CBASE+I) = FLOAT( I )
+  420             CONTINUE
+                  CBASE = CBASE+LNT(J)
+  425         CONTINUE
+
+          ELSE
+
+***            DOMAIN SPECIFIED (POINTS ARE EQUALLY SPACED).
+
+              CBASE = 0
+
+              DO 435 J=1,NCURV
+                  DX = (FXHI-FXLO)/FLOAT( LNT(J)-1 )
+                  DX = 1.E-5*ANINT( 1.E5*DX )
+                  DO 430 I=1,LNT(J)
+                      X(CBASE+I) = FXLO + FLOAT(I-1)*DX
+  430             CONTINUE
+                  CBASE = CBASE+LNT(J)
+  435         CONTINUE
+
+          END IF
+
+      END IF
+ 
+***    DECIDE ON THE NUMBER OF MAJOR AND MINOR DIVISIONS
+***    FOR THE X-AXIS IN THE CASE OF A DEFAULT PLOT.
+ 
+      IF (PTYPE.EQ.0)                                          THEN
+
+          IF (LTYPE.GT.2)                                      THEN
+
+              MGRX  = 1
+              MINRX = 1
+
+          ELSE
+
+              AMGRX = LOG10( FXHI-FXLO )
+
+              IF (AMGRX.LT.0.0)                                THEN
+                  MGRX = IFIX( AMGRX - 0.5 )-1
+              ELSE
+                  MGRX = IFIX( AMGRX + 0.5 )-1
+              END IF
+
+              DX    = 10.**MGRX
+              NDIV  = (FXHI-FXLO)/DX + 0.005
+              MINRX = 10
+
+              IF (NDIV.GT.15)                                  THEN
+                  DX    = DX*5.
+                  MINRX = 5
+              END IF
+
+                                          FXLOO = FXLO
+                                          FXLO  = FLOAT( IFIX(FXLO/DX) )
+     +                                          * DX
+              IF (FXLO.GT.FXLOO+DX*0.001) FXLO  = FXLO-DX
+
+                                          FXHIO = FXHI
+                                          FXHI  = FLOAT( IFIX(FXHI/DX) )
+     +                                          * DX 
+              IF (FXHI.LT.FXHIO-DX*0.001) FXHI=FXHI+DX
+
+              MGRX = IFIX( ((FXHI-FXLO)*1.0001)/DX )
+
+          END IF
+
+      END IF
+ 
+***    SET UP Y-AXIS SCALE.
+ 
+      IF (FYLO.EQ.FYHI)                                        THEN
+
+***        RANGE NOT SPECIFIED (AUTOMATIC SCALING).
+
+          IF (LTYPE.EQ.2 .OR. LTYPE.EQ.4)                      THEN
+
+              IF (Y(1).LE.0.0)                                 THEN
+                  WRITE(6,6013) Y(1),1
+                  CALL                             XIT(' Crvplot',-13 )
+              END IF
+
+              VAL8  = Y(1)
+              FYLO8 = LOG10( VAL8 )
+              FYHI8 = FYLO8
+
+              DO  I=2,CWDS
+                  IF (Y(I).LE.0.0)                             THEN
+                      WRITE(6,6013) Y(I),I
+                      CALL                         XIT(' Crvplot',-13 )
+                  END IF
+                  VAL8  = Y(I)
+                  VAL8  = LOG10( VAL8 )
+                  FYLO8 = MIN( FYLO8,VAL8 )
+                  FYHI8 = MAX( FYHI8,VAL8 )
+              END DO
+
+              FYLO = 10**FYLO8
+              FYHI = 10**FYHI8
+
+          ELSE
+
+              FYLO8 = Y(1)
+              FYHI8 = Y(1)
+
+              DO  I=2,CWDS
+                  VAL8  = Y(I)
+                  FYLO8 = MIN( FYLO8,VAL8 )
+                  FYHI8 = MAX( FYHI8,VAL8 )
+              END DO
+
+              FYLO = FYLO8
+              FYHI = FYHI8
+
+          END IF
+
+          WRITE(6,6025)
+          WRITE(6,6055) FYLO,FYHI
+
+      END IF
+ 
+      IF (FYLO.GE.FYHI) CALL                        XIT(' Crvplot',-8 )
+ 
+***    DECIDE ON THE NUMBER OF MAJOR AND MINOR DIVISIONS FOR THE Y-AXIS
+***    IN THE CASE OF A DEFAULT PLOT.
+ 
+      IF (PTYPE.EQ.0)                                          THEN
+
+          IF (LTYPE.EQ.2 .OR. LTYPE.EQ.4)                      THEN
+
+              MGRY  = 1
+              MINRY = 1
+
+          ELSE
+
+              AMGRY = LOG10( FYHI-FYLO )
+
+              IF (AMGRY.LT.0.0)                                THEN
+                  MGRY = IFIX( AMGRY - 0.5 )-1
+              ELSE
+                  MGRY = IFIX( AMGRY + 0.5 )-1
+              END IF
+
+              DY    = 10.**MGRY
+              NDIV  = (FYHI-FYLO)/DY + 0.005
+              MINRY = 10
+
+              IF (NDIV.GT.15)                                  THEN
+                  DY    = DY*5.
+                  MINRY = 5
+              END IF
+
+                                          FYLOO = FYLO
+                                          FYLO  = FLOAT( IFIX(FYLO/DY) )
+     +                                          * DY
+              IF (FYLO.GT.FYLOO+DY*0.001) FYLO  = FYLO-DY
+
+                                          FYHIO = FYHI
+                                          FYHI  = FLOAT( IFIX(FYHI/DY) )
+     +                                          * DY
+              IF (FYHI.LT.FYHIO-DY*0.001) FYHI  = FYHI+DY
+
+              MGRY = IFIX( ((FYHI-FYLO)*1.0001)/DY ) 
+
+          END IF
+
+      END IF
+ 
+*-----------------------------------------------------------------------
+***    READY TO PLOT.
+ 
+      NPLOT = NPLOT+1
+      NPLT  = NPLT+1
+ 
+ 
+***    DETERMINE PORTION OF PAGE WHICH IS USED FOR THIS PLOT.
+ 
+      IF (NFRM.EQ.1)                                           THEN
+
+***        ONE PLOT PER PAGE.
+
+          NP = 0
+
+***        THE WHOLE PAGE IS USED.
+
+          XL = 0.0
+          XH = 1.0
+          YL = 0.0
+          YH = 1.0
+
+      ELSE IF (NFRM.EQ.2)                                      THEN
+
+***        TWO PLOTS PER PAGE WITH THE PAGE SPLIT HORIZONTALLY
+***        NP CONTROLS WHICH HALF OF THE PAGE IS USED.
+
+          NP=NPLOT-(NPLOT/2)*2
+
+          IF (NP.EQ.1)                                         THEN
+
+***            THE UPPER HALF OF THE PAGE IS USED.
+
+              XL = 0.0
+              XH = 1.0
+              YL = 0.5
+              YH = 1.0
+
+          ELSE
+
+***            THE LOWER HALF OF THE PAGE IS USED.
+
+              XL = 0.0
+              XH = 1.0
+              YL = 0.0
+              YH = 0.5
+ 
+          END IF
+
+      ELSE IF (NFRM.EQ.3)                                      THEN
+
+***        TWO PLOTS PER PAGE WITH THE PAGE SPLIT VERTICALLY.
+***        NP CONTROLS WHICH HALF OF THE PAGE IS USED.
+
+          NP = NPLOT-(NPLOT/2)*2
+
+          IF (NP.EQ.1)                                         THEN
+
+***            THE LEFT HALF OF THE PAGE IS USED.
+
+              XL=0.0
+              XH=0.5
+              YL=0.0
+              YH=1.0
+
+          ELSE
+
+***            THE RIGHT HALF OF THE PAGE IS USED.
+
+              XL = 0.5
+              XH = 1.0
+              YL = 0.0
+              YH = 1.0
+
+          END IF
+
+      ELSE
+
+***        FOUR PLOTS PER PAGE.
+***        NP CONTROLS WHICH QUADRANT OF THE PAGE IS USED.
+
+          NP = NPLOT-(NPLOT/4)*4
+
+          IF (NP.EQ.1)                                         THEN
+
+***            THE UPPER LEFT QUADRANT IS USED.
+
+              XL = 0.0
+              XH = 0.5
+              YL = 0.5
+              YH = 1.0
+
+          ELSE IF (NP.EQ.2)                                    THEN
+
+***            THE UPPER RIGHT QUADRANT IS USED.
+
+              XL = 0.5
+              XH = 1.0
+              YL = 0.5
+              YH = 1.0
+
+          ELSE IF (NP.EQ.3)                                    THEN
+
+***            THE LOWER LEFT QUADRANT IS USED.
+
+              XL = 0.0
+              XH = 0.5
+              YL = 0.0
+              YH = 0.5
+
+          ELSE
+
+***            THE LOWER RIGHT QUADRANT IS USED..
+
+              XL = 0.5
+              XH = 1.0
+              YL = 0.0
+              YH = 0.5
+
+          END IF
+
+      END IF
+ 
+      XLEN = XH - XL
+      YLEN = YH - YL
+ 
+***    DEFINE SIZE OF PLOT WITHIN THE PORTION OF PAGE WHICH
+***    HAS BEEN SELECTED (THE REMAINING WHITE SPACE AROUND
+***    THE PLOT IS USED FOR LABELS).
+ 
+      XLO  = XL + .25*XLEN
+      XHI  = XL + .95*XLEN
+      YLO  = YL + .20*YLEN
+      YHI  = YL + .90*YLEN
+ 
+*-----------------------------------------------------------------------
+***    DO THE PLOTTING.
+ 
+***    CHOSE THE TYPE OF AXES (LIN-LIN, LOG-LIN, ETC) AND ...
+
+      CALL DISPLA( 2,0,LTYPE )
+ 
+***    ... SPECIFY FORMAT FOR LABELS AT TICK MARKS.
+
+                     CHRSIZ = 1
+      IF (NFRM.GT.2) CHRSIZ = 6
+
+      XFORM ='(1PE11.3)'
+      LX    = 11
+      YFORM ='(1PE11.3)'
+      LY    = 11
+
+      DX     = ABS(FXHI-FXLO)/MGRX
+      DY     = ABS(FYHI-FYLO)/MGRY
+
+      FMAX   = AMAX1( ABS(FXLO),ABS(FXHI) )
+      LGMAXX = LOG10( FMAX )
+      FMAX   = AMAX1( ABS(FYLO),ABS(FYHI) )
+      LGMAXY = LOG10( FMAX )
+
+      IF (LTYPE.LE.2)                                          THEN
+          IF (DX.GE.0.1 .AND. LGMAXX.LE.3)                     THEN
+              XFORM ='(F7.1)'
+              LX    = 7
+          END IF
+      END IF
+
+      IF (LTYPE.EQ.1 .OR. LTYPE.EQ.3)                          THEN
+          IF (DY.GE.0.1 .AND. LGMAXY.LE.3)                     THEN
+              YFORM ='(F7.1)'
+              LY    = 7
+          END IF
+      END IF
+
+***    FROM NOW ON CONSIDER TRANSPOSITION OF DATA (LSPC < 0).
+
+      IF (LSPC.LT.0)                                           THEN
+      CALL LABMOD( YFORM,XFORM,LY,LX,CHRSIZ,CHRSIZ,0,0,0 )
+      ELSE
+      CALL LABMOD( XFORM,YFORM,LX,LY,CHRSIZ,CHRSIZ,0,0,0 )
+      END IF
+
+***    DRAW THE TITLES.
+
+      IF (ALL)                                                 THEN
+          L = INDEX( TITLE // ' ' , ' ' ) - 1
+          CALL GET_IP1_STRING( IBUF(4),IP1OUT )
+          CALL leadblk( IP1OUT ) ; CALL PDATE( CDATE,IBUF(2) )
+          IF (L.LE.15)                                         THEN
+              WRITE(CWORK,40) NPLT,TRIM( CDATE ),LNAME,TRIM( IP1OUT )
+              TITLE(L+1:40) = CWORK
+          END IF
+      END IF
+
+      CALL SET( XL,XH,YL,YH,0.0,1.0,0.0,1.0,1 )
+      CALL PWRIT( 0.6, 0.95,TITLE,40,2, 0,1 )
+      CALL PWRIT( 0.6, 0.05,IAX,  20,1, 0,1 )
+      CALL PWRIT( 0.05,0.6, JAX,  20,1,90,1 )
+
+      IF (LSPC.LT.0)                                           THEN
+      CALL SET( XLO,XHI,YLO,YHI,FYLO,FYHI,FXLO,FXHI,LTYPE )
+      ELSE
+      CALL SET( XLO,XHI,YLO,YHI,FXLO,FXHI,FYLO,FYHI,LTYPE )
+      END IF
+
+***    DRAW AND LABEL THE AXES.
+ 
+      IF (LSPC.LT.0)                                           THEN
+      CALL PERIML( MGRY,MINRY,MGRX,MINRX )
+      ELSE
+      CALL PERIML( MGRX,MINRX,MGRY,MINRY )
+      END IF
+
+***    DRAW THE CURVES.
+ 
+      IF (ISCAT.EQ.0)                                          THEN
+ 
+***        CONTINUOUS CURVES.
+ 
+          CBASE = 1
+          DO 510 J=1,NCURV
+              CALL  DASHD( PAT(J),16,8,1 )
+              IF (LSPC.LT.0)                                   THEN
+              CALL CURVED( Y(CBASE),X(CBASE),LNT(J) )
+              ELSE
+              CALL CURVED( X(CBASE),Y(CBASE),LNT(J) )
+              END IF
+              CBASE = CBASE+LNT(J)
+  510     CONTINUE
+ 
+      ELSE IF (NCURV.EQ.1)                                     THEN
+ 
+***        ONLY ONE SCATTER PLOT: PLOT 'PLUSES'.
+
+          EPSX = (FXHI-FXLO)/300.
+          EPSY = (FYHI-FYLO)/300.
+          DO 520 I=1,LNT(1)
+
+              U(1) = X(I)
+              V(1) = Y(I)-EPSY
+              U(2) = X(I)
+              V(2) = Y(I)+EPSY
+
+              IF (LSPC.LT.0)                                   THEN
+              CALL LINE( V(1),U(1),V(2),U(2) )
+              ELSE
+              CALL LINE( U(1),V(1),U(2),V(2) )
+              END IF
+
+              U(1) = X(I)-EPSX
+              V(1) = Y(I)
+              U(2) = X(I)+EPSX
+              V(2) = Y(I)
+
+              IF (LSPC.LT.0)                                   THEN
+              CALL LINE( V(1),U(1),V(2),U(2) )
+              ELSE
+              CALL LINE( U(1),V(1),U(2),V(2) )
+              END IF
+
+  520     CONTINUE
+
+      END IF
+ 
+      IF (NCURV.GT.1 .AND. PUB.EQ.0)                           THEN
+
+***        IF THERE IS MORE THAN ONE CURVE PLOT CHARACTERS A,B,C... 
+***        FOR THE FIRST,SECOND,THIRD,... CURVE (UP TO MAXNC CURVES).
+
+          DEBU = 1
+          JUMP = 1
+
+          NCRV  = MIN0(NCURV,MAXNC)
+          CBASE = 0
+          DO  J=1,NCRV
+              IF (ISCAT.EQ.0) DEBU = (LNT(J)-1)/4+1
+              IF (ISCAT.EQ.0) JUMP = (LNT(J)-1)/2+1
+              DO  I=DEBU,LNT(J),JUMP
+                  IF (LSPC.LT.0)                               THEN
+                      CALL PWRIT( Y(CBASE+I),X(CBASE+I),ICHR(J),1,
+     +                            CHRSIZ,0,0 )
+                  ELSE
+                      CALL PWRIT( X(CBASE+I),Y(CBASE+I),ICHR(J),1,
+     +                            CHRSIZ,0,0 )
+                  END IF
+              END DO
+              CBASE = CBASE+LNT(J)
+          END DO
+
+      END IF
+
+***    DRAW Y=0 LINE IF 0 IS IN THE RANGE.
+ 
+      IF (FYLO.LT.0.0 .AND. 0.0.LT.FYHI)                       THEN
+
+          U(1) = FXLO
+          V(1) = 0.0
+          U(2) = FXHI
+          V(2) = 0.0
+
+          IF (LSPC.LT.0)                                       THEN
+          CALL LINE( V(1),U(1),V(2),U(2) )
+          ELSE
+          CALL LINE( U(1),V(1),U(2),V(2) )
+          END IF
+      END IF
+ 
+      CALL SET( XL,XH,YL,YH,0.,1.,0.,1., 1 )
+
+***    CAUSE A PAGE EJECT IF THE PRESENT PAGE IS FULL.
+
+      IF (NP.EQ.0) CALL FRAME
+ 
+      WRITE(6,6060) NCURV,NPLT
+ 
+      IF (ALL)                                                 THEN
+
+***        PLOT NEXT FRAME.
+
+          CALL OPTN( 4HCASE,4 )
+          READ(ANT, 12) NT
+          NT  = Y2KDAT8( NT )
+          CALL DATE2STAMP( NT,NSTAMP )
+
+          IF (SCAL)                                            THEN
+              FYLO = 0.0
+              FYHI = 0.0
+          END IF
+
+          GOTO 150
+
+      ELSE IF (.NOT.PRBLOC)                                    THEN
+
+***        GO BACK TO INPUT SECTION FOR MORE DIRECTIVES.
+ 
+          GOTO 110
+
+      END IF
+ 
+*----------------------------------------------------------------------
+***    E.O.F. ON INPUT.
+ 
+  901 IF (NPLOT.EQ.0)                                          THEN
+         CALL                                      XIT(' Crvplot',-9 )
+      ELSE
+         IF (NP.NE.0) CALL                         FRAME
+         CALL                                      XIT(' Crvplot', 0 )
+      END IF
+  902 IF (NPLOT.EQ.0)                                          THEN
+         CALL                                      XIT(' Crvplot',-10)
+      ELSE
+         IF (NP.NE.0) CALL                         FRAME
+         CALL                                      XIT(' Crvplot', 0 )
+      END IF
+  903 IF (NPLOT.EQ.0)                                          THEN
+         CALL                                      XIT(' Crvplot',-11)
+      ELSE
+         IF (NP.NE.0) CALL                         FRAME
+         CALL                                      XIT(' Crvplot', 0 )
+      END IF
+  904 IF (NPLOT.EQ.0)                                          THEN
+         CALL                                      XIT(' Crvplot',-12)
+      ELSE
+         IF (NP.NE.0) CALL                         FRAME
+         CALL                                      XIT(' Crvplot', 0 )
+      END IF
+  905 IF (NPLOT.EQ.0)                                          THEN
+         CALL                                      XIT(' Crvplot',-1 )
+      ELSE
+         IF (NP.NE.0) CALL                         FRAME
+         CALL                                      XIT(' Crvplot', 0 )
+      END IF
+ 
+*-----------------------------------------------------------------------
+    1 FORMAT(I1)
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+   10 FORMAT(BN,I10)
+   12 FORMAT(BN,I10)
+   15 FORMAT(BN,E15.0)
+   20 FORMAT(BN,E10.0)
+   40 FORMAT(I3,1X,A,1X,A4,1X,A)
+
+ 5010 FORMAT(10X,A10,1X,A4,A5,2E10.0,3I5,1X,2I2,I1,I2,I2,2I1,A1,2I1)
+ 5020 FORMAT(2A20,A40)
+ 5030 FORMAT(30X,2E10.0)
+ 5040 FORMAT(10X,4I5)
+
+ 6010 FORMAT(/'Crvplot:  NT,NAME,LVL= ',A,1X,A4,1X,A,5X,
+     +       'FYLO,FYHI= ',2E12.4/10X,'NSKIP,NPNTS,NC= ',3I7,2X,
+     +       'PTYPE,LTYPE,PUB= ',3I3/10X,'MLTRX,LSPC= ',2I3,21X,
+     +       'NFRM,IRWND,IXAXS,ISCAT,ISAMPL= ',5I2)
+ 6013 FORMAT(' Negative or zero value ',E15.5,' at point ',I6)
+ 6014 FORMAT(' MGRX,MGRY=',2I5,', should not be zero.')
+ 6020 FORMAT(10X,"IAX,JAX= '",A20,"','",A20,"'"/
+     +       10X,"ITITLE= '",A40,"'")
+ 6025 FORMAT(10X,'Automatic scaling requested for Y-Axis')
+ 6026 FORMAT(10X,'Automatic scaling requested for X-Axis')
+ 6030 FORMAT(10X,'FXLO,FXHI= ',2E12.4)
+ 6040 FORMAT(10X,'MGRX,MINRX,MGRY,MINRY= ',4I5)
+ 6045 FORMAT('Reading:  ',A,1X,A4,1X,A)
+ 6050 FORMAT(/'*****************************************************'
+     +       /'Other versions of this program suggest that NSKIP be'
+     +       /'zero if IXAXS<0 and XAXIS values are read from a file'
+     +       /'*****************************************************'/)
+ 6055 FORMAT(10X,'Fylo,fyhi=',2E12.4)
+ 6056 FORMAT(10X,'Fxlo,fxhi=',2E12.4)
+ 6060 FORMAT('Crvplot:  ',I5,' Curve(s) on plot no',I5/)
+ 
+      END
+      SUBROUTINE PLOTLGD(PAT,IPATNE)
+
+***    MAR 03/88 - F. MAJAESS
+***    PRODUCE A SAMPLE CURVE PATTERNS PLOT.
+
+***    PAT    = CHARCTERS ARRAY CONTAINING THE CURVE PATTERNS.
+***    IPATNE = NUMBER OF CURVES OR PATTERN ELEMENTS IN PAT.
+*-------------------------------------------------------------------
+
+      IMPLICIT  none
+
+      REAL      X(2),Y(2), XL,XH,YL,YH, XLEN,YLEN, XLO,XHI,YLO,YHI,
+     +          FXLO,FXHI, FYLO,FYHI,   DY,DYBASE
+      CHARACTER TITLE*40,PAT(1)*16
+      INTEGER   IPATNE,IPATEL,J,LTYPE
+ 
+      DATA      TITLE  /'          SAMPLE CURVE PATTERNS         '/
+      DATA      IPATEL / 16 /
+ 
+*-------------------------------------------------------------------
+***    SET UP THE OUTER FRAME COORDINATES.
+
+      XL = 0.0
+      XH = 1.0
+      YL = 0.0
+      YH = 1.0
+ 
+***    SET UP THE OUTER FRAME SIDE LENGTHS.
+
+      XLEN = XH-XL
+      YLEN = YH-YL
+ 
+***    SET UP THE INNER FRAME COORDINATES.
+
+      XLO = XL+0.1*XLEN
+      XHI = XL+0.9*XLEN
+      YLO = YL+0.1*YLEN
+      YHI = YL+0.9*YLEN
+ 
+***    SET UP THE INNER FRAME LOW AND HIGH VALUES.
+
+      FXLO  = 0.0
+      FXHI  = 1.0
+      FYLO  = 0.0
+      FYHI  = 1.0
+      LTYPE = 1
+ 
+*-------------------------------------------------------------------
+***    START PLOTTING BY SETTING THE OUTER FRAME, PUTTING THE TITLE,
+***    DRAWING AND SETTING THE INNER FRAME.
+
+      CALL DISPLA( 2,0,LTYPE )
+      CALL    SET( XL,XH,YL,YH,0.0,1.0,0.0,1.0,1 )
+      CALL  PWRIT( 0.5,0.95,TITLE,40,2,0,1 )
+      CALL   LINE( XLO,YLO,XLO,YHI )
+      CALL   LINE( XLO,YHI,XHI,YHI )
+      CALL   LINE( XHI,YHI,XHI,YLO )
+      CALL   LINE( XHI,YLO,XLO,YLO )
+      CALL    SET( XLO,XHI,YLO,YHI,FXLO,FXHI,FYLO,FYHI,LTYPE )
+ 
+***    PLOT THE CURVE PATTERNS.
+
+      X(1)   = 0.05
+      X(2)   = 0.95
+      DY     = (FYHI-FYLO)*0.95/(IPATNE-1)
+      DYBASE = (FYHI-FYLO)*0.025
+ 
+      DO 10 J = 1,IPATNE
+          Y(1) = DYBASE+(J-1)*DY
+          Y(2) = Y(1)
+          CALL  DASHD( PAT(J),IPATEL,8,1 )
+          CALL CURVED( X(1),Y(1),2 )
+   10 CONTINUE
+ 
+*-------------------------------------------------------------------
+***    EJECT THE FRAME AND RETURN.
+
+      CALL FRAME
+ 
+      RETURN
+      END
+#     endif

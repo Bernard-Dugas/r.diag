@@ -1,0 +1,846 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      linepc  IN OUT1 OUT2 input output
+*
+*
+*     AUTEUR  - B.Dugas, Octobre 11/1987.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/linepc.ptn,v 4.7 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      linepc - CONVERTIR UN FICHIER RASTER POUR AFFICHAGE/IMPRESSION SUR UN PC.
+*               LE PROGRAMME GRAPHIC.EXE EST REQUIS SUR LE PC-IBM
+*
+*
+*     FICHIER D'ENTREE...
+*      IN = FICHIER DE FIGURES EN FORMAT PLOT10 (TRAMES DEVICE=V80)
+*
+*     FICHIER DE SORTIE...
+*      OUT1 = FICHIER DE FIGURES EN FORMAT PC-GRAPHIC.
+*      OUT2 = COMPTE RENDU DES FIGURES/BLOCS SUR OUT1.
+*
+*
+*     PARAMETRES...
+*      SIZEX  = DIMENSION EN X DIVISEE PAR DEUX (MOINS QUE 960)
+*      SIZEY  = DIMENSION EN Y DIVISEE PAR DEUX (MOINS QUE 960)
+*      TYP    = TYPE DE COMPRESSION.
+*               0,  RESSEMBLE AU TYPE ORIGINAL QUE L'ON TROUVE DANS IN
+*               99, COMPACTION UTILISANT 96 CARACTERES ASCII
+*      NFR    = NOMBRE DE FIGURES HORIZONTALEMENT (GENERALEMENT 1)
+*      OUTLNG = LONGUEUR DS LIGNE DE SORTIE
+*               0, SIGNIFIE UNE LIGNE PAR BLOC DE DONNEES.
+*
+*     READ( 5,5000 ) SIZEY, SIZEX, TYP, NFR, OUTLNG  
+*5000 FORMAT(BN,10X,5I10) 
+*
+* 
+*     EXEMPLE...
+*
+*linepc          960       960        99         1       130
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 RASTER TOO LARGE OR UNKNOW TYPE
+*       2 LIGNE CODEE TROP LONGUE
+*       3 MORE THAN ONE SIZE IN X
+*       4 PREMATURE EOF ON FILE IN
+*       5 ERROR ABORT READING INPUT
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM linepc
+*    +             ( IN=/260,     OUT1=/60080, OUT2,
+*    +               INPUT,       OUTPUT=/260,
+*    +               TAPE1=IN,    TAPE2=OUT1,  TAPE3=OUT2,
+*    +               TAPE5=INPUT, TAPE6=OUTPUT) 
+
+*     $Log: linepc.ptn,v $
+*     Revision 4.7  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2008/04/25 21:36:59  dugas
+*     Simplifier l'usage des macros pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 21:09:34  dugas
+*     Corriger l'appel a JCLPNT.
+*
+*     Revision 4.3  2003/10/24 20:57:43  dugas
+*     Remplacer les appels a PERROR par des appels a MESSYS
+*
+*     Revision 4.2  1999/04/08 21:57:02  armnrbd
+*     Ajouter un macro CPP pour la compilation sous LINUX.
+*
+*     Revision 4.1  1997/10/30 20:39:41  armnrbd
+*     Ajouter un macro CPP pour IRIX5.
+*
+*     Revision 4.0  1994/11/17  14:20:55  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:29  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.6  93/08/19  15:20:13  15:20:13  armnrbd (Bernard Dugas)
+*     Modifications cosmetiques.
+*     
+*     Revision 1.5  92/03/17  14:33:26  armnrbd
+*     Enlever "EXTERNAL CHAR, XOR".
+*     
+*     Revision 1.3  92/03/17  14:04:29  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.2  92/03/11  16:03:18  armnrbd
+*     Changer linePC en linepc
+*     
+*     Revision 1.1  92/03/11  14:37:09  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     
+*     Revision 1.0  92/02/24  14:41:49  armnrbd
+*     Initial revision
+*     
+
+***    Mars 13/1991 - B.Dugas, RPN (Version CY920/IRIX F77)
+  
+***    Octobre 11/1987 - B. DUGAS (Premiere version)
+
+      IMPLICIT  none
+
+      INTEGER   M, MAXB,MAXO,MAXL, ML,MLOUT, 
+     +          SIZE,SIZEX,SIZEY,LINSIZ,OUTLNG,
+     +          LBLCK,OBLCK,BLOCK,TYP, I,j,
+     +          NFR,NFRAME, NUM,TNUM,
+     +          HEAD,NF,ZERO,IO,
+     +          LIN(964)
+
+      CHARACTER ACC(60000),OLINE(129),NLINE(964), 
+     +          CAR,EGAL,Z
+
+      LOGICAL   ENDFRM
+  
+      COMMON   /PARAM/ LINSIZ, M, ENDFRM, TYP 
+  
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+  
+***    MAXB = NOMBRE MAXIMUM DE CARACTERES OUTPUT PAR LIGNES.
+***    MAXO = NOMBRE MAXIMUM DE BITS (RASTER) PAR BLOCK (SUR LE PC), 
+***           ACTUELLEMENT, 7920 MOTS DE 16 BITS * 4 TAMPONS.
+  
+      DATA     Z    /  'Z'   /, 
+     +         EGAL /  '='   /,
+     +         MAXL /  482   /, 
+     +         MAXO / 506880 /
+  
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/linepc.ptn,v $'
+
+*---------------------------------------------------------------------
+***    MACHINE DEPENDANT CONSTANTS.
+
+      CALL MACSPE( HEAD,ZERO )
+
+***    ASSIGN I/O UNITS.
+
+      NF = 5
+      CALL JCLPNT( NF, -1,-2,-3, 5,6 )
+
+      REWIND 1
+      ENDFRM = .TRUE. 
+      MAXB   = (MAXL-2)*4+1 
+  
+***    LIRE # DE LIGNES PAR GRAPHE (<= MAXB) ET TYPE DE COMPRESSION. 
+  
+  100 READ( 5,5000, ERR=998,END=999,IOSTAT=IO ) 
+     +              SIZEY, SIZEX, TYP, NFR, OUTLNG 
+  
+      IF (OUTLNG.LT.80 .OR. OUTLNG.GT.255) OUTLNG = 0 
+  
+      IF (NFR.LT.1) NFR = 1 
+      IF (NFR.GT.2) NFR = 2 
+  
+      SIZEY  = SIZEY*2
+      SIZEX  = SIZEX*2*NFR
+      SIZE   = MAX(SIZEY,SIZEX) 
+      IF (SIZEX.EQ.0) SIZEX = SIZE*NFR
+  
+      WRITE(6,6001) SIZEY, SIZEX, TYP, NFR, OUTLNG
+  
+      IF (SIZE.GE.MAXB .OR. (TYP.NE.0 .AND. TYP.NE.99))   THEN
+          WRITE(6,'(8H MAXB = ,I5,1H./)') MAXB
+          CALL                                     XIT(' Linepc ', -1 ) 
+      END IF
+  
+      LINSIZ = (SIZEX/8)*2
+      MLOUT  = MAXO/SIZEX 
+      IF (SIZEX.GT.960)                                   THEN
+          ML = 24 
+      ELSE
+          ML = 16 
+      END IF
+      MLOUT  = MLOUT-MOD(MLOUT,ML)
+  
+***    INITIALISER LIGNE PRECEDENTE (DECODEE). 
+  
+      DO 300 I=1,LINSIZ 
+          LIN(I) = 0
+  300 CONTINUE
+  
+***    INITIALISER LES DIFFERENTS COMPTEURS :  
+  
+***    NFRAME = # DE GRAPHES DECODES.
+***    NUM    = # DE CARACTERES DS VERSION RE-CODEE DU PRESENT GRAPHE. 
+***    LBLCK  = # DE LA DERNIERE LIGNE DS BLOC COURANT.
+***    OBLCK  = # DE LA DERNIERE LIGNE DS BLOC PRECEDENT.
+***    BLOCK  = # DE BLOC (60K CARACTERES).
+***    TNUM   = # TOTAL DE CARACTERES RE-CODES JSQU'A PRESENT. 
+***    M      = # DE CARACTERES PAR LIGNE RASTER.
+  
+      NFRAME = 0
+      NUM    = 0
+      LBLCK  = 0
+      OBLCK  = 0
+      BLOCK  = 0
+      TNUM   = 0
+      M      = 0
+
+***    NE PAS LIRE LES DEUX PREMIERE LIGNES.
+
+      READ( 1, '(A1)', ERR=996,END=997,IOSTAT=IO ) CAR
+      READ( 1, '(A1)', ERR=996,END=997,IOSTAT=IO ) CAR
+
+***    LIRE LES DONNEES.
+
+  350 READ( 1,'(1X,129A1)',ERR=900,END=901,IOSTAT=IO) OLINE
+
+          DO 400 I=1,129
+          CAR = OLINE(I)  
+  
+              IF (CAR.EQ.Z)                              THEN
+  
+***                NOUS AVONS UN CARACTERE DE FIN DE LIGNE. 
+  
+                  IF (M.GT.(MAXL-1)*2) CALL        XIT(' Linepc ', -2 )
+                  M              = M+1
+                  NLINE(M)       = Z
+
+                  CALL DECOD( LIN,NLINE )
+                  DO  J=1,M
+                      ACC(NUM+J) = NLINE(J)
+                  END DO
+
+                  NUM            = NUM+M
+                  LBLCK          = LBLCK+1
+  
+***                SI ON A FINI LE GRAPHE OU SI CELUI-CI EST TROP
+***                GROS ON L'ECRIT SUR OUT (UNIT 2). 
+  
+                  IF (LBLCK       .EQ.SIZEY  .OR. 
+     +              ((NUM         .GT.52000  .OR. 
+     +                LBLCK-OBLCK .GE.MLOUT) .AND.
+     +                MOD(LBLCK,ML).EQ.0)    )            THEN
+
+                      IF (LBLCK.EQ.SIZEY)                 THEN
+                          LBLCK  = 0
+                          OBLCK  = 0
+                          NFRAME = NFRAME+1 
+                      ELSE
+                          OBLCK  = LBLCK
+                      END IF
+
+                      ENDFRM     = .TRUE. 
+                      BLOCK      = BLOCK+1
+                      TNUM       = TNUM+NUM 
+                      CALL WRITBL( 2, NUM,LBLCK,SIZEX,TYP,
+     +                                ACC,OUTLNG ) 
+                      ENDFILE      2
+                      WRITE(3,3000) BLOCK,NUM 
+                      NUM        = 0
+                  END IF
+                  M              = 0
+
+              ELSE IF (CAR.EQ.EGAL)                      THEN
+
+***            ON EST RENDU A LA FIN DES INFORMATIONS.
+
+                  GOTO 901
+
+              ELSE
+  
+***            CECI EST CARACTERE NORMAL. ON L'AJOUTE A OLINE.
+  
+                  M              = M+1
+                  IF (M.GT.MAXL*2)                       THEN
+                      WRITE(6,6002) M
+                      CALL                         XIT(' Linepc ',-2 )
+                  END IF
+                  NLINE(M)       = CAR
+  
+              END IF
+  
+  400     CONTINUE
+  
+      GOTO 350
+  
+***    EOF SUR UNIT 1 (IN).
+  
+  900 IF (IO.NE.0) CALL MESSYS(' Linepc finds the following I/O error ')
+  901 IF (LBLCK.EQ.0 .OR. NUM.EQ.0)                       THEN
+
+          IF (BLOCK.EQ.0) CALL                     XIT(' Linepc ',-3 ) 
+
+      ELSE
+
+          LBLCK      = 0
+          NFRAME     = NFRAME+1 
+          BLOCK      = BLOCK+1
+          TNUM       = TNUM+NUM 
+          CALL WRITBL( 2, NUM,LBLCK,SIZEX,TYP,ACC,OUTLNG ) 
+          ENDFILE      2
+          WRITE(3,3000) BLOCK,NUM 
+
+      END IF
+  
+      WRITE(3,3001) NFRAME,BLOCK,TNUM 
+      CALL                                         XIT(' Linepc ', 0 )
+  
+***    EOF PREMATURE SUR UNITE 1.
+
+  996 IF (IO.NE.0) CALL MESSYS(' I/O Error on unit 1 ')
+  997 CALL                                         XIT(' Linepc ',-4 ) 
+  
+***    EOF PREMATURE SUR STDIN.
+
+  998 IF (IO.NE.0) CALL MESSYS(' I/O Error on stdin ')
+  999 CALL                                         XIT(' Linepc ',-5 ) 
+  
+*-----------------------------------------------------------------
+ 3000 FORMAT(1X,'Block ',I3,' has ',I5,' characters.') 
+ 3001 FORMAT(1X,'Total file has ',I3,' frame(s), ',I3,' block(s) and ', 
+     1       I7,' characters. ')
+ 5000 FORMAT(BN,10X,5I10) 
+ 6001 FORMAT(' Sizey, sizex, type, gr and outlng = ',5I5) 
+ 6002 FORMAT(' Too many characters in one line, ',I4)
+
+      END 
+      SUBROUTINE DECOD (OLINE,LINE) 
+  
+***    OCT 27/1986 - B. DUGAS
+  
+***    DECODE LIGNE VERSATEC ET LA RECODE POUR UN IBM-PC.
+  
+      IMPLICIT  none
+  
+      CHARACTER CAR,         LINE(964),   COUI(964),CNON(964)
+      INTEGER   OLINE(964), NLINE(964),   XOUI(964),XNON(964), 
+     +          TABR(14),   I1,I2, K,L,N, IREP, 
+     +          SIZE,TYPE,  M1,M2,M
+      LOGICAL   OUI,NON,    ENDFRM, XR
+  
+      COMMON   /PARAM/ SIZE, M, ENDFRM, TYPE
+  
+      EXTERNAL  ENCOD0,ENCOD99, XIT
+
+      DATA      TABR / 01,02,03,04,05,06,07, 
+     1                 08,16,32,48,64,80,96 / 
+
+      DATA      OUI,     NON   /
+     +         .TRUE., .FALSE. /
+  
+*---------------------------------------------------------------- 
+      IREP =  0
+      I1   =  0
+      I2   =  0
+      N    =  0
+  
+***    CHECK FOR VALID FIRST CHARACTER (I.E. "X" OR "Y").
+  
+      IF (LINE(1).EQ.'X')                                 THEN
+          XR = .TRUE. 
+      ELSE IF (LINE(1).EQ.'Y')                            THEN
+          XR = .FALSE.
+      ELSE
+          WRITE(6,6001) LINE(1)
+          CALL                                     XIT('  Decod ', -1 )
+      END IF
+  
+***    DECODE LINE. PUT RESULT INTO NLINE. TRUNCATE TO SIZE. 
+  
+      DO 130 L=2,M
+  
+          IF (N.GE.SIZE) GOTO 140 
+          CAR = LINE(L) 
+  
+          IF ( (CAR.GE.'A' .AND. CAR.LE.'F') .OR.
+     +         (CAR.GE.'0' .AND. CAR.LE.'9') )            THEN
+  
+***        IF CAR IS HEX NUMERAL, IT IS PART OF A PATTERN. 
+  
+              IF (IREP.LT.1)                              THEN
+                  N                  = N+1
+              ELSE
+                  DO 100 K=N+1,N+IREP*2-1,2 
+                      NLINE(K  )     = I1
+                      NLINE(K+1)     = I2
+  100             CONTINUE
+                  N                  = N+2*IREP+1 
+                  IREP               = 0
+              END IF
+              I1                     = I2 
+              READ( CAR,1 )            I2
+              NLINE(N)               = I2
+  
+          ELSE
+  
+              IF (CAR.GE.'G' .AND. CAR.LE.'T')            THEN
+  
+***            IF CAR IS BETWEEN "G" AND "T" THIS A REPEAT CODE. 
+  
+                  IREP               = IREP+TABR(ICHAR( CAR )-70) 
+
+                  IF (N+IREP*2.GT.SIZE)                   THEN
+                      DO 110 K=N+1,SIZE-1,2 
+                          NLINE(K  ) = I1
+                          NLINE(K+1) = I2
+  110                 CONTINUE
+                      GOTO 140
+                  END IF
+  
+              ELSE IF (CAR.EQ.'Z')                        THEN
+  
+***            END OF LINE CHARACTER. REPEAT 8 BIT PATTERN TO SIZE.
+  
+                  DO 120 K=N+1,SIZE-1,2 
+                      NLINE(K  )     = I1 
+                      NLINE(K+1)     = I2 
+  120             CONTINUE
+              END IF
+  
+          END IF
+  
+  130 CONTINUE
+  
+***    IF FIRST LETTER WAS X DO EXCLUSIVE OR.
+  
+  140 IF (XR)                                             THEN
+  
+          DO 150 K=1,SIZE 
+              XOUI(K)  = NLINE(K) 
+#             if ! defined (HP)
+              OLINE(K) = XOR( NLINE(K),OLINE(K) )
+#             else
+              OLINE(K) = IXOR( NLINE(K),OLINE(K) )
+#             endif
+              XNON(K)  = OLINE(K) 
+  150     CONTINUE
+  
+      ELSE
+  
+          DO 160 K=1,SIZE 
+              XNON(K)  = NLINE(K) 
+#             if !defined (HP)
+              XOUI(K)  = XOR( OLINE(K),NLINE(K) )
+#             else
+              XOUI(K)  = IXOR( OLINE(K),NLINE(K) )
+#             endif
+              OLINE(K) = XNON(K)
+  160     CONTINUE
+  
+      END IF
+  
+***    DO THE TYPE OF RE-ENCODING REQUIRED.
+***    IN BOTH CASES, RE-ENCODE NLINE WITH 
+***    AND WITHOUT XOR AND COMPARE.
+  
+      IF (TYPE.EQ.0)                                      THEN
+  
+          CALL ENCOD0(  OUI,XOUI,COUI,M1,SIZE )
+          CALL ENCOD0(  NON,XNON,CNON,M2,SIZE )
+  
+      ELSE
+  
+          CALL ENCOD99( OUI,XOUI,COUI,M1,SIZE )
+          CALL ENCOD99( NON,XNON,CNON,M2,SIZE )
+  
+      END IF
+  
+***    FIRST LINE IN A FRAME IS A Y LINE.
+  
+      IF (ENDFRM)                                         THEN
+          M1          =  M2+1
+          ENDFRM      = .FALSE. 
+      END IF
+  
+***    CHOOSE MOST COMPACT COMPRESSION.
+  
+      IF (M1.GE.M2)                                       THEN
+          M = M2
+          DO 170 K=1,M
+              LINE(K) = CNON(K) 
+  170         CONTINUE
+      ELSE
+          M = M1
+          DO 180 K=1,M
+              LINE(K) = COUI(K) 
+  180         CONTINUE
+      END IF
+
+      RETURN  
+*-----------------------------------------------------------------
+    1 FORMAT( Z1 )
+ 6001 FORMAT(' First character in coded line is...',A1)
+
+      END 
+      SUBROUTINE ENCOD0 (XR,OLINE,NLINE,M,SIZE) 
+  
+***    MAI 19 1986 - B. DUGAS
+  
+***    CODE 4 BIT RASTER CODE (WITH OR WITHOUT XOR) TAKING 
+***    INTO ACCOUNT REPETITIONS. THE OUTPUT PATTERNS ARE : 
+  
+***        0000 = "*"   0001 = "+"  0010 = ","  0011 = "-" 
+***        0100 = "."   0101 = "/"  0110 = "0"  0111 = 1"
+***        1000 = "2"   1001 = "3"  1010 = "4"  1011 = 5"
+***        1100 = "6"   1101 = "7"  1110 = "8"  1111 = 9"
+  
+***    CORRESPONDING TO ASCII 2AH TO 39H
+  
+***    REPITITION CODES ARE "A" TO "P"  (ASCII 41HTO 50H) 
+***    CORRESPONDING TO 0 TO 15. 
+  
+***    PATTERN OR REPETITION CODES ALWAYS COME IN PAIRS OF 
+***    CHARACTERS SO THAT FOR EXAMPLE CODE "CD" MEANS THAT 
+***    YOU REPEAT THE PREVIOUS PATTERN 2*16+3 TIMES AND
+***    CODE "/8" STANDS FOR PATTERN 01011110.
+  
+***    LINES START WITH  AN X OR Y AND ALWAYS END WITH Z.
+  
+      IMPLICIT   none
+  
+      INTEGER    OLINE(964), CAR,REP, IREP, K,N,M,
+     +                       I1,I2,IA,IB,   SIZE
+      CHARACTER  NLINE(964), CHAR
+      LOGICAL    XR
+
+      DATA       CAR,REP / 42,65 /
+  
+*------------------------------------------------------------------ 
+      IREP                   = 0
+      N                      = 1
+  
+      I1                     = OLINE(1) 
+      I2                     = OLINE(2) 
+      IA                     = I1*16+I2 
+  
+      IF (XR)                                             THEN
+          NLINE(N)           = 'X'
+      ELSE
+          NLINE(N)           = 'Y'
+      END IF
+  
+      NLINE(N+1)             = CHAR( CAR+I1 )
+      NLINE(N+2)             = CHAR( CAR+I2 )
+      N                      = N+2
+  
+      DO 120 K=3,SIZE-1,2 
+  
+          I1                 = OLINE(K) 
+          I2                 = OLINE(K+1) 
+          IB                 = I1*16+I2 
+  
+          IF (IB.EQ.IA)                                   THEN
+              IREP           = IREP+1 
+          ELSE
+              IF (IREP.GT.0)                              THEN
+                  NLINE(N+1) = CHAR( REP+IREP/16 )
+                  NLINE(N+2) = CHAR( MOD(IREP,16) )
+                  N          = N+2
+                  IREP       = 0
+              END IF
+              NLINE(N+1)     = CHAR( CAR+I1 )
+              NLINE(N+2)     = CHAR( CAR+I2 )
+              N              = N+2
+              IA             = IB 
+          END IF
+  
+  120 CONTINUE
+  
+      M                      = N+1
+      NLINE(M)               = 'Z'
+  
+*---------------------------------------------------------------------- 
+      RETURN
+      END 
+  
+      SUBROUTINE ENCOD99 (XR,OLINE,NLINE,M,SIZE)
+  
+***    NOV 06/1986 - B. DUGAS
+  
+***    CODE 8 BIT RASTER CODE IN 6 BIT BUNCH (WITH OR
+***    WITHOUT XOR), TAKING REPETITIONS INTO ACCOUNT.
+***    THREE 8 BIT PATTERNS WILL THUS BE SENT IN FOUR
+***    6 BIT CHARACTERS. 
+  
+***        00000000 = " "   00000001 = "!"  00000010 = """ 
+***        00000011 = "#"   00000100 = "$"  00000101 = "%" 
+***                           .....
+***        00111010 = "Z"   00111011 = "["  00111100 = "\" 
+***        00111101 = "]"   00111110 = "   00111111 = "_"
+  
+***    CORRESPONDING TO ASCII 32 TO 95.
+  
+***    REPITITION CODES ARE LOWER CASE (ASCII 96 TO 125) 
+***    LETTER CODES, CORRESPONDING TO '`' TO '}'.
+  
+***    REPETITION CODES MAY COME IN PAIRS OF CHARACTERS SO 
+***    THAT FOR EXAMPLE, LOWER CASE CODES "cd"  MEANS THAT 
+***    YOU REPEAT THE PREVIOUS PATTERN 3*30+4 TIMES. 
+  
+***    THE FIRST TWO CHARACTERS IN A LINE ARE TREATED SPE- 
+***    CIALLY. THEY HAVE A SIX BIT RANGE  (ASCII 32 TO 95) 
+***    SO THAT (C1-32)*(C2-32)*64=CC (RANGE: BIT 0 TO 11). 
+***    
+***           1) THEY DISTINGUISH BETWEEN XOR/NO XOR LINES 
+***              (SO THAT BIT 2 ON MEANS NO XOR).
+***           2) THEY DISTINGUISH BETWEEN BLANCK AND  NON- 
+***              BLANCK LINES (BIT 1 ON MEANS BLANCK). 
+***           3) IN THE CASE OF  BLANCK LINES, C2 IS  "Z". 
+***           4) IN THE OTHER CASE, BITS 2 TO 11 TELL  HOW 
+***              MANY CHARACTERS THERE ARE IN THIS LINE. 
+  
+***    NOTE THAT LINES ALWAYS END WITH A "Z".
+  
+      IMPLICIT  none
+
+      INTEGER   OLINE(964), M,N,HOLD,NHLD, CAR,CAR1,CAR2, FIRST,
+     +          IREP,REP,R1,R2, SIXB, IA,IB,I1,I2, SIZE,K
+      CHARACTER NLINE(964),Z,CHAR
+      LOGICAL   XR
+
+      EXTERNAL  XIT
+  
+      DATA      Z / 'Z' /, CAR,REP / 32,96 /
+  
+*------------------------------------------------------------------ 
+      IREP                           = 0
+      N                              = 2
+      NHLD                           = 0
+  
+      I1                             = OLINE(1)
+      I2                             = OLINE(2)
+      IA                             = I1*16+I2 
+  
+***    FIRST SIX BIT + REMAINDER FROM FIRST 8 BIT PATTERN. 
+  
+      SIXB                           = IA/4
+      HOLD                           = MOD( IA,4 )*16 
+  
+      NHLD                           = 2
+  
+      NLINE(N+1)                     = CHAR( CAR+SIXB )
+      N                              = N+1
+  
+***    TREAT THE REST ...
+  
+      DO 120 K=3,SIZE-1,2 
+  
+***        NEW PATTERN.
+  
+          I1                         = OLINE(K)
+          I2                         = OLINE(K+1)
+          IB                         = I1*16+I2 
+  
+  
+          IF (IB.EQ.IA)                                   THEN
+  
+***            DO WE HAVE A REPEAT ? 
+  
+              IREP                   = IREP+1 
+              IF (NHLD.NE.0)                              THEN
+                  NLINE(N+1)         = CHAR( CAR+HOLD )
+                  N                  = N+1
+                  NHLD               = 0
+                  HOLD               = 0
+              END IF
+  
+          ELSE
+  
+***            NO WE DON'T.
+  
+              IF (IREP.GT.0)                              THEN
+
+                  IF (IREP.GE.900)                        THEN
+                      WRITE(6,6001) IREP
+                      CALL                         XIT(' Decod99', -1 ) 
+                  END IF
+
+                  R1                 = IREP/30
+                  R2                 = MOD( IREP,30 )
+
+                  IF (R1.EQ.0)                            THEN
+                      NLINE(N+1)     = CHAR( REP+R2 )
+                      N              = N+1
+                  ELSE
+                      NLINE(N+1)     = CHAR( REP+R1 )
+                      NLINE(N+2)     = CHAR( REP+R2 )
+                      N              = N+2
+                  END IF
+                  IREP               = 0
+
+              END IF
+  
+***            DEFINE NEW HOLD AND SIXB FROM IB AND OLD HOLD.
+  
+              IF (NHLD.EQ.0)                              THEN
+                  SIXB               = IB/4 
+                  HOLD               = MOD( IB,4 )*16 
+              ELSE IF (NHLD.EQ.2)                         THEN
+                  SIXB               = HOLD+(IB/16)
+                  HOLD               = MOD( IB,16 )*4 
+              ELSE IF (NHLD.EQ.4)                         THEN
+                  SIXB               = HOLD+(IB/64) 
+                  HOLD               = MOD( IB,64 ) 
+              END IF
+  
+              IA                     = IB 
+  
+***            TRANSFER WHAT NEEDS TO BE TO TLINE. 
+  
+              NLINE(N+1)             = CHAR( CAR+SIXB )
+              N                      = N+1
+  
+              IF (NHLD.NE.4)                              THEN
+                  NHLD               = NHLD+2 
+              ELSE
+                  NLINE(N+1)         = CHAR( CAR+HOLD )
+                  N                  = N+1
+                  NHLD               = 0
+                  HOLD               = 0
+              END IF
+  
+          END IF
+  
+  120 CONTINUE
+  
+***    LAST CHARACTER IS "Z".
+  
+      M        = N+1
+      NLINE(M) = Z
+  
+***    FILL IN THE FIRST TWO CHARACTERS. 
+  
+      IF (IB.EQ.0 .AND. M.EQ.5)                           THEN
+  
+***        CHECK FOR BLANCK LINES... 
+  
+          IF (XR)                                         THEN
+              NLINE(1) = CHAR( CAR+2 ) 
+          ELSE
+              NLINE(1) = CHAR( CAR+3 ) 
+          END IF
+          NLINE(2)     = Z
+          M            = 2
+  
+      ELSE
+  
+          FIRST              = 0
+          IF (.NOT.XR) FIRST = 1
+
+          FIRST              = FIRST+(M-3)*4
+
+          IF (FIRST.GE.4096)                        THEN
+              WRITE(6,6002) FIRST
+              CALL                                 XIT(' Decod99', -2 ) 
+          END IF
+
+          CAR1               = MOD( FIRST,64 )
+          CAR2               = FIRST/64
+
+          NLINE(1)           = CHAR( CAR+CAR1 )
+          NLINE(2)           = CHAR( CAR+CAR2 )
+  
+      END IF
+  
+      RETURN
+*---------------------------------------------------------------------- 
+
+ 6001 FORMAT(' Decod99 finds repeat count=',I10)
+ 6002 FORMAT(' Decod99 finds bad first code=',I10)
+
+      END 
+  
+      SUBROUTINE WRITBL (UNIT, NUM,LBLCK,SIZEX,TYP,ACC,OUTLNG)
+  
+***    OCT 11/1987 - B. DUGAS. 
+
+***    MODIFIEE LE 1 MARS/1990: TRAITEMENT DU CAS "MOD(NUM,OUTLNG)=0".
+  
+***    CETTE ROUTINE ECRIT UN BLOC DE CARACTERE ASCII SELON
+***    LE NOMBRE DE CARACTERES PAR LIGNE D'OUTPUT. OUTLNG=0
+***    SIGNIFIE QUE L'ON ECRIT TOUT D'UN COUP... 
+  
+      IMPLICIT  none
+  
+      INTEGER   UNIT, NUM,LBLCK,SIZEX,TYP,OUTLNG, J
+      CHARACTER ACC(NUM),FOUT*12
+  
+*---------------------------------------------------------------------
+      IF (OUTLNG.EQ.0)                                    THEN
+  
+***        ICI, LES DONNEES SONT ECRITES EN UN SEUL BLOC.
+
+          WRITE(UNIT,2000) NUM,LBLCK,SIZEX,TYP, 
+     1                     (ACC(J),J=1,NUM) 
+  
+      ELSE
+  
+***        TAMPON D'INFORMATION ISOLE DU CODE RASTER.
+
+          WRITE(UNIT,2001) NUM,LBLCK,SIZEX,TYP,OUTLNG 
+  
+***        ON ECRIT NL LIGNES DE OUTLNG CARACTERES ASCII, SE
+***        TERMINANT TOUTES PAR UNE CHAINE DE '-(CR)(LF)',
+***        SAUF LA DERNIERE QUI NE CONTIENT PAS DE '-'.
+
+          WRITE(FOUT,2002)     OUTLNG
+          WRITE(UNIT,FMT=FOUT) ACC
+  
+      END IF
+  
+      RETURN
+  
+*---------------------------------------------------------------------
+ 2000 FORMAT(I5.5,5X,I5.5,5X,I10,I5,44X,'=',60000A1) 
+ 2001 FORMAT(I5.5,5X,I5.5,5X,I10,I5,I10,34X,'=') 
+ 2002 FORMAT('(',I3.3,'A1,:1H-)') 
+
+      END 
+#endif

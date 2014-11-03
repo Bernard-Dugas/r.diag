@@ -1,0 +1,1189 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      timcov  SERA SERB COV   [MISSOUT] OUTPUT [ -def ] [-mvalue VAL1 -npg VAL2 -name VAL3]
+*      stdev   FILEDEV STDDEVI [MISSOUT] OUTPUT [ -def ] [-mvalue VAL1 -npg VAL2 -kind VAL3]
+*
+*
+*     DESCRIPTIONS...
+*      timcov - COMPUTES MULTI-LEVEL TIME COVARIANCES
+*      stdev  - COMPUTES STANDARD DEVIATION OF ONE GRID DEVIATION FILE
+*
+*
+*     AUTHORS - J.D.Henderson, May 07/80 AND B.Dugas, April 01/92.;
+*               M. Giguere, March 28/95 (STDEV entry Module).
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/timcov.ptn,v 4.30 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     PURPOSE...
+*      TIMCOV - COMPUTES THE 2-D TIME COVARIANCES FOR EACH VARIABLE AND
+*               LEVEL OF A SERIES OF SETS OF DATA.
+*      STDEV  - CALCULATES AT EACH LEVEL, THE 2-D STANDARD DEVIATION OF
+*               ONE MULTI-LEVEL TIME SERIE DATA SETS OF DEVIATIONS FROM
+*               THE TIME MEAN
+*
+*
+*     INPUT FILES...
+*     (FOR TIMCOV)
+*      SERA    = FIRST TIME SERIES OF MULT-VARIABLE MULTI-LEVEL SETS.
+*      SERB    = SECOND TIME SERIES OF MULT-VARIABLE MULTI-LEVEL SETS.
+*     (FOR STDEV)
+*      FILEDEV = TIME SERIES OF MULT-VARIABLE MULTI-LEVEL DEVIATIONS SETS
+*
+*      THESE FILES ARE ALL SUPPOSED TO BE SORTED ACCORDING TO A
+*      TIMESTEP/NAME/LEVEL RULE, FROM MOST TO LEAST SIGNIFICANT
+*             
+*     OUTPUT FILE...
+*     (FOR TIMCOV)
+*      COV     = THE TIME COVARIANCE OF THE TWO OTHER (INPUT) FILES.
+*     (FOR STDEV)
+*      STDDEVI = GRID SET OF THE STANDARD DEVIATION.
+*
+*
+*     Command-line arguments...
+*      def    = [STDEV ONLY] Remove mean from FILEDEV (see note 1)
+*      kind   = [STDEV ONLY] 'STD' ==> Output standard deviations (Default)
+*               [STDEV ONLY] 'VAR' ==> Output variances rather than std devs
+*      mvalue = Real number used to identify missing values (DEF = none)
+*      name   = [TIMCOV only] Alternate output name when SERA and SERB differ
+*      npg    = Output packing density (DEF = -32)
+*
+*     Missing value mode...
+*      Missing value treatment is activated by providing a real number to be
+*      used as a missing value flag with the "-mvalue" command-line argument.
+*      Data that has this value will be disregarded by the program.
+*
+*
+*     Notes: 1) The input file(s) may or may not already contain deviations
+*               from the time mean(s). The time means will removed from the
+*               file(s) when the "-def" command-line key is specified (i.e.
+*               TIMDEV need not be called previous to TIMCOV or STDEV)
+*            2) Only the first full homogeneous sets are treated.
+*            3) By default, when SERA and SERB contain different
+*               variables, the output variable name is set to "COV".
+*               This behavior can be overwritten by using the "-name"
+*               command-line parametre to specify an altername name.
+*            4) The data may be REAL or COMPLEX. For COMPLEX fields,
+*               the programs will perform either of the following operation
+*               >> TIMAVG( SERA * COMPLEX CONJUGATE( SERB ) ) <<  *** OR ***
+*               >> SQRT( TIMAVG( FILEDEV * COMPLEX CONJUGATE( FILEDEV ) ) ) <<
+*            5) Specifying the "-npg" command-line parametre with a valid
+*               value forces TIMCOV/STDEV to use this packing density.
+*            6) When dealing with RPN Standard files, TIMCOV and STDEV
+*               modify the file's time descriptors such that the earliest
+*               sample time sample time is saved in DATEO, while the latest
+*               can be reconstructed from new values of DATEO, NPAS and DEET.
+*               In addition, IP3 will then contain the number of time samples
+*               used to construct the average. Other R.DIAG modules such as
+*               TIMGEN and the statistical testing modules (FTEST, ...)
+*               can then use this information directly.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH VERTICAL LEVELS
+*       2 PREMATURE EOF ON FILE SERA/FILEDEV
+*       3 LABEL RECORD MISMATCH BETWEEN SERA AND SERB
+*       4 PREMATURE EOF ON FILE SERB
+*       5 MISSING RECORD IN FILE SERB
+*       6 UNABLE TO ALLOCATE ENOUGH WORKING MEMORY
+*       7 BAD ARGUMENT VALUE WITH THE "-NPG" COMMAND-LINE PARAMETRE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM timcov
+*    1               (SERA,        SERB,        COV,       OUTPUT,
+*    2         TAPE11=SERA, TAPE12=SERB, TAPE13=COV, TAPE6=OUTPUT)
+*     ------------------------------------------------
+
+*     $Log: timcov.ptn,v $
+*     Revision 4.30  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.29  2013/12/12 22:24:26  dugas
+*     Corriger un commentaire.
+*
+*     Revision 4.28  2010/02/15 22:59:46  dugas
+*     Pas de racines carrees dans STDEV si KIND=VAR.
+*
+*     Revision 4.27  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.26  2008/04/25 21:21:00  dugas
+*     Allocation de memoire dependante de NS.
+*
+*     Revision 4.25  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.24  2006/09/19 19:11:06  dugas
+*     - Corriger le code preparant les appels a WRITLEV.
+*     - Les index de valeurs manquantes sont sauves avec TYPVAR='MV'.
+*
+*     Revision 4.23  2006/07/17 21:40:17  dugas
+*     Definir MB=MA en mode STDEV.
+*
+*     Revision 4.22  2006/07/04 17:53:21  dugas
+*     Ajouter le support des donnees manquantes par le biais soit
+*      du parametre "-mvalue valeur [epsilon]", soit de la variable
+*      d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*      nombre reel denotant une valeur manquante et "epsilon" est
+*      le facteur de precision utilise dans les comparaisons. La
+*      valeur par defaut de epsilon est 1%. La seconde methode a
+*      preseance sur la premiere.
+*
+*     Revision 4.21  2006/02/09 17:14:55  dugas
+*     Passer en mode de calcul 64 bits.
+*
+*     Revision 4.20  2004/11/26 16:03:38  dugas
+*     Utiliser le nom CCOV pour tous les jeux de variables.
+*
+*     Revision 4.19  2004/11/12 18:02:47  dugas
+*     Ajouter le parametre de ligne de commande '-name'.
+*
+*     Revision 4.18  2003/12/10 22:37:45  dugas
+*     Forcer la covariance plus grande ou egale a zero en mode STDEV
+*
+*     Revision 4.17  2001/10/11 11:15:05  armnrbd
+*     Les noms lus par GETSIZ4 et ecrits par PUTMSET2 contiennent
+*     maintenant les etiquettes des enregistrements (RPN STD).
+*
+*     Revision 4.16  2001/09/24 14:58:16  armnrbd
+*     Implanter GETSIZ4 et GET/PUT(MSET2).
+*
+*     Revision 4.15  2001/05/02 11:36:40  armnrbd
+*     Modifier le format 6250 (ecriture des noms de variable).
+*
+*     Revision 4.14  2001/03/24 20:53:49  armnrbd
+*     Le traitement des descripteurs temporels a ete ajuste
+*     sur ce qui est fait normalement dans TIMAVG/ACCUMUL.
+*
+*     Revision 4.13  2001/03/22 21:26:21  armnrbd
+*     Corriger les declarations de VARIA et VARIB.
+*
+*     Revision 4.12  2001/03/13 21:46:16  armnrbd
+*     Ajouter  le parametre "-npg".
+*     Remplacer GETPARI,PUTPARI par GETHIGH,PUTHIGH.
+*
+*     Revision 4.11  2000/04/07 20:51:52  armnrbd
+*     Meilleure gestion de l'allocation de memoire dynamique.
+*
+*     Revision 4.10  1998/07/08 19:03:37  armnrbd
+*     Remplacer INCDAT/DIFDAT par INCDATR/DIFDATR.
+*
+*     Revision 4.9  1998/07/07  15:06:20  armnrbd
+*     Remplacer DATMGP par DATMGP2 (probleme Y2K).
+*
+*     Revision 4.8  1997/09/26  17:39:25  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.7  1997/05/30  17:53:17  armnrbd
+*     Assurer le calcul en double precision.
+*
+*     Revision 4.6  1997/04/17  18:16:41  armnrbd
+*     Corriger un probleme lorsque DATEO et DATEI ne
+*     sont pas dans le meme mois: on doit faire le
+*     calcul du jour Julien absolu.
+*
+*     Revision 4.5  1996/11/26  20:13:06  armnrbd
+*     Tenir compte du temps decroissant dans le cas de fichiers SQI.
+*
+*     Revision 4.4  1996/10/15  17:16:02  armnrbd
+*     Sauver ou lire la taille de l'echantillon dans IP3
+*     pour les fichiers de type SQI.
+*
+*     Revision 4.3  1995/11/20  15:10:46  armnrbd
+*     Ajouter le point d'entree STDEV (selon M.Giguere).
+*
+*     Revision 4.2  1995/10/26  17:44:07  armnrbd
+*     Ajouter de la decumentation sur le mode de fonctionnement multi-variable.
+*
+*     Revision 4.1  1995/07/07  02:22:31  armnrbd
+*     Implanter un mode de travail a multi-variables.
+*
+*     Revision 4.0  1994/11/17  14:22:09  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:08:29  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:15  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/19  13:47:27  13:47:27  armnrbd (Bernard Dugas)
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/05/05  10:16:50  armnrbd
+*     Corriger "EXTERNAL PUTSETS" ==> "EXTERNAL PUTSET2".
+*     
+*     Revision 1.0  92/04/01  16:42:13  armnrbd
+*     Initial revision
+*     
+
+*     APR 01/92 - B.DUGAS       (PORT/RE-WRITE FOR CY920/IRIX)
+*     MAY 07/80 - J.D.HENDERSON (ORIGINAL CY6600 VERSION)
+
+*---------------------------------------------------------------------------
+      IMPLICIT    none
+ 
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 1999 )
+
+      REAL        ZERO
+      CHARACTER*4 TYPE,CCOV,KIND
+      CHARACTER   VALEUR*5,NAMEF*256
+      LOGICAL     OK,ZEROM,MVALUE,MISSOUT
+      REAL*8      COV,AVF,AVG,HEURE, F,G, MISFLAG,EPSILON
+      INTEGER     I,K,L,MAXW1,MAXW2,LEN1,LEN2,HEAD,IBUF,NS,IER,
+     +            LEVA(MAXLEV,2),LEVB(MAXLEV,2),KBUF(taille_entete),KPAK,
+     +            LBUF(taille_entete),LPAK,LEN,NWDS,MAXW,MEM,NF,NLEV,
+     +            CMPL,STEP(MAXLEV),NSETA,NSETB,LN,IER1,IER2,
+     +            IER3,DEET,DATEI,DATEO,NPAS,ALLR8,NPG,IO,
+     +            SETA(0:MAXLEV),SETB(0:MAXLEV),
+     +            MA,MB,MC
+
+      CHARACTER*20 VARIA(MAXLEV),VARIB(MAXLEV)
+
+      POINTER   ( PI,IBUF(8) )
+
+      POINTER   ( PC, COV(1) )
+      POINTER   ( PF,   F(1) ),( PMF, AVF(1) )
+      POINTER   ( PG,   G(1) ),( PMG, AVG(1) )
+      POINTER   ( PA,MA(2,1) ),( PB, MB(2,1) ),(PMC,MC(1))
+
+#     include "machtype.cdk" 
+
+      CHARACTER   NOMPRG*256,NMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      CHARACTER*4 GETYP,PKTYP*2
+      LOGICAL     RPBLOC,SETIO64
+      INTEGER     GETSIZ4,GETHIGH
+      EXTERNAL    GETSIZ4,RPBLOC,JCLPNT,CMPLBL,
+     +            GETYP,GETHIGH,INCDATR,SETIO64,
+     +            HPALLOC,HPDEALLC,XIT,GETNAM,
+     +            MISPAR
+
+      DATA        ALLR8 / 1 /, NPG / 999 /
+      DATA        CCOV  / 'COV' /
+      DATA        KIND  / 'STD' /
+*====================================================================
+
+      DATA NMPRG /
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/timcov.ptn,v $'
+     +           /
+
+*---------------------------------------------------------------------
+      NOMPRG =  NMPRG
+      ZEROM  = .FALSE.
+
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NS = 0
+      NF = 5
+      CALL JCLPNT( NF, 11,12,13,14, 6 )
+ 
+                   MISSOUT = .FALSE.
+      IF (NF.EQ.4) MISSOUT = .TRUE.
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    CHECK MISSING VALUE PARAMETRES.
+
+      CALL MISPAR( MVALUE,MISFLAG,EPSILON )
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('NPG',VALEUR )
+          IF (OK) READ( VALEUR,'(BN,I5)',ERR=900,IOSTAT=IO ) NPG
+
+          OK = RPBLOC('NAME',VALEUR)
+          IF (OK) CCOV = VALEUR
+
+          ZEROM = RPBLOC('DEFAUT',VALEUR)
+
+          IF (ZEROM) WRITE(6,6000)
+          IF (ZEROM) ALLR8 = 3
+
+      END IF
+
+***    FIND HOW MANY LEVELS IN FIRST SETS AND ASK FOR 
+***    NECESSARY MEMORY. 
+ 
+  100 MAXW1 = GETSIZ4( 11, KBUF,LEN1,NWDS,KPAK,
+     +                     SETA,NSETA, LEVA,VARIA, MAXLEV )
+      MAXW2 = GETSIZ4( 12, LBUF,LEN2,NWDS,LPAK,
+     +                     SETB,NSETB, LEVB,VARIB, MAXLEV )
+
+      IF (MAXW1       .LE.  0         .OR.
+     +    MAXW2       .LE.  0         .OR.
+     +    SETA(NSETA) .GT.MAXLEV      .OR.
+     +    SETA(NSETA) .NE.SETB(NSETB) )                        THEN
+          WRITE(6,6100) MAXW1,SETA(NSETA),MAXW2,SETB(NSETB)
+          CALL                                     XIT(' Timcov ',-1 )
+      END IF
+
+      MAXW = MAX( MAXW1,MAXW2 )
+      LEN  = MAX( LEN1, LEN2  )
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+
+      IF (.NOT.OK)                                             THEN
+           CALL PRTLAB( LBUF ) ; CALL PRTLAB( LBUF )
+           CALL                                    XIT(' Timcov ',-1 )
+      END IF
+
+      IF (NS.EQ.0)                                             THEN
+
+          CALL GETNAM( 11,NAMEF )
+          LN = INDEX( NAMEF // ' ' , ' ' )
+
+          WRITE(6,6300) NAMEF(1:LN-1)
+          CALL PRTLAB( KBUF )
+          WRITE(6,6250) (VARIA(SETA(K))(1:4),K=1,NSETA)
+
+          NLEV = SETA(1)
+          DO  I=2,NSETA
+              IF (NLEV.NE.SETA(I)-SETA(I-1)) NLEV = 0
+          END DO
+
+          IF (NLEV*NSETA.EQ.SETA(NSETA))                       THEN
+              CALL WRITLEV2( LEVA,NLEV, KBUF )
+          ELSE
+              WRITE(6,6350) NSETA,SETA(NSETA)
+          END IF
+
+          CALL GETNAM( 12,NAMEF )
+          LN = INDEX( NAMEF // ' ' , ' ' )
+
+          WRITE(6,6300) NAMEF(1:LN-1)
+          CALL PRTLAB( LBUF )
+          WRITE(6,6250) (VARIB(SETB(L))(1:4),L=1,NSETB)
+
+          NLEV = SETB(1)
+          DO  I=2,NSETB
+              IF (NLEV.NE.SETB(I)-SETB(I-1)) NLEV = 0
+          END DO
+
+          IF (NLEV*NSETB.EQ.SETB(NSETB))
+     +        CALL WRITLEV2( LEVB,NLEV, LBUF )
+
+      END IF
+
+      WRITE(TYPE,4) KBUF(1)
+
+                          CMPL = 1
+      IF (TYPE.EQ.'CMPL') CMPL = 2
+
+                          NWDS = NWDS/CMPL
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      MEM  = NWDS*SETA(NSETA)
+
+      ALLOC_NABT
+      CALL HPALLOC( PF, LEN+2*MEM*CMPL,IER1,8 )     ! F   + G,IBUF
+      IF (NS.EQ.0)                                             THEN
+          CALL HPALLOC( PC, ALLR8*MEM*CMPL,IER2,8 ) ! COV + AVG,AVF
+          CALL HPALLOC( PA,     5*MEM     ,IER3,0 ) ! MA  + MB, MC
+      ELSE
+          IER2 = 0 ; IER3 = 0
+      END IF
+      ALLOC_ABT
+
+      IER = MAX( IER1,IER2,IER3 )
+
+      IF (IER.NE.0)                                            THEN
+          WRITE(6,6006) 4*(LEN+2*CMPL*MEM)*(MOD( MACHINE,2 )+1)
+     +                + 5*            MEM *(MOD( MACHINE,2 )+1)
+     +                + 8* ALLR8*CMPL*MEM
+          CALL                                     XIT(' Timcov ' ,-6 )
+      END IF
+
+      PG  = LOC(    F(MEM*CMPL+1) )             ! G
+      PI  = LOC(    G(MEM*CMPL+1) )             ! IBUF
+
+      IF (NS.EQ.0)                                             THEN
+
+          PB  = LOC( MA(1,MEM+1) )              ! MB
+          PMC = LOC( MB(1,MEM+1) )              ! MC
+
+
+          IF (ZEROM)                                           THEN
+              PMF = LOC( COV(MEM*CMPL+1) )      ! AVF
+              PMG = LOC( AVF(MEM*CMPL+1) )      ! AVG
+          END IF
+
+      END IF
+
+***    IBUF(2) TREATMENT DEPENDS ON THE INPUT FILE TYPE.
+
+      PKTYP = GETYP( 11 )
+      
+      IF (PKTYP.EQ.'SQ' .AND. NS.EQ.0)                         THEN
+
+***        SAVE DEET AS WELL AS INITIAL DATE AND
+***        CURRENT TIMESTEP READ FROM SECOND FILE.
+
+          DEET  = GETHIGH('DEET' ,LBUF )
+          NPAS  = GETHIGH('NPAS' ,LBUF )
+          DATEO = GETHIGH('DATEO',LBUF )
+
+***        CALCULATE CURRENT DATE.
+
+          IF (DEET.NE.0)                                       THEN
+              HEURE = (NPAS*(DBLE( DEET )/60.))/60.
+              CALL INCDATR( DATEI,DATEO,HEURE )
+          ELSE
+              DATEI = DATEO
+          END IF
+          
+      END IF
+
+      NS = NS+1
+
+***    DO THE WORK.
+
+      CALL COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
+     +              SETA,SETB,LEVA,LEVB,VARIA,VARIB,STEP,
+     +              MEM,HEAD, NSETA,NSETB,MAXW, OK,ZEROM,
+     +             .TRUE., PKTYP,NPAS,DATEI,NPG, MAXLEV,
+     +              EPSILON,MISSOUT,MVALUE,MISFLAG,
+     +              MA,MB,MC,KIND )
+
+      IF (.NOT.OK .AND. MAXW.EQ.0)                             THEN
+          CALL HPDEALLC( PF, IER,0 )  
+          GOTO 100
+      END IF
+
+***    ERROR READING NPG.
+ 
+  900 IF (IO.NE.0) WRITE(6,6007) IO
+      CALL                                         XIT(' Timcov ',-7 )
+
+      STOP
+*---------------------------------------------------------------------
+      ENTRY stdev
+      NOMPRG =  NMPRG
+      ZEROM  = .FALSE.
+
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NS = 0
+      NF = 4
+      CALL JCLPNT( NF, 11,13,14, 6 )
+ 
+                   MISSOUT = .FALSE.
+      IF (NF.EQ.3) MISSOUT = .TRUE.
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    CHECK MISSING VALUE PARAMETRES.
+
+      CALL MISPAR( MVALUE,MISFLAG,EPSILON )
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('NPG',VALEUR )
+          IF (OK) READ( VALEUR,'(I5)',ERR=901,IOSTAT=IO ) NPG
+
+          OK = RPBLOC('KIND',KIND )
+          CALL LOW2UP( KIND,KIND )
+          IF (KIND /= 'VAR' .AND. KIND /= 'STD') KIND = 'STD'
+
+          ZEROM = RPBLOC('DEFAUT',VALEUR)
+
+          IF (ZEROM) WRITE(6,6001)
+          IF (ZEROM) ALLR8 = 3
+
+      END IF
+
+***    FIND HOW MANY LEVELS IN FIRST SET AND ASK FOR 
+***    NECESSARY MEMORY. 
+ 
+  200 MAXW = GETSIZ4( 11, KBUF,LEN,NWDS,KPAK,
+     +                    SETA,NSETA, LEVA,VARIA, MAXLEV )
+
+      IF (MAXW       .LE.  0    .OR.
+     +    SETA(NSETA).GT.MAXLEV )                              THEN
+          WRITE(6,6101) MAXW,SETA(NSETA)
+          CALL                                     XIT('  Stdev ',-1 )
+      END IF
+
+      IF (NS.EQ.0)                                             THEN
+
+          CALL GETNAM( 11,NAMEF )
+          LN = INDEX( NAMEF // ' ' , ' ' )
+
+          WRITE(6,6300) NAMEF(1:LN-1)
+          CALL PRTLAB( KBUF )
+          WRITE(6,6250) (VARIA(SETA(K))(1:4),K=1,NSETA)
+
+          NLEV = SETA(1)
+          DO  I=2,NSETA
+              IF (NLEV.NE.SETA(I)-SETA(I-1)) NLEV = 0
+          END DO
+
+          IF (NLEV*NSETA.EQ.SETA(NSETA))                       THEN
+              CALL WRITLEV2( LEVA,NLEV, KBUF )
+          ELSE
+              WRITE(6,6350) NSETA,SETA(NSETA)
+          END IF
+
+      END IF
+
+      WRITE(TYPE,4) KBUF(1)
+
+                          CMPL = 1
+      IF (TYPE.EQ.'CMPL') CMPL = 2
+
+                          NWDS = NWDS/CMPL
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      MEM  = NWDS*SETA(NSETA)
+
+      ALLOC_NABT
+      CALL HPALLOC( PF, LEN+2*MEM*CMPL,IER1,8 )     ! F   + G
+      IF (NS.EQ.0)                                             THEN
+          CALL HPALLOC( PC, ALLR8*MEM*CMPL,IER2,8 ) ! COV + AVF,AVG
+          CALL HPALLOC( PA,     3*MEM     ,IER3,0 ) ! MA  + MA,MC
+      ELSE
+          IER2 = 0 ; IER3 = 0
+      END IF
+      ALLOC_ABT
+
+      IER = MAX( IER1,IER2,IER3 )
+
+      IF (IER.NE.0)                                            THEN
+          WRITE(6,6006) 4*(LEN+2*CMPL*MEM)*(MOD( MACHINE,2 )+1)
+     +                + 3*           *MEM *(MOD( MACHINE,2 )+1)
+     +                + 8* ALLR8*CMPL*MEM 
+          CALL                                     XIT('  Stdev ' ,-6 )
+      END IF
+
+      PG  = LOC(   F(MEM*CMPL+1) )              ! G
+      PI  = LOC(   G(MEM*CMPL+1) )              ! IBUF
+
+      IF (NS.EQ.0)                                             THEN
+
+          PB  = PA                              ! MB AND MA EQUIVALENCED
+          PMC = LOC( MB(1,MEM+1) )              ! MC
+
+          IF (ZEROM)                                            THEN
+              PMF = LOC( COV(MEM*CMPL+1) )      ! AVF
+              PMG = LOC( AVF(MEM*CMPL+1) )      ! AVG
+          END IF
+
+      END IF
+
+***    IBUF(2) TREATMENT DEPENDS ON THE INPUT FILE TYPE.
+
+      PKTYP = GETYP( 11 )
+      
+      IF (PKTYP.EQ.'SQ' .AND. NS.EQ.0)                        THEN
+
+***        SAVE DEET AS WELL AS INITIAL DATE AND CURRENT TIMESTEP.
+
+          DEET  = GETHIGH('DEET' ,KBUF )
+          NPAS  = GETHIGH('NPAS' ,KBUF )
+          DATEO = GETHIGH('DATEO',KBUF )
+
+***        CALCULATE CURRENT DATE.
+
+          IF (DEET.NE.0)                                       THEN
+              HEURE = (NPAS*(DBLE( DEET )/60.))/60.
+              CALL INCDATR( DATEI,DATEO,HEURE )
+          ELSE
+              DATEI = DATEO
+          END IF
+          
+      END IF
+
+      NS = NS+1
+
+***    DO THE WORK.
+
+      CALL COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
+     +              SETA,SETA,LEVA,LEVA,VARIA,VARIA,STEP,
+     +              MEM,HEAD, NSETA,NSETA,MAXW, OK,ZEROM,
+     +             .FALSE., PKTYP,NPAS,DATEI,NPG, MAXLEV,
+     +              EPSILON,MISSOUT,MVALUE,MISFLAG,
+     +              MA,MB,MC, KIND )
+
+      IF (.NOT.OK .AND. MAXW.EQ.0)                             THEN
+          CALL HPDEALLC( PF, IER,1 )  
+          GOTO 200
+      END IF
+
+***    ERROR READING NPG.
+ 
+  901 IF (IO.NE.0) WRITE(6,6007) IO
+      CALL                                         XIT('  Stdev ' ,-7 )
+
+      STOP
+
+*-------------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6000 format(' Timcov will remove time means.')
+ 6001 format(' Stdev will remove time means.')
+ 6006 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' characters.')
+ 6007 FORMAT(' I/O error number ',I3,', while reading npg.')
+
+ 6100 FORMAT('0..Problems with input files...'/
+     +       '   Maxw/nrec(sera), maxw/nrec(serb) =',6I8)
+ 6101 FORMAT('0..Problems with input files...   Maxw/nlev =',2I8)
+ 6250 FORMAT(/' Variable(s) : ',A4,1X,A4,1X,A4,1X,A4,1X,A4,1X,A4,1X,A4,
+     +                             1X,A4,1X,A4,1X,A4/(15X,10(A4,1X)))
+ 6300 FORMAT(/'From file ',A)
+ 6350 FORMAT(/' Each set will contain ',I3,' variables distributed',
+     +        ' over ',I3,' horizontal records.'/)
+
+      END
+      SUBROUTINE COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
+     +                    SETA,SETB,LEVA,LEVB,VARIA,VARIB,STEP,
+     +                    MEM,HEAD, NSETA,NSETB,MAXW, OK,ZEROM,
+     +                    TIMCOV, PKTYP,NPAS,DATEI,NPG, MAXLEV,
+     +                    EPSILON,MISSOUT,MVALUE,MISFLAG,
+     +                    MA,MB,MC,KIND )
+*-------------------------------------------------------------------------
+      IMPLICIT    none
+
+      CHARACTER*4 KIND
+      COMPLEX*16  CWORD
+      LOGICAL     OK,ZEROM,TIMCOV,MVALUE,MISSOUT
+      CHARACTER*4 CCOV,CHOLD(MAXLEV),JOBN*8,PKTYP*2
+      INTEGER     NPAS,DATEI,MEM,HEAD,DEET,HOLD,JOURF,
+     +            JOURI,HEURF,HEURI,ANNEE,JOUR,DATIM(14),
+     +            NSETA,NSETB,NRECS,NSETS,MOIS,DATEO,NPG,
+     +            SETA(0:NSETA),SETB(0:NSETB),MAXLEV,I,IK,K,
+     +            LEVA(MAXLEV,2),LEVB(MAXLEV,2),STEP(*),
+     +            KBUF(8),IBUF(8), MAXW,CMPL,DATEF,
+     +            MA(2,MEM),MB(2,MEM),MC(MEM),M
+      REAL*8      COV(CMPL,MEM),AVF(CMPL,MEM),AVG(CMPL,MEM),
+     +            F(CMPL,MEM),G(CMPL,MEM),AR,AI,EPS,
+     +            EPSILON,HEURE,MISFLAG,OVNSET
+
+      CHARACTER*20 VARIA(MAXLEV),VARIB(MAXLEV)
+
+      SAVE        NRECS, NSETS
+
+      INTEGER     GETHIGH
+      EXTERNAL    XIT,GETMSET2,PUTMSET2,PRECEDE,
+     +            PUTHIC,GETHIGH,PUTHIGH,DATMGP2
+
+      DATA        NSETS / 0 /
+*-------------------------------------------------------------------------
+
+      CHOLD = ' '
+
+                  JOBN = '  Stdev '
+      IF (TIMCOV) JOBN = ' Timcov '
+
+      IF (MVALUE) EPS = EPSILON * ABS( MISFLAG )
+
+      IF (NSETS.EQ.0)                                          THEN
+
+***        INITIALIZE COV,AVF AND AVG.
+
+          DO  IK=1,CMPL*MEM
+              COV(IK,1) = 0.0
+          END DO
+
+          IF (ZEROM)                                           THEN
+              DO  IK=1,CMPL*MEM
+                  AVF(IK,1) = 0.0
+                  AVG(IK,1) = 0.0
+              END DO
+          END IF
+
+***        INITIALIZE Mx COUNTERS.
+
+          IF (MVALUE)                                          THEN
+              MA = 0
+              MB = 0
+          ELSE
+              MA = 1
+              MB = 1
+          END IF
+
+          MC = 0
+
+***        FIRST TIMESTEP LOOP. DETERMINE THE TIME AVERAGES FOR SERA AND
+***        SERB. GET THE NEXT FIELD FROM FILE 11 AND CHECK THE LABEL.
+  
+          NRECS = 0
+
+      END IF
+
+  100 CALL GETMSET2( 11, F, SETA,NSETA, LEVA,VARIA,STEP,
+     +                      IBUF,MAXW,OK )
+
+***        READ OK ?
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0) RETURN
+
+              IF (NSETS.NE.0)                                  THEN
+                  GOTO 300
+              ELSE
+                  CALL                             XIT( JOBN,-2 )
+              END IF
+
+          END IF
+
+***        CHECK SIZE AND NAME COHERENCE.
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (NSETS.NE.0)                                  THEN
+                  GOTO 300
+              ELSE
+                  CALL                             XIT( JOBN,-2 )
+              END IF
+          END IF
+
+          IF (MVALUE)                                          THEN
+
+***            CHECK FOR MISSING VALUES in F. TRACK THEM IN MA.
+
+              DO  I=1,MEM
+                  MA(1,I) = 1
+                  DO  K=1,CMPL
+                      IF (ABS( F(K,I)-MISFLAG ).LE.EPS) MA(1,I) = 0
+                  END DO
+                  MA(2,I) = MA(2,I) + MA(1,I)
+              END DO
+
+          END IF
+
+          IF (TIMCOV)                                          THEN
+
+***            READ THE CORRESPONDING FIELD FROM FILE 12.
+
+              CALL GETMSET2( 12, G, SETB,NSETB, LEVB,VARIB,STEP,
+     +                              IBUF,MAXW,OK )
+
+***            READ OK ?
+
+              IF (.NOT.OK)                                     THEN
+                  IF (MAXW.EQ.0)                               THEN
+                      CALL PRECEDE( 11,SETA(NSETA) )
+                      RETURN
+                  END IF
+                  CALL                             XIT( JOBN,-4 )
+              END IF
+
+***            CHECK SIZE AND NAME COHERENCE.
+
+              CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+
+              IF (.NOT.OK)                                     THEN
+                  CALL PRTLAB( KBUF ) ; CALL PRTLAB( IBUF )
+                  WRITE(6,6250) NSETS
+                  IF (NSETS.EQ.0) CALL             XIT( JOBN,-4 )
+                  CALL                             XIT( JOBN,-5 )
+              END IF
+
+              IF (MVALUE)                                      THEN
+
+***                CHECK FOR MISSING VALUES in G. TRACK THEM IN MB.
+
+                  DO  I=1,MEM
+                      MB(1,I) = 1
+                      DO  K=1,CMPL
+                          IF (ABS( G(K,I)-MISFLAG ).LE.EPS) MB(1,I) = 0
+                      END DO
+                      MB(2,I) = MB(2,I) + MB(1,I)
+                  END DO
+
+              END IF
+
+          ELSE
+
+***            REPRODUCE F INTO G.
+
+              DO  IK=1,CMPL*MEM
+                  G(IK,1) = F(IK,1)
+              END DO
+
+***            DO THE SAME FOR MA AND MB.
+
+              IF (MVALUE) MB = MA
+
+          END IF
+
+          IF (ZEROM)                                           THEN 
+
+***            ACCUMULATE AVERAGES IN AVF AND AVG.
+
+              DO  K=1,CMPL
+              DO  I=1,MEM
+                  AVF(K,I) = AVF(K,I) + F(K,I)*MA(1,I)
+                  AVG(K,I) = AVG(K,I) + G(K,I)*MB(1,I)
+              END DO
+              END DO
+
+          END IF
+
+***        DIRECTLY ACCUMULATE COVARIANCE IN ARRAY COV.
+
+          IF (CMPL.EQ.1)                                       THEN
+              DO  I=1,MEM
+
+                  COV(1,I) =  COV(1,I) + (  F(1,I) *  G(1,I) ) *
+     +                                     MA(1,I) * MB(1,I)
+                  MC(I)    =  MC(I)    +   MA(1,I) * MB(1,I)
+
+              END DO
+          ELSE IF (CMPL.EQ.2)                                  THEN
+              DO  I=1,MEM
+
+                  M        = MA(1,I) * MB(1,I)
+                  MC(I)    =  MC(I)  + M
+
+                  AR       =  F(1,I) * G(1,I)
+     +                     +  F(2,I) * G(2,I)
+                  AI       =  F(2,I) * G(1,I)
+     +                     -  F(1,I) * G(2,I)
+
+                  COV(1,I) = COV(1,I) + AR * M
+                  COV(2,I) = COV(2,I) + AI * M
+
+              END DO
+          END IF
+
+      NRECS = NRECS+SETA(NSETA)
+      NSETS = NSETS+1
+      GOTO 100
+
+***    CALCULATE THE APPROPRIATE COVARIANCE.
+
+  300 OVNSET = 1.0/DBLE( NSETS )
+
+      IF (ZEROM)                                               THEN
+
+***        FINALIZE AVF,AVG. 
+
+          IF (MVALUE)                                          THEN
+              DO  K=1,CMPL
+              DO  I=1,MEM
+                  IF (MA(2,I).GT.0) AVF(K,I) = AVF(K,I)/MA(2,I)
+                  IF (MB(2,I).GT.0) AVG(K,I) = AVG(K,I)/MB(2,I)
+              END DO
+              END DO
+          ELSE
+              DO  IK=1,CMPL*MEM
+                  AVG(IK,1) = AVG(IK,1)*OVNSET
+                  AVF(IK,1) = AVF(IK,1)*OVNSET
+              END DO
+          END IF
+
+***        SUBTRACT THE MEAN CONTRIBUTIONS TO COV.
+
+          IF (CMPL.EQ.1)                                       THEN
+
+              IF (MVALUE)                                      THEN
+                  DO  I=1,MEM
+                      IF (MC(I).NE.0)
+     +                COV(1,I) =                        
+     +              ( COV(1,I)/MC(I) )  - ( AVG(1,I)*AVF(1,I) )
+                  END DO
+              ELSE
+                  DO  I=1,MEM
+                      COV(1,I) =
+     +              ( COV(1,I)*OVNSET ) - ( AVG(1,I)*AVF(1,I) )
+                  END DO
+              END IF
+
+          ELSE IF (CMPL.EQ.2)                                  THEN
+
+              IF (MVALUE)                                      THEN
+                  DO  I=1,MEM
+                      IF (MC(I).NE.0)                          THEN
+                          AR       = AVF(1,I) * AVG(1,I)
+     +                             + AVF(2,I) * AVG(2,I)
+                          AI       = AVF(2,I) * AVG(1,I)
+     +                             - AVF(1,I) * AVG(2,I)
+                          COV(1,I) = COV(1,I)/MC(I) - AR 
+                          COV(2,I) = COV(2,I)/MC(I) - AI 
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,MEM
+                      AR       = AVF(1,I) * AVG(1,I)
+     +                         + AVF(2,I) * AVG(2,I)
+                      AI       = AVF(2,I) * AVG(1,I)
+     +                         - AVF(1,I) * AVG(2,I)
+                      COV(1,I) = COV(1,I)*OVNSET - AR 
+                      COV(2,I) = COV(2,I)*OVNSET - AI 
+                  END DO
+              END IF
+
+          END IF
+
+      ELSE
+
+          IF (MVALUE)                                          THEN
+              DO  K=1,CMPL
+              DO  I=1,MEM
+                  IF (MC(I).NE.0) COV(K,I) = COV(K,I)/MC(I)
+              END DO
+              END DO
+          ELSE
+              DO  IK=1,CMPL*MEM
+                  COV(IK,1) = COV(IK,1)*OVNSET
+              END DO
+          END IF
+
+      END IF
+
+***    SAVE THE RESULT ACCUMULATED IN COV AND
+***    (OPTIONALLY) PUT MISFLAG WHERE WE HAD NO DATA.
+
+      IF (TIMCOV)                                              THEN
+
+          IF (MVALUE)                                          THEN
+              DO  K=1,CMPL
+              DO  I=1,MEM
+                  IF (MC(I).EQ.0) COV(K,I) = MISFLAG
+              END DO
+              END DO
+          END IF
+
+          DO  I=1,NSETA
+              IF (VARIB(I)(1:4).NE.VARIA(I)(1:4))              THEN
+                  CHOLD(I)      =  VARIA(I)(1:4)
+                  VARIA(I)(1:4) =  CCOV
+              ELSE
+                  CHOLD(I) = ' '
+              END IF
+          END DO
+
+      ELSE IF (KIND == 'STD')                                  THEN
+
+          IF (MVALUE)                                          THEN
+              IF (CMPL == 2)                                   THEN
+                  DO  I=1,MEM
+                      IF (MC(I).NE.0)                          THEN
+                          CWORD    = CMPLX( COV(1,I),COV(2,I),8 )
+                          CWORD    = SQRT ( CWORD )
+                          COV(1,I) = REAL ( CWORD,8 )
+                          COV(2,I) = DIMAG( CWORD )
+                      ELSE
+                          COV(1,I) = MISFLAG
+                          COV(2,I) = MISFLAG
+                      END IF
+                  END DO
+              ELSE
+                  DO  I=1,MEM
+                      IF (MC(I).NE.0)                          THEN
+                          COV(1,I) = SQRT( MAX( COV(1,I),0.0_8 ) )
+                      ELSE
+                          COV(1,I) = MISFLAG
+                      END IF
+                  END DO
+              END IF
+          ELSE
+              IF (CMPL == 2)                                   THEN
+                  DO  I=1,MEM
+                      CWORD    = CMPLX( COV(1,I),COV(2,I),8 )
+                      CWORD    = SQRT ( CWORD )
+                      COV(1,I) = REAL ( CWORD,8 )
+                      COV(2,I) = DIMAG( CWORD )
+                  END DO
+              ELSE
+                  DO  I=1,MEM
+                      COV(1,I)   = SQRT( MAX( COV(1,I),0.0_8 ) )
+                  END DO
+              END IF
+          END IF
+
+      ELSE IF (MVALUE)                                         THEN
+
+          DO  K=1,CMPL
+          DO  I=1,MEM
+              IF (MC(I) == 0)                                  THEN
+                 COV(K,I) = MISFLAG
+              END IF
+          END DO
+          END DO
+
+      END IF
+
+***    PUT F ONTO FILE 13 (NOT PACKED).
+ 
+                        IBUF(8) = -32
+      IF (NPG .NE. 999) IBUF(8) = NPG
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+***        RETREIVE CURRENT DATE AND SAVE IT IN DATEF.
+
+          DEET  = GETHIGH('DEET' ,IBUF )
+          DATEO = GETHIGH('DATEO',IBUF )
+          NPAS  = GETHIGH('NPAS' ,IBUF )
+
+          IF (DEET.NE.0)                                       THEN
+              HEURE = (NPAS*(DBLE( DEET )/60.))/60. 
+              CALL INCDATR( DATEF,DATEO,HEURE )
+          ELSE
+              DATEF = DATEO
+          END IF
+          
+***        ACCOUNT FOR DECREASING TIME:
+***        DATEI MUST BE THE EARLIEST TIME.
+
+***        CALCULATE JULIAN DAY CORRESPONDING TO DATEF.
+
+          DATIM(14) = DATEF
+          CALL DATMGP2( DATIM )
+
+          HEURF = DATIM(5)
+          ANNEE = DATIM(4)
+          JOUR  = DATIM(3)
+          MOIS  = DATIM(2)
+
+          CALL JDATEC( JOURF, ANNEE,MOIS,JOUR )
+
+***        CALCULATE JULIAN DAY CORRESPONDING TO DATEI.
+
+          DATIM(14) = DATEI
+          CALL DATMGP2( DATIM )
+
+          HEURI = DATIM(5)
+          ANNEE = DATIM(4)
+          JOUR  = DATIM(3)
+          MOIS  = DATIM(2)
+
+          CALL JDATEC( JOURI, ANNEE, MOIS, JOUR )
+
+***        THIS IS WHERE WE ENSURE INCREASING TIME.
+
+          IF (JOURF.LT.JOURI .OR.
+     +       (JOURF.EQ.JOURI .AND. HEURF.LT.HEURI))            THEN
+
+              HOLD  = DATEF
+              DATEF = DATEI
+              DATEI = HOLD
+
+          END IF
+
+          CALL DIFDATR( DATEF,DATEI,HEURE )
+
+          IF (DEET.NE.0)                                       THEN
+          
+***            PUT VALIDITY DATE OF FIRST SET IN DATEO. THE
+***            SAMPLE SIZE IS SAVED IN IP3 AND THE NUMBER OF
+***            TIMESTEPS SPANNING THE SET GOES TO IBUF(2).
+***            THE CALCULATED VALIDITY DATE THAT WILL BE
+***            SAVED ON THE FILE WILL CORRESPOND TO
+***            THE LAST SAMPLE.
+
+              NPAS = NINT( (HEURE*60.)/(DBLE( DEET )/60.) )
+
+          ELSE
+
+***            RESET DEET TO AN HOUR AND DO THE
+***            SAME THING AS IN THE PREVIOUS CASE.
+
+              NPAS = HEURE
+              DEET = 3600
+
+          END IF
+
+          CALL PUTHIGH( NSETS,'IP3'  ,IBUF )
+          CALL PUTHIGH( DATEI,'DATEO',IBUF )
+          CALL PUTHIGH( DEET ,'DEET' ,IBUF )
+          CALL PUTHIGH( NPAS ,'NPAS' ,IBUF )
+
+          IBUF(2) = NPAS
+
+      ELSE
+
+          IBUF(2) = NSETS
+
+      END IF
+
+      CALL PUTMSET2( 13, COV, SETA,NSETA, LEVA,VARIA,MAXLEV, IBUF,MAXW )
+
+      IF (MVALUE .AND. MISSOUT)                                THEN
+
+***        SAVE MC - THE COVARIANCE'S MISSING VALUE COUNTER.
+
+          
+          DO  K=1,CMPL
+          DO  I=1,MEM
+              COV(K,I) = MC(I)
+          END DO
+          END DO
+
+***        MISSING VALUES ARE SAVED WITH A 'MV' TYPVAR.
+
+          IF (PKTYP.EQ.'SQ') CALL PUTHIC( 'MV','TYPVAR',IBUF )
+
+          CALL PUTMSET2( 14, COV, SETA,NSETA,
+     +                            LEVA,VARIA,MAXLEV,
+     +                            IBUF,MAXW )
+
+      END IF
+
+      DO  I=1,NSETA
+          IF (CHOLD(I).NE.' ') VARIA(I)(1:4) = CHOLD(I)
+      END DO
+
+                       CALL PRTLAB( IBUF )
+      IF (     TIMCOV) WRITE(6,6250) NSETS
+      IF (.NOT.TIMCOV) WRITE(6,6251) NSETS
+
+      CALL                                         XIT( JOBN, 0 )
+
+      OK = .TRUE.
+
+      RETURN
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6250 FORMAT('0Timcov read',I5,'  sets.')
+ 6251 FORMAT('0Stdev read',I5,'  sets.')
+ 6300 FORMAT('0..Last set incomplete. NR/NRECS=',2I6)
+
+      END
+#     endif

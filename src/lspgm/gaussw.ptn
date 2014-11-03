@@ -1,0 +1,325 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      gaussw  CHAMP WEIGHT OUTPUT
+*
+*
+*     AUTHORS - B.Dugas, 03 avril 1987.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gaussw.ptn,v 4.10 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      PRODUCES A FILE OF GAUSSIAN WEIGHTS CORRESPONDING TO AN INPUT 
+*      ZONAL, REAL OR COMPLEX GRIDS OR FOURIER ARRAYS. THE OUTPUT IS
+*      OF SAME SIZE AND KIND AS THE INPUT.  IT READS/WRITES ONLY THE
+*      FIRST SET OF DATA  RECORDS OF UNIT 1/2. IF THE FILE WEIGHT IS
+*      NOT SPECIFIED, THE LATITUDES AND WEIGHTS ARE SENT TO STDOUT.
+*      
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 UNSUPPORTED DATA TYPE
+*       2 PREMATURE EOF ON FILE CHAMP
+*
+*     NON-FATAL CONDITIONS...
+*     101 NO WORK/OUTPUT FOR SPECTRAL CASE
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM gaussw 
+*    +               (      CHAMP,       WEIGHT,       OUTPUT, 
+*    +                TAPE1=CHAMP, TAPE2=WEIGHT, TAPE6=OUTPUT) 
+ 
+*     $Log: gaussw.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2013/10/28 21:14:04  bernard
+*     Remplacer GAUSSG par GAUSSG16.
+*
+*     Revision 4.8  2013/10/16 20:12:14  bernard
+*      - Declarations 'a la' F90
+*      - Utiliser le macro latitude_maximale pour definir MAXJ
+*      - Tous les calculs se font en mode 64 bits, de meme que l'I/O.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.5  2005/04/12 17:32:19  dugas
+*     Imprimer les latitudes en degres sur STDOUT.
+*
+*     Revision 4.4  2004/11/12 21:53:11  dugas
+*     Ajouter un mode STDOUT.
+*
+*     Revision 4.3  2004/11/12 17:03:38  dugas
+*     Verifier qu'on a effectivement des donnees sur grilles gaussiennes (G).
+*
+*     Revision 4.2  1998/10/19 14:43:52  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.1  1998/05/21  20:20:48  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:20:10  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/05/19  16:07:58  armnrbd
+*     Corriger un bogue dans le traitement ZONL.
+*     
+*     Revision 3.1  94/05/04  21:37:21  armnrbd
+*     Modifier le traitement du cas ZONL.
+*     
+*     Revision 3.0  93/10/13  13:56:03  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/04  09:13:50  09:13:50  armnrbd (Bernard Dugas)
+*     Initial revision
+*     
+***   Premiere Version: AVRIL 03/87 - B. DUGAS. 
+ 
+*---------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXJ = latitude_maximale
+      INTEGER,    PARAMETER :: MAXLEV = 999
+ 
+      LOGICAL     OK
+      REAL(8)     DEMI,WIJ
+      CHARACTER   TYPE*4,PKTYP*2,GRTYP*1
+      REAL(8)     SL(MAXJ),WL(MAXJ),CL(MAXJ),
+     +            RADL(MAXJ),WOSSL(MAXJ),TOTAL,RAD2DEG
+      INTEGER     IER,NF,ILG,ILAT,ILATH,LR,I,J,JJ,IJ,L,
+     +            LEN,IERR,NLEV,LEV(MAXLEV),IPAK,NWDS,IHEM,
+     +            JBUF(HEAD),MAXW
+
+      INTEGER,    DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL(8),    DIMENSION(:),   ALLOCATABLE :: F
+      COMPLEX*16, DIMENSION(:),   ALLOCATABLE :: C
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL,    EXTERNAL :: SETIO64
+      INTEGER,    EXTERNAL :: GETSIZ2
+      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
+      EXTERNAL    JCLPNT,GAUSSG16,TRIGL2,
+     +            PUTFLD2,PUTSET2
+
+      DATA        DEMI / 0.5 /, GRTYP / 'G' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gaussw.ptn,v $'
+
+*------------------------------------------------------------------- 
+      NF = 3 
+      CALL JCLPNT( NF, 1,2, 6 )
+ 
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      PKTYP = GETYP( 1 )
+
+      RAD2DEG = 45./ATAN( 1D0 )
+
+***    READ IN THE FIRST INFO BUFFER IN CHAMP. 
+***    DETERMINE THE NUMBER OF LEVELS IN A SET.
+ 
+      MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,IPAK, LEV,NLEV )
+      IF (MAXW.LE.0) GOTO 999
+ 
+      ALLOCATE( IBUF(HEAD+MAXW),F(MAXW),C(MAXW) )
+
+      DO  I=1,HEAD
+          IBUF(I) = JBUF(I)
+      END DO
+
+      IF (PKTYP.EQ.'SQ') GRTYP = GETHIC('GRTYP',IBUF )
+
+***    GO TO THE APPROPRIATE CODE AREA. 
+ 
+      WRITE(TYPE,'(A4)') IBUF(1) 
+ 
+      IF (TYPE.EQ.'SPEC')                                      THEN 
+ 
+***        FIRST CHECK THAT TYPE IS NOT SPECTRAL ... 
+ 
+          WRITE(6,6000) 
+          CALL                                     XIT(' Gaussw ',-101) 
+ 
+      ELSE IF (TYPE.EQ.'ZONL' .AND. GRTYP.EQ.'G')              THEN 
+ 
+***         ... THEN DO THE ZONAL CASE ... 
+ 
+          ILG  = 1 
+          ILAT = IBUF(5) 
+          NWDS = ILAT
+          IF (IBUF(6).NE.1) IBUF(6) = 1
+ 
+      ELSE IF (TYPE.EQ.'FOUR')                                 THEN 
+ 
+***         ... AND FOURIER CASE SETUPS. 
+ 
+          ILG  = 1 
+          ILAT = IBUF(6) 
+          LR   = IBUF(5) * 2 
+ 
+      ELSE IF ((TYPE.EQ.'GRID' .AND. GRTYP.EQ.'G')
+     +    .OR.  TYPE.EQ.'CMPL' )                               THEN 
+ 
+***        END WITH DEFINITION OF THE GRID CASE PARAMETERS. 
+ 
+          ILG  = IBUF(5) 
+          ILAT = IBUF(6) 
+ 
+      ELSE 
+ 
+          IF (PKTYP.EQ.'SQ') WRITE(6,6011) TYPE,GRTYP
+          IF (PKTYP.NE.'SQ') WRITE(6,6001) TYPE
+          CALL                                     XIT(' Gaussw ',-1 ) 
+ 
+      END IF 
+
+                     IHEM  = IBUF(7)
+                     ILATH = ILAT
+      IF (IHEM.EQ.0) ILATH = ILATH / 2 
+ 
+***    COMPUTATIONS COMMON TO CMPL, GRID, FOUR AND ZONL CASES. 
+ 
+      CALL GAUSSG16( ILATH, SL,WL,CL,RADL,WOSSL ) 
+      CALL TRIGL2( ILATH, SL,WL,CL,RADL,WOSSL,IHEM ) 
+
+      IBUF(8) = -64
+
+      IF (NF.EQ.1)                                             THEN
+
+***        Write the latitudes and weights on STDOUT.
+
+          TOTAL = 0.0
+
+          WRITE(6,6150)
+          DO  J=1,ILATH
+              TOTAL = TOTAL+0.5*WL(J)
+              WRITE(6,6200) J,RADL(J)*RAD2DEG,RADL(J),0.5*WL(J),TOTAL
+          END DO
+
+      ELSE IF (NF.EQ.2)                                        THEN
+
+***        PUT THE WEIGHTS INTO F ... 
+ 
+          IF (TYPE.EQ.'FOUR')                                  THEN 
+ 
+              DO 200 J=1,ILAT 
+                  JJ = (J - 1) * LR + 1 
+                  F(JJ) = WL(J)*DEMI 
+                  DO  I=1,LR-1 
+                      F(JJ+I) = 0. 
+                  END DO
+  200         CONTINUE 
+ 
+          ELSE IF (TYPE.EQ.'GRID')                             THEN 
+ 
+              DO 300 J=1,ILAT 
+                  IJ  = (J - 1) * ILG 
+                  WIJ = WL(J) * DEMI 
+                  DO  I=1,ILG 
+                      F(IJ+I) = WIJ 
+                  END DO
+  300         CONTINUE 
+ 
+          ELSE IF (TYPE.EQ.'CMPL')                             THEN 
+ 
+              DO 350 J=1,ILAT 
+                  IJ  = (J - 1) * ILG 
+                  WIJ = WL(J) * DEMI 
+                  DO  I=1,ILG 
+                      C(IJ+I) = CMPLX( WIJ , 0.0 )
+                  END DO
+  350         CONTINUE 
+ 
+          ELSE IF (TYPE.EQ.'ZONL')                             THEN 
+ 
+              DO 400 J=1,ILAT 
+                  F(J) = WL(J)*DEMI 
+  400         CONTINUE 
+ 
+              IJ = ILAT
+              DO  L=2,NLEV
+                  DO  I=1,NWDS
+                      F(IJ+I) = F(I)
+                  END DO
+                  IJ = IJ+NWDS
+              END DO
+ 
+              CALL PUTSET2( 2, F, LEV,NLEV, IBUF,MAXW )
+
+          END IF 
+ 
+***        ... AND THEN PUT F INTO OUTPUT FILE WEIGHT=TAPE2. 
+
+          IF (TYPE.NE.'ZONL')                                  THEN
+              DO  L=1,NLEV
+                  IBUF(4) = LEV(L)
+                  IF (TYPE.EQ.'CMPL')                          THEN 
+                      CALL PUTFLD2( 2, C, IBUF,MAXW )
+                  ELSE
+                      CALL PUTFLD2( 2, F, IBUF,MAXW )
+                  END IF
+              END DO
+          END IF
+
+          WRITE(6,6100) TYPE 
+
+      END IF
+
+      CALL                                         XIT(' Gaussw ', 0 ) 
+ 
+***    NO DATA ... ABORT. 
+ 
+  999 WRITE(6,6002) 
+      CALL                                         XIT(' Gaussw ',-2 ) 
+*---------------------------------------------------------------- 
+
+ 6001 FORMAT(' Unsupported data type= ',A,' ... aborting.') 
+ 6011 FORMAT(' Unsupported data type= ',A,'/',A,' ... aborting.') 
+ 6002 FORMAT(' Premature EOF on input file.') 
+
+ 6000 FORMAT(' No work/output for case kind=spec ') 
+ 6100 FORMAT(' Output is type= ',A,' .') 
+
+ 6150 FORMAT(/10X,' Latitudes ( Degrees',4X,
+     +            'Radians )  Weights    TotalW'/)
+ 6200 FORMAT(10X,I6,5X,F10.5,3(1X,F10.7))
+
+      END 
+#     endif

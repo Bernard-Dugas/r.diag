@@ -1,0 +1,416 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     SEQUENCE D'APPEL...
+*      spblow  SPIN SPOUT1 SPOUT2 INPUT OUTPUT [ -kind VAL1 ]
+*
+*
+*     AUTEUR - B.Dugas, DEC 03/88.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spblow.ptn,v 4.8 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CE PROGRAMME AJOUTE OU ENLEVE LES ZEROS CONTENUS DANS DES
+*      CHAMPS SPECTRAUX SYMMETRIQUES OU  ANTI-SYMMETRIQUES. TOUS
+*      LES CHAMPS D'ENTREE DOIVENT ETRE DE LA MEME TAILLE. 
+*
+*
+*     FICHIER I/O...
+*      SPIN   = GRILLES SPECTRALES HEMISPHERIQUES OU GLOBALES (SELON KIND)
+*      SPOUT1 = GRILLES SPECTRALES GLOBALES OU SYMMETRIQUE-HEMISPHERIQUES
+*      SPOUT1 = GRILLES SPECTRALES ANTI-SYMMETRIQUE-HEMISPHERIQUES.
+*              (SEULEMENT SI "KIND.EQ.0")
+*
+*
+*
+*     PARAMETRE...
+*
+*      KIND = EST-CE QU'ON AGRANDIT  (KIND.NE.0) LES CHAMPS OU BIEN, 
+*             EST-CE QU'ON LES RAPETISSE (KIND.EQ.0) ? SI ON AGRANDIT, 
+*             LE SIGNE DE KIND NOUS DONNE LA PARITE DES CHAMPS D'I/O : 
+*             SYMMETRIQUE/POSITIF ET ANTI-SYMMETRIQUE/NEGATIF.
+*
+*      READ(5,5000) KIND
+*5000  FORMAT(10X,I5)
+*
+*
+*     EXEMPLE DE LIGNE D'APPEL...
+*
+* SPBLOW        -1.0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ANTI-SYMMETRIC COEFFICIENT FILE NOT PROVIDED IN BLOW-UP MODE
+*       2 INPUT TYPE NOT SPECTRAL
+*       3 MISMATCH BETWEEN REQUESTED MODE AND INPUT FILE LENGHT
+*       4 NO INPUT INFORMATION PROVIDED
+*       5 EMPTY SPECTRAL INPUT FILE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spblow
+*    1              (      SPIN,        SPOUT1,        SPOUT2
+*    2               TAPE1=SPIN,  TAPE2=SPOUT1,  TAPE3=SPOUT2,
+*    3                     INPUT,       OUTPUT,
+*    4               TAPE5=INPUT, TAPE6=OUTPUT)
+  
+*     $Log: spblow.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2013/10/16 20:29:53  bernard
+*      - Declarations 'a la' F90 des PARAMETER
+*      - Utiliser le macro lm_maximal pour definir MAXLM
+*      - Modifier les formats des message pour tenir compte des LRLMT a 9 chiffres
+*
+*     Revision 4.6  2010/02/15 22:49:22  dugas
+*     Utiliser PRTLAB2 pour imprimer ibuf(1:8).
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.3  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.2  1998/07/03 02:26:37  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:18  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:39  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/08/22  14:32:38  armnrbd
+*     Ajouter le support de parametres RPBLOC.
+*     
+*     Revision 3.1  94/08/16  21:06:19  21:06:19  armnrbd (Bernard Dugas)
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:56  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/10  21:31:22  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/05/05  16:37:53  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:54  armnrbd
+*     Initial revision
+*     
+***    JANVIER  17/91 - B.DUGAS, RPN. (CALL TO GETLIGN ADDED)
+***    NOVEMBRE 28/90 - B.DUGAS, RPN. (VERSION CY920/IRIX F77)
+***    DECEMBRE 03/88 - B.DUGAS.
+  
+*----------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLM = lm_maximal
+      INTEGER,    PARAMETER :: HEAD  = taille_entete
+
+      LOGICAL     OK
+      COMPLEX     ZERO
+      CHARACTER   TYPE*4,LIGNE*80
+      INTEGER     JBUF(HEAD),JPAK,I,LSR,NWDS,
+     +            NF,IO,KIND,LA,LRLMT,LAIN,NLO2,NRO1,NRO2,NRIN,
+     +            LR,LM,KTR,LAOUT1,LAOUT2,LEN,LEN1,LEN2,LENI,NTOTAL,
+     +            LSRIN(2,MAXLM),LSROU1(2,MAXLM),LSROU2(2,MAXLM),
+     +            NR,MAXW,M,N,NLIN,NLO1,KWDS,KPACK,IER
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      COMPLEX,    DIMENSION(:), ALLOCATABLE :: SPIN,SPOUT1,SPOUT2
+      
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ
+      EXTERNAL    RPBLOC,MACSPE,JCLPNT,GETLIGN,BURNF,XIT,
+     +            DIMGT2,LBLCHK,GETFLD2,PUTFLD2,GETSIZ,
+     +            HPALLOC,HPDEALLC
+
+      DATA        ZERO / (0.0,0.0 ) /
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spblow.ptn,v $'
+
+*----------------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5
+      CALL JCLPNT (NF, 1,2,3, 5,6 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          KIND   = 0
+
+          OK = RPBLOC( 'KIND',LIGNE )
+          IF (OK) READ(LIGNE,'(BN,I5)',ERR=900,END=901,IOSTAT=IO) KIND
+
+      ELSE
+
+***        EST-CE QU'ON AGRANDIT  (KIND.NE.0) LES CHAMPS OU BIEN, EST-CE
+***        QU'ON LES RAPETISSE (KIND.EQ.0) ? SI ON AGRANDIT, LE SIGNE DE
+***        KIND NOUS DONNE LA PARITE DES CHAMPS D'ENTREE.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE  
+              READ( LIGNE, 5000,ERR=900,END=901,IOSTAT=IO ) KIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    DANS LE CAS ON ON RAPETISSE, ON PRODUIT DEUX CHAMPS PAR
+***    CHAMPS LU. VERIFIER QUE L'ON A  BIEN LES NOMS  DES DEUX
+***    FICHIERS DE SORTIE.
+  
+      IF (KIND.EQ.0)                                           THEN
+          IF (NF.NE.3)                                         THEN
+              WRITE(6,6001) NF-2
+              CALL                                 XIT(' Spblow ',-1 )
+          END IF
+      ELSE
+          KIND = KIND/IABS( KIND )
+      END IF
+  
+***    DETERMINER LES DIMENSIONS DU PROBLEME ET LA MEMOIRE REQUISE.
+  
+      MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) GOTO 902
+  
+      WRITE(TYPE,4) JBUF(1)
+  
+      IF (TYPE.NE.'SPEC')                                      THEN
+          WRITE(6,6002) TYPE
+          CALL                                     XIT(' Spblow ',-2 )
+      END IF
+  
+      LA    = JBUF(5)
+      LRLMT = JBUF(7)
+  
+      CALL PRTLAB2(' IBUF = ',JBUF )
+  
+***    APPELLER DIMGT2 SANS DEFINIR LSR, CALCULER LES 'LA'S,
+***    EN COMMENCANT PAR CELUI D'ENTREE...
+  
+      CALL DIMGT2(LSR,LAIN,LR,LM,KTR,LRLMT, KIND,-1)
+  
+      IF (LA.NE.LAIN)                                          THEN
+          WRITE(6,6003) LAIN, LA
+          CALL XIT (' Spblow ',-3)
+      END IF
+  
+***    ... ET MAINTENANT CELUI (OU CEUX) DE SORTIE.
+  
+      IF (KIND.EQ.0)                                           THEN
+          CALL DIMGT2( LSR, LAOUT1,LR,LM,KTR,LRLMT, +1,-1 )
+          CALL DIMGT2( LSR, LAOUT2,LR,LM,KTR,LRLMT, -1,-1 )
+          WRITE(6,6110) LRLMT, LAIN, LAOUT1, LAOUT2
+      ELSE
+          CALL DIMGT2( LSR, LAOUT1,LR,LM,KTR,LRLMT,  0,-1 )
+          WRITE(6,6120) LRLMT, LAIN, LAOUT1
+          LAOUT2 = 0
+      END IF
+
+***    GROSSEUR MAXIMALE DES CHAMPS SPECTRAUX.
+  
+      LA      = MAX( LAIN,LAOUT1,LAOUT2 )
+      JBUF(5) = LA
+
+***    GROSSEUR MAXIMALE DES TAMPONS D'I/O.
+
+      CALL LBLCHK( LEN, KWDS,KPACK,JBUF )
+      MAXW = LEN -HEAD
+  
+***    CALCUL DE LA MEMOIRE NECESSAIRE.
+
+      NTOTAL  = 2*(LAIN+LAOUT1+LAOUT2)
+     +        + 6* (LM+1)
+     +        + LEN
+  
+***    DEMANDER CETTE MEMOIRE.
+  
+      ALLOCATE( IBUF(LEN),SPIN(LAIN),SPOUT1(LAOUT1),SPOUT2(LAOUT2) )
+  
+***    RAPPELLER DIMGT2 MAIS CETTE FOIS, DEFINIR LES 'LSR'S.
+  
+      CALL DIMGT2( LSRIN, LAIN,LR,LM,KTR,LRLMT, KIND,0 )
+  
+      IF (KIND.EQ.0)                                           THEN
+          CALL DIMGT2( LSROU1, LAOUT1,LR,LM,KTR,LRLMT, +1,0 )
+          CALL DIMGT2( LSROU2, LAOUT2,LR,LM,KTR,LRLMT, -1,0 )
+      ELSE
+          CALL DIMGT2( LSROU1, LAOUT1,LR,LM,KTR,LRLMT,  0,0 )
+      END IF
+  
+*----------------------------------------------------------------------
+***    FAIRE LE TRAVAIL.
+  
+      NR = 0
+  100 CALL GETFLD2( 1, SPIN, 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+  
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6000)                        NR
+              CALL                                 XIT(' Spblow ', 0 )
+          END IF
+  
+          IF (IBUF(5).NE.LAIN .OR. IBUF(7).NE.LRLMT)           THEN
+              CALL PRTLAB2(' IBUF = ',IBUF )
+              CALL                                 XIT(' Spblow ',-3 )
+          END IF
+  
+          IF (KIND.EQ.0)                                       THEN
+  
+***            LA PARTIE ZONALE EST TRAITEE DIFFERAMMENT DU RESTE ...
+  
+              DO  N=1,LR
+                  SPOUT1(N) = ZERO
+                  SPOUT2(N) = ZERO
+              END DO
+              DO  N=1,LR,2
+                  SPOUT1(N) = SPIN(N)
+              END DO
+              DO  N=2,LR,2
+                  SPOUT2(N) = SPIN(N)
+              END DO
+  
+***            ... QUE L'ON TRAITE MAINTENANT.
+  
+              DO 500 M=2,LM
+                  NLIN = LSRIN(1,M)
+  
+***                ECRIRE LA PARTIE SYMMETRIQUE. 
+  
+                  NLO1 = LSROU1(1,M)
+                  NRO1 = LSROU1(1,M+1)
+                  LEN1 = NRO1-NLO1
+                  DO  N=0,LEN1-1,2
+                      SPOUT1(NLO1+N  ) = SPIN(NLIN+2*N)
+                  END DO
+  
+***                ECRIRE LA PARTIE ANTI-SYMMETRIQUE.
+  
+                  NLO2 = LSROU2(1,M)
+                  NRO2 = LSROU2(1,M+1)
+                  LEN2 = NRO2-NLO2
+                  DO  N=0,LEN2-1,2
+                      SPOUT2(NLO2+N) = SPIN(NLIN+2*N+1)
+                  END DO
+  
+  500         CONTINUE
+  
+***            SAUVER LES RESULTATS.
+  
+              IBUF(5) = LAOUT1
+              CALL PUTFLD2( 2, SPOUT1, IBUF,MAXW )
+  
+              IBUF(5) = LAOUT2
+              CALL PUTFLD2( 3, SPOUT2, IBUF,MAXW )
+  
+          ELSE
+  
+***            TRANSFERER LA PARTIE ZONALE TELLE QUELLE ET TOUT METTRE 
+***            LE RESTE A ZERO COMPLEXE.
+  
+              DO  N=1,LR
+                  SPOUT1(N) = SPIN(N)
+              END DO
+              DO  N=LR+1,LAOUT1
+                  SPOUT1(N) = ZERO
+              END DO
+  
+***            TRANSFERER L'INFORMATION.
+  
+              DO 800 M=2,LM
+                                 NLIN = LSRIN(1,M)
+                                 NRIN = LSRIN(1,M+1)
+                                 LENI = NRIN-NLIN 
+  
+                                 NLO1 = LSROU1(1,M)
+                  IF (KIND.LT.0) NLO1 = NLO1+1
+  
+                  DO  N=0,LENI-1,2
+                      SPOUT1(NLO1+2*N) = SPIN(NLIN+N)
+                  END DO
+  
+  800         CONTINUE
+  
+***            SAUVER LES RESULTATS.
+  
+              IBUF(5) = LAOUT1
+              CALL PUTFLD2( 2, SPOUT1, IBUF,MAXW )
+  
+          END IF
+  
+          NR = NR+1 
+  
+      GOTO 100
+*----------------------------------------------------------------------
+  
+***    FIN PREMATUREE D'INFORMATION SUR L'UNITE 5.
+
+  900 IF (IO.NE.0) WRITE(6,6130) IO
+  901 IF (IO.EQ.0) WRITE(6,6004) 
+      CALL                                         XIT(' Spblow ',-4 )
+  
+***    FIN PREMATUREE D'INFORMATION SUR L'UNITE 1.
+  
+  902 WRITE(6,6005) 
+      CALL                                         XIT(' Spblow ',-5 )
+  
+*----------------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 5000 FORMAT(10X,I5)
+ 6000 FORMAT(' Spblow processed ',I6,' records.') 
+
+ 6001 FORMAT(' Anti-symmetric coefficient file not provided.'/
+     +       ' Only ',I2,' I/O file names found.')
+ 6002 FORMAT(' Input type is ',A4,'.')
+ 6003 FORMAT(' Mismatch between requested mode and input file',
+     +       ' lenght'/' Assumed/Found LA = ',2I8)
+ 6004 FORMAT(' No input information provided.')
+ 6005 FORMAT(' Empty spectral input file.')
+
+ 6110 FORMAT(' LRLMT, LA(In), LA(Symm/Out), LA(Anti-symm/Out) =',I10,3I9)
+ 6120 FORMAT(' LRLMT, LA(In), LA(Full/Out) =',I10,2I9)
+ 6130 FORMAT(' Spblow reports I/O error number ',I4,' on unit 5.')
+
+      END 
+#     endif

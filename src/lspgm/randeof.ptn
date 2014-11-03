@@ -1,0 +1,639 @@
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 15000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      randeof  INCOMP OUTCOMP INEOF OUTEOF INPUT OUTPUT\
+*                    [-a VAL1 -b VAL2 -c VAL3 -kind VAL4]
+*
+*
+*     AUTHOR - B.Dugas, AVRIL 21/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/randeof.ptn,v 4.5 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CALCUL DU TEST Q  DE PREISENDORFER ET AL. POUR LES  COMPOSANTES 
+*      PRINCIPALES (REF. "FOUNDATIONS OF PRINCIPAL COMPONENT SELECTION 
+*      RULES", SIO REFERENCE  SERIES 81-4, 1981, 192 PP.) APPLIQUE IN- 
+*      DIVIDUELLEMENT  A CHACUNE  D'ENTRE ELLES. LES VECTEURS  PROPRES 
+*      DE LA MATRICE DE COVARIANCE CORRESPONDANT AUX COMPOSANTES RETE- 
+*      NUES LE SONT AUSSI. IL DOIT Y AVOIR AUTANT DE ECTEURS  PROPRES
+*      QUE DE COMPOSANTES PRINCIPALES.
+*
+*
+*     PARAMETERS...
+*      K    (a) = DEPHASAGE MAXIMAL (DOIT ETRE << LONGUEUR TOTALE / 2).
+*      CRIT (b) = VALEUR CRITIQUE DU REFUS DE L'HYPOTHESE NULLE. 
+*      NMAX (c) = NOMBRE DE COMPOSANTES A CONSERVER (TRIEES SELON 
+*                 LEUR SCORE AU TEST Q). SI NMAX EST EGAL A ZERO,
+*                 TOUS LES MODES QUI PASSENT LE TEST SONT RETENUS.
+*      KIND     = 1, SI INCOMP CONTIENT LA TRANSPOSEE DE LA MATRICE
+*                    DES COMPOSANTES PRINCIPALES
+*                 0, SINON (VALEUR PAR DEFAUT).
+*
+*      READ( 5,5000 ) K,CRIT,NMAX,KIND
+*5000  FORMAT(10X,I5,E10.0,2I5)
+*
+*
+*     EXAMPLES OF INPUT CARD...
+*
+* RANDEOF    10  23.20924    9    0   !  AT 99%
+* RANDEOF    10  18.30704    9    0   !  AT 95%
+* RANDEOF    10  15.98718    9    0   !  AT 90%
+* RANDEOF    20  37.56625    9    0   !  AT 99%
+* RANDEOF    20  31.41043    9    0   !  AT 95%
+* RANDEOF    20  28.41198    9    0   !  AT 90%
+* RANDEOF    30  50.89220    9    0   !  AT 99%
+* RANDEOF    30  43.77297    9    0   !  AT 95%
+* RANDEOF    30  40.25603    9    0   !  AT 90%
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 INCOMP AND INPUT DATA NOT COHERENT
+*       2 INCOMP AND INEOF ARE INCONSISTENT
+*       3 MEMORY ALLOCATION PROBLEMS
+*       4 ERROR DECODING FIRST COMPONENT
+*       5 NOT AS MANY EOF SETS AS PRINCIPAL COMPONENTS
+*       6 PREMATURE END OF FILE ON INPUT
+*       7 PREMATURE END OF FILE ON INCOMP
+*       8 PREMATURE END OF FILE ON INEOF
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM RANDEOF 
+*    1        (      INCOMP,       OUTCOMP,       INEOF,       OUTEOF, 
+*    2         TAPE1=INCOMP, TAPE2=OUTCOMP, TAPE3=INEOF, TAPE4=OUTEOF, 
+*    3               INPUT,        OUTPUT, 
+*    4         TAPE5=INPUT,  TAPE6=OUTPUT) 
+ 
+*      $Log: randeof.ptn,v $
+*      Revision 4.5  2014/09/25 20:20:52  dugas
+*      Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*      Revision 4.4  2008/05/03 21:06:30  dugas
+*      Modification generale pour r.gppf.
+*
+*      Revision 4.3  1997/09/26 17:39:13  armnrbd
+*      Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.1  1996/07/08  20:01:10  armnrbd
+*     Mise-a-jour pour nouveau format des TS.
+*     Ajout du mode des PC transposees.
+*
+*     Revision 4.0  1994/11/17  14:21:23  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:44  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/24  15:43:08  armnrbd
+*     Initial revision
+*      
+***    AVRIL 21/87 - B. DUGAS. 
+ 
+***    MOD LE 27 JUIN 1988 PAR BD : 
+***    ... POSSIBILITE DE CONSERVER LES N COMPOSANTES AYANT LES SCORES 
+***        LES PLUS ELEVES. 
+ 
+*---------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+      INTEGER     MAXMEM
+      PARAMETER ( MAXMEM= memoire_maximale )
+      INTEGER     MAXVAR
+      PARAMETER ( MAXVAR = 256 )
+ 
+      LOGICAL     OK,ERR
+      CHARACTER   LIGNE*80
+      REAL*8      VAR,SUM,LAG,SQJ
+      REAL        CMP,QJ,CRIT,QJNR
+      CHARACTER*4 TYPE,VARIAB(MAXVAR)
+      INTEGER     WHERE,WHEREJ,KBUF(taille_entete),KPAK,LEV(MAXLEV),NLEV,INDEX,
+     +            IBUF,JBUF,IER(7),LEN,LEN1,LEN3,NWDS,NWDS3,MAXW,
+     +            MAXW1,MAXW3,NF,IO,I,J,K,L,MEM,NR,NS,NMAX,NVAR,
+     +            NV,LONG,LONC,KIND,M,M3,TIME,TIME2,HOLD,LINE
+ 
+      POINTER    (ICMP,  CMP(1)), (ILAG, LAG(1)), (INBF, IBUF(8)), 
+     +           (JNBF, JBUF(8)), (IQJ,   QJ(1)), (IDEX, INDEX(1)),
+     +           (IB2,TIME2(1))
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ,GETSIZ3
+      EXTERNAL    GETSIZ,GETSIZ3,JCLPNT,GETLIGN,BURNF,
+     +            HPALLOC,XIT,GETFLD2,RECGET,RECPUT
+     +            PUTFLD2,CSORTR,PRECEDE,SUIVANT
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/randeof.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 6 
+      CALL JCLPNT( NF, 1,2,3,4, 5,6 )
+ 
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          K    = 0
+          CRIT = 0.0
+          NMAX = 0
+          KIND = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE,  5, ERR=995,END=995,IOSTAT=IO) K
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 10, ERR=995,END=995,IOSTAT=IO) CRIT
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ( LIGNE,  5, ERR=995,END=995,IOSTAT=IO) NMAX
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ( LIGNE,  5, ERR=995,END=995,IOSTAT=IO) KIND
+
+      ELSE
+
+***        LECTURE DES PARAMETRES D'EXECUTION. 
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 995
+          ELSE
+              READ( LIGNE, 5000,ERR=995,END=995,IOSTAT=IO)
+     +                     K,CRIT,NMAX,KIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (KIND.LE.0) KIND = 0 
+
+***    LIRE UNIT 1 POUR DETERMINER LA LONGUEUR DES SERIES. 
+ 
+      MAXW1 = GETSIZ( 1, KBUF,LEN1,NWDS,KPAK )
+      IF (MAXW1.EQ.0) GOTO 996
+
+      LONG = KBUF(5)*KBUF(6)
+      WRITE(TYPE,4) KBUF(1)
+
+***    DETERMINER LE NOMBRE M DE COLONNES DANS INCOMP.
+
+      TIME = -1
+      M    =  0 
+  050 CALL SUIVANT( 1, KBUF, ERR,OK )
+          IF (.NOT.OK ) GOTO 100
+          IF (     ERR) GOTO 996
+          IF (TIME.NE.KBUF(2))                                 THEN
+              TIME  = KBUF(2)
+              M     = M + 1
+          END IF
+      GOTO 050 
+
+  100 IF (M.EQ.0) GOTO 996
+      CALL PRECEDE( 1,-1 )
+
+      IF (NMAX.LE.0 .AND. KIND.EQ.0) NMAX = M 
+      IF (NMAX.LE.0 .AND. KIND.NE.0) NMAX = LONG
+
+***    VERIFIER COHERENCE ENTRE  DONNEES UNIT 5 ET 1. 
+ 
+      IF ((KIND   .EQ.   0   .AND. K      .GT. LONG/2 ) .OR. 
+     +    (KIND   .NE.   0   .AND. K      .GT.    M/2 ) .OR. 
+     +     K      .LT.   2   .OR. 
+     +     KBUF(6).NE.   1   .OR. 
+     +    (TYPE   .NE.'GRID' .AND. 
+     +     TYPE   .NE.'SUBA' .AND. 
+     +     TYPE   .NE.'ZONL').OR. 
+     +     CRIT   .LE.  0.0     )                              THEN 
+
+          IF (KIND.EQ.0) WRITE(6,6001) K, LONG, TYPE, CRIT 
+          IF (KIND.NE.0) WRITE(6,6001) K,    M, TYPE, CRIT 
+
+          CALL                                     XIT(' Randeof',-1 ) 
+
+      ELSE 
+
+          IF (KIND.EQ.0)    WRITE(6,6100) K, LONG, CRIT 
+          IF (KIND.EQ.0)    WRITE(6,6150) M
+          IF (KIND.EQ.0 
+     +   .AND.NMAX.NE.M)    WRITE(6,6101) NMAX 
+
+          IF (KIND.NE.0)    WRITE(6,6100) K,    M, CRIT 
+          IF (KIND.NE.0)    WRITE(6,6151) LONG
+          IF (KIND.NE.0 
+     +   .AND.NMAX.NE.LONG) WRITE(6,6101) NMAX 
+
+
+      END IF 
+ 
+***    LIRE UNIT 3 POUR DETERMINER LA TAILLE DES GRILLES. 
+ 
+      MAXW3 = GETSIZ3( 3, KBUF,LEN3,NWDS3,KPAK,  .TRUE.,
+     +                    LEV,NLEV, VARIAB,NVAR, MAXVAR )
+
+      IF (  MAXW3.EQ.  0 
+     + .OR. NLEV .GT.MAXLEV
+     + .OR. NVAR .GT.MAXVAR) GOTO 997
+ 
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS3 = KBUF(5)
+
+      MAXW = MAX( MAXW1,MAXW3 )
+      LEN  = MAX( LEN1, LEN3  )
+      NV   = NLEV*NVAR
+      LINE = NV*NWDS3
+
+***    DETERMINER LE NOMBRE M3 DE COLONNES DANS INEOF.
+
+      TIME = -1
+      M3   =  0 
+  150 CALL SUIVANT( 3, KBUF, ERR,OK )
+          IF (.NOT.OK ) GOTO 200
+          IF (     ERR) GOTO 997
+          IF (TIME.NE.KBUF(2))                                 THEN
+              TIME  = KBUF(2)
+              M3    = M3 + 1
+          END IF
+      GOTO 150 
+
+  200 IF (M3.EQ.0) GOTO 997
+      CALL PRECEDE( 3,-1 )
+
+***    VERIFIER QUE LE PROBLEME EST BIEN POSE.
+
+      IF ((KIND.EQ.0 .AND. (M3.NE.M   ) ) .OR.
+     +    (KIND.NE.0 .AND. (M3.NE.LONG) ) )                    THEN
+          WRITE(6,6002) M3
+          CALL                                     XIT(' Randeof',-2 ) 
+      END IF
+
+***    DEMANDONS LA MEMOIRE DONT ON A BESOIN SI C'EST POSSIBLE ... 
+ 
+      LONC = MAX( LONG,M )
+      MEM  = LONG*M+5*LONC+LEN*(1+NV)+M
+ 
+      IF (MEM.GT.MAXMEM)                                       THEN 
+          WRITE(6,6003) MEM-MAXMEM 
+          CALL                                     XIT(' Randeof',-3 ) 
+      END IF 
+ 
+***    ... ET DEFENISSONS LES POINTEURS. 
+ 
+      Call hpalloc( ICMP,   LONG*M , IER(1),1 ) ! CMP
+      Call hpalloc( ILAG,   LONC   , IER(2),8 ) ! LAG
+      Call hpalloc( IQJ ,   LONC   , IER(3),1 ) ! QJ
+      Call hpalloc( IDEX, 2*LONC   , IER(4),1 ) ! INDEX
+      Call hpalloc( INBF,   LEN    , IER(5),1 ) ! IBUF
+      Call hpalloc( JNBF,   LEN*NV , IER(6),1 ) ! JBUF
+      Call hpalloc( IB2 ,   M      , IER(7),1 ) ! TIME2
+ 
+      DO  I=1,7
+          IF (IER(I).NE.0)                                     THEN
+              WRITE(6,6103) I,IER(I)
+              CALL                                 XIT(' Randeof',-3 ) 
+          END IF
+      END DO
+
+***    INITIALISER INDEX.
+
+      DO  I=1,LONC
+          INDEX(I) = I
+      END DO
+
+***    LECTURE DE TOUTES LES COMPOSANTES PRINCIPALES.
+ 
+      NS = 0 
+      WRITE(6,6110) 
+      
+      DO  NR=1,M
+
+          WHERE = (NR-1)*LONG+1
+
+          CALL GETFLD2( 1, CMP(WHERE), ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+              IF (NR.EQ.0)                                     THEN 
+                  CALL                             XIT(' Randeof',-4 ) 
+              ELSE
+                  CALL                             XIT(' Randeof',-7 )
+              END IF
+          END IF
+
+***        SAUVER IBUF(2) POUR LA SORTIE.
+
+          TIME2(NR) = IBUF(2)
+
+      END DO
+
+***    MAINTENANT, ON LES ANALYSE.
+
+      IF (KIND.EQ.0)                                           THEN
+ 
+***        MODE NORMAL.
+
+          DO  NR=1,M
+
+              WHERE = (NR-1)*LONG
+
+***            CALCUL DE L'EQUATION (24.1) DE PREISENDORFER ET AL. 
+ 
+              VAR = 0.0 
+              DO  I=1,LONG 
+                  VAR = VAR+DBLE( CMP(WHERE+I) )*CMP(WHERE+I) 
+              END DO
+ 
+              DO  L=1,K 
+                  SUM = 0.0 
+                  DO  J=L+1,LONG 
+                      SUM = SUM+DBLE( CMP(WHERE+J) )*CMP(WHERE+J-L) 
+                  END DO
+                  LAG(L) = SUM/VAR 
+              END DO
+ 
+***            CALCUL DE L'EQUATION (24.3) DE PREISENDORFER ET AL. 
+ 
+              SQJ = 0.0 
+              DO  L=1,K 
+                  SQJ = SQJ+LAG(L)*LAG(L)/FLOAT(LONG-L) 
+              END DO
+
+***            SAUVER LE QJ COURANT DANS QJ(NR).
+
+              QJ(NR)  = SQJ*FLOAT(LONG*(LONG+2)) 
+ 
+          END DO
+
+****       ON CHOISIT LES COMPOSANTES AYANT LES PLUS GRANDS QJ. 
+ 
+          CALL csortr( QJ,INDEX,M )
+
+***        REMETTRE DU PLUS GRAND AU PLUS PETIT.
+ 
+          DO  NR=1,M/2
+              HOLD          = INDEX(  NR  )
+              INDEX(  NR  ) = INDEX(M-NR+1)
+              INDEX(M-NR+1) = HOLD 
+          END DO
+ 
+          DO  NR=1,M
+              INDEX(M+INDEX(NR))=NR
+          END DO
+
+          DO 250 NR=1,M
+ 
+***            LIRE LA EOF CORRESPONDANTE.
+ 
+              DO  L=1,NV 
+                  WHEREJ = (L-1)*LEN+1 
+                  CALL RECGET( 3, ' ',-1,' ',-1, JBUF(WHEREJ),MAXW,OK ) 
+                  IF (.NOT.OK) CALL                XIT(' Randeof',-5 ) 
+              END DO
+
+***            SI CETTE COMPOSANTE PRINCIPALE EST DISTRIBUEE ALEATOIREMENT, 
+***            QJ EST  APPROXIMATIVEMENT CHI-CARREE  (K DEGRES DE LIBERTE). 
+***            CRIT DEVRAIT ALORS EST LA  VALEUR CRITIQUE  POUR QUE CE TEST 
+***            SOIT ACCEPTE AVEC UN NIVEAU VOULU DE CONFIANCE. 
+ 
+              IF ( INDEX(M+NR).LE.NMAX 
+     +       .AND. QJ(NR)     .GE.CRIT)                        THEN 
+
+                  NS      = NS+1 
+                  IBUF(2) = TIME2(NR)
+                  WHERE   = (NR-1)*LONG+1
+                  CALL PUTFLD2( 2, CMP(WHERE), IBUF,MAXW )
+
+                  WRITE(6,6130) NR, QJ(NR), 100.*QJ(NR)/CRIT, NS 
+
+                  DO  L=1,NV 
+                      WHEREJ         = (L-1)*LEN+1 
+CCC                   JBUF(WHEREJ+1) = NS 
+                      CALL RECPUT( 4,JBUF(WHEREJ) ) 
+                  END DO 
+
+              ELSE 
+
+                  WRITE(6,6140) NR, QJ(NR), 100.*QJ(NR)/CRIT 
+
+              END IF 
+ 
+  250     CONTINUE 
+ 
+          WRITE(6,6120) M, NS 
+
+      ELSE
+
+***        MODE INCOMP TRANSPOSE.
+
+          DO  NR=1,LONG
+
+***            CALCUL DE L'EQUATION (24.1) DE PREISENDORFER ET AL. 
+ 
+              WHERE = NR
+              VAR   = 0.0 
+              DO  I=1,M
+                  VAR = VAR+DBLE( CMP(WHERE) )*CMP(WHERE) 
+                  WHERE  = WHERE+LONG
+              END DO
+ 
+              DO  L=1,K 
+                  WHERE  = NR
+                  WHEREJ = NR+L*LONG
+                  SUM    = 0.0 
+                  DO  J=L+1,M
+                      SUM = SUM+DBLE( CMP(WHEREJ) )*CMP(WHERE) 
+                      WHEREJ = WHEREJ+LONG
+                      WHERE  = WHERE +LONG
+                  END DO
+                  LAG(L) = SUM/VAR 
+              END DO
+ 
+***            CALCUL DE L'EQUATION (24.3) DE PREISENDORFER ET AL. 
+ 
+              SQJ = 0.0 
+              DO  L=1,K 
+                  SQJ = SQJ+LAG(L)*LAG(L)/FLOAT(M-L) 
+              END DO
+
+***            SAUVER LE QJ COURANT DANS QJ(NR).
+
+              QJ(NR)  = SQJ*FLOAT(M*(M+2)) 
+ 
+          END DO
+
+***        ON CHOISIT LES COMPOSANTES AYANT LES PLUS GRANDS QJ. 
+ 
+          CALL csortr( QJ,INDEX,LONG )
+
+***        REMETTRE DU PLUS GRAND AU PLUS PETIT.
+ 
+          DO  NR=1,LONG/2
+              HOLD             = INDEX(     NR  )
+              INDEX(     NR  ) = INDEX(LONG-NR+1)
+              INDEX(LONG-NR+1) = HOLD 
+          END DO
+ 
+          DO  NR=1,LONG
+              INDEX(LONG+INDEX(NR))=NR
+          END DO
+
+***        NE RETENIR QUE LES NMAX COMPOSANTES
+***        PRINCIPALES LES PLUS SIGNIFICATIVES.
+
+          DO 300 NR=1,LONG
+
+***            LIRE LA EOF CORRESPONDANTE.
+ 
+              DO  L=1,NV 
+                  WHEREJ = (L-1)*LEN+1 
+                  CALL RECGET( 3, ' ',-1,' ',-1, JBUF(WHEREJ),MAXW,OK ) 
+                  IF (.NOT.OK) CALL                XIT(' Randeof',-5 ) 
+              END DO
+
+***            SI CETTE COMPOSANTE PRINCIPALE EST DISTRIBUEE ALEATOIREMENT, 
+***            QJ EST  APPROXIMATIVEMENT CHI-CARREE  (K DEGRES DE LIBERTE). 
+***            CRIT DEVRAIT ALORS EST LA  VALEUR CRITIQUE  POUR QUE CE TEST 
+***            SOIT ACCEPTE AVEC UN NIVEAU VOULU DE CONFIANCE. 
+ 
+              IF ( INDEX(LONG+NR).LE.NMAX 
+     +       .AND. QJ(NR)        .GE.CRIT)                     THEN 
+
+***                SAUVER LES EOF CORRESPONDANTS.
+
+                  NS      = NS+1 
+
+                  DO  L=1,NV 
+                      WHEREJ         = (L-1)*LEN+1 
+CCC                   JBUF(WHEREJ+1) = NS 
+                      CALL RECPUT( 4,JBUF(WHEREJ) ) 
+                  END DO 
+
+                  WRITE(6,6130) NR, QJ(NR), 100.*QJ(NR)/CRIT, NS 
+
+***                RE-ORGANISER LE CHAMPS CMP.
+
+                  WHERE  = NS
+                  WHEREJ = NR
+                  DO  I=1,M
+                      CMP(WHERE) = CMP(WHEREJ)
+                      WHEREJ = WHEREJ+LONG
+                      WHERE  = WHERE +LONG
+                  END DO
+
+              ELSE 
+
+                  WRITE(6,6140) NR, QJ(NR), 100.*QJ(NR)/CRIT 
+
+              END IF 
+ 
+  300     CONTINUE
+
+***        SAUVER LES COMPOSANTES RETENUES,
+***        TOUJOURS SOUS FORME TRANSPOSEE.
+
+          IBUF(5) = NS
+          IBUF(6) = 1
+          WHERE   = 1
+
+          DO  NR=1,M
+
+              IBUF(2) = TIME2(NR)
+              CALL PUTFLD2( 2, CMP(WHERE), IBUF,MAXW )
+              WHERE   = WHERE+LONG
+
+          END DO
+
+          WRITE(6,6120) LONG, NS 
+
+      END IF
+
+***    FIN NORMALE. 
+ 
+      CALL                                          XIT(' Randeof', 0 ) 
+
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT 5. 
+ 
+  995 WRITE(6,6006) 
+      CALL                                          XIT(' Randeof',-6 ) 
+
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT 1. 
+ 
+  996 WRITE(6,6007) 
+      CALL                                          XIT(' Randeof',-7 ) 
+
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT 3. 
+ 
+  997 WRITE(6,6008) 
+      CALL                                          XIT(' Randeof',-8 ) 
+ 
+*---------------------------------------------------------------------- 
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5000 FORMAT(10X,I5,E10.0,2I5) 
+
+ 6001 FORMAT(' Problem starting, K,LEN,TYPE,CRIT =',2I5,1X,A4,1X,E10.4) 
+ 6002 FORMAT(' Found ',I5,' EOFs in file INEOF.')
+ 6003 FORMAT(' Missing at least ',I6,'words of available memory.')
+ 6103 FORMAT(' Field No.',I2,', HPALLOC error=',I5)
+ 6006 FORMAT(' Read error on unit 5.') 
+ 6007 FORMAT(' Read error on unit 1.') 
+ 6008 FORMAT(' Read error on unit 3.') 
+
+ 6100 FORMAT(' Randeof working with K,LEN,CRIT =',2I5,1X,E10.4) 
+ 6101 FORMAT(' Keeping not more than ',I5,' of the most important', 
+     +       ' components.') 
+ 6110 FORMAT(/3X,'Record',4X,'Q statistic',7X,'%'/) 
+ 6120 FORMAT(/1X,I5,' Principal components were evaluated and', 
+     +       I5,' were kept.') 
+ 6130 FORMAT(1X,'*',I5,4X,E13.7,2X,F9.2,'     kept #',I5) 
+ 6140 FORMAT(2X,I5,4X,E13.7,2X,F9.2,' not kept') 
+ 6150 FORMAT(' INCOMP is in normal (column) mode.'/
+     +       ' The total number of input modes is ',I5)
+ 6151 FORMAT(' INCOMP is in transposed (line) mode.'/
+     +       ' The total number of input modes is ',I5)
+ 
+      END
+#     endif
+
+
+
+
+

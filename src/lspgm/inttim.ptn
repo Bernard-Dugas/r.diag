@@ -1,0 +1,277 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     inttim  XIN XOUT OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, novembre 1992.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/inttim.ptn,v 4.16 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A CCC FILE ARITHMETIC PROGRAM WHICH...
+*
+*      ... PRODUCES FILE XOUT(T) = XIN(T)+XOUT(T-1)
+*
+*      NOTES - 1) INTTIM MAKES MINIMAL USE OF XIN'S TIME INFORMATION.
+*                 THE FIRST SAMPLE TIME IS SIMPLY ASSIGNED T=0,
+*                 THE NEXT ONE IS T=1, AND SO ON.
+*              2) XOUT(T=0) = XIN(T=0) 
+*              3) XIN CAN BE MULTI-LEVEL, MULTI-VARIABLE
+*                 IN THIS CASE, THE FILE IS SUPPOSED TO BE
+*                 SORTED ACCORDING TO TIMESTEP/NAME/LEVEL,
+*                 FROM MOST TO LEAST SIGNIFICANT
+*              4) INTTIM IS FUNCTIONALY EQUIVALENT TO GJB'S TIMSUM
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST SET
+*       2 MORE THAN ONE SIZE IN XIN
+*       3 UNABLE TO ALLOCATE ENOUGH WORKING MEMORY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM inttim
+*    +                    ( XIN,        XOUT,      OUTPUT,
+*    +               TAPE1= XIN, TAPE2= XOUT,TAPE6=OUTPUT)
+ 
+*     $Log: inttim.ptn,v $
+*     Revision 4.16  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.15  2009/02/11 17:44:38  dugas
+*     Corriger l'allocation de memoire pour H.
+*
+*     Revision 4.14  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.13  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.12  2003/10/02 16:22:48  dugas
+*     Corriger le traitement des erreurs de type 1
+*
+*     Revision 4.11  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.10  2001/10/11 11:15:05  armnrbd
+*     Les noms lus par GETSIZ4 et ecrits par PUTMSET2 contiennent
+*     maintenant les etiquettes des enregistrements (RPN STD).
+*
+*     Revision 4.9  2001/09/24 14:58:16  armnrbd
+*     Implanter GETSIZ4 et GET/PUT(MSET2).
+*
+*     Revision 4.8  2000/04/07 20:19:48  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.7  1998/07/03 02:26:30  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.6  1997/09/26  17:39:03  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.5  1996/12/23  22:24:47  armnrbd
+*     Corriger l'ecriture du premier tampon d'information.
+*
+*     Revision 4.4  1996/11/27  15:10:45  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.3  1995/10/26  17:44:07  armnrbd
+*     Ajouter de la decumentation sur le mode de fonctionnement multi-variable.
+*
+*     Revision 4.2  1995/07/07  03:04:10  armnrbd
+*     Implanter un mode de travail a multi-variables.
+*
+*     Revision 4.1  1995/04/28  00:48:42  armnrbd
+*     Corriger un bogue dans l'utilisation de IBUF.
+*
+*     Revision 4.0  1994/11/17  14:20:45  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/05/20  14:39:51  14:39:51  armnrbd (Bernard Dugas)
+*     Corriger la documentation.
+*     Grand menage du printemps.
+*     
+*     Revision 3.0  93/10/13  13:56:23  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/01/14  15:43:27  armnrbd
+*     Corriger le comportement lorsque MAXW=0.
+*     
+*     Revision 1.0  92/11/25  17:18:03  armnrbd
+*     Initial revision
+*     
+***    NOVEMBRE 25/92 - B.DUGAS, RPN.
+
+*-------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 1999 )
+
+      LOGICAL     OK
+      REAL        ZERO
+      CHARACTER*4 TYPE,VARIAB(MAXLEV)*20
+      INTEGER     HEAD,JBUF(taille_entete),JPAK,LEV(MAXLEV,2),
+     +            SET(0:MAXLEV),NSET,MAXW,LEN,NWDS,NLEV,NF,NR,I,IER,
+     +            STEP(MAXLEV),NLEVAR
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: G,H
+
+#     include "machtype.cdk" 
+
+      INTEGER     GETSIZ4
+      EXTERNAL    GETSIZ4,MACSPE,JCLPNT,WRITLEV2,
+     +            GETMSET2,XIT,PUTMSET2,PRECEDE
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/inttim.ptn,v $'
+
+*-------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NR = 0
+      NF = 3
+      CALL JCLPNT( NF, 1,2, 6 )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ4( 1, JBUF,LEN,NWDS,JPAK,
+     +                   SET,NSET, LEV,VARIAB, MAXLEV )
+
+      IF (    NSET .EQ.0) GOTO 901
+      IF (SET(NSET).EQ.0) GOTO 901
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      NLEVAR = SET(NSET)
+
+      IF (NR.EQ.0)                                             THEN
+
+          CALL PRTLAB( JBUF )
+          WRITE(6,6050) (VARIAB(SET(I))(1:4),I=1,NSET)
+
+          NLEV = SET(NSET)/NSET
+
+          IF (NLEV*NSET.EQ.SET(NSET))                          THEN
+              CALL WRITLEV2( LEV,NLEV, JBUF )
+          ELSE
+              WRITE(6,6100) NSET,SET(NSET)
+          END IF
+
+      END IF
+
+      ALLOCATE( IBUF(LEN),G(NWDS*NLEVAR),H(NWDS*NLEVAR), STAT=IER )
+
+      IF (IER.NE.0)                                            THEN
+          WRITE(6,6003) 4*(LEN+2*NWDS*NLEVAR)*(MOD( MACHINE,2 )+1)
+          CALL                                     XIT(' Inttim ' ,-3 )
+      END IF
+
+      IF (NR.EQ.0)                                             THEN
+
+***        READ FIRST SET OF GRIDS FROM FILE XIN INTO H.
+
+          CALL GETMSET2( 1, H, SET,NSET, LEV,VARIAB,STEP, IBUF,MAXW,OK )
+
+          CALL PRTLAB( IBUF )
+
+          IF (.NOT.OK)
+     +        CALL                                 XIT(' Inttim ',-1 ) 
+
+***        WRITE THE FIRST SET AS IS.
+
+          CALL PUTMSET2( 2, H, SET,NSET, LEV,VARIAB,MAXLEV, IBUF,MAXW )
+
+          NR = NLEVAR
+
+      ELSE
+
+***        READ THE PREVIOUS SET OF GRIDS FROM FILE XOUT INTO H.
+
+          CALL PRECEDE( 2, NLEVAR )
+          CALL GETMSET2( 2, H, SET,NSET, LEV,VARIAB,STEP, IBUF,MAXW,OK )
+
+      END IF
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CALL GETMSET2( 1, G, SET,NSET, LEV,VARIAB,STEP,
+     +                     IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,G,H )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB( IBUF )
+              WRITE(6,6010) NR
+              CALL                                 XIT(' Inttim ', 0 ) 
+
+          END IF
+
+***        SET H = H + G
+
+          DO  I=1,NLEVAR*NWDS
+              H(I) = H(I) + G(I)
+          END DO
+
+***        SAVE H ON FILE XOUT.
+
+          CALL PUTMSET2( 2, H, SET,NSET, LEV,VARIAB,MAXLEV, IBUF,MAXW )
+
+      NR = NR+NLEVAR
+      GOTO 100 
+
+***   E.O.F. ON UNIT #1.
+
+  901 CALL                                         XIT(' Inttim ',-1 )
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6003 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' characters.')
+
+ 6010 FORMAT('0 Inttim read',I6,' records.')
+ 6050 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6100 FORMAT(/' Each set will contain ',I3,' variables distributed',
+     +        ' over ',I3,' horizontal records.'/)
+
+      END 
+#     endif

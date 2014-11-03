@@ -1,0 +1,323 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ctemps  SSPHIS SSPHI SSTEMP OUTPUT
+*
+*
+*     DESCRIPTION...
+*      ctemps - CONVERTS SPECTRAL PHI FILE TO SPECTRAL TEMPERATURES
+*
+*
+*     AUTHOR  - J.D.Henderson, AUG 25/81
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ctemps.ptn,v 4.10 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     PURPOSE - CONVERTS SPECTRAL GEOPOTENTIALS (PHI) ON MODEL FULL
+*               LEVELS TO SPECTRAL TEMPERATURES ON MODEL HALF LEVELS.
+*               EACH SET CONTAINS SIGMA LEVELS 1 TO ILEV.
+*
+*
+*     INPUT FILES...
+*      SSPHIS = INPUT FILE OF SPECTRAL MOUNTAIN FIELDS.
+*      SSPHI  = INPUT FILE OF SPECTRAL GEOPOTENTIALS (PHI) ON FULL
+*                             SIGMA LEVELS.
+*
+*     OUTPUT FILE...
+*      SSTEMP = OUTPUT FILE OF SPECTRAL TEMPERATURES ON HALF LEVELS.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NOT ENOUGH OR TOO MANY LEVELS IN SSPHI
+*       2 UNABLE TO READ SSPHIS
+*       3 PHI AND PHIS NOT THE SAME SIZE
+*       4 UNABLE TO READ SSPHI
+*       5 UNABLE TO OPERATE ON FILE SSPHI
+*       6 WRONG VERTICAL COORDINATE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM CTEMPS 
+*     PROGRAM CTEMPS (SSPHIS,       SSPHI,        SSTEMP,       OUTPUT, 
+*    1          TAPE1=SSPHIS, TAPE2=SSPHI , TAPE3=SSTEMP, TAPE6=OUTPUT) 
+
+
+*     $Log: ctemps.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2013/10/16 21:01:18  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2008/01/31 18:31:46  dugas
+*     Corriger le calcul de S (SIGF) pour les fichiers CCCma.
+*
+*     Revision 4.6  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2003/12/10 22:31:21  dugas
+*     Corriger la valeur du parametre NFF a JCLPNT
+*
+*     Revision 4.4  1998/07/03 02:26:22  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1997/09/26  17:38:49  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/05/30  18:04:36  armnrbd
+*     Conversions de noms/unites seulement pour fichiers SQ89.
+*
+*     Revision 4.1  1995/10/16  17:44:53  armnrbd
+*     Premiere version fonctionnelle.
+*
+*     Revision 4.0  1995/10/16  14:31:12  armnrbd
+*     Initial version.
+*
+
+*     MAY 06/83 - R.LAPRISE. 
+*     AUG 25/81 - J.D.HENDERSON. 
+
+*---------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLM = lm_maximal
+      INTEGER,    PARAMETER :: HEAD  = taille_entete
+      INTEGER,    PARAMETER :: MAXLEV = 999
+
+      LOGICAL     OK
+      CHARACTER*4 CT,CS,PKTYP,TYPE
+      INTEGER     LEV(MAXLEV),LEVH(MAXLEV),LSR(2,MAXLM+1),
+     +            KBUF(HEAD),NFF,MAXW,LEN,NWDS,KPAK,
+     +            NLEV,NLEVM,NZT,NSETS,I,L,LRLMT,LA,LR,
+     +            LM,KTR,IER,MAXW1,MAXW2,LEN1,LEN2,
+     +            VKIND
+      REAL        S(MAXLEV),SF(MAXLEV),SH(MAXLEV),
+     +            RGAS,CORRECT
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: SP
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      CHARACTER*4 GETYP
+      INTEGER     GETSIZ2,GETSIZ
+      EXTERNAL    JCLPNT,GETYP,GETSIZ2,GETSIZ,GETFLD2,GETSET2,
+     +            CMPLBL,TFGZ,PUTSET2,DIMGT2,LVDCODE
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ctemps.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+      PKTYP = GETYP( 1 )
+      IF (PKTYP.NE.'SQ89')                                     THEN
+          CS = 'PHIS'
+          CT = 'TEMP'
+      ELSE
+          CS = 'MT'
+          CT = 'TT'
+      END IF
+
+***    GET SIZES AND SIGMA VALUES FROM PHI FILE. 
+
+      MAXW1 = GETSIZ ( 1, KBUF,LEN1,NWDS,KPAK )
+      MAXW2 = GETSIZ2( 2, KBUF,LEN2,NWDS,KPAK, LEV,NLEV )
+
+      MAXW = MAX( MAXW1,MAXW2 )
+      LEN  = MAX( LEN1, LEN2  )
+
+      IF (MAXW1.EQ. 0 .OR.
+     +    MAXW2.EQ. 0 .OR.
+     +    NLEV .LT. 2 .OR.
+     +    NLEV .GT. MAXLEV) CALL                   XIT(' Ctemps ',-1 ) 
+
+      WRITE(TYPE,4)  KBUF(1)
+
+      DO  L=1,NLEV
+          CALL CONVPR( LEV(L), S(L), VKIND, -2 )
+      END DO
+
+      NZT   = NWDS+1 
+      NLEVM = NLEV-1 
+
+      IF (PKTYP(1:2).EQ.'SQ')                                  THEN
+          IF (VKIND.NE.1 .AND.
+     +        VKIND.NE.5) CALL                      XIT(' Ctemps ',-6 ) 
+      ELSE IF (VKIND.EQ.2)                                     THEN
+          S(1:NLEV) = S(1:NLEV) * 0.001 
+      END IF
+
+***    SET LEVH TO SIGMA HALF LEVELS FOR OUTPUT LABELS. 
+
+      DO  L=1,NLEVM 
+          SH(L) = SQRT( S(L)*S(L+1 ))
+      END DO
+      SH(NLEV)  = SQRT( S(NLEV) )
+
+      IF (PKTYP(1:2).EQ.'SQ')                                  THEN
+          DO  L=1,NLEV
+              CALL CONVPR( LEVH(L), SH(L), VKIND, +2 )
+              CALL CONVPR( LEVH(L), SH(L), VKIND, -2 )
+          END DO
+      ELSE
+          CALL LVCODE(  LEVH,SH, NLEV ) 
+          CALL LVDCODE( SH,LEVH, NLEV )
+          SH(1:NLEV) = SH(1:nLEV)*.001 
+      END IF
+
+      CALL WRITLEV( S, NLEV,'SIGF' )
+      CALL WRITLEV( SH,NLEV,'SIGH' )
+
+      WRITE(6,6020) ' PHI  DESCRIPTOR ...'
+      CALL PRTLAB( KBUF )
+
+***    COMPUTE SF TO BE USED IN TFGZ. 
+
+      DO  L=1,NLEVM 
+          SF(L) = ALOG( S(L+1)/S(L) ) 
+      END DO
+      SF(NLEV)  = ALOG( 1./S(NLEV) ) 
+
+***    ALLOCATE WORK SPACE
+
+      ALLOCATE( IBUF(LEN),SP(NWDS*(NLEV+1)) )
+
+***    GET THE MOUNTAIN FIELD. 
+
+      CALL GETFLD2( 1,SP, 'SPEC',-1,CS,-1, IBUF,MAXW,OK ) 
+
+      IF (.NOT.OK) CALL                            XIT(' Ctemps ',-2 ) 
+
+      WRITE(6,6020) ' PHIS DESCRIPTOR ...'
+      CALL PRTLAB( IBUF )
+
+      CALL CMPLBL( 0,KBUF, 0,IBUF, OK ) 
+
+      IF (.NOT.OK)                                             THEN 
+          CALL PRTLAB( KBUF ) ; CALL PRTLAB( IBUF )
+          CALL                                     XIT(' Ctemps ',-3 ) 
+      END IF 
+
+      IF (TYPE.EQ.'SPEC')                                      THEN
+
+***        RETREIVE COMPLEX FIELD SIZES.
+
+          LRLMT = IBUF(7)
+          CALL DIMGT2( LSR,LA,LR,LM,KTR, LRLMT, 0,0 ) 
+          WRITE(6,6015) LRLMT,LR,LM,KTR 
+
+      ELSE
+
+***        THIS WILL WORK ONLY IF THE NUMBER OF WORDS IS
+***        EVEN, WHICH IS GENERALLE THE CASE FOR GRIDS.
+
+          LA = NWDS/2
+
+          IF (MOD(NWDS,2).NE. 0     .OR.
+     +        TYPE       .EQ.'FOUR' .OR.
+     +        TYPE       .EQ.'DATA' .OR.
+     +        TYPE       .EQ.'COEF') CALL          XIT(' Ctemps ',-5 )
+
+      END IF
+*--------------------------------------------------------------------- 
+
+***    GET THE NEXT SET OF PHI. 
+
+      NSETS=0 
+  100 CALL GETSET2( 2, SP(NZT), LEV,NLEV, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6010) NSETS 
+              CALL                                 XIT(' Ctemps ', 0 ) 
+          END IF 
+
+***        CHECK THE LABEL. 
+
+          CALL CMPLBL( 0,KBUF, 0,IBUF, OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              CALL PRTLAB( KBUF ) ; CALL PRTLAB( IBUF )
+              CALL                                 XIT(' Ctemps ',-4 ) 
+          END IF 
+
+***        ACCOUNT FOR GEOPOTENTIAL IN DECAMETERS.
+
+          IF (PKTYP.EQ.'SQ89')                                 THEN
+              CORRECT = 1/98.0665
+              DO  I=NZT,NZT+NWDS*NLEV-1
+                  SP(I) = SP(I)*CORRECT
+              END DO
+          END IF
+
+***        CONVERT TO TEMPERATURES AND WRITE ONTO FILE 3. 
+
+          RGAS = 287.04 
+          CALL TFGZ( SP(NZT),SP(NZT),SP(1), LA,NLEV,SF,RGAS ) 
+
+***        ACCOUNT FOR TEMPERATURES IN DEGREES C.
+
+          IF (CT.EQ.'TT')                                      THEN
+              IF (TYPE.EQ.'SPEC')                              THEN
+                  I       = NZT
+                  CORRECT = 273.15*SQRT( 2.0 )
+                  DO  L=1,NLEV
+                      SP(I) = SP(I)-CORRECT
+                      I     = I+NWDS
+                  END DO
+              ELSE
+                  CORRECT = 273.15
+                  DO  L=NZT,NZT+NLEV*NWDS-1
+                      SP(I) = SP(I)-CORRECT
+                  END DO
+              END IF
+          END IF
+
+          READ( CT,4 ) IBUF(3)
+          CALL PUTSET2( 3, SP(NZT), LEVH,NLEV, IBUF,MAXW ) 
+
+          IF (NSETS.EQ.0) WRITE(6,6020) ' TEMP DESCRIPTOR ...'
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+      NSETS = NSETS+1 
+      GOTO 100 
+
+*--------------------------------------------------------------------- 
+    4 FORMAT(A4)
+
+ 5010 FORMAT(10X,I5,13F5.1/16F5.1) 
+
+ 6010 FORMAT(/' Ctemps converts ',I4,'  sets of gz to temp.') 
+ 6015 FORMAT(/' LRLMT,LR,LM,KTR =',I10,3I5) 
+ 6020 FORMAT(/A20)
+
+      END 
+#     endif

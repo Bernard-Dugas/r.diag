@@ -1,0 +1,625 @@
+#     if !defined (ligne_maximale)
+#         define   ligne_maximale 512
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggstat  GG01 [GG02 [GG03 [ ... [GG79] ... ]]] OUTPUT [-kind VAL1]
+*
+*
+*     DESCRIPTION...
+*      ggstat - PRINTS STATISTICS FOR EACH FIELD IN A SET OF GRID/SPEC FILE
+*
+*
+*     AUTHOR  - J.D.Henderson, MAY 11/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggstat.ptn,v 4.25 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE - PRINTS SIMPLE STATISTICS FOR EACH FIELD IN A SET OF FILES.
+*               IF THE DATA IS REAL,  THE PROGRAM PRINTS THE MIN, MAX, MEAN
+*               AND VARIANCE OF THE FIELDS.
+*
+*               IF THE DATA IS COMPLEX (i.e. TYPE 'CMPL'), THE MAXIMUM AND
+*               MINIMUM AMPLITUDES, AS WELL AS THE MEAN AND VARIANCES
+*               ARE PRINTED.
+*
+*     NOTES   - 1) AS ONE LINE IS PRINTED FOR EACH RECORD IN THE FILES,
+*                  THIS MAY RESULT IN A LARGE OUTPUT.
+*               2) KIND IS ZERO BY DEFAULT (I.E. ORIGINAL MODE)
+*               3) AN OLD GG2 FILE WILL NEVER BE OVERWRITTEN.
+*               4) MISSING VALUE TREATMENT IS SUPPORTED VIA EITHER
+*                  THE "MISSING_VALUE" ENVIRONMENT VARIABLE OR THE
+*                  "-mvalue" COMMAND-LINE ARGUMENT. PLEASE SEE THE
+*                  R.DIAG WEB DOCUMENTAION FOR MORE DETAILS.
+*
+*
+*
+*
+*     INPUT FILE...
+*      GG01         = FIRST INPUT FILE (REAL OR COMPLEX)
+*      GG02 TO GG79 = OTHER INPUT FILES (REAL OR COMPLEX), BUT ONLY WHEN KIND=0
+*
+*    (OPTIONAL AND NEW) OUTPUT FILE...
+*      GG02         = SIMPLE ARITHMETIC MEAN     (WHEN KIND=1)
+*                   = SIMPLE ARITHMETIC VARIANCE (WHEN KIND=2)
+*                   = MAXIMUM VALUE/AMPLITUDE    (WHEN KIND=3)
+*                   = MINIMUM VALUE/AMPLITUDE    (WHEN KIND=4)
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggstat
+
+*     $Log: ggstat.ptn,v $
+*     Revision 4.25  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.24  2013/10/16 21:03:32  bernard
+*     Modifier le format de sortie 6005 pour tenir compte de diag_convert_ip123.
+*
+*     Revision 4.23  2012/05/29 21:10:24  dugas
+*     Corriger un probleme avec les enregistrements '++'.
+*
+*     Revision 4.22  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.21  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.20  2008/04/25 21:32:59  dugas
+*     Effacer les declarations externes de CMMM8,FMMM2.
+*
+*     Revision 4.19  2007/12/20 20:55:24  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser GET_IP1_STRING pour imprimer les niveaux verticaux.
+*
+*     Revision 4.17  2006/07/04 18:25:15  dugas
+*     - Utiliser la routine XXX_CMMM8 pour effectuer les calculs des
+*       grilles contenant des nombres complexes (i.e. CMPL,FOUR,SPEC).
+*     - Les variances sont maintenant calculees par XXX_FMMM8 et
+*       XXX_CMMM8 plutot que par le module GGSTAT lui-meme.
+*     - Ajouter le support des donnees manquantes par le biais soit
+*       du parametre "-mvalue valeur [epsilon]", soit de la variable
+*       d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*       nombre reel denotant une valeur manquante et "epsilon" est
+*       le facteur de precision utilise dans les comparaisons. La
+*       valeur par defaut de epsilon est 1%. La seconde methode a
+*       preseance sur la premiere.
+*
+*     Revision 4.16  2004/11/12 16:29:45  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3 (v2)
+*
+*     Revision 4.15  2004/09/13 16:51:59  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.14  2004/01/30 18:01:49  dugas
+*     Corriger un petit probleme lorsque KIND .NE 0
+*
+*     Revision 4.13  2003/12/10 22:45:53  dugas
+*     Implementer le calcul en mode 64 bits pour les grilles reelles
+*
+*     Revision 4.12  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.11  2000/04/06 18:03:28  armnrbd
+*     Corriger une verification du type des donnees.
+*
+*     Revision 4.10  1999/04/24 00:53:56  armnrbd
+*     Fonctionner en mode I/O a 64 bits.
+*
+*     Revision 4.9  1999/04/13 16:28:42  armnrbd
+*     Ne pas appeller GETSTAT inutilement.
+*
+*     Revision 4.8  1998/11/27 15:53:14  armnrbd
+*     Ecrire le nom des fichiers en mode multi-fichiers.
+*     Re-activer le mode KIND.ne.0 tout en protegeant GG2.
+*
+*     Revision 4.7  1998/07/03  02:26:27  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.6  1998/06/08  02:21:07  armnrbd
+*     Utiliser GETHIC pour la gestion de NEWL.
+*
+*     Revision 4.5  1998/02/17  21:27:46  armnrbd
+*     Ajouter le support des donnees de type DATA.
+*
+*     Revision 4.4  1997/09/26  17:38:56  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1997/04/01  18:11:47  armnrbd
+*     Verifier le code de retour de GETZX2 avant de continuer.
+*     Modifier la valeur de OPT si NFF>1.
+*
+*     Revision 4.2  1995/07/18  14:11:35  armnrbd
+*     Terminer la modif precedente. Ajouter zonal multi-niveaux.
+*
+*     Revision 4.1  1995/07/17  19:42:19  armnrbd
+*     Ajouter l'option de traitement KIND.
+*
+*     Revision 4.0  1994/11/17  14:20:26  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/04/12  15:18:42  armnrbd
+*     Ajouter les support des champs de type COEF.
+*     
+*     Revision 3.1  94/03/18  14:24:33  armnrbd
+*     Modifier le format du mot 7.
+*     Corriger un bogue poteniel dans l'appel a JCLPNT.
+*     
+*     Revision 3.0  93/10/13  13:56:14  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.9  93/03/02  21:30:01  armnrbd
+*     Utiliser HPALLOC/HPDEALLC plutot que MEMOIR.
+*     
+*     Revision 1.8  92/12/16  14:16:09  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.7  92/11/10  09:33:16  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.6  92/10/30  09:45:26  armnrbd
+*     Definir ILAT avant l'appel a GETZX2.
+*     
+*     Revision 1.5  92/10/13  15:57:34  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.4  92/04/03  21:53:13  armnrbd
+*     Accumulateur a 64 bits.
+*     
+*     Revision 1.3  92/03/24  21:29:24  armnrbd
+*     Changer un Dollar en Dieze...
+*     
+*     Revision 1.2  92/03/24  21:26:08  armnrbd
+*     Ajouter le "endif" manquant a la fin de la section DOC.
+*     
+*     Revision 1.1  92/03/24  20:33:37  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:45  armnrbd
+*     Initial revision
+*     
+*     FEV 28/91 - B.DUGAS, RPN. (GRILLES ZONALES MULTI-NIVEAUX)
+*     FEV 19/91 - B.DUGAS, RPN. (BLOC RECABT AJOUTE)
+*     DEC 10/90 - B.DUGAS, RPN. (DYNAMIC MEMORY ALLOCATION)
+*     NOV 15/90 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+*     JUN 27/89 - F.ZWIERS.     (ADD "SUBA" TYPE )
+
+*     MAY 11/83 - R.LAPRISE, J.D.HENDERSON.
+
+*--------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+      INTEGER     MAXLIGNE
+      PARAMETER ( MAXLIGNE = ligne_maximale )
+
+      LOGICAL     OK
+      CHARACTER   NAME*256,LINE*ligne_maximale,
+     +            ip1_string*15,FORMC*7,CBUF*72
+      CHARACTER*4 TYPE,VALEUR,NEWL,VARNAM
+      REAL*8      ASUM,DR,DI,AVAR(MAXLEV),
+     +            AMIN8(MAXLEV),AMAX8(MAXLEV),
+     +            AMEAN8(MAXLEV),OVLA
+      REAL        AMEAN(MAXLEV),ZERO,
+     +            AMIN(MAXLEV),AMAX(MAXLEV)
+      INTEGER     I,L,NFF,NR,NR0,LEN,LA,NIO,IER,
+     +            START,NLEV,ILAT,NLON,NLONM,MAXW,HEAD,
+     +            JPAK,JBUF(taille_entete),LEV(MAXLEV),NWDS,
+     +            ID1,ID2,ID3,OPT,CMPL,ND,LENAM,LAC,
+     +            LEN1,LEN2,NP
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,C
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: A
+
+#     include    "machtype.cdk" 
+
+      INTEGER     GETSIZ
+      CHARACTER*4 GETHIC
+      LOGICAL     RPBLOC,SETIO64
+      EXTERNAL    GETSIZ,MACSPE,JCLPNT,XIT,RECGET,RECUP2,
+     +            GETZX2,PRECEDE,GETNAM,GETSTAT,
+     +            RPBLOC,PUTFLD2,PUTSET2,GETHIC,
+     +            SETIO64,get_ip1_string
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        NEWL / 'NEWL' /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggstat.ptn,v $'
+
+*---------------------------------------------------------------------
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ASSIGN I/O UNITS.
+
+      NFF = 80
+      CALL JCLPNT( NFF, 11,12,13,14,15,16,17,18,19,20,
+     +                  21,22,23,24,25,26,27,28,29,30,
+     +                  31,32,33,34,35,36,37,38,39,40,
+     +                  41,42,43,44,45,46,47,48,49,50,
+     +                  51,52,53,54,55,56,57,58,59,60,
+     +                  61,62,63,64,65,66,67,68,69,70,
+     +                  71,72,73,74,75,76,77,78,79,80,
+     +                  81,82,83,84,85,86,87,88,89, 6 )
+
+      ID1 = 0
+      ID2 = 0
+      ID3 = 0
+
+      ND  = 0
+      NR0 = 0
+      NIO = 11
+      NFF = 10+NFF
+
+      OPT = 0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)') OPT
+
+      END IF
+
+***    ENSURE THAT IF MORE THAN TWO FILES ARE OPENNED,  ** OR **
+***    IF TWO FILES ARE OPENNED AND THE SECOND IS NOT NEW, OPT = 0.
+
+      IF (NFF.GE.12) CALL GETSTAT( 12,VALEUR )
+
+      IF ( OPT.NE.0  .AND.
+     +   ((NFF.EQ.12 .AND. VALEUR.NE.'NEW') .OR.
+     +     NFF.GT.12 )   ) OPT = 0
+
+***    PRINT FIRST FILE NAME IN MULTI-FILE MODE.
+
+      IF (NIO.EQ.11  .AND.
+     +    NIO.NE.NFF .AND.
+     +    OPT.EQ.0 )                                           THEN
+          CALL GETNAM( NIO,NAME )
+          LENAM = INDEX( NAME // ' ' , ' ' )-1
+          WRITE(6,6200) NAME(1:LENAM)
+      END IF
+
+***    ASK FOR WORKING MEMORY. CHECK FIRST DATA BUFFER.
+
+  100 MAXW = GETSIZ( NIO, JBUF,LEN,NWDS,JPAK )   
+      IF (MAXW.EQ.0) CALL                          XIT(' Ggstat ', 0 )
+
+      ALLOCATE( IBUF(2*LEN),A(NWDS),C(NWDS) )
+
+***    GET THE NEXT FIELD. LABELS ARE JUST PRINTED.
+
+  150 CALL RECGET( NIO, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+  160 IF (.NOT.OK)                                             THEN
+          IF (MAXW.EQ.0)                                       THEN
+              DEALLOCATE( IBUF,A,C )
+              GOTO 100
+          ELSE IF (NIO.LT.NFF .AND. OPT.EQ.0)                  THEN
+              ID1 = 0
+              ID2 = 0
+              ID3 = 0
+              NIO = NIO+1
+              CALL GETNAM( NIO,NAME )
+              LENAM = INDEX( NAME // ' ' , ' ' )-1
+              WRITE(6,6201) NAME(1:LENAM)
+              GOTO 150
+          ELSE
+              CALL                                 XIT(' Ggstat ', 1 )
+          END IF
+      END IF
+
+      WRITE(VARNAM,0004) IBUF(3)
+      IF (VARNAM == '++') GOTO 150
+
+      NR0 = NR0+1
+      NR  = NR0
+
+      WRITE(TYPE,0004) IBUF(1)
+
+      CALL PRTLAB3( CBUF,IBUF )
+
+      IF (TYPE.EQ.'LABL')                                      THEN
+          WRITE(6,6010) NR,TRIM( CBUF )
+          GOTO 150
+      END IF
+
+                          CMPL = 1
+      IF (TYPE.EQ.'CMPL') CMPL = 2
+
+      IF (TYPE.EQ.'CHAR')                                      THEN
+          CALL RECUP2( C,IBUF )
+      ELSE
+          CALL RECUP2( A,IBUF )
+      END IF
+
+      LA = IBUF(5)*IBUF(6)
+
+***    DETERMINE THE KIND OF FIELD.
+
+      IF (TYPE.EQ.'GRID' .OR. TYPE.EQ.'ZONL' .OR.
+     +    TYPE.EQ.'DATA' .OR. TYPE.EQ.'SUBA' .OR.
+     +    TYPE.EQ.'COEF' )                                     THEN
+
+***        GRID ARRAY SECTION.
+
+          ID1 = ID1+1
+          ID2 = 0
+          ID3 = 0
+
+          IF (ID1.EQ.1) WRITE(6,6005)
+
+          IF (TYPE.EQ.'ZONL' .AND. LA.NE.IBUF(5))              THEN
+
+***            WE HAVE A MULTI-LEVEL ZONAL ARRAY. DO THE CALCULATIONS
+***            BY LEVELS. ACCOUNT FOR HIDDEN '++' RECORDS WITH THE
+***            NEWL/IBUF INFO.
+
+              CALL PRECEDE( NIO,1 )
+
+              ILAT = IBUF(5)
+              CALL GETZX2( NIO, A, ILAT,LEV,NLEV, IBUF,MAXW,OK )
+              IF (.NOT.OK) GOTO 160
+
+              VALEUR = GETHIC('NEWL',IBUF )
+              IF (HEAD.GE.20 .AND. VALEUR.EQ.NEWL) NR0 = NR0+1
+
+          ELSE
+
+***            ONE-LEVEL ARRAYS...
+
+              NLEV = 1
+
+          END IF
+
+          NLON  = LA/NLEV
+          NLONM = NLON-1
+          OVLA  = 1./DBLE( NLON ) 
+
+          IF (NLEV.NE.1) IBUF(6) = 1
+
+          JBUF(1:HEAD) = IBUF(1:HEAD)
+
+          DO  200 L=1,NLEV
+
+              START = (L-1)*NLON+1
+
+***            COMPUTE THE MIN,MAX, MEAN AND VAR.
+
+              NP = NLON
+
+              CALL XXX_FMMM8( AMIN8(L),AMAX8(L),AMEAN8(L),AVAR(L),
+     +                        A(START),NP )
+
+              IF (NP.NE.0) AMEAN8(L) = AMEAN8(L)/NP
+
+              ND = ND+1
+
+              IF (NLEV.NE.1)                                   THEN
+                  JBUF(4) = LEV(L)
+                  CALL PRTLAB3( CBUF,JBUF )
+              END IF
+
+              WRITE(6,6010) NR,TRIM( CBUF ),
+     +                      AMIN8(L),AMAX8(L),AMEAN8(L),AVAR(L)
+
+  200     CONTINUE
+
+      ELSE IF (TYPE.EQ.'SPEC' .OR. TYPE.EQ.'FOUR' )            THEN
+
+***        SPECTRAL SECTION.
+
+          ID1 = 0
+          ID2 = ID2+1
+          ID3 = 0
+
+          IF (ID2.EQ.1) WRITE(6,6006)
+
+          WRITE(6,6010) NR,TRIM( CBUF ), A(1),A(2), A(3),A(4)
+
+      ELSE IF (TYPE.EQ.'CMPL')                                 THEN
+
+***        GENERIC COMPLEX SECTION.
+
+          NLON  = LA
+
+          ID1 = 0
+          ID2 = 0
+          ID3 = ID3+1
+
+          IF (ID3.EQ.1) WRITE(6,6007)
+
+***        COMPUTE THE MIN,MAX, MEAN AND VAR.
+
+          NP = NLON
+
+          CALL XXX_CMMM8( AMIN8,AMAX8,AMEAN8,AVAR, A,NP )
+
+          WRITE(6,6015) NR,TRIM( CBUF ),  AMIN8 (1),AMAX8(1),
+     +                  AMEAN8(1),AMEAN8(2),AVAR (1)
+
+          AVAR  (2) = 0.0
+          AMAX8 (2) = 0.0
+          AMIN8 (2) = 0.0
+
+      ELSE IF (TYPE.EQ.'CHAR')                                 THEN
+
+***        A CHARACTER STRING.
+
+          WRITE(6,6010) NR,TRIM( CBUF )
+
+          IF      (IBUF(8).EQ.-64)                             THEN
+              LAC  = LA*MACHINE
+              LEN1 = MIN( IBUF(5)*8, MAXLIGNE )
+              IF (INTSIZE*MACHINE.EQ.1)                        THEN
+                  LEN2 = MIN( IBUF(5), MAXLIGNE/8 )
+                  WRITE(FORMC,"('(',I3,'A8)')") LEN2
+              ELSE
+                  LEN2 = MIN( 2*IBUF(5), MAXLIGNE/4 )
+                  WRITE(FORMC,"('(',I3,'A4)')") LEN2
+              END IF
+          ELSE IF (IBUF(8).EQ.-32)                             THEN
+              LAC  = LA
+              LEN1 = MIN( IBUF(5)*4, MAXLIGNE )
+              LEN2 = MIN( IBUF(5), MAXLIGNE/4 )
+              WRITE(FORMC,"('(',I3,'A4)')") LEN2
+          END IF
+
+          DO I=1,LAC,LEN2
+              WRITE(LINE,FORMC) (C(L),L=I,MIN( LAC,I+LEN2-1 ))
+              WRITE(6,'(A)') LINE(1:LEN1)
+          END DO
+
+      ELSE
+
+          WRITE(6,6010) NR,TRIM( CBUF )
+
+      END IF
+
+***
+      IF (TYPE.EQ.'SPEC' .OR.
+     +    TYPE.EQ.'FOUR' .OR.
+     +    TYPE.EQ.'CHAR' )                                     THEN
+
+***        NO MORE OPERATION SUPPORTED FOR THESE GRIDS.
+
+          GOTO 150
+
+      ELSE IF (OPT .NE.   0    .AND.
+     +         TYPE.EQ.'ZONL'  .AND. 
+     +         LA  .NE.IBUF(5) )                               THEN
+
+***        CONSIDER MULTI-LEVEL ZONAL FIELDS.
+
+          DO  L=1,NLEV
+              START = (L-1)*NLON
+              IF (OPT.EQ.1)                                    THEN
+                  DO  I=1,NLON
+                      A(START+I) = AMEAN8(L)
+                  END DO
+              ELSE IF (OPT.EQ.2)                               THEN
+                  DO  I=1,NLON
+                      A(START+I) = AVAR(L)
+                  END DO
+              ELSE IF (OPT.EQ.3)                               THEN
+                  DO  I=1,NLON
+                      A(START+I) = AMAX8(L)
+                  END DO
+              ELSE IF (OPT.EQ.4)                               THEN
+                  DO  I=1,NLON
+                      A(START+I) = AMIN8(L)
+                  END DO
+              END IF
+          END DO
+
+          CALL PUTSET2( NIO+1, A, LEV,NLEV, IBUF,MAXW)
+
+      ELSE 
+
+          IF (OPT.EQ.1)                                        THEN
+
+***            SAVE ARITHMETIC MEAN.
+
+              DO  I=1,LA
+                  DO  L=1,CMPL
+                      A((I-1)*CMPL+L) = AMEAN8(L)
+                  END DO
+              END DO
+
+          ELSE IF (OPT.EQ.2)                                   THEN
+
+***            SAVE ARITHMETIC VARIANCE. IMAGINARY PART IS ZERO.
+
+              DO  I=1,LA
+                  DO  L=1,CMPL
+                      A((I-1)*CMPL+L) = AVAR(L)
+                  END DO
+              END DO
+
+          ELSE IF (OPT.EQ.3)                                   THEN
+
+***            SAVE MAXIMUM VALUE/AMPLITUDE. IMAGINARY PART IS ZERO.
+
+              DO  I=1,LA
+                  DO  L=1,CMPL
+                      A((I-1)*CMPL+L) = AMAX8(L)
+                  END DO
+              END DO
+
+          ELSE IF (OPT.EQ.4)                                   THEN
+
+***            SAVE MINIMUM VALUE/AMPLITUDE. IMAGINARY PART IS ZERO.
+
+              DO  I=1,LA
+                  DO  L=1,CMPL
+                      A((I-1)*CMPL+L) = AMIN8(L)
+                  END DO
+              END DO
+
+          END IF
+
+          IF (OPT.NE.0)
+     +        CALL PUTFLD2( NIO+1, A, IBUF,MAXW )
+
+      END IF
+
+      GOTO 150
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+
+ 6005 FORMAT(/'  Grid',76X,'Min',11X,'Max',11X,'Mean',10X,'Var'/)
+ 6006 FORMAT(/'  Spectral',69X,'C(1)',24X,'C(2)'/)
+ 6007 FORMAT(/'  Complex',70X,'Min',11X,'Max',19X,'Mean',16X,'Var'/)
+
+ 6000 FORMAT(2X,A4,I12,1X,A4,A,2I6,I10,I6)
+ 6010 FORMAT(1X,I5,A,3X,1P4E14.6)
+ 6015 FORMAT(1X,I5,a,3X,1P5E14.6)
+
+ 6200 FORMAT(/' First file is ',A)
+ 6201 FORMAT(/' Next file is ',A)
+
+      END 
+#     endif

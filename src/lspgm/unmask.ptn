@@ -1,0 +1,247 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 200000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      unmask  MASK TSIN TSOUT
+*
+*
+*     AUTHOR  - B.Dugas, AVRIL 05/1989.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/unmask.ptn,v 4.5 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CE PROGRAMME DECOMPRESSE DES SERIES TEMPORELLES CORRESPONDANTS 
+*      A UN CERTAIN MASQUE.  LES MOYENNES DES SERIES  INITIALES  SONT 
+*      INSERES AUX MOMENTS EXCLUS PAR LE MASQUE.  LA LONGUEUR DES SE- 
+*      RIES  CONTENUES DANS TSIN DOIT ETRE EGALE AU NOMBRE D'ELEMENTS 
+*      NON-NULS DE MASK. 
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 PROBLEM READING MASK
+*      2 MASK RECORD IS NULL
+*      3 PROBLEM READING TSIN
+*      4 NUMBER OF POINTS IN TSIN NOT EQUAL TO NON-ZERO VALUES IN MASK
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM UNMASK 
+*    1               (      MASK,         TSIN,         TSOUT, 
+*    2                TAPE1=MASK,   TAPE2=TSIN,   TAPE3=TSOUT, 
+*    3                      OUTPUT, TAPE6=OUTPUT) 
+ 
+*     $Log: unmask.ptn,v $
+*     Revision 4.5  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.2  1998/05/21 20:20:57  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1996/11/12  19:22:07  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*     Modifier le traitement des donnees complexes.
+*
+*     Revision 4.0  1994/11/17  14:22:18  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:21  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/17  17:32:56  armnrbd
+*     Initial revision
+*      
+***    AVRIL 05/1989 - B. DUGAS. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+ 
+      LOGICAL     OK,CMPL
+      CHARACTER*4 TYPE,NAME
+      REAL        MASK,TSIN,TSOUT 
+      REAL*8      MEAN,MEANR,MEANI
+      INTEGER     IBUF,IER,NF,KIND,LEVL,
+     +            MAXR,NWDS,NWDS2,NR,I,J
+ 
+      POINTER   ( IB,IBUF(8) )
+      POINTER   ( PM,MASK(1) )
+      POINTER   ( PN,TSIN(1) )
+      POINTER   ( PO,TSOUT(1) )
+
+      EXTERNAL    JCLPNT,XIT,GETFLD2,PUTFLD2,SETLAB,HPALLOC
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        CMPL / .FALSE. /
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/unmask.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,1 )
+      CALL HPALLOC( PM,      MAXW, IER,1 )
+      CALL HPALLOC( PN,      MAXW, IER,1 )
+      CALL HPALLOC( PO,      MAXW, IER,1 )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2,3, 6 )
+ 
+***    GO GET THE ORIGINAL MASKING RECORD ... 
+ 
+      CALL GETFLD2( 1, MASK, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+      IF (.NOT.OK)                                             THEN 
+          WRITE(6,6001) 
+          CALL                                     XIT(' Unmask ',-1 ) 
+      END IF 
+ 
+***    ... SAVE A FEW CONSTANTS ... 
+ 
+      CALL PRTLAB2(' Mask record from unit 1 ...', IBUF )
+ 
+      KIND = IBUF(1) 
+      LEVL = IBUF(4) 
+      MAXR = IBUF(5)*IBUF(6) 
+
+      WRITE(TYPE,0004) IBUF(1) 
+      WRITE(NAME,0004) IBUF(3) 
+ 
+      IF (TYPE.EQ.'SPEC' .OR.
+     +    TYPE.EQ.'FOUR' .OR.
+     +    TYPE.EQ.'CMPL')
+     +    CMPL = .TRUE.
+
+***    HOW MANY NON-ZERO POINTS ? 
+ 
+      NWDS = 0 
+      DO 050 I=1,MAXR 
+          IF (MASK(I).NE.0.0) NWDS = NWDS+1 
+  050 CONTINUE 
+ 
+      IF (NWDS.EQ.0) CALL                          XIT(' Unmask ',-2 ) 
+ 
+***    GET THE INPUT TIME SERIE RECORD. 
+ 
+      NR = 0 
+  100 CALL GETFLD2( 2, TSIN, TYPE,-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+              IF (NR.EQ.0)                                     THEN 
+                  WRITE(6,6003) 
+                  CALL                             XIT(' Unmask ',-3 ) 
+              END IF 
+              WRITE(6,6000) NR 
+              CALL                                 XIT(' Unmask ', 0 ) 
+          END IF 
+ 
+          NWDS2 = IBUF(5)*IBUF(6) 
+ 
+          IF (NR.EQ.0)
+     +    CALL PRTLAB2(' First time series in from unit 2 ...', IBUF )
+ 
+***        CHECK FOR CONSISTENCY. 
+ 
+          IF (NWDS2.NE.NWDS)                                   THEN 
+              WRITE(6,6004) NR+1,NWDS,NWDS2 
+              CALL                                 XIT(' Unmask ',-4 ) 
+          END IF 
+ 
+***        LET'S CALCULATE THE ORDER ONE MOMENT. 
+ 
+          IF (CMPL)                                            THEN
+              MEANR = 0.0 
+              MEANI = 0.0 
+              DO  I=1,2*NWDS-1,2
+                  MEANR = MEANR + TSIN(I) 
+                  MEANI = MEANI + TSIN(I+1) 
+              END DO
+              MEANR = MEANR/FLOAT(NWDS) 
+              MEANI = MEANI/FLOAT(NWDS) 
+          ELSE
+              MEAN = 0.0 
+              DO  I=1,NWDS 
+                  MEAN = MEAN + TSIN(I) 
+              END DO
+              MEAN = MEAN/FLOAT(NWDS) 
+          END IF
+ 
+***        LET US NOW BUILD TSOUT ... 
+ 
+          J = 1
+          IF (CMPL)                                           THEN
+              DO  I=1,2*MAXR-1,2
+                  IF (MASK(I).NE.0.0 .OR. MASK(I+1).NE.0.0)   THEN 
+                      TSOUT(I  ) = TSIN(J  ) 
+                      TSOUT(I+1) = TSIN(J+1) 
+                      J = J+2
+                  ELSE 
+                      TSOUT(I  ) = MEANR
+                      TSOUT(I+1) = MEANI
+                  END IF 
+              END DO
+          ELSE
+              DO  I=1,MAXR 
+                  IF (MASK(I).NE.0.0)                         THEN 
+                      TSOUT(I) = TSIN(J) 
+                      J = J+1 
+                  ELSE 
+                      TSOUT(I) = MEAN 
+                  END IF 
+              END DO
+          END IF
+ 
+***        ... AND SAVE IT. 
+ 
+          CALL SETLAB( IBUF, TYPE,-1,NAME,LEVL,MAXR,1,-1,-32 ) 
+          CALL PUTFLD2( 3, TSOUT, IBUF,MAXW ) 
+ 
+      NR = NR+1 
+      GOTO 100 
+*----------------------------------------------------------------------- 
+ 
+ 0004 FORMAT(A4) 
+ 6000 FORMAT('0',I5,' time series written to unit 3.') 
+ 6001 FORMAT('0Unmask aborting for lack of mask record...') 
+ 6003 FORMAT('0Unmask aborting for lack of a time series record...') 
+ 6004 FORMAT('0At record no. ',I4, 
+     +       ', the input time series do not have the right lenght,', 
+     +       ' NWDS1/NWDS2= ',2I6) 
+ 
+      END 
+#     endif

@@ -1,0 +1,383 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      timdev  SERA AVGA DEVA OUTPUT [ -mvalue VAL1 ]
+*
+*
+*     DESCRIPTION...
+*      timdev - COMPUTES TIME DEVIATION FROM THE TIME AVERAGE
+*
+*
+*     AUTHOR  - J.D.Henderson, MAY 07/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/timdev.ptn,v 4.17 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES THE 2-D TIME DEVIATION  FROM THE TIME AVERAGE FOR EACH 
+*               LEVEL OF A SERIES OF (MULTI-LEVEL) SETS OF DATA HAVING THE SAME
+*               SIZE AND TYPE. MAXIMUM LEVELS IS 999.
+*
+*
+*     INPUT FILE...
+*      SERA = SERIES OF  MULTI-VARIABLE MULTI-LEVEL SETS, 
+*             WHERE THE DATA MAY BE REAL OR COMPLEX.
+*      AVGA = CONTAINS ONE SET WHICH IS THE MEAN OF ALL
+*             THE SETS IN FILE SERA.
+
+*      NOTES: 1) THE INPUT FILES SHOULD HAVE THE SAME STRUCTURE,
+*                I.E. THE SAME VERTICAL LEVELS AND VARIABLES.
+*             2) THESE FILES ARE SUPPOSED TO BE SORTED ACCORDING
+*                TO A TIMESTEP/NAME/LEVEL RULE, FROM MOST TO
+*                LEAST SIGNIFICANT
+*             
+*     OUTPUT FILE...
+*      DEVA = DEVIATIONS FROM THE MEAN 
+*
+*
+*     Command-line arguments...
+*      mvalue = Real number used to identify missing values (DEF = none)
+*
+*     Missing value mode...
+*      Missing value treatment is activated by providing a real number to be
+*      used as a missing value flag with the "-mvalue" command-line argument.
+*      Data that has this value will be disregarded by the program.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEMS READING INPUT FILES
+*       2 AVGA AND SERA RECORDS NOT THE SAME SIZE
+*       3 PREMATURE EOF ON FILE AVGA
+*       4 PREMATURE EOF ON FILE SERA
+*       5 UNABLE TO ALLOCATE ENOUGH WORKING MEMORY
+*       6 BAD ARGUMENT VALUE WITH A COMMAND-LINE PARAMETRE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM timdev
+*    1               (SERA,        AVGA,        DEVA,       OUTPUT,
+*    2         TAPE11=SERA, TAPE12=AVGA, TAPE13=DEVA, TAPE6=OUTPUT)
+*     ------------------------------------------------
+
+*     $Log: timdev.ptn,v $
+*     Revision 4.17  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.16  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.15  2008/04/25 21:21:49  dugas
+*     Allocation de memoire dependante de NS.
+*
+*     Revision 4.14  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.13  2006/09/19 19:11:29  dugas
+*     Corriger le code preparant les appels a WRITLEV.
+*
+*     Revision 4.12  2006/07/04 17:53:21  dugas
+*     Ajouter le support des donnees manquantes par le biais soit
+*      du parametre "-mvalue valeur [epsilon]", soit de la variable
+*      d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*      nombre reel denotant une valeur manquante et "epsilon" est
+*      le facteur de precision utilise dans les comparaisons. La
+*      valeur par defaut de epsilon est 1%. La seconde methode a
+*      preseance sur la premiere.
+*
+*     Revision 4.11  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.10  2001/10/11 11:15:05  armnrbd
+*     Les noms lus par GETSIZ4 et ecrits par PUTMSET2 contiennent
+*     maintenant les etiquettes des enregistrements (RPN STD).
+*
+*     Revision 4.9  2001/09/24 14:58:16  armnrbd
+*     Implanter GETSIZ4 et GET/PUT(MSET2).
+*
+*     Revision 4.8  2000/04/07 20:19:48  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.7  1998/10/21 20:10:07  armnrbd
+*     Renforcir le controle de la compatibilite entre les fichiers de donnees.
+*
+*     Revision 4.6  1998/07/03  02:26:43  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:39:25  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1996/11/26  20:12:26  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.3  1996/01/30  19:43:58  armnrbd
+*     Corriger une erreur dans la definition de MEM.
+*
+*     Revision 4.2  1995/10/26  17:44:07  armnrbd
+*     Ajouter de la decumentation sur le mode de fonctionnement multi-variable.
+*
+*     Revision 4.1  1995/07/06  02:53:20  armnrbd
+*     Implanter un mode de travail a multi-variables.
+*
+*     Revision 4.0  1994/11/17  14:22:10  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/08/16  21:08:31  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.1  94/02/04  15:55:40  armnrbd
+*     Corriger un bogue dans l'allocation de la memoire ZONL.
+*     
+*     Revision 3.0  93/10/13  13:57:16  13:57:16  armnrbd (Bernard Dugas)
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/23  15:14:52  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/04/02  11:55:55  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:01  armnrbd
+*     Initial revision
+*     
+*     MAY 07/91 - B.DUGAS, RPN (PORT TO CY920/IRIX)
+*     MAY 07/80 - J.D.HENDERSON
+
+*---------------------------------------------------------------------------
+      IMPLICIT    none
+ 
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 1999 )
+
+      REAL        ZERO
+      LOGICAL     OK,MVALUE
+      CHARACTER*4 TYPE,VALEUR*20
+      INTEGER     LEV(MAXLEV,2),KPAK,KBUF(taille_entete),LPAK,LBUF(taille_entete),
+     +            LEN,LEN1,LEN2,HEAD,MAXW,MAXW1,MAXW2,MEM,
+     +            NWDS,NLEV,I,K,NF,STEP(MAXLEV),NRECS,NSET,
+     +            NSETB,NSETS,IER,LEVB(MAXLEV,2),IO,
+     +            SET(0:MAXLEV),SETB(0:MAXLEV)
+      REAL*8      EPSILON,MISFLAG
+
+      CHARACTER*20 VARIA(MAXLEV),VARIB(MAXLEV)
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: F,AVG
+
+      LOGICAL     SETIO64
+      EXTERNAL    MACSPE,JCLPNT,XIT,HPALLOC,HPDEALLC,
+     +            GETMSET2,PUTMSET2,PRECEDE,CMPLBL,
+     +            WRITLEV2,SETIO64,MISPAR
+
+#     include "machtype.cdk" 
+
+      INTEGER     GETSIZ4
+      EXTERNAL    GETSIZ4
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/timdev.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 11,12,13, 6 )
+ 
+      NSETS = 0
+      NRECS = 0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    CHECK MISSING VALUE PARAMETRES.
+
+      CALL MISPAR( MVALUE,MISFLAG,EPSILON )
+      IF (MVALUE) EPSILON = EPSILON * ABS( MISFLAG )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+      MAXW2 = GETSIZ4( 12, LBUF,LEN2,NWDS,LPAK,
+     +                     SET,NSET, LEV,VARIA, MAXLEV )
+  050 MAXW1 = GETSIZ4( 11, KBUF,LEN1,NWDS,KPAK,
+     +                     SETB,NSETB, LEVB,VARIB, MAXLEV )
+
+***    DO SOME CONSISTENCY CHECKS.
+
+      IF (MAXW1     .LE.0           .OR.
+     +    MAXW2     .LE.0           .OR.
+     +    SET(NSET) .GT.MAXLEV      .OR.
+     +    SET(NSET) .NE.SETB(NSETB) )                          THEN
+          WRITE(6,6100) MAXW1,SET(NSET),MAXW2,SETB(NSETB)
+          CALL                                     XIT(' Timdev ',-1 )
+      END IF
+
+      DO  I=1,NSET
+          IF (VARIA(SET(I))(1:4).NE.VARIB(SETB(I))(1:4))       THEN
+              WRITE(6,6101) I,VARIA(SET(I))(1:4),VARIB(SETB(I))(1:4)
+              CALL                                 XIT(' Timdev ',-1 )
+          END IF
+          DO  K=SET(I-1)+1,SET(I)
+              IF (LEV(I,1).NE.LEVB(I,1))                       THEN
+                  WRITE(6,6102) I,LEVB(I,1)
+                  CALL                             XIT(' Timdev ',-1 )
+              END IF
+          END DO
+      END DO
+
+      MAXW = MAX( MAXW1,MAXW2 )
+      LEN  = MAX( LEN1, LEN2  )
+
+      WRITE(TYPE,4) LBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      CALL CMPLBL( 0,LBUF, 0,KBUF, OK ) 
+
+      IF (.NOT.OK) CALL                            XIT(' Timdev ',-2 )
+
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      WRITE(6,6150) (VARIA(SET(I))(1:4),I=1,NSET)
+
+      NLEV = SET(1)
+      DO  I=2,NSET
+         IF (NLEV.NE.SET(I)-SET(I-1)) NLEV = 0
+      END DO
+
+      IF (NLEV*NSET.EQ.SET(NSET))                              THEN
+          CALL WRITLEV2( LEV,NLEV, KBUF )
+      ELSE
+          WRITE(6,6350) NSET,SET(NSET)
+      END IF
+
+***    ALLOCATE WORKING MEMORY.
+
+      MEM  = NWDS*SET(NSET)
+
+      IF (NSETS.EQ.0)                                          THEN
+         ALLOCATE( IBUF(2*LEN),F(MEM),AVG(MEM), STAT=IER )
+      ELSE
+         ALLOCATE( IBUF(2*LEN),F(MEM),          STAT=IER )
+      END IF
+
+      IF (IER.NE.0)                                            THEN
+          WRITE(6,6005) 8*(2*MEM+LEN*(MOD( MACHINE,2 )+1))
+          CALL                                     XIT(' Timdev ' ,-5 )
+      END IF
+
+      IF (NSETS.EQ.0)                                          THEN
+
+***        READ THE AVERAGE INTO AVG FROM FILE 12.
+ 
+          CALL GETMSET2( 12, AVG, SET,NSET, LEV,VARIA,STEP,
+     +                            IBUF,MAXW,OK )
+
+          IF (.NOT.OK) CALL                        XIT(' Timdev ',-3 )
+
+      END IF
+
+***    TIMESTEP LOOP. GET THE NEXT FIELD FROM FILE 11 AND CHECK THE LABEL.
+  
+  100 CALL GETMSET2( 11, F, SET,NSET, LEV,VARIA,STEP,
+     +                      IBUF,MAXW,OK )
+
+          IF (.NOT.OK .AND. MAXW.EQ.0)                         THEN
+              DEALLOCATE( IBUF,F )
+              GOTO 050
+          END IF
+
+***        SKIP (I.E. REMOVE) LABEL RECORDS.
+
+          WRITE(TYPE,4) IBUF(1)
+          IF (TYPE.EQ.'LABL') GOTO 100
+
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( KBUF ) ; CALL PRTLAB( IBUF )
+              WRITE(6,6250) NSETS
+              IF (NSETS.EQ.0) CALL                 XIT(' Timdev ',-4 )
+              CALL                                 XIT(' Timdev ', 0 )
+          END IF
+
+***        REMOVE TIME MEAN.
+
+          IF (MVALUE)                                          THEN
+              DO  I=1,MEM
+                  IF (ABS(   F(I)-MISFLAG).GT.EPSILON .AND.
+     +                ABS( AVG(I)-MISFLAG).GT.EPSILON )        THEN
+                      F(I)= F(I) - AVG(I)
+                  ELSE
+                      F(I) = MISFLAG
+                  END IF
+              END DO
+          ELSE
+              DO  I=1,MEM
+                  F(I)= F(I) - AVG(I)
+              END DO
+          END IF
+
+***        SAVE THE RESULT.
+
+          CALL PUTMSET2( 13, F, SET,NSET, LEV,VARIA,MAXLEV, IBUF,MAXW )
+
+      NRECS = NRECS+SET(NSET)
+      NSETS = NSETS+1
+      GOTO 100
+ 
+***    ERROR READING MISFLAG.
+ 
+  900 IF (IO.NE.0) WRITE(6,6006) IO
+      CALL                                         XIT(' Timdev ',-6 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0020 FORMAT(BN,E20.0)
+
+
+ 6005 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' characters.')
+ 6006 FORMAT(' I/O error number ',I3,
+     +       ', while reading command-line parametre value.')
+
+ 6100 FORMAT('0..Problems with input files...'/
+     +       '   Maxw,nrec(sera),maxw,nrec(avga) =',4I8)
+ 6101 FORMAT('0..Problems with input files...'/
+     +       '   Variable no. ',I3,' different...= ',A4,1X,A4)
+ 6102 FORMAT('0..Problems with input files...'/
+     +       '   Level no. ',I3,' different...= ',2I6)
+
+ 6150 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6250 FORMAT('0Timdev read',I5,'  sets.')
+ 6300 FORMAT('0..Last set incomplete. NR,NRECS=',2I6)
+ 6350 FORMAT(/' Each set will contain ',I3,' variables distributed',
+     +        ' over ',I3,' horizontal records.'/)
+
+      END
+#     endif

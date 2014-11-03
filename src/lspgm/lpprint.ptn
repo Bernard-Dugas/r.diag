@@ -1,0 +1,810 @@
+#     if !defined (ligne_maximale)
+#         define   ligne_maximale 512
+#     endif
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      lpprint  INLP INPUT OUTPUT [ -kind VAL1 -a VAL2 -label VAL3 ]
+*
+*
+*     DESCRIPTION...
+*      lpprint - PRINTS VALUES OF ANY SIZE (MAX 361X180) ARRAY
+*
+*
+*     AUTHOR   - M.Lazare, JUN 22/84.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/lpprint.ptn,v 4.18 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     PURPOSE  - PRINTS VALUES FROM INLP FILE, ONE RECORD AT A TIME.
+*                THE PRINTOUT IS CLASSIFIED BY LATITUDE (AND POSSIBLY
+*                LONGITUDE), FOR EASY READING.
+*
+*     NOTES    - 1) THE PROGRAM DOES NOT CHECK FOR NAME, LEVEL OR
+*                   TIMESTEP NUMBER.
+*                2) THE MAXIMUM SIZE ALLOWABLE CORRESPONDS TO GRID OF
+*                   1X1 DEGREE RESOLUTION.
+*                3) THE PROGRAM WILL NOT ABORT; IT WILL TERMINATE WITH A
+*                   MESSAGE IF:
+*                   a) - THERE IS A PROBLEM IN OBTAINING THE RECORD.
+*                   b) - AN ATTEMPT IS MADE TO OPERATE ON A SPECTRAL FILE.
+*
+*
+*     INPUT FILE...
+*      INLP = LAT-LONG, GAUSSIAN GRID, ZONAL FIELDS WITH EQUALLY-SPACED
+*             LATITUDES, OR ZONAL FIELDS WITH GAUSSIAN LATITUDES FILE
+*             OR FOURIER COEFFICIENTS OR STRAIGHT DATA RECORDS.
+*             RPN L- AND Z-TYPE ARRAYS ARE ALSO SUPPORTED.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NTYP   = DETERMINES THE TYPE OF ARRAYS FOUND IN CCCma FILES:
+*      (kind)   0 OR ' ' DEFAULTS TO GAUSSIAN G-TYPE GRIDS
+*               1 OR 'A' STANDS FOR RPN/CMC A-TYPE GRIDS
+*               2 OR 'B' STANDS FOR RPN/CMC B-TYPE GRIDS
+*      SCALE  = REAL NUMBER BY WHICH THE VALUES ARE TO BE MULTIPLIED BEFORE
+*      (a)      BEING PRINTED IN A F9.2 FORMAT (DEFAULTS TO AUTOSCALE)
+*      LABEL  = 80 CHARACTER LABEL PRINTED BELOW LISTING OF DATA
+*
+*      READ( 5,5010 ) NTYP,SCALE
+*      READ( 5,5020 ) LABEL
+*5010  FORMAT(10X,I5,E10.0)
+*5020  FORMAT(20A4)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+* LPPRINT.    0       1.0
+*  LLPHYS=IPHS1LP.  GROUND TEMPERATURE FOR DECEMBER. UNITS DEC C.
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITION...
+*       1 PROBLEM READING FILE INLP
+*       2 ERROR ABORT READING LABEL CARD
+*
+*     NON-FATAL CONDITIONS...
+*     101 EMPTY INLP FILE
+*     102 UNSUPPORTED DATA TYPE
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM lpprint
+*     PROGRAM LPPRINT (INLP,       INPUT,       OUTPUT,
+*    1           TAPE1=INLP, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -------------------------------------------------
+
+*     $Log: lpprint.ptn,v $
+*     Revision 4.18  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.17  2013/10/16 21:08:09  bernard
+*     Utiliser les macros longitude_maximale et latitude_maximale pour definir les parametres MAXLON et MAXLAT, respectivement.
+*
+*     Revision 4.16  2013/02/07 21:48:27  bernard
+*     Augmenter MAXLAT,MAXLON a 1999,3999.
+*
+*     Revision 4.15  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.14  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.13  2007/08/29 17:21:46  dugas
+*     Ne plus limiter RLON a 2*PI a l'impression pour les grilles L.
+*
+*     Revision 4.12  2007/03/12 19:34:34  dugas
+*     Corriger le calcul des latitudes pour les grilles A et B.
+*
+*     Revision 4.11  2004/11/12 17:52:57  dugas
+*     Ajouter le support des donnees sur grilles de type L
+*      et des donnees de type CHAR/datyp=3.
+*
+*     Revision 4.10  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.9  2002/04/22 15:27:07  dugas
+*     Ajouter le support des grilles de type Z
+*
+*     Revision 4.8  2000/03/20 20:22:51  armnrbd
+*      Associer un seul champs par pointeur.
+*
+*     Revision 4.7  1999/07/06 18:22:04  armnrbd
+*     Allouer dynamiquement RLONG.
+*
+*     Revision 4.6  1998/10/19 15:11:41  armnrbd
+*     Modifier la documentation.
+*     Ajouter le parametre "-label"
+*
+*     Revision 4.5  1998/07/03  02:26:32  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1998/06/08  02:24:24  armnrbd
+*     Passer en mode de calcul a 64 bits.
+*     Utiliser HPALLOC pour allouer la memoire dynamique.
+*     Tenir compte des enregistrements LABL.
+*     Decoder les enregistrements ++.
+*
+*     Revision 4.3  1998/05/21  20:20:50  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.2  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.1  1995/11/13  14:23:49  armnrbd
+*     Ajouter le support de fichiers de type DATA.
+*
+*     Revision 4.0  1994/11/17  14:20:58  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/13  21:35:44  armnrbd
+*     Ajouter le support de grilles d'entrees hemispheriques.
+*     
+*     Revision 3.0  93/10/13  13:56:30  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/06/15  15:15:48  armnrbd
+*     Ajouter un test pour ILAT impair avant l'appel a GAUSSG.
+*     
+*     Revision 1.1  92/03/27  10:07:59  armnrbd
+*     Ajouter mise a l'echelle automatique avec PRECON3.
+*     
+*     Revision 1.0  92/03/20  14:45:46  armnrbd
+*     Initial revision
+*     
+
+*     MAR 21/92 - B.DUGAS  - VERSION CY910/IRIX f77
+*     APR 25/85 - M.LAZARE.
+*     JUN 22/84 - M.LAZARE.
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER, PARAMETER :: MAXLIGNE = ligne_maximale
+      INTEGER, PARAMETER :: MAXLON = longitude_maximale
+      INTEGER, PARAMETER :: MAXLAT = latitude_maximale
+      INTEGER, PARAMETER :: MAXLEV=999
+
+      LOGICAL      OK,LINEIO
+      REAL*8       A,B,AC,DEUXPI,PISUR4
+      CHARACTER*4  NAME,TYPE,PKTYP,FORMC*10
+      CHARACTER    GRTYP,LIGNE*ligne_maximale,LABEL*ligne_maximale
+      REAL         RLON(MAXLON),RLAT(MAXLAT),SCAL,PR,
+     +             FLO,HI,FINC,SPVAL,RX,RY,SCALE,ZERO,C,
+     +             XG1,XG2,XG3,XG4
+      INTEGER      IBUF,IER,NFF,NR,NTYPE,ILAT,IHEM,ILEV,IO,
+     +             CMPL,ILONG,ILONGM1,NLONG,NLAT,ILATH,
+     +             I,J,JJ,K,L,LL,M,N,NWDS,KIND,IP1,LEN,
+     +             MAXW,JBUF(taille_entete),JPAK,HEAD,
+     +             LAC,LEN1,LEN2,CC,IG1,IG2,IG3,IG4
+
+      POINTER    ( IB, IBUF( 8 ) )
+      POINTER    ( IA,    A( 1 ) ),( IA2,B(2,1) )
+      POINTER    ( IA3,   C( 1 ) )
+      POINTER    ( IC ,  CC( 1 ) )
+
+      REAL*8       SL(MAXLAT),CL(MAXLAT),WL(MAXLAT),
+     +             WOSSL(MAXLAT),RAD(MAXLAT),CONST
+
+#     include     "machtype.cdk" 
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      INTEGER      GETSIZ,GETHIGH
+      LOGICAL      RPBLOC,SETIO64
+      CHARACTER*4  GETYP,GETHIC
+      EXTERNAL     RPBLOC,SETIO64,GETYP,CONVPR,
+     +             HPALLOC,JCLPNT,GETFLD2,GETLIGN,
+     +             BURNF,XIT,GAUSSG,TRIGL2,PRECON3,
+     +             GETSIZ,MACSPE,GETHIC,CIGAXG,
+     +             GETHIGH
+
+      DATA         DEUXPI / 360. /
+      DATA         PISUR4 / 90. /
+      DATA         SPVAL  / 1.0E37 /
+      DATA         CMPL   / 1 /
+      DATA         NTYPE  / 0 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/lpprint.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+      LINEIO = .TRUE.
+
+***    OPEN FILES AND PERFORM INITIAL SETTUP.
+
+      NR  = 0
+      NFF = 3
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK    = SETIO64( .TRUE. )
+
+***    DETERMINE THE GRID SIZE AND ALLOCATE WORK SPACE
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+
+      IF (MAXW.EQ.0)                                           THEN
+          WRITE(6,6001) MAXW
+          CALL                                     XIT(' Lpprint',-1 )
+      END IF
+
+      CALL HPALLOC( IB, HEAD+MAXW, IER,0 )
+      CALL HPALLOC( IA,      MAXW, IER,8 )
+      CALL HPALLOC( IC,      MAXW, IER,0 )
+
+      IA2 = IA
+      IA3 = IA
+
+      IF (NR.NE.0) GOTO 200
+  100 CONTINUE
+
+          IF (RPBLOC( ' ',LIGNE ))                             THEN
+
+              LINEIO = .FALSE.
+
+***            CHECK PARAMETRE BLOCK.
+
+              NTYPE = 0
+              SCALE = 0.0
+              LABEL = ' '
+
+              OK = RPBLOC('KIND',LIGNE)
+              IF (OK) GRTYP = LIGNE
+
+              OK = RPBLOC('A',LIGNE)
+              IF (OK) 
+     +        READ(LIGNE,'(BN,E10.0)',END=900,ERR=900,IOSTAT=IO) SCALE
+
+              OK = RPBLOC('LABEL',LIGNE)
+              IF (OK) LABEL = LIGNE
+
+          ELSE
+
+***            READ INPUT DIRECTIVES.
+
+              LINEIO = .TRUE.
+
+              CALL GETLIGN( 5, LIGNE,80, OK)
+
+              IF (.NOT.OK)                                     THEN
+                   GOTO 900
+              ELSE
+                  READ( LIGNE, 5010,END=900,ERR=900,IOSTAT=IO)  
+     +                  GRTYP,SCALE
+              END IF  
+
+              CALL GETLIGN( 5, LABEL,80, OK)
+              IF (.NOT.OK) GOTO 902
+
+              CALL BURNF
+
+          END IF
+
+***        REDEFINE GRTYP.
+
+          IF      (GRTYP.EQ.'0')                               THEN
+                   GRTYP =  'G'
+          ELSE IF (GRTYP.EQ.'1')                               THEN
+                   GRTYP =  'A'
+          ELSE IF (GRTYP.EQ.'2')                               THEN
+                   GRTYP =  'B'
+          ELSE IF (GRTYP.EQ.'3')                               THEN
+                   GRTYP =  'L'
+          ELSE IF (GRTYP.EQ.'4')                               THEN
+                   GRTYP =  'Z'
+          END IF
+
+          IF      (GRTYP.EQ.'G') NTYPE = 0
+          IF      (GRTYP.EQ.'A') NTYPE = 1
+          IF      (GRTYP.EQ.'B') NTYPE = 2
+          IF      (GRTYP.EQ.'L') NTYPE = 3
+          IF      (GRTYP.EQ.'Z') NTYPE = 4
+
+***        READ THE FILE LABEL FROM IBUF. TERMINATE IF RECORD
+***        NOT FOUND OR IF FIELD READ IN IS SPECTRAL.
+
+  200     CALL GETFLD2( 1, A, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL HPDEALLC( IA,IER,0 )
+                  CALL HPDEALLC( IB,IER,0 )
+                  CALL HPDEALLC( IC,IER,0 )
+                  GOTO 050
+              END IF
+              IF (NR.EQ.0)                                     THEN
+                  WRITE(6,6101)
+                  CALL                             XIT(' LpPrint',-101)
+              ELSE
+                  CALL                             XIT(' LpPrint', 0 )
+              END IF
+          END IF
+
+          WRITE(TYPE,0004) IBUF(1)
+          WRITE(NAME,0004) IBUF(3)
+
+          IF (TYPE.EQ.'GRID' .OR.
+     +        TYPE.EQ.'FOUR' .OR.
+     +        TYPE.EQ.'SUBA' .OR.
+     +        TYPE.EQ.'CMPL' )                                 THEN
+
+              ILONG = IBUF(5)
+              ILAT  = IBUF(6)
+
+          ELSE IF (TYPE.EQ.'ZONL')                             THEN
+
+              ILAT = IBUF(5)
+              ILEV = IBUF(6)
+
+          ELSE IF (TYPE.EQ.'DATA')                             THEN
+
+              ILONG = IBUF(5)*IBUF(6)
+              ILAT  = 1
+
+          ELSE IF (TYPE.NE.'LABL' .AND.
+     +             TYPE.NE.'CHAR')                             THEN
+
+              WRITE(6,6102) TYPE
+              CALL                                 XIT(' LpPrint',-102)
+
+          END IF
+
+          IF (PKTYP(1:2).EQ.'SQ')                              THEN
+
+              GRTYP = GETHIC( 'GRTYP',IBUF )
+
+              IF (GRTYP.EQ.'G') NTYPE = 0
+              IF (GRTYP.EQ.'A') NTYPE = 1
+              IF (GRTYP.EQ.'B') NTYPE = 2
+              IF (GRTYP.EQ.'L') NTYPE = 3
+              IF (GRTYP.EQ.'Z') NTYPE = 4
+
+          ELSE IF (NTYPE.GT.2)                                 THEN
+              
+              WRITE(6,6102) GRTYP
+              CALL                                 XIT(' LpPrint',-102)
+
+          END IF
+          
+          CMPL = 1
+
+          IF (TYPE.EQ.'CMPL'  .OR.
+     +        TYPE.EQ.'FOUR')                                  THEN
+
+              CMPL = 2
+
+          ELSE IF (TYPE.NE.'CHAR' .AND.
+     +             TYPE.NE.'DATA' .AND.
+     +             TYPE.NE.'LABL')                             THEN
+
+***            CALCULATE SCALE FACTOR AUTOMATICALLY IF DESIRED
+
+              
+              NWDS = CMPL*IBUF(5)*IBUF(6)
+              SCAL = SCALE
+
+              IF (SCALE.EQ.0.)                                 THEN
+
+                  DO  I=1,NWDS
+                      C(I) = A(I)
+                  END DO
+
+                  CALL PRECON3( FLO,HI,FINC,SCAL,C,
+     +                          CMPL*IBUF(5),IBUF(6),10,SPVAL )
+
+                  DO  I=NWDS,1,-1
+                      A(I) = C(I)
+                  END DO
+
+              END IF
+
+              IF (TYPE.NE.'ZONL' .OR.
+     +            NAME.NE.'++'   )                             THEN
+
+                  WRITE(6,6100) NTYPE,SCAL
+
+***                SCALE THE FIELD.
+
+                  DO  I=1,NWDS
+                      A(I)=A(I)*SCAL
+                  END DO
+
+              ELSE
+
+***                DECODE VERTICAL LEVEL INFORMATION.
+
+                 IF (PKTYP(1:2).EQ.'SQ')                       THEN
+
+                     DO  I=1,NWDS
+                         IF (PKTYP.NE.'SQ98')
+     +                   A(I) = NINT( 10**( A(I) ) )
+                         IP1  = NINT( A(I) )
+                         CALL CONVPR( IP1, PR, KIND, -1 )
+                         A(I) = PR
+                     END DO
+
+                     IF (KIND.EQ.0) WRITE(6,6140) 'height'
+                     IF (KIND.EQ.1) WRITE(6,6140) 'sigma/eta'
+                     IF (KIND.EQ.2) WRITE(6,6140) 'pressure'
+
+                 ELSE
+
+                     DO  I=1,NWDS
+                         A(I) = 10**( A(I) )
+                     END DO
+
+              END IF
+
+
+              END IF
+
+          ELSE IF (TYPE.EQ.'LABL')                             THEN
+
+              NR = NR+1
+              WRITE(6,6510)
+              WRITE(6,6400) (IBUF(I),I=HEAD+1,HEAD+MIN(40,IBUF(5)*2))
+              CALL PRTLAB( IBUF )
+              WRITE(6,6510)
+              GOTO 200
+
+          ELSE IF (TYPE.EQ.'CHAR')                             THEN
+
+***            FOUND A CHARACTER RECORD.
+
+              CALL PRECEDE( 1,1 )
+              CALL GETFLD2( 1, CC, 'CHAR',-1,' ',-1, IBUF,MAXW,OK )
+
+              NR = NR+1
+
+              CALL PRTLAB( IBUF )
+
+              IF      (IBUF(8).EQ.-64)                         THEN
+                  LAC  = IBUF(5)*IBUF(6)*MACHINE
+                  LEN1 = MIN( IBUF(5)*8, MAXLIGNE )
+                  IF (INTSIZE*MACHINE.EQ.1)                    THEN
+                      LEN2 = MIN( IBUF(5), MAXLIGNE/8 )
+                      WRITE(FORMC,"('(',I3,'A8)')") LEN2
+                  ELSE
+                      LEN2 = MIN( 2*IBUF(5), MAXLIGNE/4 )
+                      WRITE(FORMC,"('(',I3,'A4)')") LEN2
+                  END IF
+              ELSE IF (IBUF(8).EQ.-32)                         THEN
+                  LAC  = IBUF(5)*IBUF(6)
+                  LEN1 = MIN( IBUF(5)*4, MAXLIGNE )
+                  LEN2 = MIN( IBUF(5), MAXLIGNE/4 )
+                  WRITE(FORMC,"('(',I3,'A4)')") LEN2
+              END IF
+
+              DO I=1,LAC,LEN2
+                  WRITE(LIGNE,FORMC) (CC(L),L=I,MIN( LAC,I+LEN2-1 ))
+                  WRITE(6,'(A)') LIGNE(1:LEN1)
+              END DO
+
+              GOTO 200
+
+          END IF
+
+***        DEFINE THE LONGITUDES (IF GRID FIELD).
+
+          IF (GRTYP.EQ.'Z')                                    THEN
+
+***             RETRIEVE THE Z-GRID X-DIRECTIONAL INFO.
+
+              CALL GETZREF( 1, '>>',RLON )
+
+          ELSE IF (GRTYP.EQ.'L')                               THEN
+
+***             DEFINE THE L-GRID X-DIRECTIONAL INFO.
+              
+              IG1   = GETHIGH( 'IG1',IBUF )
+              IG2   = GETHIGH( 'IG2',IBUF )
+              IG3   = GETHIGH( 'IG3',IBUF )
+              IG4   = GETHIGH( 'IG4',IBUF )
+
+              CALL CIGAXG( GRTYP, XG1,XG2,XG3,XG4,
+     +                            IG1,IG2,IG3,IG4 )
+
+              AC = XG2
+              DO  I=1,ILONG
+CCC               RLON(I) = MIN( AC , DEUXPI )
+                  RLON(I) = AC
+                  AC      = AC + XG4
+              END DO
+
+          ELSE IF (TYPE.EQ.'GRID' .OR. TYPE.EQ.'CMPL')         THEN
+
+                                       ILONGM1 = ILONG-1
+              IF (MOD( ILONG,2 ).EQ.0) ILONGM1 = ILONG
+                                       NLONG   = ILONGM1-1
+
+              RX            = 360./(ILONGM1)
+              RLON(1)       = 0.0
+
+              DO  I=1,NLONG
+                  RLON(I+1) = RLON(I)+RX
+              END DO
+
+              IF (ILONG.NE.ILONGM1) RLON(ILONG) = 0.0
+
+          ELSE IF (TYPE.EQ.'FOUR')                             THEN
+
+              DO  I=1,ILONG
+                  RLON(I)   = I-1
+              END DO
+
+          ELSE IF (TYPE.EQ.'SUBA')                             THEN
+
+              DO  I=1,ILONG
+                  RLON(I)   = I
+              END DO
+
+          END IF
+
+          IF (ILAT.NE.1 .AND. TYPE.NE.'SUBA')                  THEN
+
+***            LATITUDES ?
+
+              IHEM = IBUF(7)
+
+              IF (NTYPE.NE.0 .OR. MOD(ILAT,2).NE.0)            THEN
+
+***                CALCULATE EQUALLY-SPACED LATITUDES.
+
+                  IF (NTYPE.EQ.1)                              THEN
+
+                      IF (IHEM.NE.0)                           THEN
+                          RY        =  90./ILAT
+                      ELSE
+                          RY        = 180./ILAT
+                      END IF
+
+                      IF (IHEM.NE.1)                           THEN
+                          RLAT(1)   =-90.0+0.5*RY
+                      ELSE
+                          RLAT(1)   =      0.5*RY
+                      END IF
+
+                  ELSE IF (NTYPE.EQ.2)                         THEN
+
+                      IF (IHEM.NE.0)                           THEN
+                          RY        =  90./(ILAT-1)
+                      ELSE
+                          RY        = 180./(ILAT-1)
+                      END IF
+
+                      IF (IHEM.NE.1)                           THEN
+                          RLAT(1)   =-90.0
+                      ELSE
+                          RLAT(1)   =  0.0
+                      END IF
+
+                  END IF
+
+                  DO  J=2,ILAT
+                      RLAT(J) = RLAT(J-1)+RY
+                  END DO
+
+              ELSE
+
+***                CALCULATE GAUSSIAN LATITUDES.
+
+                  ILATH = ILAT/2
+                  IF (IHEM.NE.0) ILATH = ILAT
+
+                  CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL )
+                  CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL,IHEM )
+
+                  CONST = 45./ATAN(1.0D0)
+                  DO  J=1,ILAT
+                      RLAT(J) = RAD(J)*CONST
+                  END DO
+
+              END IF
+
+          ELSE IF (TYPE.EQ.'SUBA')                             THEN
+
+              IF (GRTYP.EQ.'Z')                                THEN
+
+***                RETRIEVE THE Z-GRID Y-DIRECTIONAL INFO.
+
+                  CALL GETZREF( 1, '^^',RLAT )
+
+              ELSE IF (GRTYP.EQ.'L')                           THEN
+
+***                DEFINE THE L-GRID Y-DIRECTIONAL INFO.
+
+                  AC = XG1
+                  DO  J=1,ILAT
+                      RLAT(J) = MIN( AC , PISUR4 )
+                      AC      =      AC + XG3
+                  END DO
+
+              ELSE
+
+***                NO LATITUDES, JUST INDICES.
+
+                  DO  J=1,ILAT
+                      RLAT(J) = J
+                  END DO
+
+              END IF
+
+          ELSE
+
+***            COLUMN DATA. ONLY ONE LATITUDE PRESENT.
+
+              RLAT(1) = 0.0
+
+          END IF
+
+***        PRINT OUT THE VALUES.
+
+          IF (TYPE.EQ.'GRID')                                  THEN
+
+***            REAL GRID CASE.
+
+              N = 12
+              DO  300 I=1,ILONG,12
+                  J = I+11
+                  IF (J.GT.ILONG)                              THEN
+                      J = ILONG
+                      N = ILONG-I+1
+                  END IF
+                  WRITE(6,6500) NAME, (RLON(M),M=I,J)
+                  WRITE(6,6510)
+                  DO  JJ=ILAT,1,-1
+                      K  = (JJ-1)*ILONG+(I-1)
+                      WRITE(6,6520) RLAT(JJ),(A(K+M),M=1,N)
+                  END DO
+  300         CONTINUE
+
+          ELSE IF (TYPE.EQ.'SUBA')                             THEN
+
+***            SUB-AREA CASE.
+
+              N = 12
+              DO  350 I=1,ILONG,12
+                  J = I+11
+                  IF (J.GT.ILONG)                              THEN
+                      J = ILONG
+                      N = ILONG-I+1
+                  END IF
+                  WRITE(6,6700) NAME, (RLON(M),M=I,J)
+                  WRITE(6,6510)
+                  DO  JJ=ILAT,1,-1
+                      K  = (JJ-1)*ILONG+(I-1)
+                      WRITE(6,6720) RLAT(JJ),(A(K+M),M=1,N)
+                  END DO
+  350         CONTINUE
+
+          ELSE IF (TYPE.EQ.'CMPL'
+     +        .OR. TYPE.EQ.'FOUR')                             THEN
+
+***            COMPLEX GRID CASE.
+
+              N = 6
+              DO  400 I=1,ILONG,6
+                  J = I+5
+                  IF (J.GT.ILONG)                              THEN
+                      J = ILONG
+                      N = ILONG-I+1
+                  END IF
+                  IF (TYPE.EQ.'CMPL') WRITE(6,6501) NAME,(RLON(M),M=I,J)
+                  IF (TYPE.EQ.'FOUR') WRITE(6,6502) NAME,(RLON(M),M=I,J)
+                  WRITE(6,6510)
+                  DO  JJ=ILAT,1,-1
+                      K  = (JJ-1)*ILONG+(I-1)
+                      WRITE(6,6520) RLAT(JJ),(B(1,K+M),B(2,K+M),M=1,N)
+                  END DO
+  400         CONTINUE
+
+          ELSE IF (TYPE.EQ.'ZONL')                             THEN
+
+***            ZONL FIELD.
+
+              WRITE(6,6600)
+              DO  500 LL=ILEV,1,-1
+                  DO  JJ=ILAT,1,-1
+                      K = (LL-1)*ILAT
+                      WRITE(6,6610) LL,RLAT(JJ),A(K+JJ)
+                  END DO
+  500         CONTINUE
+
+          ELSE IF (TYPE.EQ.'DATA')                             THEN
+
+***            STRAIGHT DATA.
+
+              WRITE(6,6600)
+              WRITE(6,6620) (LL,A(LL),LL=1,ILONG)
+
+          END IF
+
+      NR = NR+1
+      WRITE(6,6110) LABEL
+      CALL PRTLAB( IBUF )
+
+      IF (LINEIO) GOTO 100
+                  GOTO 200
+
+***    E.O.F. ON INPUT.
+
+  900 WRITE(6,6130) NR
+      CALL                                         XIT(' LpPrint', 0 )
+
+  902 WRITE(6,6002) 
+      CALL                                         XIT(' LpPrint',-2 )
+*-----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+
+ 5010 FORMAT(14X,A,E10.0)
+ 5020 FORMAT(20A4)
+
+ 6001 FORMAT(' Problems reading file inlp, MAXW=',I9)
+ 6002 FORMAT(' Missing label card...')
+
+ 6100 FORMAT(' Ntype,scale=   ',I5,1PE12.4)
+ 6101 FORMAT(' First record not found...')
+ 6102 FORMAT(' You are trying to operate on a file of type:',A)
+ 6110 FORMAT(A80)
+ 6130 FORMAT(' ',I6,' records processed.')
+ 6140 FORMAT(//' The following holds vertical ',A,' coordinates.'//)
+
+ 6400 FORMAT(/2(' Labl: ',20A4/))
+ 6500 FORMAT(/' Values of ',A,' @ long =',12F9.2)
+ 6501 FORMAT(/' Values of ',A,' @ long =',4X,6(F9.2,9X))
+ 6502 FORMAT(/' Values of ',A,' : wave =',4X,6(F9.2,9X))
+ 6510 FORMAT(' ')
+ 6520 FORMAT(' LAT =',F6.2,6X,'value=',12F9.2)
+
+ 6600 FORMAT(/' Values of field: ')
+ 6610 FORMAT(' LEV,LAT =',I5,1X,F6.2,6X,'value=',F9.2)
+ 6620 FORMAT(I5,F10.2,I5,F10.2,I5,F10.2,I5,F10.2,I5,F10.2)
+
+ 6700 FORMAT(/' Values of ',A,' @    X =',12F9.2)
+ 6720 FORMAT('   Y =',F6.2,6X,'value=',12F9.2)
+
+      END
+#     endif

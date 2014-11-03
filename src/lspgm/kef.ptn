@@ -1,0 +1,309 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      kef  U V KE OUTPUT
+*
+*
+*     AUTHOR - J.D.Henderson,  01 JAN 1981.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/kef.ptn,v 4.12 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A CCC FILE ARITHMETIC PROGRAM WHICH...
+*
+*      ... PRODUCES FILE KE = (U**2 + V**2)/2,
+*
+*     NOTES: 1) IF THE U AND V INTERNAL VARIABLE NAMES ARE RESPECTIVELY
+*              'UU' AND 'VV', THE DATA IS CONVERTED FROM KNOTS TO M/S.
+*            2) OTHERWISE, NO CHECKING IS DONE ON U AND V, BEYOND THAT
+*               THEY BE OF SIMILAR DIMENSIONS.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 FEWER RECORDS IN FILE V THAN IN FILE U
+*       2 RECORDS NOT THE SAME SIZE
+*       3 UNABLE TO READ FILE X
+*       4 UNABLE TO READ FILE Y
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM kef
+*    1           (      U,       V,       KE,       OUTPUT, 
+*    2            TAPE1=U, TAPE2=V, TAPE3=KE, TAPE6=OUTPUT)
+
+*     $Log: kef.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.10  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.9  2004/11/12 16:29:12  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.8  2004/05/10 15:29:40  dugas
+*     Corriger la documentation automatique
+*
+*     Revision 4.7  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.6  2003/05/23 20:56:56  dugas
+*     Corriger le calcul de NR
+*
+*     Revision 4.5  1999/07/19 19:18:43  armnrbd
+*     Corriger l'indice de la boucle de calcul de KE.
+*
+*     Revision 4.4  1999/06/30 17:26:33  armnrbd
+*     Ajouter le support des variables en noeuds (RPN standard).
+*     Allocation dynamique avec HPALLOC plutot que MEMOIR.
+*
+*     Revision 4.3  1998/07/03 02:26:31  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1997/09/26  17:39:05  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1996/02/27  20:45:34  armnrbd
+*     Modifier le traitement des enregistrements de type LABL.
+*
+*     Revision 4.0  1994/11/17  14:20:49  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:25  13:56:25  armnrbd (Bernard Dugas)
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  92/12/02  13:09:58  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/11/10  09:54:35  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/04/29  01:34:04  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:48  armnrbd
+*     Initial revision
+*     
+***    JAN  1/81 - J.D.HENDERSON 
+***    04 AVRIL 1990 - B.DUGAS, RPN : VERSION CY920/IRIX F77.
+
+*---------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      HEAD
+      PARAMETER  ( HEAD = taille_entete )
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+      LOGICAL      OK
+      CHARACTER    CHAINE*256
+      REAL*8       CONSTU,CONSTV
+      CHARACTER*4  KIND,TYPE,KEN,NOM,NOMU,NOMV
+      INTEGER      KBUF(HEAD),LBUF(HEAD),
+     +             LEV(MAXLEV),NLEV,NLEVA,NLEVB,NF,
+     +             NR,MAXW,MAXW1,MAXW2,LEN,LEN1,LEN2,
+     +             NWDS,LPAK,KPAK,I,K,L,LENLAB
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+      REAL*8,      DIMENSION(:), ALLOCATABLE :: A,B
+
+      CHARACTER             NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+
+      LOGICAL      SETIO64
+      INTEGER      GETSIZ2
+      EXTERNAL     GETSIZ2,MACSPE,JCLPNT,CMPLBL,XIT,GETSET2,
+     +             PUTSET2,GETLAB,PUTLAB,SETIO64
+
+      LOGICAL      VRAI,  FAUX
+      DATA         VRAI,  FAUX   /
+     +            .TRUE.,.FALSE. /
+
+      DATA         KEN / 'KE'  /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/kef.ptn,v $'
+
+*---------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2,3, 6 )
+
+      NR=0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST DATA INFO BUFFER.
+
+  100 MAXW2 = GETSIZ2( 2, LBUF,LEN2,NWDS,LPAK, LEV,NLEVB )
+      IF (MAXW2.EQ.0) GOTO 902
+      MAXW1 = GETSIZ2( 1, KBUF,LEN1,NWDS,KPAK, LEV,NLEV )
+      IF (MAXW1.EQ.0) GOTO 901
+
+      CALL CMPLBL( 0,LBUF, 0,KBUF, OK ) 
+
+      IF (.NOT.OK .OR. NLEV.NE.NLEVB)                          THEN
+          CALL PRTLAB( LBUF ) ; CALL PRTLAB( KBUF )
+          CALL                                     XIT('  Cmlt  ',-2 ) 
+      END IF
+
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      LEN  = MAX( LEN1, LEN2  )
+      MAXW = MAX( MAXW1,MAXW2 )
+
+      ALLOCATE( IBUF(2*LEN),JBUF(2*LEN),A(NWDS*NLEV),B(NWDS*NLEV) )
+
+***    READ THE NEXT PAIR OF MULTI-LEVEL FIELDS. 
+***    MAKE SURE THAT THE FIELDS ARE THE SAME KIND AND SIZE. 
+
+  200 CALL GETSET2( 1, A,LEV,NLEVA, IBUF,MAXW,OK )
+
+      IF (.NOT.OK)                                             THEN
+
+          DEALLOCATE( IBUF,JBUF,A,B )
+          IF (MAXW.EQ.0) GOTO 100
+          WRITE(6,6000) NR
+          CALL                                     XIT('   Kef  ', 0 )
+
+      END IF
+
+      WRITE(KIND,0004) IBUF(1)
+
+      IF (KIND .NE.'CHAR' .AND.
+     +    KIND .NE.'LABL')                                     THEN
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK ) 
+
+          IF (.NOT.OK .OR. NLEV.NE.NLEVA )                     THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( KBUF )
+              CALL                                 XIT('   Kef  ',-2 ) 
+          END IF
+
+      END IF
+
+      IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      CALL GETSET2( 2, B,LEV,NLEVB, JBUF,MAXW,OK )
+
+      IF (.NOT.OK)                                             THEN
+          DEALLOCATE( IBUF,JBUF,A,B )
+          IF (MAXW.EQ.0)                                       THEN
+              CALL PRECEDE( 1,NLEVA )
+              GOTO 100
+          END IF
+          CALL                                     XIT('   Kef  ',-1 ) 
+      END IF
+
+      IF ((KIND   .NE.'CHAR' .AND.
+     +     KIND   .NE.'LABL') .OR.
+     +     IBUF(1).NE.JBUF(1) )                                THEN
+
+          CALL CMPLBL( 0,JBUF, 0,LBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.NE.NLEVB )                     THEN
+              CALL PRTLAB( JBUF ) ; CALL PRTLAB( LBUF )
+              CALL                                 XIT('   Kef  ',-2 ) 
+          END IF
+
+      END IF
+
+      IF (NR.EQ.0) CALL PRTLAB( JBUF )
+
+      WRITE(NOMU,0004) IBUF(3)
+      WRITE(NOMV,0004) JBUF(3)
+
+***    ACCOUNT FOR WINDS IN KNOTS.
+
+                        CONSTU  =   0.5
+                        CONSTV  =  CONSTU
+      IF (NOMU.EQ.'UU') CONSTU = ( CONSTU * 0.5144444 ) * 0.5144444
+      IF (NOMV.EQ.'VV') CONSTV = ( CONSTV * 0.5144444 ) * 0.5144444 
+
+      IF (KIND.NE.'LABL')                                      THEN
+
+          IF (KIND.NE.'CHAR')                                  THEN
+
+***            DO IT.
+   
+              DO  L=1,NWDS*NLEV
+                  A(L) = ( A(L)*A(L) ) * CONSTU
+     +                 + ( B(L)*B(L) ) * CONSTV
+              END DO
+
+***            SAVE THE RESULT ON FILE C.
+
+              READ(KEN,4) IBUF(3)
+
+          END IF
+
+          CALL PUTSET2( 3, A, LEV,NLEV, IBUF,MAXW )
+
+      ELSE
+
+***        SAVE THE LAST LABEL READ FROM FILE U.
+
+          LENLAB = IBUF(5)
+
+          CALL GETLAB( 0, CHAINE, IBUF,LENLAB, OK )
+          WRITE(NOM,4) IBUF(3)
+
+          IF (NOM.EQ.'LABL')                                   THEN
+              CALL PUTLAB( 3, CHAINE, IBUF,LENLAB, FAUX , FAUX )
+          ELSE IF (NOM.EQ.'FILE')                              THEN
+              CALL PUTLAB( 3, CHAINE, IBUF,LENLAB, VRAI , FAUX )
+          ELSE IF (NOM.EQ.'INFO')                              THEN
+              CALL PUTLAB( 3, CHAINE, IBUF,LENLAB, FAUX , VRAI )
+          END IF
+
+       END IF
+
+      IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+NLEV
+      GOTO 200 
+
+***    PREMATURE E.O.F. ON UNIT #1.
+
+  901 CALL                                         XIT('   Kef  ',-3 )
+  902 CALL                                         XIT('   Kef  ',-4 )
+
+*--------------------------------------------------------------------
+ 0004 FORMAT(A4)
+
+ 6000 FORMAT('0',I6,' Pairs of records processed.')
+
+      END 
+#     endif

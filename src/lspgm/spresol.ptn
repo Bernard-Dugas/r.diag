@@ -1,0 +1,318 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spresol  SPIN SPOUT INPUT OUTPUT [ -lrlmt VAL0 -kind VAL1 ]
+*
+*
+*     DESCRIPTION...
+*      spresol - EXTRACTS LOWER RESOLUTION SUB-SET FROM SPECTRAL FILE 
+* 
+*
+*     AUTHOR  - S.LAMBERT, NOV 1979.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spresol.ptn,v 4.9 2014/09/25 20:20:54 dugas Exp $
+*
+* 
+*     PURPOSE - RETURNS IN SPOUT FILE A LOWER SPECTRAL RESOLUTION SUB-SET OF 
+*               THE INPUT GLOBAL SPHERICAL HARMONIC COEFFICIENTS IN SPIN FILE 
+* 
+*
+*     INPUT FILE... 
+*      SPIN  = GLOBAL SPECTRAL FIELDS 
+* 
+*     OUTPUT FILE... 
+*      SPOUT = GLOBAL SPECTRAL FIELDS WITH LOWER SPECTRAL RESOLUTION 
+* 
+*
+*     INPUT PARAMETERS... 
+* 
+*      LRLMT = ONE NUMBER CONTAINING THE REQUIRED RESOLUTION. 
+*              THIS NUMBER CONTAINS SEVEN DIGITS... 
+*              LR = FIRST  THREE DIGITS = M TRUNCATION 
+*              LM = SECOND THREE DIGITS = N TRUNCATION 
+*              T  = TYPE OF TRUNCATION (0=RHOMBOIDAL,2=TRIANGULAR). 
+*      KIND  = 0 ==> GLOBAL COEFFICIENTS INPUT
+*            < 0 ==> ANTI-SYMMETRIC COEFFICIENTS
+*            > 0 ==> SYMMETRIC COEFFICIENTS
+*
+*      READ( 5,5000 ) LRLMT,KIND
+*5000  FORMAT(10X,I10,I5) 
+*
+*
+*     EXAMPLE OF INPUT CARD... 
+* 
+*  SPRESOL    150152    0
+* 
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*     THIS EXTRACTS SPECTRAL FIELDS WITH 14 WAVES IN THE M AND N 
+*     DIRECTIONS AND WITH GLOBAL TRIANGULAR TRUNCATION. 
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 ERROR READING OUTSP
+*       2 INPUT ARRAY INCONSISTENT WITH KIND
+*       3 ERROR READING INPUT
+*
+*     NON-FATAL CONDITIONS...
+*     101 INSUFFICIENT ZONAL WAVE RESOLUTION IN SPIN
+*     102 INSUFFICIENT RESOLUTION IN SPIN
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spresol 
+*    +              (      SPIN,       SPOUT,       INPUT,       OUTPUT,
+*    +               TAPE1=SPIN, TAPE2=SPOUT, TAPE5=INPUT, TAPE6=OUTPUT) 
+
+*     $Log: spresol.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2013/10/16 20:52:09  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.4  2003/07/05 14:51:44  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1998/10/19 15:17:05  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.2  1998/07/03  02:26:40  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:21  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:57  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/02/14  10:27:10  armnrbd
+*     Implanter le support de RPBLOC.
+*     
+*     Revision 3.0  93/10/13  13:57:08  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/10  23:00:45  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/03/17  15:09:42  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.2  92/03/13  16:50:26  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:58  armnrbd
+*     Initial revision
+*     
+
+***    MODIFICATION HISTORY:
+***    JAN 17/91 - B.DUGAS, RPN. (CALLS TO GETLIGN AND MEMOIR ADDED)
+***    NOV 21/90 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+***    MAY 14/83 - R.LAPRISE.
+***    DEC  1/80 - J.D.HENDERSON.
+
+***    AUTHOR: S. LAMBERT, CCRN - NOV 1979.
+
+*-----------------------------------------------------------------------
+      IMPLICIT     REAL (A-H,O-Z), INTEGER (I-N)
+
+      INTEGER, PARAMETER :: MAXLM = lm_maximal
+
+      LOGICAL      OK,RPBLOC
+      CHARACTER    LIGNE*80,VALEUR*10
+      INTEGER      HEAD, JBUF(taille_entete), IN,OUT,
+     +             LSRI(2,MAXLM),LSRO(2,MAXLM) 
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:), ALLOCATABLE :: F
+
+      INTEGER      GETSIZ
+      EXTERNAL     GETSIZ,RPBLOC,HPALLOC,HPDEALLC
+
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spresol.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      NRECS=0 
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          LRLMT = -1
+          KIND  =  0
+
+          OK = RPBLOC('LRLMT',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=901,IOSTAT=IO) LRLMT
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=901,IOSTAT=IO) KIND
+
+      ELSE
+
+***    SIZE AND TYPE OF OUTPUT FIELD.
+
+      CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5000,ERR=901,END=902,IOSTAT=IO) LRLMT,KIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    GET OUTPUT SPECTRAL ROW LENGTH
+
+      CALL DIMGT2( LSRO, LAO,LRO,LMO,KTRO, LRLMT, KIND,0 ) 
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  050 MAXW = GETSIZ( 1, JBUF,LENI,NWDSI,JPAK )
+      IF (MAXW.EQ.0) CALL                          XIT(' Spresol',-1 )
+
+      JBUF(5) = LAO
+      JBUF(7) = LRLMT
+      CALL LBLCHK( LENO, NWDSO,JPAK,JBUF )
+
+      LEN  = MAX(  LENI,LENO  )
+      NWDS = MAX( NWDSI,NWDSO )
+
+      MAXW = LEN-HEAD
+
+      ALLOCATE( IBUF(LEN),F(NWDS) )
+
+***    READ NEXT FIELD.
+
+  100 CALL GETFLD2( 1, F, 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,F )
+                  GOTO 050
+              END IF
+
+              IF (NRECS.EQ.0) CALL                 XIT(' Spresol',-1 ) 
+              WRITE(6,6020) NRECS 
+              CALL                                 XIT(' Spresol', 0 ) 
+
+          END IF
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+***        CHECK THAT THE INPUT SIZE IS COHERENT WITH KIND.
+
+          LA = IBUF(5)          
+          CALL DIMGT2( LSRI, LAI,LRI,LMI,KTRI, IBUF(7), KIND,0 ) 
+
+          IF (LAI.NE.LA)                                       THEN
+
+              CALL                                 XIT(' Spresol',-2 )
+
+***        CHECK INPUT/OUTPUT RESOLUTIONS.
+
+          ELSE IF (LMO.GT.LMI)                                 THEN
+
+              WRITE(6,6040) LMI,LMO
+              CALL                                 XIT(' Spresol',-101) 
+          END IF
+
+          KK=0
+          DO 200 M=1,LMO
+                IF ( (LSRO(1,M+1)-LSRO(1,M)) .GT.
+     +               (LSRI(1,M+1)-LSRI(1,M))    ) KK=1 
+  200     CONTINUE
+
+          IF (KK.NE.0)                                         THEN
+              WRITE(6,6050) 
+              CALL                                 XIT(' Spresol',-102)
+          END IF
+
+***        DO THE CONVERSION.
+
+          DO 300 M=1,LMO
+              NN  = 2*(LSRO(1,M +1)-LSRO(1,M))
+              IN  = 2*(LSRI(1,M)-1)
+              OUT = 2*(LSRO(1,M)-1)
+              DO 300 J=1,NN
+                  F(OUT+J) = F(IN+J) 
+  300     CONTINUE
+
+          IBUF(5) = LAO 
+          IBUF(7) = LRLMT 
+
+          CALL PUTFLD2( 2, F, IBUF,MAXW )
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+      NRECS = NRECS+1 
+      GOTO 100 
+
+***    E.O.F. ON INPUT.
+
+  901 IF (IO.NE.0) WRITE(6,6100) IO
+  902 CALL                                         XIT(' Spresol',-3 )
+
+*-----------------------------------------------------------------------
+ 5000 FORMAT(10X,I10,I5) 
+
+ 6020 FORMAT('0Spresol converted ',I5,' records.')
+ 6040 FORMAT('0Insufficient zonal wave resolution in input file;'/
+     +       '  INPUT=',I3,', OUTPUT=',I3) 
+ 6050 FORMAT('0Insufficient resolution in input file.') 
+ 6100 FORMAT(' Splook reports I/O error number ',I4)
+
+      END 
+#     endif

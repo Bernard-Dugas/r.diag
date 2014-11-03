@@ -1,0 +1,400 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*        tstep  IN OUT INPUT OUTPUT [-a VAL1 -b VAL2 -kind VAL3]
+*
+*
+*     DESCRIPTION...
+*      tstep  - RELABELS MODEL TIMESTEP NUMBER TO DATE-TIME GROUP.
+*
+*
+*     AUTHORS - S.Lambert, E.Chan, MARCH 01/1993.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/tstep.ptn,v 4.12 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     PURPOSE - CHANGES THE MODEL TIMESTEP NUMBER IN IBUF(2) TO ONE OF THE
+*               SUPPORTED DATE-TIME FORMATS, A DATE AND TIME CORRESPONDING
+*               TO THE BEGINNING OF THE MODEL RUN MAY BE SPECIFIED ON THE
+*               INPUT CARD, OTHERWISE JAN 1 00Z OF YEAR 1901 IS ASSUMED.
+*
+*
+*     INPUT FILE...
+*      IN     = INPUT FILE WITH MODEL TIMESTEP NUMBERS IN IBUF(2).
+*               PLEASE NOTE THAT TIMESTEP SHOULD ALL HAVE THE SAME
+*               NUMBER OF LEVELS AND VARIABLES
+*
+*     OUTPUT FILE...
+*      OUT    = COPY OF IN WITH 2ND WORD OF THE 8-WORD LABEL CHANGED
+*                                                                           
+*
+*     INPUT PARAMETERS... 
+*      MSTEP  (a) = NUMBER OF MINUTES PER MODEL TIMESTEP
+*      MSTART (b) = STARTING DATE AND TIME OF THE MODEL RUN IN THE
+*                   FORMAT SPECIFIED BY THE DTM PARAMETER. OTHERWISE,
+*                   JAN 1 00Z OF YEAR 1901 IS ASSUMED.
+*      DTM (kind) = FLAG TO INDICATE METHOD OF TIME MEASUREMENT.
+*                 = 0,1 ==> IBUF(2) WILL BE IN THE FORMAT YYYYMMDDHH
+*                 = 2   ==> IBUF(2) WILL BE IN THE FORMAT YYYYMMDDHHMM
+*                 = 3   ==> IBUF(2) WILL BE IN THE FORMAT YYYYMMDDHH. BUT
+*                           NOW, LEAP YEARS ARE TAKEN INTO ACCOUNT.
+*                 = 4   ==> IBUF(2) IS SIMPLY THE ORDINAL OF THE
+*                           TIMESTEP IN THE FILE
+*
+*
+*     Note:   - An IBUF(2) value will be recognized as a timestep if it
+*               a positive number smaller than 30 01 01 00. Larger values
+*               are assumed to already be in a particular time format.
+*               This number of steps corresponds to about 570 years,
+*               assuming 10 minute timesteps.
+*
+*
+*      READ(5,5010) MSTEP,MSTART,DTM
+*5010  FORMAT(10X,I5,I15,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* TSTEP      20       79070112    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEM DECODING MSTART
+*       2 UNABLE TO READ FIRST TIMESTEP
+*       3 PROBLEM WHILE READING DIRECTIVES
+*       4 UNABLE TO ALLOCATE ENOUGH WORKING MEMORY
+*       5 IBUF(2) IS NOT RECOGNIZED AS A TIMESTEP
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM  tstep
+*     PROGRAM  TSTEP (IN,        OUT,       INPUT,       OUTPUT,
+*    +         TAPE1= IN, TAPE2= OUT, TAPE5=INPUT, TAPE6=OUTPUT )
+*     ------------------------------------------------------------
+*     $Log: tstep.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.10  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2005/11/22 19:04:43  dugas
+*     Corriger la declaration de SET utilise par GETSIZ4 et GETMSET2.
+*
+*     Revision 4.6  2001/10/11 11:15:05  armnrbd
+*     Les noms lus par GETSIZ4 et ecrits par PUTMSET2 contiennent
+*     maintenant les etiquettes des enregistrements (RPN STD).
+*
+*     Revision 4.5  2001/09/24 14:58:16  armnrbd
+*     Implanter GETSIZ4 et GET/PUT(MSET2).
+*
+*     Revision 4.4  2000/04/07 20:31:28  armnrbd
+*      Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.3  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.2  1998/07/03  02:26:44  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:27  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1995/12/06  18:43:34  armnrbd
+*     Version initiale.
+*
+
+*     MAR 01/93 - S.LAMBERT, E.CHAN
+*     DEV 06/95 - B.DUGAS (ADD DTM PARAMETER)
+
+*---------------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLEV = 1999
+
+      LOGICAL     OK
+      CHARACTER*4 TYPE,VARIAB(MAXLEV)*20,LIGNE*80
+      INTEGER*8 :: MSTART,TIME,MINS,MINST,CTIME
+      INTEGER*8 :: DEFAULT_YEAR=1901 01 01 00,ZER=0,
+     +             MINYR=525600,UN_MILLION=1 00 00 00
+      INTEGER     MINMON(12),MSTEP,DTM,NF,SET(0:MAXLEV),
+     +            LEV(MAXLEV,2),NLEV,STEP(MAXLEV),NWDS,NSET,
+     +            LEN,IER,KPAK,KBUF(taille_entete),MAXW,NRECS,IYR,
+     +            IREM,IMON,IDAY,IHR,I,K,IO
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: HOLD
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+#     include "machtype.cdk" 
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER(8), EXTERNAL :: ADDTIM,Y2KDAT8
+      INTEGER,    EXTERNAL :: GETSIZ4,GETHIGH
+      EXTERNAL    JCLPNT,WRITLEV2,
+     +            GETMSET2,PUTMSET2,
+     +            SET_DTM,PUTHIGH
+
+      DATA        MINMON /
+     +                 0, 44640, 84960,129600,172800,217440,
+     +            260640,305280,349920,393120,437760,480960
+     +                   /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/tstep.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NRECS = 0
+      NF    = 4
+
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          MSTEP  = 0
+          MSTART = 0
+          DTM    = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 15,ERR=900,END=900,IOSTAT=IO) MSTEP
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 20,ERR=900,END=900,IOSTAT=IO) MSTART
+
+          OK = RPBLOC('KIND', LIGNE)
+          IF (OK) READ( LIGNE, 15,ERR=900,END=900,IOSTAT=IO) DTM
+
+      ELSE
+
+***        READ THE LENGTH OF THE MODEL'S TIMESTEP IN MINUTES (MSTEP)
+***        THE DATE AND TIME (MSTART) CORRESPONDING TO THE BEGINNING
+***        OF THE  MODEL RUN. 
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO)
+     +                     MSTEP,MSTART,DTM
+              CALL BURNF
+          END IF
+
+      END IF
+
+      MSTART = Y2KDAT8( MSTART )
+
+      WRITE(6,6007) MSTEP,MSTART,DTM
+
+      IF (DTM.EQ.0) DTM = 1
+
+      IF (DTM /= 4)                                            THEN
+          CALL SET_DTM( DTM )
+      ELSE
+          CALL SET_DTM( DTM-4 )
+      END IF
+
+      IF (DTM == 1)                                            THEN
+
+***        CONVERT INITIAL TIME TO MINUTES.
+
+          IYR  = MSTART/UN_MILLION
+          IREM = MSTART-IYR*UN_MILLION
+          IMON = IREM/10000
+          IF (IMON.GT.12) CALL                     XIT('TSTEP',-1 )
+          IREM = IREM-IMON*10000
+          IDAY = IREM/100
+          IHR  = IREM-IDAY*100
+
+          IF (IMON.GT.0)                                       THEN
+              MINST = (IYR-1)*MINYR+MINMON(IMON)+(IDAY-1)*1440+IHR*60
+          ELSE
+              MINST = 0
+          END IF
+
+      ELSE IF (MSTART == ZER)                                   THEN
+
+***        INITIALISER MSTART.
+
+          IF (DTM.EQ.2) MSTART = DEFAULT_YEAR*100
+          IF (DTM.EQ.3) MSTART = DEFAULT_YEAR
+
+      END IF
+
+***    FIND HOW MANY VARIABLES AND LEVELS IN ONE SET AND ASK
+***    FOR  NECESSARY MEMORY. USE NEXT SET OF INFO BUFFERS.
+
+      MAXW = GETSIZ4( 1, KBUF,LEN,NWDS,KPAK,
+     +                   SET,NSET, LEV,VARIAB, MAXLEV )
+
+      IF (MAXW.LE.0)                                           THEN
+          WRITE(6,6002) SET(NSET),MAXLEV
+          CALL                                     XIT('  Tstep ',-2 )
+      END IF
+
+      IF (GETHIGH(' NPAS ',KBUF )-KBUF(2) /= 0)                THEN
+          WRITE(6,6005) KBUF(2)
+          CALL                                     XIT('  Tstep ',-5 )
+      END IF
+
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      CALL PRTLAB( KBUF )
+      WRITE(6,6035) (VARIAB(SET(I))(1:4),I=1,NSET)
+
+      NLEV = SET(NSET)/NSET
+
+      IF (NLEV*NSET.EQ.SET(NSET))                              THEN
+          CALL WRITLEV2( LEV,NLEV, KBUF )
+      ELSE
+          WRITE(6,6045) NSET,SET(NSET)
+      END IF
+
+      ALLOCATE( IBUF(LEN),HOLD(NWDS*SET(NSET)), STAT=IER )
+
+      IF (IER.NE.0)                                            THEN
+          WRITE(6,6004) 4*(LEN+NWDS*SET(NSET))*(MOD( MACHINE,2 )+1)
+          CALL                                     XIT('  Tstep ' ,-4 )
+      END IF
+*-------------------------------------------------------------------------
+
+***    READ THE FIRST SET. STOP IF THE FILE IS EMPTY.
+
+  100 CALL GETMSET2( 1, HOLD, SET,NSET, LEV,VARIAB,STEP, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( IBUF )
+              IF (NRECS.EQ.0) CALL                 XIT('  Tstep ',-2 )
+              WRITE(6,6010) NRECS
+              CALL                                 XIT('  Tstep ', 0 )
+          END IF
+
+          IF (GETHIGH(' NPAS ',IBUF )-IBUF(2) /= 0)            THEN
+              WRITE(6,6005) IBUF(2)
+              CALL                                 XIT('  Tstep ',-5 )
+          END IF
+
+***        ADD MODEL TIMESTEP TO INITIAL START TIME
+***        AND CONVERT TO DATE-TIME FORMAT.
+
+          TIME = IBUF(2)
+
+          IF (DTM == 1)                                        THEN
+
+              MINS = MINST+TIME*MSTEP
+              IYR  = 1901+MINS/MINYR
+              IREM = MOD( MINS,MINYR )
+              DO  IMON=1,12
+                  IF (IREM < MINMON(IMON)) EXIT
+              END DO
+              IREM = IREM-MINMON(IMON)
+              IDAY = 1+IREM/1440
+              IHR  = MOD(IREM,1440)/60
+
+              CTIME = IYR*UN_MILLION+IMON*10000+IDAY*100+IHR
+
+          ELSE IF (DTM /= 4)                                   THEN
+
+***            ADD MINUTES WHEN DTM=2 AND HOURS WHEN DTM=3.
+
+              IF (DTM == 2) TIME =  TIME*MSTEP
+              IF (DTM == 3) TIME = (TIME*MSTEP)/60
+
+              CTIME = ADDTIM( MSTART,TIME, DTM )
+              
+          ELSE
+
+***            USE THE TIMESTEP ORDINAL.
+
+              CTIME   = -1
+              IBUF(2) = NRECS+1
+              CALL PUTHIGH( IBUF(2), 'NSTEP',IBUF )
+
+          END IF
+
+***        CONVERT "PRINTABLE" TIME TO DATE-TIME-STAMP.
+
+          IF (CTIME > ZER) CALL DATE2STAMP( CTIME,IBUF(2) )
+
+***        SAVE ON FILE OUT.
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          CALL PUTMSET2( 2, HOLD, SET,NSET, LEV,VARIAB,MAXLEV,
+     +                            IBUF,MAXW )
+
+      NRECS = NRECS+1
+      GOTO 100
+
+***    ERROR EXIT.
+
+ 900  CALL                                         XIT('  Tstep ',-3 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0015 FORMAT(BN,I15)
+ 0020 FORMAT(BN,I20)
+
+ 5010 FORMAT(10X,I5,I15)
+
+ 6002 FORMAT('...Tstep input file is empty. SET(NSET)/MAX VALUE=',3I6)
+ 6004 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' characters.')
+ 6005 FORMAT(' Looking for timestep, found IBUF(2) = ',I16)
+
+ 6007 FORMAT(' Model timestep ',I3,' mins',5X,' start',2X,I10,2x,
+     +       ' DateTimeMode ',I1)
+ 6010 FORMAT(' Tstep read',I6,' records.')
+ 6035 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6045 FORMAT(/' Each set will contain ',I3,' variables distributed',
+     +        ' over ',I3,' horizontal records.'/)
+
+      END
+#     endif

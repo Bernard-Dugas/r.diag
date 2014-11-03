@@ -1,0 +1,1073 @@
+#     if !defined (unite_io_maximale)
+#         define  unite_io_maximale 99
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+      module Diag_TOC
+
+!    Reads the parametres defining the GEM/DM vertical
+!    hybrid coordinate system (from v_4.0.6 onward) for
+!    use in the r.diag disnostic toolbox. Uses the
+!    Ron Mctaggart-Cowan's Vgrid_Descriptors
+
+!    Author: Bernard Dugas, automne 2009/hiver 2010
+!    Last revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lssub/diag_toc.cdk90,v 3.5 2014/09/25 18:31:50 dugas Exp $
+
+!    $Log: diag_toc.cdk90,v $
+!    Revision 3.5  2014/09/25 18:31:50  dugas
+!    Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
+!
+!    Revision 3.4  2013/03/21 20:59:49  bernard
+!    - Ajouter le support du type 5003.
+!    - Ajouter du code DEBUG dans la routine LopTOC.
+!    - La routine NewTOC va maintenant CREER un nouveau TocToc valide.
+!    - Ajouter un argument optionnel (NBR) a GetTOC. IP1 et IP2 deviennent
+!      egalement des arguments optionnels. Il faut par contre que soit NBR,
+!      soit IP1 et IP2 soient specifies.
+!
+!    Revision 3.3  2012/07/03 16:34:39  dugas
+!    Corriger le traitement de CA_T dans GetTOC_rv.
+!
+!    Revision 3.2  2012/06/12 16:21:08  dugas
+!    - Adapter a vgrid_descriptors v3.1.0
+!    - Re-organiser les messages informatifs
+!    - Ajouter les options 'NKM' et 'NKT' dans GETTOC_i.
+!    - Corriger une serie de bogues suivant les
+!      appels a VGD_GEt dans LITTOC.
+!
+!    Revision 3.1  2012/05/22 15:31:21  dugas
+!    Version CVS initiale.
+!
+
+      use vGrid_Descriptors, only: VGD_OK,           &
+                                   vgrid_descriptor, &
+                                   vgd_get,          &
+                                   vgd_levels,       &
+                                   vgd_new,          &
+                                   vgd_put,          &
+                                   vgd_print,        &
+                                   vgd_write
+
+      IMPLICIT    NONE
+      private
+
+      public :: alltoc ! Allocates the structures for !! records
+      public :: newtoc ! Creates (fills) a !! record
+      public :: ecrtoc ! Writes appropriate !! records
+      public :: lirtoc ! Reads all the !! records in a file
+      public :: gettoc ! Retreives specific parametres from !! records
+      public :: savtoc ! Determines if a !! record needs to be saved 
+      public :: loptoc ! Calculates 3d local pressure field
+
+      interface gettoc
+         module procedure gettoc_i
+         module procedure gettoc_iv
+         module procedure gettoc_r
+         module procedure gettoc_rv
+      end interface
+
+!    vGrid_Descriptors variable declarations
+
+      integer, parameter :: max_nbr=2   ! Maximum number of TocToc in any file
+      integer, parameter :: STDERR=0    ! Standard error I/O unit 
+      integer, parameter :: STDOUT=6    ! Standard output I/O unit 
+
+      type(vgrid_descriptor), dimension(:,:), allocatable, save :: TOC_GD
+
+!    Local work variables.
+
+      LOGICAL, SAVE :: INITIAL_CALL=.TRUE.
+      LOGICAL, SAVE :: REWRIT=.FALSE.
+
+!    Private DATA shared by ECRTOC/LIRP and GETTOC/SETTOC.
+
+      INTEGER, SAVE :: TOC_IP  (2,max_nbr,0:unite_io_maximale), &
+                       TOC_NBR (          0:unite_io_maximale), &
+                       TOC_NK  (2,max_nbr,0:unite_io_maximale), &
+                       TOC_VER (  max_nbr,0:unite_io_maximale)
+      REAL(8), SAVE :: TOC_TOP (  max_nbr,0:unite_io_maximale), &
+                       TOC_REF (  max_nbr,0:unite_io_maximale)
+      REAL,    SAVE :: TOC_RC  (2,max_nbr,0:unite_io_maximale)
+      LOGICAL, SAVE :: TOC_READ(          0:unite_io_maximale), &
+                       TOC_SAVE(            unite_io_maximale)
+
+      CONTAINS
+
+!-------------------------------------------------------------------
+      SUBROUTINE AllTOC ( )
+
+!    Allocations/Initializations.
+
+      IF (INITIAL_CALL)                                        THEN
+          INITIAL_CALL = .FALSE.
+          TOC_READ(:)  = .FALSE. ; TOC_SAVE(:) = .FALSE.
+          TOC_NBR(:)   =  0      ; TOC_IP(:,:,:) = -1
+          ALLOCATE( TOC_GD (max_nbr,0:unite_io_maximale) )
+      END IF
+
+      End SUBROUTINE AllTOC
+!-------------------------------------------------------------------
+
+      SUBROUTINE NewTOC ( NFOUT, F_version,F_hyb,F_rcoef,F_ptop_8,F_pref_8,F_ip1,F_ip2, NBR )
+
+!    NewTOC I/O declarations.
+
+      integer, intent(in)  :: NFOUT                ! I/O unit associated to new TOC_GD variable
+      integer, intent(in)  :: F_version            ! code specification (only code=6 supported for now)
+      real, dimension(:), intent(in) :: F_hyb      ! user specification for vertical layering hyb
+      real, dimension(:), intent(in) :: F_rcoef    ! user specification for rcoef
+      real*8 , intent(in)  :: F_ptop_8, F_pref_8   ! user specification for lid and reference pressures
+      integer, intent(in)  :: F_ip1,F_ip2          ! IP1,IP2 of the new TocToc record
+      integer, intent(out) :: NBR                  ! the ordinal of the new TocToc records on NFOUT
+
+!    Local variables
+
+      LOGICAL              info,debug
+      COMMON     /ZZVERBO/ info
+      COMMON     /ZZDEBUG/      debug
+
+      integer ::  NF, status
+      integer,    parameter :: Kind = 5
+
+      NBR = 0 ! Indication que l'enregistrement TocToc n'a pas encore ete cree
+
+      IF (size(F_rcoef) < 2) RETURN
+      NF = ABS( NFOUT ) ; IF (NF > unite_io_maximale) RETURN
+
+!    Allocations/Initializations.
+
+      IF (INITIAL_CALL)                                        THEN
+          INITIAL_CALL = .FALSE.
+          TOC_READ(:)  = .FALSE. ; TOC_SAVE(:) = .FALSE.
+          TOC_NBR(:)   =  0      ; TOC_IP(:,:,:) = -1
+          ALLOCATE( TOC_GD (max_nbr,0:unite_io_maximale) )
+      END IF
+
+      IF (TOC_NBR(NF)+1 > max_nbr) RETURN
+
+      status = vgd_new( self=TOC_GD(TOC_NBR(NF)+1,NF),         &
+                        kind=Kind,version=F_version,hyb=F_hyb, &
+                        rcoef1=F_rcoef(1),rcoef2=F_rcoef(2),   &
+                        ptop_8=F_ptop_8, pref_8=F_pref_8,      &
+                        ip1=F_ip1,ip2=F_ip2 )
+
+      IF (status == VGD_OK)                                    THEN
+
+          TOC_SAVE(NF) = .TRUE. ! Il faudra sauver ceci a la sortie
+
+          ! Rang du nouvel enregistrement TocToc
+          TOC_NBR(NF) = TOC_NBR(NF)+1 ; NBR = TOC_NBR(NF)
+
+          status = vgd_get( self=TOC_GD(NBR,NF),value=TOC_NK(1,NBR,NF), key='NL_M' )
+          status = vgd_get( self=TOC_GD(NBR,NF),value=TOC_NK(2,NBR,NF), key='NL_T' )
+
+          TOC_VER(   NBR,NF) = Kind*1000+F_version ! Un-safe !
+          TOC_TOP(   NBR,NF) = F_ptop_8
+          TOC_REF(   NBR,NF) = F_pref_8
+          TOC_RC(1:2,NBR,NF) = F_rcoef(1:2)
+          TOC_IP(1:2,NBR,NF) = (/ F_ip1, F_ip2 /)
+
+!        Initialize the default values (unit 0).
+
+          if (TOC_NBR( 0 ) == 0)                               THEN
+              
+              TOC_NBR(      0) = 1
+              TOC_NK ( : ,1,0) = TOC_NK( : ,NBR,NF)
+
+              TOC_GD (    1,0) = TOC_GD(    NBR,NF)
+              TOC_VER(    1,0) = TOC_VER(   NBR,NF)
+              TOC_TOP(    1,0) = TOC_TOP(   NBR,NF)
+              TOC_REF(    1,0) = TOC_REF(   NBR,NF)
+              TOC_RC (1:2,1,0) = TOC_RC(1:2,NBR,NF)
+              TOC_IP (1:2,1,0) = TOC_IP(1:2,NBR,NF)
+
+              if (INFO)                                        THEN
+                  write(STDOUT,6104) NF
+                  status = vgd_print( TOC_GD(NBR,NF),stdout )
+              end if
+
+          end if
+
+      End If
+
+      RETURN
+
+ 6104 FORMAT('*INFO:  NewToc VGD_NEW *OK*, I/O unit ',I3)
+
+      End SUBROUTINE NewTOC
+
+!-------------------------------------------------------------------
+      SUBROUTINE LirTOC (NFIN,NBR)
+
+!    lirtoc I/O declarations.
+
+!    NFIN  = input unit number to read from
+!    NBR   = returns the number of TocToc found on NFIN
+
+      INTEGER, intent(IN)  :: NFIN
+      INTEGER, intent(OUT) ::  NBR
+
+!    External declarations.
+
+      INTEGER     FSTINL,FSTPRM,FSTLUK,FSTECR
+      EXTERNAL    FSTINL,FSTPRM,FSTLUK,FSTECR, &
+                  GETNAM,CONVPR
+
+      LOGICAL              info,debug
+      COMMON     /ZZVERBO/ info
+      COMMON     /ZZDEBUG/      debug
+
+!    Local variables
+
+      INTEGER     ivalue
+      REAL(8)     rvalue
+      CHARACTER   BLK*16,NAME*256
+      INTEGER     DUM,status,NF,I,J,CLE(max_nbr), &
+                  SWA,LNG,DLTF,UBC,EXTRA1,EXTRA2,EXTRA3
+      INTEGER     NI0,NJ0,NK0
+
+!     INTEGER,    DIMENSION(:), POINTER :: LOCAL_IP1
+
+      NF = ABS( NFIN ) ; IF (NF > unite_io_maximale) RETURN
+
+!    Allocations/Initializations.
+
+      IF (INITIAL_CALL)                                        THEN
+          INITIAL_CALL = .FALSE.
+          TOC_READ(:)  = .FALSE. ; TOC_SAVE(:) = .FALSE.
+          TOC_NBR(:)   =  0      ; TOC_IP(:,:,:) = -1
+          ALLOCATE( TOC_GD (max_nbr,0:unite_io_maximale) )
+      END IF
+
+      IF (.NOT.TOC_READ(NF))                                   THEN
+
+          TOC_READ(NF) = .TRUE.
+
+          IF (INFO)                                            THEN
+              CALL GETNAM( NF, NAME )
+              WRITE(STDOUT,6000) TRIM( NAME )
+          END IF
+
+!        Attempt (ONCE) to find and all vertical reference
+!        records (TocToc) on unit NF. Please note that this
+!        procedure quits at the first error.
+
+          status = FSTINL( NF, NI0,NJ0,NK0,          &
+                           -1,' ',-1,-1,-1,'X','!!', &
+                           CLE, TOC_NBR(NF),max_nbr )
+
+          IF (TOC_NBR(NF) == 0) GOTO 100
+
+          IF (status < 0)                                      THEN
+              IF (DEBUG) WRITE(STDERR,6101) status
+              GOTO 100
+          END IF
+
+          IF (TOC_NBR(NF) > max_nbr)                           THEN
+              TOC_NBR(NF) = 0
+              IF (DEBUG) WRITE(STDOUT,6102) TOC_NBR(NF)
+              GOTO 100
+          END IF
+
+          DO  I=1,TOC_NBR(NF)
+
+              status = FSTPRM( CLE(I),             &
+                       DUM,DUM,DUM,NI0,NJ0,NK0,    &
+                       DUM,BLK, TOC_IP(1,I,NF),    &
+                       TOC_IP(2,I,NF), DUM, BLK,   &
+                       BLK,BLK,BLK, TOC_VER(I,NF), &
+                       DUM,DUM,DUM,SWA,LNG,DLTF,   &
+                       UBC,EXTRA1,EXTRA2,EXTRA3 )
+
+              IF (status < 0)                                  THEN
+                  TOC_NBR(NF) = 0
+                  IF (DEBUG) WRITE(STDERR,6103) status,I
+                  TOC_NBR(NF) = 0 ; EXIT
+                  EXIT
+              END IF
+
+!            Construct a new set of 3D coordinate descriptors
+!            using the last TocToc record record found.
+
+              status = vgd_new( self=TOC_GD(I,NF),    &
+                                unit=NF,format='fst', &
+                                ip1=TOC_IP(1,I,NF),   &
+                                ip2=TOC_IP(2,I,NF) )
+
+              if (status /= VGD_OK)                            THEN
+                  IF (DEBUG) write(STDERR,6100) TOC_IP(1,I,NF),TOC_IP(2,I,NF)
+                  TOC_NBR(NF) = 0 ; EXIT
+              else if (INFO)                                   THEN
+                  write(STDOUT,6104)
+                  status = vgd_print( TOC_GD(I,NF),stdout )
+              end if
+
+!            Explore the current TocToc vertical grid
+!            descriptor, saving certain of its elements.
+
+              if (TOC_VER(I,NF) == 5001) THEN ! Un-staggered hybrid levels (v1)
+
+!                Start by determining the number of levels.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=IVALUE,      &
+                                    key='NL_M' )
+
+                  if (status /= VGD_OK)                        THEN
+                      if (DEBUG) write(STDERR,6200) 'NL_M'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_NK(1,I,NF) = ivalue
+                      if (INFO) write(stdout,6105) 'NL_M'
+                  end if
+
+
+!                Save PTOP the pressure the model top level.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue,      &
+                                    key='PTOP' )
+
+                  if (status /= VGD_OK)                        THEN
+                      IF (DEBUG) write(STDERR,6200) 'PTOP'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_TOP(I,NF) = rvalue
+                      if (INFO) write(stdout,6105) 'PTOP'
+                  end if
+
+!                Save PREF the model reference pressure.
+
+                  status = vgd_get( self=TOC_GD(I,NF), & 
+                                    value=rvalue,      &
+                                    key='PREF' )
+
+                  if (status /= VGD_OK)                        THEN
+                      IF (DEBUG) write(STDERR,6200) 'PREF'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_REF(I,NF) = rvalue
+                      if (INFO) write(stdout,6105) 'PREF'
+                  end if
+
+!                Save RCOEF.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue,      &
+                                    key='RC_1' )
+
+                  if (status /= VGD_OK)                        THEN
+                      IF (DEBUG) write(STDERR,6200) 'RC_1'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_RC(1,I,NF) = rvalue
+                      if (INFO) write(stdout,6105) 'RC_1'
+                  end if
+
+              else if (TOC_VER(I,NF) == 5002 .or.      &
+                       TOC_VER(I,NF) == 5003) THEN ! Staggered hybrid levels (v2 or v3)
+
+!                Start by determining the number of dynamic levels.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=IVALUE,      &
+                                    key='NL_M' )
+
+                  if (status /= VGD_OK)                        THEN
+                      if (DEBUG) write(STDERR,6200) 'NL_M'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_NK(1,I,NF) = ivalue
+                      if (INFO) write(stdout,6105) 'NL_M'
+                  end if
+
+!                Determine the number of thermodynamic levels.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=IVALUE,      &
+                                    key='NL_T' )
+
+                  if (status /= VGD_OK)                        THEN
+                      if (DEBUG) write(STDERR,6200) 'NL_T'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                     TOC_NK(2,I,NF) = ivalue
+                     if (INFO) write(stdout,6105) 'NL_T'
+                  end if
+
+!                Save PTOP the pressure the model top level.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue,      &
+                                    key='PTOP' )
+
+                  if (status /= VGD_OK)                        THEN
+                      IF (DEBUG) write(STDERR,6200) 'PTOP'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_TOP(I,NF) = rvalue
+                      if (INFO) write(stdout,6105) 'PTOP'
+                  end if
+
+!                Save PREF the model reference pressure.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue,      &
+                                    key='PREF' )
+
+                  if (status /= VGD_OK)                        THEN
+                      IF (DEBUG) write(STDERR,6200) 'PREF'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_REF(I,NF) = rvalue
+                      if (INFO) write(stdout,6105) 'PREF'
+                  end if
+
+!                Save the first RCOEF.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue,      &
+                                    key='RC_1' )
+
+                  if (status /= VGD_OK)                        THEN
+                      IF (DEBUG) write(STDERR,6200) 'RC_1'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_RC(1,I,NF) = rvalue
+                      if (INFO) write(stdout,6105) 'RC_1'
+                  end if
+
+!                Save the second RCOEF.
+
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue,      &
+                                    key='RC_2' )
+
+                  if (status /= VGD_OK)                        THEN
+                      IF (DEBUG) write(STDERR,6200) 'RC_2'
+                      TOC_NBR(NF) = 0 ; EXIT
+                  else
+                      TOC_RC(2,I,NF) = rvalue
+                      if (INFO) write(stdout,6105) 'RC_2'
+                  end if
+
+              end if
+
+          END DO
+
+!        Initialize the default values (unit 0).
+
+          if (TOC_NBR( 0 ) == 0 .AND.  TOC_NBR(NF) /= 0)       THEN
+              
+              TOC_NBR(         0) = 1
+              TOC_NK ( :    ,1,0) = TOC_NK ( :    ,1,NF)
+
+              TOC_GD (       1,0) = TOC_GD (       1,NF)
+              TOC_VER(       1,0) = TOC_VER(       1,NF)
+              TOC_IP ( :    ,1,0) = TOC_IP ( :    ,1,NF)
+              TOC_TOP(       1,0) = TOC_TOP(       1,NF)
+              TOC_REF(       1,0) = TOC_REF(       1,NF)
+              TOC_RC ( :    ,1,0) = TOC_RC ( :    ,1,NF)
+
+              if (INFO) write(stdout,6106) TOC_IP(:,1,NF)
+
+          end if
+
+      END IF
+
+  100 NBR = TOC_NBR(NF)
+
+      RETURN
+
+ 6000 FORMAT(' LirTOC:   Attempt to find !! on file...'/10X,A/)
+
+ 6101 FORMAT('*DEBUG: LirTOC error ',I3,' in FSTINFX')
+ 6102 FORMAT('*DEBUG: LirTOC found too many !! ',I4)
+ 6103 FORMAT('*DEBUG: LirTOC error ',I3,' in FSTPRM, VGRID # ',I2)
+ 6104 FORMAT('*INFO:  LirTOC VGD_NEW *OK*')
+ 6105 FORMAT('*INFO:  LirTOC VGD_GET *OK* on ',A)
+ 6106 FORMAT('*INFO:  LirTOC first grid descriptor found... IP1/2 =',2I7/)
+
+
+ 6100 FORMAT(' LirTOC:   WARNING - error during construction', &
+                        ' of grid description structure associated', &
+                        ' to IP1/2 =',2I7/)
+ 6200 FORMAT(' LirTOC:   WARNING - error during get operation OF ',A/)
+
+      End SUBROUTINE LirTOC
+!-------------------------------------------------------------------
+
+      SUBROUTINE EcrTOC (NFOUT)
+
+!    ecrtoc I/O declarations.
+
+!    NFOUT = output unit number to write to
+
+      INTEGER, intent(IN)  :: NFOUT
+
+!    External declarations
+
+      LOGICAL              info,debug
+      COMMON     /ZZVERBO/ info
+      COMMON     /ZZDEBUG/      debug
+
+!    Local variables
+
+      CHARACTER(len=256) NAME
+      INTEGER i,NF,status
+
+      NF = ABS( NFOUT )
+
+!    Writes to I/O unit abs( NFOUT ) a record that defines the
+!    parametres of the GEM/DM vertical hybrid coordinate system.
+
+      IF (TOC_SAVE(NF) .AND. TOC_NBR(NF) > 0)                  THEN
+
+!        Write the data as it last read. We use
+!        the parametres of the previous operation.
+
+          do  i=1,TOC_NBR(NF)
+
+              status = vgd_write( self=TOC_GD(i,NF), &
+                                  format='fst',      &
+                                  unit=NF )
+
+              if (status /= VGD_OK)                            THEN
+                  IF (DEBUG) write(STDERR,'(A/)') &
+                  ' EcrTOC:  WARNING - error during write'
+                  CALL                             XIT(' Ecrtoc ',-1 ) 
+              end if
+
+              IF (INFO)                                        THEN
+                  CALL GETNAM( NF, NAME )
+                  WRITE(STDOUT,6400) TOC_IP(1:2,i,NF),TRIM( NAME )
+              END IF
+
+          end do
+
+      END IF
+
+      RETURN
+
+ 6400 FORMAT(' EcrTOC:   Written !! with IP1/2 =',2I7,' to file...'/10X,A/)
+
+      End SUBROUTINE EcrTOC
+
+!-------------------------------------------------------------------
+      SUBROUTINE GetTOC_i (NFIN, varname,ivalue, IP1,IP2,NBR)
+
+!    NFIN     = input unit number to read from
+!    varname  = Grid_Desctriptors variable we are interested in
+!    ivalue   = integer scalar returned (gettoc_i)
+!    IP1,IP2  = Grid_Desctriptors unique ID pair
+!    NBR      = Actual ordinal of the Grid_Desctriptor
+
+      integer, intent(IN)  :: NFIN
+      CHARACTER(len=*), intent(IN) :: varname
+      integer, intent(IN), optional :: IP1,IP2,NBR
+      integer, intent(OUT) :: ivalue
+
+!    Local variables
+
+      INTEGER I,NF, LIP1,LIP2
+      CHARACTER(LEN=4) local_name
+
+      ivalue = -1 ; IF (TOC_NBR(0) == 0) RETURN
+
+      NF = ABS( NFIN )
+
+      if (present( IP1 ) .and. present( IP2 ))                 THEN
+          LIP1 = IP1 ; LIP2 = IP2
+      else if (present( NBR ))                                 THEN
+          if (NBR > 0 .and. NBR <= TOC_NBR(NF))               THEN
+              if (varname == 'IP1') ivalue = TOC_IP(1,NBR,NF)
+              if (varname == 'IP2') ivalue = TOC_IP(2,NBR,NF)
+              RETURN
+          end if
+      else
+          RETURN
+      end if
+
+!    Is (IP1,IP2) recognition possible ?
+!    If not, ignore IP1,IP2 parametres
+!    and use default values.
+
+      if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
+                          .and. TOC_IP(2,1,0) == 0 ) &
+         LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+
+!    Now, try to find an existing grid descriptor
+!    set corresponding to these (IP1,IP2).
+
+      if (LIP1 == -1 .or. LIP2 == -1)                          THEN
+          NF = 0 ; LIP1 = TOC_IP(1,1,NF) ; LIP2 = TOC_IP(2,1,NF) 
+      end if
+
+      DO  I=1,TOC_NBR(NF)
+
+          IF (LIP1 == TOC_IP(1,I,NF) .AND. &
+              LIP2 == TOC_IP(2,I,NF) )                         THEN
+
+!            This is the correct grid_descriptor.
+
+              call low2up( varname, local_name )
+              select case ( trim( local_name ) )
+
+              case ('VER')
+                  ivalue = TOC_VER(I,NF)
+              case ('NK')
+                  ivalue = TOC_NK (1,I,NF)
+              case ('NKM')
+                  ivalue = TOC_NK (1,I,NF)
+              case ('NKT')
+                  ivalue = TOC_NK (2,I,NF)
+              end select
+
+          END IF
+
+      END DO
+
+      RETURN
+
+      End SUBROUTINE GetTOC_i
+!-------------------------------------------------------------------
+
+      SUBROUTINE GetTOC_r (NFIN, varname,rvalue, IP1,IP2)
+
+!    NFIN     = input unit number to read from
+!    varname  = Grid_Desctriptors variable we are interested in
+!    rvalue   = real scalar returned    (gettoc_r)
+!    IP1,IP2  = Grid_Desctriptors unique ID pair
+
+      integer, intent(IN)  :: NFIN,IP1,IP2
+      CHARACTER(len=*), intent(In) :: varname
+      real(8), intent(OUT) :: rvalue
+
+!    Local variables
+
+      INTEGER I,NF, LIP1,LIP2
+      CHARACTER(LEN=4) local_name
+
+      rvalue = -1 ; IF (TOC_NBR(0) == 0) RETURN
+
+      NF = ABS( NFIN ) ; LIP1 = IP1 ; LIP2 = IP2
+
+!    Is (IP1,IP2) recognition possible ?
+!    If not, ignore IP1,IP2 parametres
+!    and use default values.
+
+      if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
+                          .and. TOC_IP(2,1,0) == 0 ) &
+         LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+
+!    Now, try to find an existing grid descriptor
+!    set corresponding to these (IP1,IP2).
+
+      if (LIP1 == -1 .or. LIP2 == -1)                          THEN
+          NF = 0 ; LIP1 = TOC_IP(1,1,NF) ; LIP2 = TOC_IP(2,1,NF) 
+      end if
+
+      DO  I=1,TOC_NBR(NF)
+
+          IF (LIP1 == TOC_IP(1,I,NF) .AND. &
+              LIP2 == TOC_IP(2,I,NF) )                         THEN
+
+!            This is the correct grid_descriptor.
+
+              call low2up( varname, local_name )
+              select case ( trim( local_name ) )
+
+              case ('PTOP')
+                  rvalue = TOC_TOP(I,NF)
+              case ('PREF')
+                  rvalue = TOC_REF(I,NF)
+              case ('RC_1')
+                  rvalue = TOC_RC(1,I,NF)
+              case ('RC_2')
+                  rvalue = TOC_RC(2,I,NF)
+              end select
+
+          END IF
+
+      END DO
+
+      RETURN
+
+      End SUBROUTINE gettoc_r
+
+!-------------------------------------------------------------------
+      SUBROUTINE GetTOC_iv (NFIN, varname,ivalue1d, IP1,IP2)
+
+!    NFIN     = input unit number to read from
+!    varname  = Grid_Desctriptors variable we are interested in
+!    ivalue1d = integer vector returned (gettoc_iv)
+!    IP1,IP2  = Grid_Desctriptors unique ID pair
+
+      integer, intent(IN)  :: NFIN,IP1,IP2
+      CHARACTER(len=*), intent(In) :: varname
+      integer, dimension(:), pointer :: ivalue1d
+
+!    External declarations
+
+      LOGICAL              debug
+      COMMON     /ZZDEBUG/ debug
+
+!    Local variables
+
+      INTEGER I,NF,status, LIP1,LIP2
+      CHARACTER(LEN=4) local_name
+
+      IF (TOC_NBR(0) == 0) RETURN
+ 
+      if (associated( ivalue1d )) deallocate( ivalue1d )
+      nullify( ivalue1d )
+
+      NF = ABS( NFIN ) ; LIP1 = IP1 ; LIP2 = IP2
+
+!    Is (IP1,IP2) recognition possible ?
+!    If not, ignore IP1,IP2 parametres
+!    and use default values.
+
+      if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
+                          .and. TOC_IP(2,1,0) == 0 ) &
+         LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+
+!    Now, try to find an existing grid descriptor
+!    set corresponding to these (IP1,IP2).
+
+      if (LIP1 == -1 .or. LIP2 == -1)                          THEN
+          NF = 0 ; LIP1 = TOC_IP(1,1,NF) ; LIP2 = TOC_IP(2,1,NF) 
+      end if
+
+      DO  I=1,TOC_NBR(NF)
+
+          IF (LIP1 == TOC_IP(1,I,NF) .AND. &
+              LIP2 == TOC_IP(2,I,NF) )                         THEN
+
+!            This is the correct grid_descriptor.
+
+              call low2up( varname, local_name )
+              select case ( trim( local_name ) )
+
+              case ('VIPM')
+!                Get the (coded IP1) hybrid levels.
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=ivalue1d,    &
+                                    key='VIPM' )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'VIPM'
+              case ('VIPT')
+!                Get the (coded IP1) thermodynamic hybrid levels.
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=ivalue1d,    &
+                                    key='VIPT' )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'VIPT'
+              end select
+
+          END IF
+
+      END DO
+
+      RETURN
+
+ 6201 FORMAT(' GetTOC:   WARNING - error during get operation OF ',A/)
+
+      End SUBROUTINE GetTOC_iv
+!-------------------------------------------------------------------
+
+      SUBROUTINE GetTOC_rv (NFIN, varname,rvalue1d, IP1,IP2)
+
+!    NFIN     = input unit number to read from
+!    varname  = Grid_Desctriptors variable we are interested in
+!    rvalue1d = real vector returned  (gettoc_rv)
+!    IP1,IP2  = Grid_Desctriptors unique ID pair
+
+      integer, intent(IN)  :: NFIN,IP1,IP2
+      CHARACTER(len=*), intent(IN) :: varname
+      real(8), dimension(:), pointer :: rvalue1d
+
+!    External declarations
+
+      LOGICAL              debug
+      COMMON     /ZZDEBUG/ debug
+
+!    Local variables
+
+      INTEGER I,NF,status, LIP1,LIP2
+      CHARACTER(LEN=4) local_name
+
+      IF (TOC_NBR(0) == 0) RETURN
+
+      if (associated( rvalue1d )) deallocate( rvalue1d )
+      nullify( rvalue1d )
+
+      NF = ABS( NFIN ) ; LIP1 = IP1 ; LIP2 = IP2
+
+!    Is (IP1,IP2) recognition possible ?
+!    If not, ignore IP1,IP2 parametres
+!    and use default values.
+
+      if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
+                          .and. TOC_IP(2,1,0) == 0 ) &
+         LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+
+!    Now, try to find an existing grid descriptor
+!    set corresponding to these (IP1,IP2).
+
+      if (LIP1 == -1 .or. LIP2 == -1)                          THEN
+          NF = 0 ; LIP1 = TOC_IP(1,1,NF) ; LIP2 = TOC_IP(2,1,NF) 
+      end if
+
+      DO  I=1,TOC_NBR(NF)
+
+          IF (LIP1 == TOC_IP(1,I,NF) .AND. &
+              LIP2 == TOC_IP(2,I,NF) )                         THEN
+
+!            This is the correct grid_descriptor.
+
+              call low2up( varname, local_name )
+              select case ( trim( local_name ) )
+
+              case ('COFA')
+!                Get A, the first pressure reconstruction vector.
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue1d,    &
+                                    key='COFA' )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'COFA'
+              case ('COFB')
+!                Get B, the second pressure reconstruction vector.
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue1d,    &
+                                    key='COFB' )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'COFB'
+              case ('CA_M')
+!                Get AM, the first momemtum pressure
+!                        reconstruction vector.
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue1d,    &
+                                    key='CA_M' )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CA_M'
+              case ('CB_M')
+!                Get BM, the second momemtum pressure
+!                        reconstruction vector.
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue1d,    &
+                                    key='CB_M' )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CB_M'
+              case ('CA_T')
+!                Get AT, the first momemtum pressure
+!                        reconstruction vector.
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue1d,    &
+                                    key='CA_T' )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CA_T'
+              case ('CB_T')
+!                Get BT, the second momemtum pressure
+!                        reconstruction vector.
+                  status = vgd_get( self=TOC_GD(I,NF), &
+                                    value=rvalue1d,    &
+                                    key='CB_T' )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CB_T'
+              end select
+
+          END IF
+
+      END DO
+
+      RETURN
+
+ 6201 FORMAT(' GetTOC:   WARNING - error during get operation OF ',A/)
+
+      End SUBROUTINE GetTOC_rv
+
+!-------------------------------------------------------------------
+      SUBROUTINE SavTOC (NFOUT, IP1,IP2)
+
+!    NFOUT    = output unit number to write to
+!    IP1,IP2  = Grid_Desctriptors unique ID pair
+
+      integer, intent(IN)  :: NFOUT,IP1,IP2
+
+!    External declarations
+
+      LOGICAL              info
+      COMMON     /ZZVERBO/ info
+
+!    Local variables
+
+      INTEGER I,J,NF,status, LIP1,LIP2
+
+      IF (TOC_NBR(0) == 0) RETURN
+
+      NF = ABS( NFOUT ) ; LIP1 = IP1 ; LIP2 = IP2
+
+!    Is (IP1,IP2) recognition possible ?
+!    If not, ignore IP1,IP2 parametres
+!    and use default values.
+
+      if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
+                          .and. TOC_IP(2,1,0) == 0 ) &
+         LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+
+!    A record with hybrid vertical coordinate was written to
+!    I/O unit abs( NFOUT ), with (IG1,IG2) == (ip1,IP2).
+!    Defaults to the first saved !! (unit 0).
+
+      if (LIP1 == -1) LIP1 = TOC_IP(1,1,0)
+      if (LIP2 == -1) LIP2 = TOC_IP(2,1,0) 
+
+!    Check that we have not already flagged the (possibly)
+!    associated grid descriptor to be saved to unit NFOUT
+!    as well.
+
+      DO  I=1,TOC_NBR(NF)
+          IF (LIP1 == TOC_IP(1,I,NF) .AND. LIP2 == TOC_IP(2,I,NF)) RETURN
+      END DO
+
+!    Now, try to find an existing grid descriptor
+!    set corresponding to these (IP1,IP2).
+
+      ALREADY_SAVED : DO  J=0,unite_io_maximale
+
+          IF (J /= NF .and. TOC_NBR(J)  >    0     &
+                      .and. TOC_NBR(NF) < max_nbr)             THEN
+              DO  I=1,TOC_NBR(J)
+                  IF (LIP1 == TOC_IP(1,I,J) .AND.  &
+                      LIP2 == TOC_IP(2,I,J) )                  THEN
+
+!                    This is it.
+
+                      TOC_NBR(              NF) = TOC_NBR(NF)+1
+                      TOC_GD (  TOC_NBR(NF),NF) = TOC_GD (  I,J)
+                      TOC_IP (:,TOC_NBR(NF),NF) = TOC_IP (:,I,J)
+                      TOC_NK (:,TOC_NBR(NF),NF) = TOC_NK (:,I,J)
+                      
+                      IF (INFO) WRITE(STDOUT,6500) IP1,IP2,NF
+
+                      TOC_SAVE(NF) = .TRUE.
+
+                      EXIT ALREADY_SAVED
+
+                  END IF
+              END DO
+          END IF
+
+      END DO ALREADY_SAVED
+
+      RETURN
+
+ 6500 FORMAT(' SavTOC:   !! with IP1/2 =',2I7,' is now scheduled to be saved to I/O unit ',I2/)
+
+      End SUBROUTINE SavTOC
+!-------------------------------------------------------------------
+
+      SUBROUTINE LoPTOC ( LocalPressure, IP1V, P0, IP1,IP2, IN_LNP )
+
+      integer,                  intent(IN) :: IP1,IP2       ! IP1,IP2 associated to Descriptor instance 
+      integer, dimension(:),    intent(IN) :: IP1V          ! IP1 list of prototype field
+      real,    dimension(:,:),  intent(IN) :: P0            ! Surface field reference for coordinate
+      logical, optional,        intent(IN) :: IN_LNP        ! Output LN( pressure ) ? Default is yes !
+
+      real,    dimension(:,:,:), pointer   :: LocalPressure ! Physical level values
+
+!    External declarations
+
+      LOGICAL              info
+      COMMON     /ZZVERBO/ info
+      LOGICAL              debug
+      COMMON     /ZZDEBUG/ debug
+
+!     Local variables
+
+      logical :: my_IN_LNP
+      integer i,j, status, LIP1,LIP2, ni,nj,nk
+
+!     Set default values
+      my_IN_LNP = .true.
+      if (present( IN_LNP )) my_IN_LNP = IN_LNP
+
+      LIP1 = IP1 ; LIP2 = IP2
+
+!    Is (IP1,IP2) recognition possible ?
+!    If not, ignore IP1,IP2 parametres
+!    and use default values.
+
+      if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
+                          .and. TOC_IP(2,1,0) == 0 ) &
+         LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+
+!    Now, try to find an existing grid descriptor
+!    set corresponding to this (IP1,IP2) pair.
+
+      IF (TOC_NBR(0) == 0) RETURN
+
+      if (LIP1 == -1 .or. LIP2 == -1)                          THEN
+          LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0) 
+      end if
+
+      LOOK_FOR_DESCRIPTOR : DO  J=0,unite_io_maximale
+
+          IF (TOC_NBR(J)  >  0)                                THEN
+              DO  I=1,TOC_NBR(J)
+                  IF (LIP1 == TOC_IP(1,I,J) .AND.  &
+                      LIP2 == TOC_IP(2,I,J) )                  THEN
+
+!                      This is it.
+
+                      EXIT LOOK_FOR_DESCRIPTOR
+
+                  END IF
+              END DO
+          END IF
+
+      END DO LOOK_FOR_DESCRIPTOR
+
+      if (J > unite_io_maximale) call              xit(' LoPTOC ',-1 )
+
+
+      ni = size(P0,dim=1); nj = size(P0,dim=2) ; nk = size( IP1V,dim=1 )
+
+      status = vgd_levels( self=TOC_GD(I,J),     &
+                           ip1_list=IP1V,        &
+                           levels=LocalPressure, &
+                           sfc_field=P0,         &
+                           in_log=my_IN_LNP )
+
+      if (status /= VGD_OK)                                    THEN
+          IF (DEBUG) write(STDOUT,6600) nk,IP1,IP2
+          call                                     xit(' LoPTOC ',-2 )
+      else if (INFO)                                           THEN
+          write(STDOUT,6601) nk,ni,nj
+      end if
+
+      RETURN
+
+ 6600 FORMAT('*DEBUG:  LoPTOC cannot compute the ',I3,' vertical levels local pressures associated to !! with IP1/2 =',2I7/)
+ 6601 FORMAT('*INFO:   LoPTOC computed ',I3,' pressures levels distributed over ',I3.3,'x',I3.3,' horizontal points.')
+
+      End SUBROUTINE LoPTOC
+
+!-------------------------------------------------------------------
+
+      End module Diag_TOC

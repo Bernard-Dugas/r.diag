@@ -1,0 +1,310 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      condef  DECK DFNAM OUT OUTPUT
+*
+*
+*     DESCRIPTION...
+*      condef - SIMULATES CONDITIONNAL ASSEMBLY OF JCL STREAM 
+*
+*
+*     AUTHOR  - R.Laprise, NOV 22/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/condef.ptn,v 4.3 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     PURPOSE - JCL PRE-PROCESSOR TO BE INVOKED PRIOR TO PARMSUB.  LINES
+*               BRACKETTED BY STATEMENTS "=IF,+NAME" OR  "=IF,-NAME" AND
+*               "=END,NAME" ON FILE DECK ARE CONDITIONALLY COPIED TO FILE 
+*               OUT DEPENDING ON WHETHER FILE DFNAM CONTAINS A CORRESPON-
+*               DING "=DF NAME" STATEMENT. 
+*
+*
+*     INPUT FILES... 
+*      DECK  = INPUT FILE CONTAINING LINES BRACKETTED BY STATEMENTS 
+*              "=IF,+NAME"  OR  "=IF,-NAME"  AND  "=END,NAME".  THE 
+*              "=IF," AND "=END," STATEMENTS MUST EXIST IN PAIRS ON 
+*              FILE DECK. 
+*
+*      DFNAM = INPUT FILE CONTAINING STATEMENTS OF THE FORM =DF NAME. 
+*              A MAXIMUM OF 999 NAMES ARE ALLOWED ON FILE DFNAM. EACH
+*              NAME CAN BE UP TO 8 CHARACTERS LONG.  THE CONTROL CHA-
+*              RACTER IS DEFINED TO BE THE CHARACTER PRECEEDING  THE
+*              FIRST "DF NAME" ON FILE DFNAM. 
+*
+*     OUTPUT FILE... 
+*      OUT   = CONDITIONALLY COPIED LINES FROM FILE DECK. 
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ATTEMPT TO CHANGE CONTROL CHARACTER INSIDE DFNAM
+*       2 FILE DECK SEEMS EMPTY. NO CARDS READ
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM condef
+*    +              ( DECK,        DFNAM,        OUT,       OUTPUT,
+*    +         TAPE11=DECK, TAPE12=DFNAM, TAPE13=OUT, TAPE6=OUTPUT)  
+*    +                                               
+*     ------------------------------------------------------------- 
+
+*     $Log: condef.ptn,v $
+*     Revision 4.3  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.2  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.1  2007/12/20 21:09:34  dugas
+*     Corriger l'appel a JCLPNT.
+*
+*     Revision 4.0  1994/11/17 14:19:34  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:41  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  93/08/19  15:18:50  armnrbd
+*     Modifications cosmetiques.
+*     
+*     Revision 1.1  92/03/18  12:01:47  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:36  armnrbd
+*     Initial revision
+*     
+
+*     JAN 22/91 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+*     NOV 22/83 - R.LAPRISE. 
+
+*----------------------------------------------------------------------- 
+*         NDF   = NUMBER OF DEFINED PARAMETERS ON FILE DFNAM. 
+*         NIN   = NUMBER OF LINLEN COLUMNS CARDS READ IN FROM FILE DECK. 
+*         NCONT = NUMBER OF CONTROL STATEMENTS ENCOUNTERED ON FILE DECK 
+*         NOUT  = NUMBER OF CARD IMAGES WRITTEN OUT TO FILE OUT. 
+*         NCOND = COUNT OF NUMBER OF SIMULTANEOUS CONDITIONS RESULTING 
+*                 IN SKIP. 
+
+      IMPLICIT    NONE
+
+      CHARACTER   LC,LC2,CARD(256)
+      CHARACTER*4 CHAIN,IFP,IFM,END
+      CHARACTER*8 NAME,CONDIT, DF(999)
+      INTEGER     MAXDF,NFF,NDF,LNT,LEVEL,
+     +            NIN,NOUT,NCONT,N,I,J,
+     +            LINLEN
+      LOGICAL     LIFP,LIFM,LEND,OK,
+     +            LSKIP,LSKIPA,CNTRL
+
+      EXTERNAL    JCLPNT,XIT
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        IFP / 'IF,+' /,
+     +            IFM / 'IF,-' /, 
+     +            END / 'END,' / 
+
+      DATA        MAXDF  / 999 /,
+     +            LNT    /  4  /,
+     +            LINLEN / 256 /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/condef.ptn,v $'
+
+*----------------------------------------------------------------------- 
+      NFF = 4 
+      CALL JCLPNT( NFF, -11,-12,-13, 6 )
+
+***    READ FILE DFNAM TO DECODE THE NAMES. 
+
+      NDF = 0 
+
+      READ(12,1200,END=100) LC, DF(1)
+      NDF = 0 
+
+      DO 050 N=2,MAXDF 
+          READ(12,1200,END=100) LC2, DF(N)
+          IF (LC2.NE.LC)                                       THEN
+              WRITE(6,6001) LC,LC2
+              CALL                                 XIT(' Condef ',-1 )
+          end if
+          NDF = NDF+1 
+  050 CONTINUE 
+
+***    ALL NAMES HAVE BEEN READ IN.  PRINT THEM. 
+
+  100 WRITE(6,6100) NDF 
+      IF (NDF.GT.0) WRITE(6,6110) LC, (DF(N),N=1,NDF) 
+
+*----------------------------------------------------------------------- 
+***    PROCESS FILE DECK. 
+*----------------------------------------------------------------------- 
+
+*     WRITE(6,6130) 
+
+      NIN   = 0 
+      NCONT = 0 
+      NOUT  = 0 
+      LSKIP =.FALSE. 
+      CNTRL =.FALSE.
+
+  150 READ(11,1000,END=901) CARD 
+
+          NIN = NIN+1 
+          IF (CARD(1).EQ.LC)                                   THEN
+
+***            THIS CARD IS A CONTROL STATEMENT.  DECODE IT. 
+
+              NCONT = NCONT+1 
+              CNTRL =.TRUE.
+
+              CHAIN = CARD(2)//CARD(3)//CARD(4)//CARD(5)
+
+              LIFP  = ( CHAIN .EQ. IFP )
+              LIFM  = ( CHAIN .EQ. IFM )
+              LEND  = ( CHAIN .EQ. END )
+
+***            ILLEGAL CONTROL STATEMENTS ARE SIMPLY IGNORED.
+
+              IF (.NOT.(LIFP.OR.LIFM.OR.LEND))                 THEN
+
+                  CNTRL =.FALSE.
+                  NCONT = NCONT-1
+
+*----------------------------------------------------------------------- 
+***            THIS IS AN "=IF,+" (OR -) CONTROL STATEMENT. 
+***            FIND OUT IF NAME IS ONE OF THE DF NAMES,
+***            AND SET OK=.T. IF IT IS. 
+*----------------------------------------------------------------------- 
+
+              ELSE IF (.NOT.LEND)                              THEN
+
+                  LSKIPA = LSKIP 
+                  OK     =.FALSE. 
+
+                  NAME =   CARD(LNT+2)//CARD(LNT+3)//
+     +                     CARD(LNT+4)//CARD(LNT+5)//
+     +                     CARD(LNT+6)//CARD(LNT+7)//
+     +                     CARD(LNT+8)//CARD(LNT+9)
+
+                  DO 200 N=1,NDF 
+                      OK = ( NAME .EQ. DF(N) ) 
+                      IF (OK) GOTO 201
+  200             CONTINUE 
+
+***                SET SWITCH TO SKIP TILL "=END,NAME"  IF... NAME
+***                NAME IS NOT ONE OF THE "=DF NAME" AND THIS IS AN
+***                "=IF,+" *OR*  NAME IS ONE OF THE "=DF NAME"  AND
+***                THIS IS AN "=IF,-" STATEMENT. 
+
+  201             LSKIP = ( (OK.AND.LIFM) .OR. ((.NOT.OK).AND.LIFP) )
+
+***                IF WE WERE NOT ALREADY SKIPPING, REMEMBER THE
+***                NAME THAT CAUSES THE SKIP AND SAVE IN CONDIT.
+
+                  IF (LSKIP .AND. .NOT.LSKIPA)                 THEN
+                      CONDIT = NAME
+                      LEVEL  = 1
+                  ELSE IF (LSKIPA .AND. CONDIT.EQ.NAME)        THEN
+                      LEVEL  = LEVEL+1
+                  END IF
+
+                  LSKIP = ( LSKIP .OR. LSKIPA )
+
+*----------------------------------------------------------------------- 
+***            THIS IS AN "=END,NAME" STATEMENT. IF WE ARE IN
+***            SKIPPING MODE,  CHECK IF THIS IS THE END OF IT. 
+*----------------------------------------------------------------------- 
+
+              ELSE
+
+                  IF (LSKIP)                                   THEN
+
+                      NAME = CARD(LNT+2)//CARD(LNT+3)//
+     +                       CARD(LNT+4)//CARD(LNT+5)//
+     +                       CARD(LNT+6)//CARD(LNT+7)//
+     +                       CARD(LNT+8)//CARD(LNT+9)
+
+                      OK = ( NAME .EQ. CONDIT )
+
+                      IF (OK)                                  THEN
+                          LEVEL = LEVEL-1
+                          IF (LEVEL.EQ.0) LSKIP =.FALSE.
+                      END IF
+
+                  END IF
+
+              END IF
+
+          END IF
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+***        WRITE THIS LINE TO FILE OUT UNLESS IN SKIPPING
+***        MODE OR UNLESS THIS IS A VALID CONTROL CARD. 
+
+          IF (LSKIP .OR. CNTRL)                                THEN
+
+              IF (CNTRL) CNTRL =.FALSE.
+
+          ELSE
+
+***            STRIP END-LINE BLANKS.
+
+              DO 250 I=LINLEN,1,-1
+                  IF (CARD(I).NE.' ') GOTO 251
+  250         CONTINUE
+
+  251         WRITE(13,1000) (CARD(J), J=1,I)
+*             WRITE( 6,6120) (CARD(J), J=1,I)
+
+              NOUT = NOUT+1 
+
+          END IF
+
+      GOTO 150 
+
+***    E.O.F. ON FILE DECK. 
+
+  901 IF (NIN.EQ.0) CALL                            XIT(' Condef ',-2 ) 
+      WRITE(6,6000) NIN,NCONT,NOUT 
+      CALL                                          XIT(' Condef ', 0 ) 
+
+*----------------------------------------------------------------------- 
+ 1000 FORMAT(256A1) 
+ 1200 FORMAT(A1,3X,A8) 
+
+ 6000 FORMAT(/' Number of cards in = ',I5,
+     +                  ', control = ',I5,
+     +                      ', out = ',I5) 
+ 6001 FORMAT(/' Illegal attempt to change control character inside'/
+     +        ' DFNAM file. Original/New values = ',A1,'/',A1)
+
+ 6100 FORMAT(/' Number of defined parameters = ',I5) 
+ 6110 FORMAT(/' Control character is ',A1/ 
+     +        ' Defined names are...'//(10X,A8)) 
+*6120 FORMAT(10X,256A1) 
+*6130 FORMAT('1',30x,'LIST OF OUTPUT FILE'///) 
+
+      END 
+#     endif

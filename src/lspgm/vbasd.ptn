@@ -1,0 +1,205 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      vbasd  VBIAS SD OUTPUT
+*
+*
+*     AUTHOR  - F. Zwiers, Jan 25/1985
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/vbasd.ptn,v 4.9 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*
+*     PURPOSE - COMPUTES AN ESTIMATE OF POPULATION STANDARD
+*               DEVIATION FROM THE MEAN SQUARED DEVIATION.
+*
+*
+*     INPUT FILE...
+*      VBIAS  = FILE OF GRIDS OR ZONAL PROFILES OF BIASED ESTIMATES OF
+*               VARIANCE ( SUMS OF SQUARED DEVIATIONS DIVIDED BY N ).
+*               IT IS ASSUMED THAT N IS OBTAINED FROM WORD 2 OF THE
+*               RECORD LABEL OR FROM THE IP3 INTERNAL DESCRIPTOR,
+*               DEPENDING ON THE VBIAS FILE TYPE.
+*
+*     OUTPUT FILE...
+*      SD     = FILE OF GRIDS OR ZONAL PROFILES OF SQUARE ROOTS OF
+*               UNBIASED ESTIMATES OF THE VARIANCE (IE, THE SQUARE ROOT
+*               OF THE SUM OF SQUARED DEVIATIONS DIVIDED BY N-1)
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST SET
+*       2 MORE THAN ONE SIZE IN VBIAS
+*       3 FOUND TOO SMALL A VALUE OF N
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM vbasd 
+*     PROGRAM VBASD (VBIAS,       SD,       OUTPUT,                     )
+*    1         TAPE1=VBIAS, TAPE2=SD, TAPE6=OUTPUT) 
+*     ---------------------------------------------
+*     $Log: vbasd.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2005/04/14 18:15:49  dugas
+*     Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.5  2004/11/26 16:09:24  dugas
+*     Enlever la verification du nom de variable COV.
+*
+*     Revision 4.4  2001/03/17 21:42:56  armnrbd
+*     Remplacer GETPARI par GETHIGH.
+*
+*     Revision 4.3  1998/07/03 02:26:45  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1997/09/26  17:39:28  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1996/12/12  19:59:51  armnrbd
+*     Ajouter le support de fichiers SQI.
+*
+*     Revision 4.0  1995/12/06  18:57:10  armnrbd
+*     Version initiale.
+*
+
+*     JAN 29/92 - E. CHAN  (CONVERT HOLLERITH LITERALS TO ASCII)
+*     JAN 25/85 - F. ZWIERS                                                     
+
+*-----------------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+      LOGICAL      OK
+      REAL         FACT
+      CHARACTER*4  NSD,TYPE,NAME
+      INTEGER      JBUF(taille_entete),NWDS,MAXW,LEN,JPAK,NF,
+     +             LEV(MAXLEV),NLEV,NLEVB,I,IER,NREC,N
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: X
+
+      INTEGER      GETSIZ2,GETHIGH
+      CHARACTER    PKTYP*2,GETYP*4
+      EXTERNAL     JCLPNT,GETSIZ2,GETSET2,PUTSET2,
+     +             CMPLBL,XIT,GETYP,GETHIGH
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         NSD /'SD'/
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vbasd.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF=3
+      CALL JCLPNT( NF, 1,2, 6 )
+
+***    RETREIVE FILE TYPE.
+
+      PKTYP = GETYP( 1 )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF DATA INFO BUFFERS.
+
+      MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.LE.0 .OR. NLEV.GT.MAXLEV) CALL      XIT('  Vbasd ',-1 )
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(LEN),X(MAX( MAXW,NWDS*NLEV )) )
+
+*-----------------------------------------------------------------------------
+      NREC = 0
+  100 CONTINUE
+
+***        READ NEXT SET.
+      
+          CALL GETSET2( 1, X, LEV,NLEVB, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6000) NREC
+              IF (NREC.EQ.0)                                   THEN 
+                  WRITE(6,6010)
+                  CALL                             XIT('  Vbasd ',-1 )
+              ELSE
+                  CALL                             XIT('  Vbasd ', 0 ) 
+              END IF 
+          END IF
+
+***        IGNORE LABEL OR CHARACTER RECORDS.
+
+          WRITE(TYPE,4) IBUF(1)
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 100
+
+***        CHECK SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+          IF (.NOT.OK .OR. NLEVB.NE.NLEV) CALL     XIT('  Vbasd ',-2 )
+
+***        IBUF(2) OR IP3 CONTAINS THE SAMPLE SIZE.
+
+                             N = IBUF(2)
+          IF (PKTYP.EQ.'SQ') N = GETHIGH('IP3',IBUF )
+
+          IF (N.LE.1)                                          THEN 
+              NREC = NREC+1 
+              WRITE(6,6030) NREC ; CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Vbasd ',-3 )
+          END IF
+
+          FACT = SQRT( FLOAT( N )/FLOAT( N-1 ) ) 
+
+          DO  I=1,NWDS*NLEV
+              X(I) = FACT*SQRT( X(I) )
+          END DO
+
+                                 WRITE(NAME,0004) IBUF(3)
+          IF (NAME(1:2).EQ.'CO') READ (NSD, 0004) IBUF(3)
+
+          CALL PUTSET2( 2, X, LEV,NLEV, IBUF,MAXW ) 
+
+      NREC = NREC+NLEV
+      GOTO 100 
+*-----------------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+
+ 6000 FORMAT(' Vbasd read ',I5,' records.')
+ 6010 FORMAT(' Input file of biased variance estimates was empty.')
+ 6030 FORMAT(' Variances in record ',I5,' computed from only one',
+     +       ' observation - Unable to compute standard deviation.'/
+     +       ' Label:')
+
+      END 
+#     endif

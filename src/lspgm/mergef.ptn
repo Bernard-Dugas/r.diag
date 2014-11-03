@@ -1,0 +1,429 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      mergef  INA INB MERG OUTPUT
+*
+*
+*     AUTHOR - J.Henderson, MAR 10/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/mergef.ptn,v 4.9 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     PURPOSE...
+*      MERGES TWO FILES INA,INB INTO ONE FILE MERG. ORDERING IS BY
+*      TIMESTEP NUMBER (WORD 2 OF THE LABEL). TIES ARE RESOLVED IN
+*      FAVOR  OF THE FIRST FILE (INA).  BOTH INPUT FILES SHOULD BE
+*      ORDERED BY TIMESTEP NUMBER.  AFTER ONE FILE IS FINISHED THE
+*      OTHER FILE IS COPIED TO THE MERGE FILE WITHOUT CHECKING THE
+*      TIMESTEP NUMBER. ALL RECORDS SHOULD BE SAME SIZE. 
+*
+*      NOTE: THE PROGRAMS ATTEMPS TO PREVENT A THE REPETITION OF
+*            RECORDS HAVING SAME NAME,TIMESTEPS AND LEVELS THAT
+*            COULD BE EXTRACTED FROM THE TWO FILES.
+*
+*
+*
+*     INPUT FILES...
+*      INA  = FIRST INPUT FILE
+*      INB  = SECOND INPUT FILE
+*
+*     OUTPUT FILE...
+*      MERG = MERGED CONCATENATION OF THE TWO INPUT FILES
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 FILES DO NOT CONTAIN SAME TYPE OF DATA
+*       2 CANNOT CHANGE/MIX PACKING TYPE
+*       3 PREMATURE EOF ON FILE INA
+*       4 PREMATURE EOF ON FILE INB
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM mergef
+*    +             (      INA,       INB,       MERG,       OUTPUT,
+*    +              TAPE1=INA, TAPE2=INB, TAPE3=MERG, TAPE6=OUTPUT) 
+
+*     $Log: mergef.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.5  1998/07/03 02:26:33  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1998/05/21  20:20:51  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.3  1998/02/17  21:32:39  armnrbd
+*     Seconde iteration des modifs associes a la cle OPKTYP.
+*
+*     Revision 4.2  1997/12/10  18:14:59  armnrbd
+*     Avertir si la cle OPKTYP ne peut etre satisfaite.
+*
+*     Revision 4.1  1995/11/03  20:26:31  armnrbd
+*     Corriger le traitement d'enregistrements zonaux et multi-niveaux.
+*
+*     Revision 4.0  1994/11/17  14:21:05  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:31  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  93/07/08  11:41:15  armnrbd
+*     Implanter la non-repetition de champs identiques.
+*     
+*     Revision 1.4  93/06/22  15:20:29  armnrbd
+*     Ajouter des verifications de constance entre les fichiers.
+*     Recoder avec l'enonce "IMPLICIT none".
+*     
+*     Revision 1.3  92/11/19  13:47:33  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/11/10  11:49:19  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/03/24  22:09:42  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:50  armnrbd
+*     Initial revision
+*     
+***    DEC 03/90 - B.DUGAS, RPN. (VERSION CY920/IRIX F77)
+***    MAR 10/81 - J.D.HENDERSON 
+
+*-------------------------------------------------------------------- 
+      IMPLICIT     none
+
+      INTEGER      MAXLEV       , HEAD
+      PARAMETER  ( MAXLEV = 999 , HEAD = taille_entete )
+
+      CHARACTER*4  NOMA,NOMB,OLDA,TYPE,
+     +             TYPA,TYPB,NEWA,NEWB
+      LOGICAL      EOFA,EOFB,READA,READB,
+     +             NOFIND,OK,WNEW,CHNGTYP
+      INTEGER      KBUF(HEAD),LBUF(HEAD),I,
+     +             OTA,IER,NF,NRA,NRB,NWC,MAXW1,MAXW2,MAXW,
+     +             LEN1,LEN2,LEN,NWDS,NTA,NTB,NPK,LASTL,
+     +             OLDL(MAXLEV),LEVA(MAXLEV),NLEVA,
+     +             LEVB,MBUF(MAXLEV+HEAD)
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      INTEGER      GETSIZ
+      CHARACTER*4  TYPE1,TYPE2,GETYP,INTYP,OUTYP
+      EXTERNAL     JCLPNT,GETSIZ,GETYP,XIT,CMPLBL,
+     +             RECGET,RECPUT,PUTYP,TYPSET
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/mergef.ptn,v $'
+
+*-------------------------------------------------------------------- 
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2,3, 6 )
+
+***    DEFINE LOGICAL CONTROLS AND INTEGER COUNTERS.
+
+      EOFA    = .FALSE.
+      EOFB    = .FALSE.
+      READA   = .TRUE.
+      READB   = .TRUE.
+
+      NOMA    =  ' ' 
+      OTA     =  -1
+      NTA     =   0
+
+      NRA     =   0 
+      NRB     =   0 
+      NWC     =   0
+
+      NLEVA   =   0
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER IN EACH FILE.
+
+  050 IF (.NOT.EOFA)                                           THEN
+          MAXW1 = GETSIZ( 1, KBUF,LEN1,NWDS,NPK )
+          IF (MAXW1.LE.0 .AND. NRA.EQ.0) GOTO 901
+      END IF
+      IF (.NOT.EOFB)                                           THEN
+          MAXW2 = GETSIZ( 2, LBUF,LEN2,NWDS,NPK )
+          IF (MAXW2.LE.0 .AND. NRB.EQ.0) GOTO 902
+      END IF
+
+***    FILE TYPE CONSISTENCY CHECK.
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+      IF (.NOT.OK) CALL                            XIT(' Mergef ',-1 )
+      
+      WRITE(TYPE,'(A4)') KBUF(1)
+
+      IF (NRA+NRB.EQ.0)                                        THEN
+
+***        FILE PACKING TYPE CONSISTENCY CHECK (DONE ONLY ONCE).
+
+          OUTYP = GETYP( 0 )
+          TYPE1 = GETYP( 1 )
+          TYPE2 = GETYP( 2 )
+          INTYP = TYPE1(1:2)
+
+          IF ((TYPE1.NE.OUTYP .OR.
+     +         TYPE2.NE.OUTYP .OR.
+     +         TYPE1.NE.TYPE2).AND.
+     +         INTYP.NE.'SQ' )                                 THEN
+              CALL TYPSET( CHNGTYP )
+              IF (TYPE1.NE.TYPE2 .OR. CHNGTYP)                 THEN
+                  CALL                             XIT(' Mergef ',-2 )
+              ELSE
+                  CALL PUTYP( 0, TYPE1 )
+              END IF
+          END IF
+
+      END IF
+      
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      LEN  = MAX( LEN1 ,LEN2  )
+      MAXW = MAX( MAXW1,MAXW2 )
+
+      ALLOCATE( IBUF(LEN),JBUF(LEN) )
+
+***    READ THE NEXT RECORD FROM FILE 1 AND/OR FILE 2. 
+
+  100 IF (.NOT.EOFA .AND. READA )                              THEN
+
+          CALL RECGET( 1, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+                     IF (MAXW.EQ.0)                            THEN
+                         DEALLOCATE( IBUF,JBUF )
+                         GOTO 050
+                     END IF
+
+                     EOFA  = .TRUE.
+
+          END IF
+
+          READA = .FALSE. 
+
+          IF (.NOT.EOFA)                                       THEN
+
+                     WRITE(TYPA,4) IBUF(1)
+                     WRITE(NEWA,4) IBUF(4)
+
+                     IF (TYPA.EQ.'ZONL'.AND.
+     +                   NEWA.EQ.'NEWL'.AND.
+     +                   IBUF(6).NE.1) IBUF(4) = 1
+
+                     IF (NRA.EQ.0)
+     +               CALL PRTLAB2(' First record in file 1 ...',IBUF )
+                     NRA   = NRA+1 
+
+***                   SAVE CURRENT TIMESTEP/VARIABLE LEVELS.
+
+                     OTA   = NTA
+                     NTA   = IBUF(2) 
+
+                     OLDA  =  NOMA
+                     WRITE(NOMA,4)  IBUF(3)
+
+                     IF (NTA.EQ.OTA .AND. NOMA.EQ.OLDA)        THEN
+
+                         IF (NLEVA.LT.MAXLEV)
+     +                   NLEVA    = NLEVA+1
+
+                     ELSE
+
+                         IF (NTA.NE.OTA)                       THEN
+                             DO  I=1,NLEVA
+                                 OLDL(I) = LEVA(I)
+                             END DO
+                         END IF
+
+                         LASTL    = NLEVA
+                         NLEVA    = 1
+
+                     END IF
+
+                     LEVA(NLEVA)  = IBUF(4)
+
+          ELSE
+
+                     OTA   = NTA
+                     OLDA  = NOMA
+                     LASTL = NLEVA
+
+                     DO  I=1,LASTL
+                         OLDL(I) = LEVA(I)
+                     END DO
+
+
+          END IF
+
+      END IF
+
+      IF (.NOT.EOFB .AND. READB )                              THEN
+
+          CALL RECGET( 2, ' ',-1,' ',-1, JBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+                     IF (MAXW.EQ.0)                            THEN
+                         IF (.NOT.EOFA) CALL PRECEDE( 1,1 )
+                         DEALLOCATE( IBUF,JBUF )
+                         GOTO           050
+                     END IF
+
+                     EOFB  = .TRUE.
+
+          END IF
+
+          READB = .FALSE. 
+
+          IF (.NOT.EOFB)                                       THEN
+
+                     WRITE(TYPB,4) JBUF(1)
+                     WRITE(NEWB,4) JBUF(4)
+
+                     IF (TYPB.EQ.'ZONL'.AND.
+     +                   NEWB.EQ.'NEWL'.AND.
+     +                   JBUF(6).NE.1) JBUF(4) = 1
+
+                     IF (NRB.EQ.0)
+     +               CALL PRTLAB2(' First record in file 2 ...',JBUF )
+                     NRB   = NRB+1 
+
+                     NTB   = JBUF(2)
+
+                     WRITE(NOMB,4)  JBUF(3)
+                     LEVB  = JBUF(4)
+
+          END IF
+
+      END IF
+
+***    STOP HERE IF BOTH FILES HAVE BEEN FULLY PROCESSED.
+
+      IF (EOFA.AND.EOFB)                                       THEN
+
+          WRITE(6,6010) NRA,NRB,NWC
+          CALL                                     XIT(' Mergef ', 0 ) 
+
+      END IF
+
+***    COPY THE RECORD WITH LOWER TIMESTEP INTO FILE 3.
+
+      IF (EOFA) NTA = NTB+1
+      IF (EOFB) NTB = NTA+1
+
+      IF (NTA.LE.NTB)                                          THEN
+
+          CALL RECPUT( 3, IBUF )
+          NWC   =  NWC+1
+
+          IF (TYPA   .EQ.'ZONL' .AND. 
+     +        NEWA   .EQ.'NEWL' .AND.
+     +        IBUF(6).NE.   1   )                              THEN
+
+***            ACCOUNT FOR POSSIBLE '++' RECORDS IN FILE 1.
+
+              CALL RECGET( 1, 'ZONL',-1,'++',-1, MBUF,MAXLEV,OK )
+
+              IF (OK)                                          THEN
+                  NRA = NRA+1
+                  CALL RECPUT( 3, MBUF )
+                  NWC = NWC+1
+              END IF
+
+          END IF
+
+          READA = .TRUE. 
+
+          
+      ELSE
+
+          WNEW = .FALSE.
+
+          IF (TYPB   .EQ.'ZONL' .AND.
+     +        NEWB   .EQ.'NEWL' .AND.
+     +        JBUF(6).NE.   1   )                              THEN
+
+***            ACCOUNT FOR POSSIBLE '++' RECORDS IN FILE 2.
+
+              CALL RECGET( 2, 'ZONL',-1,'++',-1, MBUF,MAXLEV,OK )
+              IF (OK) WNEW = .TRUE.
+
+          END IF
+
+          NOFIND = .TRUE.
+          DO  I=1,LASTL
+              IF (OLDL(I).EQ.LEVB) NOFIND = .FALSE.
+          END DO
+
+          IF (NTB.NE.OTA .OR. NOMB.NE.OLDA .OR. NOFIND)        THEN
+
+              CALL RECPUT( 3, JBUF )
+              NWC = NWC+1
+
+              IF (WNEW)                                        THEN
+                  NRB = NRB+1
+                  CALL RECPUT( 3, MBUF )
+                  NWC = NWC+1
+              END IF
+
+          END IF
+
+          READB = .TRUE. 
+
+      END IF
+
+      GOTO 100
+
+***    PREMATURE E.O.F ON UNIT 1 OR UNIT 2.
+
+  901 CALL                                         XIT(' Mergef ',-3 )
+  902 CALL                                         XIT(' Mergef ',-4 )
+
+*-------------------------------------------------------------------- 
+
+    4 FORMAT(A4)
+
+ 6010 FORMAT('0Records read =',2I6,',  merged =',I6) 
+
+      END 
+#     endif

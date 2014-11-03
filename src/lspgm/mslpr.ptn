@@ -1,0 +1,357 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      mslpr  GPTEMP GPPHI GPMSL OUTPUT
+*
+*
+*     DESCRIPTION...
+*      mslpr  - COMPUTES MEAN-SEA-LEVEL-PRESSURE FROM T,PHI PRESSURE FILES
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 27/80.
+*     LAST REVISION: $Header
+*
+*
+*     PURPOSE - COMPUTES A GRID FILE OF MEAN-SEA-LEVEL PRESSURE FROM THE
+*               LOWEST AVAILABLE ATMOSPHERIC LEVEL OF TEMPERATURE AND PHI.
+*               THE LAPSE RATE FROM THE LOWEST TEMPERATURE LEVEL TO
+*               1000 MB IS .6 TIMES THE DRY ADIABATIC LAPSE RATE.
+*               THE LAYER BETWEEN 1000 MB AND MSL IS ISOTHERMAL.
+*
+*
+*     INPUT FILES...
+*      GPTEMP = PRESSURE MULTI-LEVEL GRID SETS OF TEMPERATURE.
+*      GPPHI  = PRESSURE MULTI-LEVEL GRID SETS OF GEOPOTENTIAL.
+*
+*     OUTPUT FILE...
+*      GPMSL  = GRIDS OF MEAN-SEA-LEVEL PRESSURE (MB)
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 FIRST FIELDS NOT THE SAME SIZE
+*       2 PREMATURE EOF ON GEOPOTENTIAL FILE 
+*       3 MONTAINS AND GEOPOTENTIAL NOT THE SAME SIZE
+*       4 UNABLE TO READ GPTEMP
+*       5 UNABLE TO READ GPPHI
+*       6 LEVELS DO NOT VARY MONOTONICALLY
+*       7 FOUND WRONG VARIABLES
+*       8 VERTICAL COORDINATE IS NOT PRESSURE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM mslpr
+*     PROGRAM MSLPR (GPTEMP,       GPPHI,       GPMSL,       OUTPUT,
+*    1         TAPE1=GPTEMP, TAPE2=GPPHI, TAPE3=GPMSL, TAPE6=OUTPUT)
+*     --------------------------------------------------------------
+
+*     $Log: mslpr.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:10:29  dugas
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.6  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.5  2003/06/23 14:45:42  dugas
+*     Modifier le traitement des noms de variables.
+*     Remplacer les appels a MEMOIR par des appels a HPALLOC.
+*
+*     Revision 4.4  1998/07/03 02:26:34  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1997/09/26  17:39:10  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1996/11/26  20:15:04  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.1  1996/11/12  19:36:14  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*     Modifier le support des fichiers SQI.
+*
+*     Revision 4.0  1994/11/17  14:21:13  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:35  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  93/06/07  15:56:20  armnrbd
+*     Corriger l'allocation de memoire dynamique.
+*     Corriger la limite inferieure de la boucle 400.
+*     
+*     Revision 1.2  92/11/23  15:04:17  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/11/10  12:37:22  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.0  92/04/29  01:28:14  armnrbd
+*     Initial revision
+*     
+*     MAY 13/83 - R.LAPRISE.
+*     NOV 27/80 - J.D.HENDERSON.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD   = taille_entete )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+
+      LOGICAL     OK,INCREAS
+      CHARACTER*4 TT,GZ,PN
+      REAL        PMSL,T,PHI,TCON,TTT,RGOCP,
+     +            RGAS,PRESL,T1000,GZ1000,PHICON,PR(MAXLEV)
+      INTEGER     I,K,IBUF,JBUF,LEV(MAXLEV),NFF,NRECS,LOWEST,NST,
+     +            MAXW1,MAXW2,LEN1,LEN2,LPAK,MAXW,BOT,L,VKIND,
+     +            LEN,NLEV,NLEVB,NWDS,KPAK,IER,
+     +            LBUF(HEAD),KBUF(HEAD)
+
+      POINTER   ( IT,T   (1) )
+      POINTER   ( IG,PHI (1) )
+      POINTER   ( IP,PMSL(1) )
+      POINTER   ( IB,IBUF(8) )
+      POINTER   ( JB,JBUF(8) )
+
+      CHARACTER*4 GETYP,PKTYP
+      INTEGER     GETSIZ2,GETKIND
+      EXTERNAL    MACSPE,JCLPNT,GETYP,GETSIZ2,GETFLD2,HPALLOC,
+     +            PRECEDE,CMPLBL,PUTFLD2,XIT,CONVPR,GETKIND
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/mslpr.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+      RGOCP = 2./7.
+      RGAS  = 287.
+
+***    SETUP I/O VARIABLE NAMES.
+
+      NRECS = 0
+      PKTYP = GETYP( 1 )
+
+***    EXAMINE FILES TO DETERMINE THE NUMBER OF LEVELS IN EACH SET.
+***    STOP IF ANY FILE IS EMPTY.
+
+  100 MAXW2 = GETSIZ2( 2, LBUF,LEN2,NWDS,LPAK, LEV,NLEVB )
+      MAXW1 = GETSIZ2( 1, KBUF,LEN1,NWDS,KPAK, LEV,NLEV )
+
+      IF (MAXW2.EQ.0 .OR. NLEVB.LT.   1  .OR.
+     +                    NLEVB.GT.MAXLEV) GOTO 902
+      IF (MAXW1.EQ.0 .OR. NLEV .LT.   1  .OR.
+     +                    NLEV .GT.MAXLEV) GOTO 901
+
+      WRITE(TT,0004) KBUF(3)
+      WRITE(GZ,0004) LBUF(3)
+
+      IF (PKTYP.EQ.'SQ89')                                     THEN
+
+          IF (TT.NE.'TT' .OR.
+     +        GZ.NE.'GZ' ) CALL                    XIT('  Mslpr ',-7 ) 
+
+          PN     = 'PN'
+          TCON   = 273.15
+          PHICON = 98.0665
+
+      ELSE
+
+          IF (TT.EQ.'TT' .AND.
+     +        GZ.EQ.'GZ')                                      THEN
+              PHICON = 98.0665
+              TCON   = 273.15
+              PN     = 'PN'
+          ELSE
+     +    IF (TT.EQ.'TEMP'.AND.
+     +        GZ.EQ.'PHI')                                     THEN
+              PHICON = 1.0
+              TCON   = 0.0
+              PN     = 'PMSL'
+          ELSE
+              CALL                                 XIT('  Mslpr ',-7 ) 
+          END IF
+
+      END IF
+
+      CALL CMPLBL( 0,LBUF, 0,KBUF, OK ) 
+
+      IF (.NOT.OK .OR. NLEV.NE.NLEVB)                          THEN
+          CALL PRTLAB( LBUF ) ; CALL PRTLAB( KBUF )
+          CALL                                     XIT('  Mslpr ',-1 ) 
+      END IF
+
+      LEN  = MAX( LEN1, LEN2  )
+      MAXW = MAX( MAXW1,MAXW2 )
+
+      CALL HPALLOC( IT,5*LEN,IER,0 )
+      IG = LOC( T  (LEN+1) )
+      IP = LOC(PHI (LEN+1) )
+      IB = LOC(PMSL(LEN+1) )
+      JB = LOC(IBUF(LEN+1) )
+
+***    CHECK THAT THE LEVELS ARE INCREASING OR DECREASING
+***    AND CHECK THAT WE HAVE A PRESSURE VERTICAL COORDINATE.
+
+      DO  K=1,NLEV
+          CALL CONVPR( LEV(K), PR(K), VKIND, -2 )
+          IF (VKIND.NE.2) CALL                     XIT('  Mslpr ',-8 )
+      END DO
+
+      INCREAS = .TRUE.
+      IF (PR(1).LT.PR(2))                                      THEN
+          INCREAS = .TRUE.
+      ELSE IF (PR(1).GT.PR(2))                                 THEN
+          INCREAS = .FALSE.
+      ELSE
+          WRITE(6,6006)
+          CALL                                     XIT('  Mslpr ',-6 )
+      END IF
+
+      DO  L=3,NLEV
+          IF ((     INCREAS .AND. PR(L).LE.PR(L-1))
+     +   .OR.
+     +        (.NOT.INCREAS .AND. PR(L).GE.PR(L-1)))           THEN
+              WRITE(6,6006)
+              CALL                                 XIT('  Mslpr ',-6 )
+          END IF
+      END DO
+
+      IF (INCREAS)                                             THEN
+          BOT =  NLEV
+      ELSE
+          BOT =  1
+          WRITE(6,6040)
+      END IF
+
+      LOWEST = LEV(BOT)
+      PRESL  = PR(BOT)
+
+***    GET THE LOWEST TEMP AND PHI IN THE NEXT SET.
+
+  200 CALL GETFLD2( 1, T, 'GRID'//'SUBA',-1,TT,LOWEST, 
+     +                     IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL                                 HPDEALLC( IT,IER,0 )
+              IF (MAXW.EQ.0) GOTO 100
+              WRITE(6,6030) NRECS
+              CALL                                 XIT('  Mslpr ', 0 )
+          END IF
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          NST = IBUF(2)
+
+          CALL GETFLD2( 2, PHI, 'GRID'//'SUBA',NST,GZ,LOWEST, 
+     +                           JBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL                                 HPDEALLC( IT,IER,0 )
+              IF (MAXW.EQ.0)                                       THEN
+                  CALL PRECEDE( 1,1 )
+                  GOTO 100
+              END IF
+              WRITE(6,6030) NRECS
+              CALL                                 XIT('  Mslpr ',-2 )
+          END IF
+
+          IF (NRECS.EQ.0) CALL PRTLAB( JBUF )
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (NRECS.NE.0) CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Mslpr ',-3 )
+          END IF
+
+
+***        COMPUTE THE MEAN SEA LEVEL PRESSURE IN ARRAY T.
+***        THIS CALCULATION MAKES THE ASSUMPTIONS...
+***          A) .6*(DRY LAPSE RATE) FROM LOWEST TEMP TO 1000 MB.
+***          B) MSL TEMPERATURE EQUALS 1000 MB TEMP.
+
+          IF (LOWEST.NE.1000)                                  THEN
+              DO 300 I=1,NWDS
+                  TTT     =   T(I)+TCON
+                  T1000   = TTT * ( 1000./PRESL )**( .6*RGOCP )
+                  GZ1000  = ( PHI(I)*PHICON )
+     +                    -.5*RGAS*( T1000+TTT )
+     +                       *ALOG( 1000./PRESL )
+                  PMSL(I) = 1000.*EXP( GZ1000/( RGAS*T1000 ) )
+  300         CONTINUE
+          ELSE
+              DO 400 I=1,NWDS
+                  PMSL(I) = 1000*EXP(   (PHI(I)*PHICON)
+     +                              / ( RGAS*(T(I)+TCON) ) )
+  400         CONTINUE
+          END IF
+
+***        SAVE THE PRESSURE ON FILE 3
+
+          READ(PN,0004) IBUF(3)
+          IBUF(4) = 0
+
+          CALL PUTFLD2( 3, PMSL, IBUF,MAXW )
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+      NRECS = NRECS+1
+      GOTO 200
+
+***    PREMATURE E.O.F. ON UNIT #1,#2.
+
+  901 CALL                                          XIT('  Mslpr ',-4 )
+  902 CALL                                          XIT('  Mslpr ',-5 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+
+ 6006 FORMAT(' Levels should be increasing monotonically.')
+ 6010 FORMAT('0.. Mslpr input file is empty or too many levels.')
+ 6030 FORMAT('0',I5,' fields saved by mslpr.')
+ 6040 FORMAT(' Levels are decreasing.')
+
+      END
+#     endif

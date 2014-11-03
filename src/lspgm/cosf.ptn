@@ -1,0 +1,341 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      cosf  XIN XOUT INPUT OUTPUT [ -a VAL0 -kind VAL1 ]
+*
+*
+*     AUTHOR - B.Dugas, 10 mai 1994.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/cosf.ptn,v 4.12 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A CCC FILE ARITHMETIC PROGRAM WHICH...
+*
+*      ... PRODUCES FILE XOUT WHICH CONTAINS EITHER OF
+*          1) COS( A*XIN ), WHERE XIN IS CONSIDERED TO BE IN RADIANS
+*          2) A * ARC COS( XIN ), WHERE XIN SHOULD BE WHITHIN [-1,+1]
+*
+*
+*      Note that ARC TAN( XIN ) can also be derived using the
+*      following relationships:
+*
+*       ARC SIN( XIN ) = PI / 2 - ARC COS( XIN )
+*       ARC TAN( XIN ) = ARC SIN(  XIN / [ SQRT( XIN^2 +1 ) ] )
+*
+*
+*     INPUT PARAMETER...
+*
+*      A    = WAVE NUMBER. BLANK DEFAULT VALUE IS 1.0
+*      KIND = 0, COSINUS CALCULATION (DEFAULT)
+*             1, ARC COSINUS CALCULATION
+*
+*      READ( 5,5010 ) A,KIND
+*5010 FORMAT(10X,E10.0,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* COSF           2.5    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ARC COSINUS MODE UNSUPPORTED FOR COMPLEX DATA
+*       2 MORE THAN ONE SIZE IN XIN
+*       3 ILLEGAL DATA RANGE IN XIN FOR ARC COSINUS MODE
+*       4 ERROR ABORT READING INPUT
+*       5 ERROR ABORT READING XIN OR TOO MANY LEVELS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM cosf
+*    +            ( XIN,        XOUT,       INPUT,      OUTPUT,
+*    +       TAPE1= XIN, TAPE2= XOUT, TAPE5=INPUT,TAPE6=OUTPUT)
+ 
+*     $Log: cosf.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2012/05/17 19:27:18  dugas
+*     Modification a la documentation.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.7  2003/07/05 14:49:51  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.6  2000/03/22 19:29:20  armnrbd
+*     Ajouter un include pour definir le macro AIMAG (f77 vs f90).
+*
+*     Revision 4.5  2000/03/17 21:39:08  armnrbd
+*     Remplace l'intrinseque IMAG par AIMAG.
+*
+*     Revision 4.4  1998/07/03 02:26:21  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1997/09/26  17:38:48  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1996/04/02  16:23:06  armnrbd
+*     Ajouter le mode de fonctionnement inverse avec la cle '-kind'.
+*
+*     Revision 4.1  1996/02/29  20:44:21  armnrbd
+*     Imprimer plus d'informations lors du traitement du cas MAXW=0
+*     et aussi quand le programme se mets a ignorer les LABLs.
+*
+*     Revision 4.0  1994/11/17  14:21:33  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/05/10  21:54:15  armnrbd
+*     Implanter le calcul des champs complexes.
+*     
+*     Revision 3.0  94/05/10  20:51:04  armnrbd
+*     Version initiale.
+*     
+
+*---------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+      COMPLEX      VAL
+      REAL         ZERO,A
+      CHARACTER*10 AA,MESSAG
+      LOGICAL      OK,SPEC,RPBLOC
+      CHARACTER    TYPE*4,LIGNE*80,AKIND*5
+      INTEGER      HEAD,JBUF(taille_entete),LEV(MAXLEV),NLEV,
+     +             NLEVG,IER,I,NF,NR,MAXW,LEN,NWDS,JPAK,IO,KIND
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:), ALLOCATABLE :: G
+
+      INTEGER      GETSIZ2
+      EXTERNAL     GETSIZ2,MACSPE,JCLPNT,
+     +             GETSET2,CMPLBL,PUTSET2,
+     +             XIT,GETLIGN,BURNF,RPBLOC
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         MESSAG / 'AUCUN' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/cosf.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      NR = 0
+
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      AA    = ' '
+      AKIND = ' '
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC( 'A',LIGNE )
+          IF (OK) AA = LIGNE(1:10)
+
+          OK = RPBLOC( 'KIND',LIGNE )
+          IF (OK) AKIND = LIGNE(1:5)
+
+      ELSE
+
+***        READ A FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 903
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=903,IOSTAT=IO) AA,AKIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (AA   .EQ.' ') AA    = '1.0'
+      IF (AKIND.EQ.' ') AKIND =  '0'
+      READ(AA   ,0010,ERR=900,IOSTAT=IO) A
+      READ(AKIND,0005,ERR=900,IOSTAT=IO) KIND
+
+                     WRITE(6,6000) A
+      IF (KIND.EQ.0) WRITE(6,6001)
+      IF (KIND.NE.0) WRITE(6,6002)
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.LE.0) GOTO 904
+
+      WRITE(TYPE,0004) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+      SPEC = (TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR' .OR.
+     +        TYPE.EQ.'CMPL')
+
+      ALLOCATE( IBUF(LEN),G(MAX( MAXW,NWDS*NLEV )) )
+
+      IF (NR.NE.0) CALL PRTLAB( JBUF )
+
+***    ACOS MODE NOT SUPPORTED FOR COMPLEX ARRAYS.
+
+      IF (SPEC .AND. (KIND.NE.0)) CALL             XIT('  Cosf  ',-1 )
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CALL GETSET2( 1, G,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,G )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB( IBUF )
+              WRITE(6,6200) NR
+              CALL                                XIT('  Cosf  ', 0 ) 
+
+          END IF
+
+***        BY-PASS (I.E. STRIP) LABEL/CHARACTER RECORDS.
+
+          WRITE(TYPE,0004) IBUF(1) 
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR')              THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  WRITE(6,6400)
+                  MESSAG  = 'deja donne'
+              END IF
+              GOTO 100
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.LT.NLEVG)                      THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Cosf  ',-2 ) 
+          END IF
+
+          IF (KIND.EQ.0)                                       THEN
+
+***            SET G = COS( A * G ).
+
+              IF (SPEC)                                        THEN
+                  DO  I=1,NWDS*NLEVG,2
+                      VAL    = CMPLX( A * G(I), A * G(I+1) )
+                      VAL    = COS(  VAL )
+                      G(I)   = REAL( VAL )
+                      G(I+1) = AIMAG( VAL )
+                  END DO
+              ELSE
+                  DO  I=1,NWDS*NLEVG
+                      G(I) = COS( A * G(I) )
+                  END DO
+              END IF
+
+          ELSE
+
+***            SET G = A * ARCCOS( G ).
+
+              DO  I=1,NWDS*NLEVG
+
+                  IF (G(I).LT.-1.0 .OR. G(I).GT.+1.0 )         THEN
+                      NR = NR+(I-1)/NWDS+1
+                      WRITE(6,6004) NR,I,G(I)
+                      CALL                         XIT('  Cosf  ',-3 ) 
+                  END IF
+
+                  G(I) = A* ACOS( G(I) )
+
+              END DO
+
+          END IF
+
+***        SAVE G ON FILE XOUT.
+
+          CALL PUTSET2( 2, G, LEV,NLEVG, IBUF,MAXW )
+
+      NR = NR+NLEVG
+      GOTO 100 
+
+***    E.O.F. ON UNIT #5.
+ 
+  900 IF (IO.NE.0) WRITE(6,6300) IO
+  903 CALL                                         XIT('  Cosf  ',-4 )
+
+***   E.O.F. ON UNIT #1.
+
+  904 IF (NLEV.GT.MAXLEV) WRITE(6,6003) NLEV,MAXLEV
+
+      CALL                                         XIT('  Cosf  ',-5 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,A10,A5)
+
+ 6000 FORMAT(' Cosf will apply factor=',E14.8)
+ 6001 FORMAT(' Using COSINUS transformation.')
+ 6002 FORMAT(' Using ARC COSINUS transformation.')
+ 6003 FORMAT(' Nlev,maxlev= ',I5,1X,I5)
+ 6004 FORMAT(' Cosf: at record/point ',I5,'/',I6,', found data =',E13.5)
+
+ 6200 FORMAT('0 Cosf read',I6,' records.')
+ 6300 FORMAT(' Cosf reports I/O error number ',I3,' on unit 5.')
+ 6400 FORMAT(' Cosf is stripping label/character records...')
+
+      END 
+#     endif
+
+
+
+

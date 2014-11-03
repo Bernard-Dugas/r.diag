@@ -1,0 +1,846 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spplot  SPEC INPUT OUTPUT [ -t1    VAL1 -name VAL2 -a VAL3  -b VAL4  \ 
+*                                  -lv1   VAL5 -kind VAL6 -c VAL7  -d VAL8  \ 
+*                                  -label VAL9            -i VAL10 -j VAL11 ]
+*
+*
+*     DESCRIPTION...
+*      spplot - PLOTS A 2-D SPECTRUM
+*
+*
+*     AUTHOR  - N.E.Sargent, NOV 29/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spplot.ptn,v 4.9 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     PURPOSE - CONTOUR THE REAL PART OF A TRIANGULARLY TRUNCATED SPECTRAL
+*               FIELD IN FILE SPEC.  THE RESULT IS A 2-D SPECTRUM PLOT OF
+*               SPHERICAL HARMONIC COEFFICIENTS.
+*
+*
+*     INPUT FILE...
+*      SPEC = FILE CONTAINING THE SPECTRAL FIELD TO BE PLOTTED.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NSTEP (t1)  = TIMESTEP NUMBER
+*      NAME        = NAME OF FIELD TO BE CONTOURED,
+*                    IF NAME='NEXT' OR BLANK, THE NEXT SPECTRAL FIELD IS PLOTTED
+*                    IF NAME= BLANK, NAME IS NOT CHECKED 
+*                    IF NAME='SKIP' THE NEXT SPECTRAL FIELD ON THE FILE IS SKIPPED
+*      LEVEL (lv1) = LEVEL NUMBER
+*      SCAL  (a)   = SCALING FACTOR FOR FIELD TO BE CONTOURED (0.0 DEFAULTS TO 1.0)
+*      FLO   (b)   = LOWEST VALUE OF SCALED FIELD TO BE CONTOURED
+*      FHI   (c)   = HIGHEST VALUE TO BE CONTOURED
+*      FINC  (d)   = CONTOUR INTERVAL
+*      KIND        = DETERMINES WETHER THE M.NE.0. PART OF THE FIELD IS TO
+*                    BE DIVIDED BY 2. AND/OR WETHER THE FIELD OR THE LOG
+*                    OF THE FIELD IS TO BE CONTOURED IN THE FOLLOWING WAY:
+*                    1) KIND.LT.0      THEN LOG10(FIELD) IS CONTOURED.
+*                    2) KIND.GE.0      THEN       FIELD  IS CONTOURED.
+*                    3) ABS(KIND).EQ.2 THEN DIVIDE THE M.NE.0 PART OF
+*                                       FIELD BY 2.
+*      MS    (i)   = IF MS .LT. 0 THEN PUBLICATION QUALITY PLOT IS PRODUCED
+*      IHEM  (j)   = CONTROLS INTERPOLATION FOR HEMISPHERIC DATA
+*                    DEFAULT IS ZERO; NO INTERPOLATION
+*
+*      LABEL       = 80 CHARACTER LABEL FOR PLOT, (OMITTED IF NAME='SKIP').
+*
+*      READ( 5,5010 ) NSTEP,NAME,LEVEL,SCAL,FLO,FHI,FINC,KIND,MS,IHEM
+*      READ( 5,5012 ) LABEL
+*5010  FORMAT(10X,I10,1X,A4,I5,4E10.0,I5,1X,2I2)
+*5012  FORMAT(A80)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*   SPPLOT  79010100 TEMP 1000        1.        0.      300.       10.   -1 -1
+*   JANUARY FIRST PLOT OF LOG SCALE OF TEMPERATURE AT 1000MB
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 INCOMPLETE DIRECTIVE SET (NO LABEL CARD)
+*       2 UNABLE TO FIND A REQUESTED RECORD OF THE SAME SIZE AS FIRST
+*       3 SKIPPED TO EOF
+*       4 UNABLE TO READ SPEC
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spplot
+*    +               (SPEC,       INPUT,       OUTPUT,
+*    +          TAPE1=SPEC, TAPE5=INPUT, TAPE6=OUTPUT,
+*    +                                   TAPE8       )
+*     ------------------------------------------------
+
+*     $Log: spplot.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 20:56:41  dugas
+*     - Ajouter le support des arguments sur la ligne de commande.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.4  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  2002/02/02 00:30:47  dugas
+*     Forcer la majusculisation du parametre NAME
+*
+*     Revision 4.2  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.1  1997/09/26  17:39:21  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:55  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:06  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  93/02/24  15:51:41  15:51:41  armnrbd (Bernard Dugas)
+*     Implanter l'utilisation de "CALL SUIVANT".
+*     Utiliser "CALL PRECEDE" plutot que "REWIND".
+*     
+*     Revision 1.4  92/11/15  19:32:55  armnrbd
+*     Remplacer BACKSPACE par CALL PRECEDE.
+*     
+*     Revision 1.3  92/11/10  23:00:48  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/17  15:09:40  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.1  92/03/13  13:52:45  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:57  armnrbd
+*     Initial revision
+*     
+
+*     SEP 26/91 - B.Dugas.  (Version CY920/ IRIX F77)
+*     MAY 15/86 - F.ZWIERS. (PUB QUALITY OPTION)
+*     SEP 17/85 - B.Dugas.  (NULBLL=1 ET NDOT=-1733B)
+*     NOV 29/83 - N.E.SARGENT.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER*8   NSTEP
+      LOGICAL     OK,PB,ERR,PRBLOC,ALL
+      CHARACTER*4 NAME,PNAME,CSPEC,ALEV*12,PKTYP*2
+      CHARACTER*80 LIGNE,LOWLAB,LABEL,LWN(35)*3,LTEMPS*20
+      INTEGER     JBUF(taille_entete),JPAK, HEAD,LEN,NPLOT,
+     +            MAXW,NBOX,NWDS,I,IL,IH,IN,IW,IND,IO,ISCAL,J,JLIM,
+     +            K,KL,KR,L,LEVEL,LMM1,LMM2,M,MS,NDOT,NFF,NS,STAMP,
+     +            LSR(2,999),LA,LR,LM,KTR,LRLMT,IHEM,IER,VKIND,L0
+      REAL        FHI,FLO,FINC,SCAL,SCALI,TB,ZERO,SPVAL,
+     +            X,XL,XN,XR,Y,YD,YN,YT,PR
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: SP,RP,BOX
+
+      INTEGER     MAJR,MINR,NORM,VALU,LABL,VTIK(4),VHIC(5)
+      CHARACTER*4 ETIK(4)*4,THIC(5)*4,ETIKET*12
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ
+      INTEGER*8   Y2KDAT8
+      CHARACTER*4 GETYP,GETHIC
+      EXTERNAL    GETSIZ,Y2KDAT8,GETYP,RPBLOC,GETHIC,DATE2STAMP
+
+      EXTERNAL    MACSPE, JCLPNT,SYSDAT,BNDLSET,ISPSET,GETLIGN,
+     +            GETFLD2,XIT,   DIMGT2,LOW2UP, PWRIT, FRSTPT, VECTOR,
+     +            SET,    CONISP,FRAME, BURNF,  SUIVANT
+
+      DATA       CSPEC/ 'SPEC' /
+      DATA       LWN  /
+     +                 '0  ','10 ','20 ','30 ','40 ','50 ','60 ',
+     +                 '70 ','80 ','90 ','100','110','120','130',
+     +                 '140','150','160','170','180','190','200',
+     +                 '210','220','220','230','240','250','260',
+     +                 '270','280','290','300','310','320','330'
+     +                /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spplot.ptn,v $'
+
+*--------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+      CALL SYSDAT
+
+***    DEFINE BUNDLES.
+
+      MAJR = 1
+      MINR = 2
+      LABL = 3
+      VALU = 4
+      NORM = 5
+
+      THIC(1) ='SIZE'
+      THIC(2) ='INTE'
+      THIC(3) ='ENHA'
+      THIC(4) ='CASE'
+      THIC(5) ='THIC'
+      VHIC(1) = 240
+      VHIC(2) =  2
+      VHIC(3) =  1
+      VHIC(4) =  4
+      VHIC(5) =  2
+
+      ETIK(1) ='SIZE'
+      ETIK(2) ='INTE'
+      ETIK(3) ='ENHA'
+      ETIK(4) ='CASE'
+      VTIK(1) = 480
+      VTIK(2) =  3
+      VTIK(3) =  1
+      VTIK(4) =  4
+
+      CALL BNDLSET( THIC ,VHIC,5,NORM )
+      CALL BNDLSET('THIC',  4, 1,MAJR )
+      CALL BNDLSET('THIC',  2, 1,MINR )
+      CALL BNDLSET( ETIK, VTIK,4,LABL )
+
+      CALL ISPSET(4HLABL, LABL )
+      CALL ISPSET(4HRNDV, 1.0  )
+      CALL ISPSET(3HNHL,   5   )
+      CALL ISPSET(3HNLB,   5   )
+      CALL ISPSET(3HNPV,   5   )
+
+      SPVAL = 10.E37
+      CALL ISPSET(4HSPVA, SPVAL )
+      CALL ISPGET(4HSPVA, SPVAL )
+
+      ALL   =.FALSE.
+      NPLOT = 0
+
+***    READ FIRST INFO BUFFER.
+
+  100 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) GOTO 904
+
+***    CALCULATE SPECTRAL DIMENSIONS.
+
+      LRLMT = JBUF(7)
+      CALL DIMGT2( LSR, LA,LR,LM,KTR, LRLMT, 0,0 )
+
+      IW = LM
+      IF (KTR.EQ.2)                                            THEN
+          IH = LM
+      ELSE
+          IH = 2*LM
+      END IF
+
+***    ALLOCATE WORKING MEMORY.
+
+      NBOX = IW*IH
+
+      ALLOCATE( IBUF(LEN),SP(NWDS),RP(NWDS),BOX(NBOX) )
+
+***    READ A CARD IDENTIFYING THE FIELDS TO BE PLOTTED.
+***    IF NAME='SKIP' JUST SKIP THE NEXT RECORD ON THE FILE.
+***    OTHERWISE READ THE LABELS TO BE PRINTED OVER THE PLOT.
+
+      PRBLOC = .FALSE.
+
+      IF (NPLOT.NE.0) GOTO 200
+  150 CONTINUE
+     
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NAME  = ' '
+          LABEL = ' '
+
+          NSTEP = -1
+          LEVEL = -1
+          SCALI =  0.0
+          FLO   =  0.0
+          FHI   =  0.0
+          FINC  =  0.0
+          ISCAL =  0
+          MS    =  0
+          IHEM  =  0
+
+          ALL = RPBLOC('DEFAUT',LIGNE)
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NAME = LIGNE
+
+          OK = RPBLOC('LABEL',LIGNE)
+          IF (OK) LABEL = LIGNE
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ( LIGNE,20, END=901,ERR=901,IOSTAT=IO ) NSTEP
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) READ( LIGNE,10, END=901,ERR=901,IOSTAT=IO ) LEVEL
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE,11, END=901,ERR=901,IOSTAT=IO ) SCALI
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE,11, END=901,ERR=901,IOSTAT=IO ) FLO
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ( LIGNE,11, END=901,ERR=901,IOSTAT=IO ) FHI
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ( LIGNE,11, END=901,ERR=901,IOSTAT=IO ) FINC
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ( LIGNE,10, END=901,ERR=901,IOSTAT=IO ) MS
+
+          OK = RPBLOC('J',LIGNE)
+          IF (OK) READ( LIGNE,10, END=901,ERR=901,IOSTAT=IO ) IHEM
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ( LIGNE,10, END=901,ERR=901,IOSTAT=IO ) ISCAL
+
+          PRBLOC = .TRUE.
+
+      ELSE
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010, ERR=901,END=901,IOSTAT=IO ) 
+     +                           NSTEP,NAME,LEVEL,SCALI,FLO,FHI,FINC,
+     +                           ISCAL,MS,IHEM
+          END IF  
+
+      END IF
+
+      IF (NSTEP .EQ. -1  .AND.
+     +    NAME  .EQ. ' ' .AND.
+     +    LEVEL .EQ. -1 ) ALL = .TRUE.
+
+      IF (LEVEL.NE.-1)                                         THEN
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              CALL CONVPR( LEVEL, PR, VKIND, -2 )
+              CALL CONVPR( LEVEL, PR, VKIND, +2 )
+          END IF
+
+          CALL GET_IP1_STRING( LEVEL,ALEV )
+          CALL LEADBLK( ALEV )
+
+      ELSE
+
+          ALEV = ' -1 '
+
+      END IF
+
+      CALL ISPSET(4HMAJR, NORM )
+      CALL ISPSET(4HMINR, -1   )
+      CALL ISPSET(4HVALU, LABL )
+
+      CALL LOW2UP( NAME,NAME )
+      IF (NAME.NE.'    ')  CALL LEADBLK( NAME )
+      IF (NAME.EQ.'-1  ')  NAME = ' '
+      IF (NAME.EQ.'SKIP' .AND. .NOT.PRBLOC)                    THEN
+          CALL SUIVANT( 1, JBUF, ERR,OK )
+          IF (.NOT.OK .OR. ERR) GOTO 903
+                                GOTO 150
+      END IF
+
+      IF (IHEM.NE.0) WRITE(6,6030)
+
+      IF (.NOT.PRBLOC)                                         THEN
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5012, ERR=902,END=902,IOSTAT=IO ) LABEL
+          END IF  
+
+      END IF
+
+      IF (MS.LT.0)                                             THEN
+          PB =.TRUE.
+          MS = IABS(MS+1)
+          CALL ISPSET(4HMAJR, MAJR )
+          CALL ISPSET(4HMINR, MINR )
+          CALL ISPSET(3HNHI,   -1  )
+          CALL ISPSET(4HECOL,   1  )
+          CALL ISPSET(4HOFFM,   1  )
+          CALL ISPSET(4HOFFM,   0  )
+          CALL ISPSET(4HILAB,   1  )
+      ELSE
+          PB=.FALSE.
+      END IF
+
+      NSTEP = Y2KDAT8( NSTEP )
+      CALL DATE2STAMP( NSTEP,STAMP )
+
+***    FIND THE REQUESTED FIELD.
+
+  200 CALL GETFLD2( 1, SP, 'SPEC',STAMP,NAME,LEVEL, 
+     +                           IBUF,MAXW,OK )
+
+      IF (.NOT.OK)                                             THEN
+
+          DEALLOCATE( IBUF,SP,BOX )
+          IF (MAXW.EQ.0 .AND. .NOT.OK)             GOTO 100
+
+          CALL PDATE( LTEMPS,STAMP )
+
+          WRITE(6,6010) 
+     +    TRIM( LTEMPS ),NAME,TRIM( ALEV ),SCAL,FLO,FHI,FINC
+
+          IF (.NOT.ALL .OR. NPLOT.EQ.0)                        THEN
+              WRITE(6,6002) NPLOT
+              CALL                                 XIT(' SPplot ',-2 )
+          ELSE
+              CALL                                 XIT(' SPplot ', 0 )
+          END IF
+
+      END IF 
+
+      IF (LRLMT.NE.IBUF(7))                                    THEN
+
+***        CALCULATE SPECTRAL DIMENSIONS.
+
+          LRLMT = JBUF(7)
+          CALL DIMGT2( LSR, LA,LR,LM,KTR, LRLMT, 0,0 )
+
+          IW = LM
+          IF (KTR.EQ.2)                                        THEN
+              IH = LM
+          ELSE
+              IH = 2*LM
+          END IF
+
+      END IF
+
+***    INITIALIZE BOX TO SPECIAL VALUE FOR CONISP.
+
+      DO  J=1,IH
+          IND = (J-1)*IW
+          DO  I=1,IW
+              BOX(IND+I) = -1.0
+          END DO
+      END DO
+
+      IF (SCALI.EQ.0.0)                                        THEN
+
+          L0 =  0
+          DO  L=1,LA*2,2
+              L0 = L0+1
+              IF (SP(L).GT.0.0 .AND. ISCAL.LT.0)               THEN
+                  RP(L0) = ALOG10( SP(L) )
+              ELSE
+                  RP(L0) = SP(L)
+              END IF
+          END DO
+
+          CALL PRECON3( FLO,FHI,FINC,SCAL,RP,LA,1,10,SPVAL )
+          FHI = MAX( FHI,FLO+10.*FINC )
+          WRITE(6,6020) FLO,FHI,FINC,SCAL
+          
+      ELSE
+
+          SCAL = SCALI
+
+      END IF
+
+***    FILL BOX.
+
+      DO  M=0,LM-1
+          KL = 2*(LSR(1,M+1)-1)+1
+          KR = 2*(LSR(1,M+2)-1)
+          DO  K=KL,KR,2
+
+              NS = M+(K-KL)/2
+
+              IF (M.NE.0 .AND. IABS( ISCAL ).EQ.2) 
+     +            SP(K) = SP(K)/2.
+
+              IND = NS*IW+M+2
+
+              IF (NS.NE.0)                                     THEN
+                  BOX(IND) = SCAL* SP(K)
+                  IF (SP(K).NE.0.0)                            THEN
+                      IF (ISCAL.LT.0) 
+     +                    BOX(IND) = SCAL*ALOG10( SP(K) )
+                  END IF
+              END IF
+
+          END DO
+      END DO
+
+***    CHECK FOR HEMISPHERIC DATA
+
+      IF (IHEM.NE.0)                                           THEN
+
+***        INTERPOLATION FOR HEMISPHERIC DATA
+
+***        LOWER LEFT CORNER
+
+          IF (BOX(LM+1).EQ.0.0) 
+     +        BOX(LM+1)        = ( BOX(2*LM+1  )
+     +                         +   BOX(  LM+2) )/2.
+
+***        UPPER LEFT CORNER
+
+          IF (BOX((LM-1)*LM+1).EQ.0.0) 
+     +        BOX((LM-1)*LM+1) = ( BOX((LM-2)*LM+1  )
+     +                         +   BOX((LM-1)*LM+2) )/2.
+
+***        RIGHT-HAND CORNERS
+
+          IF (BOX(LM*LM-1).EQ.0.0) 
+     +        BOX(LM*LM-1)     = ( BOX((LM-1)*LM-1)
+     +                         +   BOX( LM   *LM-2) )/2.
+          IF (KTR.EQ.0 .AND. 
+     +        BOX((IH-2)*IW).EQ.0.0)
+     +        BOX((IH-2)*IW)   = ( BOX((IH-2)*IW-1)
+     +                         +   BOX((IH-3)*IW) )/2.
+          IF (KTR.EQ.0 .AND.
+     +        BOX(LM*IW).EQ.0.0)
+     +        BOX(LM*IW)       = ( BOX((LM+1)*IW)
+     +                         +   BOX( LM   *IW-1) )/2.
+
+***        LEFT AND RIGHT EDGES
+
+          LMM2 = LM-2
+          DO 300 I=2,LMM2
+              IF (BOX(I*LM+1).EQ.0.0)
+     +            BOX(I*LM+1)      = ( BOX((I-1)*LM+1)
+     +                             +   BOX((I+1)*LM+1) )/2.
+              IF (KTR.EQ.0 .AND. 
+     +            BOX((I-1+IW)*IW).EQ.0.0) 
+     +            BOX((I-1+IW)*IW) = ( BOX((I  +IW)*IW)
+     +                             +   BOX((I-2+IW)*IW) )/2.
+  300     CONTINUE
+
+***        UPPER EDGE
+
+          KL = (LM-1)*LM+2
+          KR =  LM   *LM-2
+          DO 350 I=KL,KR
+              IF (BOX(I).EQ.0.0) 
+     +            BOX(I) = ( BOX(I-1)+BOX(I+1) )/2.
+  350     CONTINUE
+
+***        LOWER RIGHT AND UPPER LEFT EDGE
+
+          DO 400 I=1,LMM2
+              IF (BOX( I      *LM+I+1).EQ.0.0)
+     +            BOX( I      *LM+I+1)  =
+     +          ( BOX( I      *LM+I  ) 
+     +          + BOX((I+1)   *LM+I+1) )/2.
+              IF (KTR.NE.0 .AND. 
+     +            BOX((I-1)   *IW+I+1).EQ.0) 
+     +            BOX((I-1+IW)*IW+I+1) = 
+     +          ( BOX((I-1)   *IW+I+2)
+     +          + BOX((I-2+IW)*IW+I+1) )/2.
+  400     CONTINUE
+
+***        INTERIOR
+
+                        JLIM = LMM2+I
+          IF (KTR.EQ.2) JLIM = LMM2
+                        LMM1 = LM-1
+
+          DO 450 I=2,LMM1
+              DO 450 J=I,JLIM
+                  IF (BOX(J*LM+I).EQ.0.0) 
+     +                BOX(J*LM+I) = ( BOX( J   *LM+I+1)
+     +                            +   BOX( J   *LM+I-1)
+     +                            +   BOX((J+1)*LM+I  )
+     +                            +   BOX((J-1)*LM+I  ) )/4.
+  450     CONTINUE
+
+      END IF
+
+***    WRITE LABEL.
+
+      IF (ALL)                                                 THEN
+
+          CALL PDATE( LTEMPS,IBUF(2) )
+          CALL LEADBLK( LTEMPS )
+          WRITE(PNAME,4) IBUF(3)
+
+          LIGNE = ' '
+          call get_ip1_string( Ibuf(4),LIGNE(1:12) )
+          call leadblk( LIGNE )
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              ETIKET(1:4)  = GETHIC ( 'ETIK1',IBUF )
+              ETIKET(5:8)  = GETHIC ( 'ETIK2',IBUF )
+              ETIKET(9:12) = GETHIC ( 'ETIK3',IBUF )
+          ELSE
+              ETIKET   = ' '
+          END IF
+
+          DO  L0=80,1,-1
+              IF (LABEL(L0:L0).NE.' ') GOTO 475
+          END DO
+
+ 475      IF (L0.LE.32 .AND. ISCAL.GE.0)                       THEN
+              WRITE(LABEL(L0+1:L0+56),40) NPLOT+1,TRIM(PNAME),SCAL
+              LABEL =      TRIM( LABEL  )//
+     +                ' '//TRIM( LIGNE  )//
+     +                ' '//TRIM( LTEMPS )//
+     +                ' '//TRIM( ETIKET )
+          END IF
+          IF (L0.LE.27 .AND. ISCAL.LT.0)                       THEN
+              WRITE(LABEL(L0+1:L0+61),41) NPLOT+1,TRIM(PNAME),SCAL
+              LABEL =      TRIM( LABEL  )//
+     +                ' '//TRIM( LIGNE  )//
+     +                ' '//TRIM( LTEMPS )//
+     +                ' '//TRIM( ETIKET )
+          END IF
+
+      END IF
+
+      X = 0.05
+      Y = 0.985
+
+      CALL LOW2UP( LABEL,LOWLAB )
+
+      DO  L=80,1,-1
+          IF (LABEL(L:L).NE.' ') GOTO 500
+      END DO
+
+  500 CALL PWRIT( X,Y,LOWLAB,L,1,0,0 )
+
+      IF (ALL .AND. L0.LT.80) LABEL(L0+1:80) = ' '
+
+***    DRAW PERIMETER.
+
+      CALL SET(.1,.9,.1,.9,.1,.9,.1,.9,1)
+
+      IF (KTR.NE.2)                                            THEN
+
+          CALL FRSTPT( .1,.5 )
+          CALL VECTOR( .1,.1 )
+          CALL FRSTPT( .5,.9 )
+          CALL VECTOR( .5,.5 )
+
+          DO 550 I=1,LM
+
+              X  =.1+FLOAT( I-1 )*.4/FLOAT( LM-1 )
+              YD = X
+              XN =.1+FLOAT( I   )*.4/FLOAT( LM-1 )
+              YN = XN
+
+              IF (I.EQ.LM)                                     THEN
+                  XN = X
+                  YN = YD
+              END IF
+
+              CALL FRSTPT( X,     YD-.005 )
+              CALL VECTOR( X,     YN      )
+              CALL VECTOR( XN,    YN      )
+
+              IL = (I-1)/10
+              IF (10*IL.EQ.I-1) 
+     +        CALL PWRIT(  X     ,YD-.03,  LWN(IL+1),3,1,0,0 )
+
+              XL = .1
+              CALL FRSTPT( XL,    YD )
+              CALL VECTOR( XL-.01,YD )
+              IF (10*IL.EQ.I-1) 
+     +        CALL PWRIT(  XL-.03,YD,      LWN(IL+1),3,1,0,0 )
+
+              YT = YD+.4
+              CALL FRSTPT( X,     YT      )
+              YN = XN+.4
+              CALL VECTOR( XN,    YT      )
+              CALL VECTOR( XN,    YN+.005 )
+              IF (10*IL.EQ.I-1) 
+     +        CALL PWRIT(  X,     YT+.03,  LWN(IL+1),3,1,0,0 )
+
+              XR = X+.4
+              CALL FRSTPT( .5,    YT      )
+              CALL VECTOR( .5+.01,YT      )
+              IN = (I+LM-2)/10
+              IF (10*IN.EQ.I+LM-2) 
+     +        CALL PWRIT(  .5+.03,YT,      LWN(IN+1),3,1,0,0 )
+
+  550     CONTINUE
+
+      ELSE
+
+          CALL FRSTPT( .9,.9 )
+          CALL VECTOR( .1,.9 )
+          CALL VECTOR( .1,.1 )
+
+          DO 600 I=1,LM
+
+              X  =.1+FLOAT( I-1 )*.8/FLOAT( LM-1 )
+              YD = X
+              XN =.1+FLOAT( I   )*.8/FLOAT( LM-1 )
+              YN = XN
+
+              IF (I.EQ.LM)                                     THEN
+                  XN = X
+                  YN = YD
+              END IF
+
+              CALL FRSTPT( X,     YD-.005 )
+              CALL VECTOR( X,     YN      )
+              CALL VECTOR( XN,    YN      )
+
+              IL = (I-1)/10
+              IF (10*IL.EQ.I-1) 
+     +        CALL PWRIT(  X,     YD-.03,  LWN(IL+1),3,1,0,0 )
+
+              XL = .1
+              CALL FRSTPT( XL,    YD      )
+              CALL VECTOR( XL-.01,YD      )
+              IF (10*IL.EQ.I-1) 
+     +        CALL PWRIT(  XL-.03,YD,      LWN(IL+1),3,1,0,0 )
+
+              YT = .9
+              CALL FRSTPT( X,     YT      )
+              CALL VECTOR( X,     YT+.01  )
+              IF (10*IL.EQ.I-1) 
+     +        CALL PWRIT(  X,     YT+.03,  LWN(IL+1),3,1,0,0)
+
+  600     CONTINUE
+
+      END IF
+
+***    INVOKE SPECIAL VALUE OPTION.
+
+      CALL ISPSET(4HOFFP,   1  )
+      CALL ISPSET(4HSPVA, -1.0 )
+      CALL ISPSET(4HNULB,   1  )
+
+***    PLOT.
+
+      TB = .9*FLOAT( 2*LM+1 )/FLOAT( 2*LM )
+
+      IF (KTR.EQ.2)                                            THEN
+          CALL SET( .1,.9,.1,.9,.1,.9,.1,.9,1 )
+      ELSE IF (KTR.EQ.0)                                       THEN
+          CALL SET( .1,.5,.1,TB,.1,.9,.1,.9,1 )
+      END IF
+
+      NDOT = -INT(O'1733')
+
+      CALL CONISP( BOX, IW,IW,IH,FLO, FHI,FINC,  -1,   -1,NDOT )
+
+***    DRAW AN X IN UPPER RIGHT HAND CORNER.
+
+      CALL SET( .1,.9,.1,.9,.1,.9,.1,.9,1 )
+      CALL PWRIT( .97,.97,'X',1,0,0,0 )
+      CALL FRAME
+
+      WRITE(6,6010) NSTEP,NAME,ALEV,SCAL,FLO,FHI,FINC
+      CALL PRTLAB2(' Plotted ',IBUF )
+
+      NPLOT = NPLOT+1
+
+      IF (     ALL   ) GOTO 200
+      IF (.NOT.PRBLOC) GOTO 150
+
+***    .E.O.F ON INPUT.
+
+  901 IF (IO.NE.0) WRITE(6,6040) IO
+      CALL                                         XIT(' SPplot ', 0 )
+
+  902 IF (IO.NE.0) WRITE(6,6040) IO
+      WRITE(6,6001)
+      CALL                                         XIT(' SPplot ',-1 )
+
+  903 CALL BURNF
+      WRITE(6,6003)
+      CALL                                         XIT(' SPplot ',-3 )
+
+  904 CALL BURNF
+      CALL                                         XIT(' SPplot ',-4 )
+*-----------------------------------------------------------------------
+    4 FORMAT(A4)
+   10 FORMAT(BN,I10)
+   11 FORMAT(BN,E10.0)
+   20 FORMAT(BN,I20)
+   40 FORMAT(1X,I3.3,1X,A,' *',1PE8.2,1X,A,1X,A,1X,A12)
+   41 FORMAT(1X,I3.3,1X,'LOG(',A,') *',1PE8.2,1X,A,1X,A,1X,A12)
+
+ 5010 FORMAT(10X,I10,1X,A4,I5,4E10.0,I5,1X,2I2)
+ 5012 FORMAT(A80)
+
+ 6001 FORMAT(' Missing label... aborting.')
+ 6002 FORMAT(' Unable to find it... aborting after ',I3,' plots.')
+ 6003 FORMAT(' No more data...  aborting.')
+
+ 6010 FORMAT(' Step,Name,Level: ',I10,1X,A4,A,' requested.',
+     +          ' Scal,Lo,Hi,Incr:',4E10.3)
+ 6020 FORMAT(' FLO= ',G12.4,', FHI= ',G12.4,', FINC= ',G12.4,
+     1                                      ', SCAL= ',G12.4)
+ 6030 FORMAT(' Considering hemispheric data.')
+ 6040 FORMAT(' SPplot reports I/O error number ',I4,' on unit 5.')
+
+      END
+#     endif

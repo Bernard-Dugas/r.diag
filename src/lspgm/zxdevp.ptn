@@ -1,0 +1,279 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxdevp  ZXIN ZXOUT OUTPUT
+*
+*
+*     DESCRIPTION...
+*      zxdevp - CROSS-SECTION DEVIATION FROM PRESSURE MEAN.
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 05/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxdevp.ptn,v 4.8 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES DEVIATIONS FROM THE VERTICAL PRESSURE MEAN FOR A FIL
+*               OF CROSS-SECTIONS.
+*
+*     NOTE    - 1) MAX LATITUDES IS 999, MAX LEVELS IS 999 
+*               2) AT INPUT THE CROSS-SECTION IS ORDERED FROM S TO N 
+*                  AND TOP TO BOTTOM
+*
+*
+*     INPUT FILE...
+*      ZXIN  = CROSS-SECTIONS
+*
+*     OUTPUT FILE...
+*      ZXOUT = DEVIATION CROSS-SECTIONS
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEMS READING ZXIN
+*       2 FOUND DATA TYPE NOT ZONAL
+*       3 ABORT ERROR READING ZXIN
+*       4 ZXIN NOT ON PRESSURE LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zxdevp
+*     PROGRAM ZXDEVP (ZXIN,       ZXOUT,       OUTPUT,
+*    1          TAPE1=ZXIN, TAPE2=ZXOUT, TAPE6=OUTPUT)
+*     ------------------------------------------------
+
+*     $Log: zxdevp.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2013/10/17 11:24:55  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.3  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.2  1998/07/03 02:26:50  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:35  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:23:00  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:09:52  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:39  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/19  14:33:30  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/05/01  13:16:31  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/03/04  21:05:44  armnrbd
+*     Initial revision
+*     
+*     MAY 14/83 - R.LAPRISE.
+*     NOV 05/80 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale , MAXLEV = 999
+
+      REAL        G(MAXJ),ZERO,PDIF,
+     +            PR(MAXLEV),PRH(MAXLEV+1)
+
+      LOGICAL     OK
+      INTEGER     LEV(MAXLEV),NFF, MAXW,NWDS,LEN,
+     +            HEAD,J,L, NSETS,NLEV,NLAT, VKIND,
+     +            JBUF(taille_entete),JPAK,BASE,IER
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: XA
+
+      CHARACTER*4 KIND
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2
+
+      CHARACTER*4 GETYP,GETHIC,PKTYP*2
+      EXTERNAL    MACSPE,JCLPNT,XIT,GETYP,GETHIC,
+     +            GETZX2,PUTZX2,CONVPR
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxdevp.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3
+      CALL JCLPNT( NFF, 1,2, 6 )
+
+***    GET PACKING TYPE.
+
+      PKTYP = GETYP( 1 )
+
+      NSETS = 0
+
+***    DETERMINE THE GRID SIZE.
+
+  100 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW.EQ.0 .OR. NLEV.LE.0
+     +              .OR. NLEV.GT.MAXLEV)                      THEN
+          WRITE(6,6001)  NLEV,MAXLEV
+          CALL                                     XIT(' Zxdevp ',-1 )
+      END IF
+
+      WRITE(KIND,4) JBUF(1)
+
+      IF (KIND.NE.'ZONL')                                      THEN
+          WRITE(6,6002) KIND
+          CALL                                     XIT(' Zxdevp ',-2 )
+      END IF
+
+      NLAT  = JBUF(5) 
+      NWDS  = NLAT*NLEV
+
+***    ASK FOR WORKING MEMORY.
+
+      ALLOCATE( IBUF(LEN),XA(NWDS) )
+
+***    READ THE NEXT CROSS-SECTION. STOP AT EOF.
+***    LEV WILL CONTAIN THE PRESSURE LEVEL VALUES IN MILLIBARS.
+***    PR,PRH ARE SET TO N/M**2.
+
+  200 CALL GETZX2( 1, XA, NLAT,LEV,NLEV, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                             THEN
+
+              DEALLOCATE( IBUF,XA )
+              IF (MAXW.EQ.0) GOTO 100
+
+              WRITE(6,6110) NSETS
+              IF (NSETS.EQ.0) CALL                 XIT(' Zxdevp ',-3 )
+              CALL                                 XIT(' Zxdevp ', 0 )
+
+          END IF
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+          IF ((NLEV.LT.  1 )  .OR.
+     +        (NLEV.GT.MAXLEV))                                THEN
+              CALL                                 XIT(' Zxdevp ',-1 )
+          END IF
+
+***        CONVERT MILLIBAR TO PASCAL.
+
+          DO  L=1,NLEV
+              CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+              IF (PKTYP.EQ.'SQ' .AND. VKIND.NE.2)
+     +            CALL                             XIT(' Zxdevp ',-4 ) 
+          END DO
+
+          DO 300 L=1,NLEV
+              PR(L)   = 100.*PR(L)
+  300     CONTINUE
+
+***        COMPUTE PRESSURE HALF LEVELS FOR INTEGRAL IN P.
+***        BOTTOM BOUNDARY IS CHOSEN TO BE 1013.3 MB.
+
+          PRH(1)      = PR(1)*.5
+          DO 400 L=2,NLEV
+              PRH(L)  = .5*(PR(L-1)+PR(L))
+  400     CONTINUE
+          PRH(NLEV+1) = 1013.3*100.
+
+          PDIF        = PRH(NLEV+1)-PRH(1)
+
+***        INTEGRATE EACH LATITUDE IN PRESSURE.
+
+          DO 500 J=1,NLAT
+              G(J) = ZERO
+  500     CONTINUE
+
+          DO 600 L=1,NLEV
+              BASE = (L-1)*NLAT
+              DO 600 J=1,NLAT
+                  G(J) = G(J)+XA(BASE+J)*(PRH(L+1)-PRH(L))
+  600     CONTINUE
+
+          DO 700 J=1,NLAT
+              G(J) = G(J)/PDIF
+  700     CONTINUE
+
+***        COMPUTE DEVIATIONS FROM PRESSURE MEAN 
+***        AT EACH LEVEL AND SAVE.
+
+          DO 800 L=1,NLEV
+              BASE = (L-1)*NLAT
+              DO 800 J=1,NLAT
+                  XA(BASE+J) = XA(BASE+J)-G(J)
+  800     CONTINUE
+
+***        PUT THE RESULT ON FILE ZXOUT.
+
+          IBUF(6) = NLEV
+
+          CALL PUTZX2( 2, XA,LEV, IBUF,MAXW )
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+      NSETS = NSETS+1
+      GOTO 200
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6001 FORMAT(' Too many or not enough levels, NLEV/MAXLEV=',2I6)
+ 6002 FORMAT(' First file should be typed ZONL, found ',A4)
+
+ 6110 FORMAT(1X,I6,' sets processed.')
+ 
+      END
+#     endif

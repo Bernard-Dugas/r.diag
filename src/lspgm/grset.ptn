@@ -1,0 +1,638 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      grset  GG INPUT OUTPUT \ 
+*          [ -n   VAL1  -name VAL2  -plv  VAL3  -lon  VAL4  \ 
+*            -lat VAL5  -npg  VAL6  -a    VAL7  -b    VAL8  \ 
+*            -c   VAL9  -d    VAL10 -delt VAL11 -kind VAL12 \ 
+*            -t1  VAL13 VAL14 -lv1  VAL15 [ VAL16 [ VAL17 ] ] \ 
+*            -def  ]
+*
+*
+*     DESCRIPTION...
+*      CGRSET   - CREATES A GAUSSIAN GRID FIELD FOR TESTING PURPOSES
+*
+*
+*     AUTHOR  - R.LAPRISE, CCC  MAY 11/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/grset.ptn,v 4.17 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE - CREATES A FILE, GG, CONTAINING NSETS OF ILEV LEVELS OF GRID
+*               OF SIZE (ILG,ILAT). FIELDS ARE SET BY THIS EQUATION...
+*               GG(T,LON,LAT,P) =
+*                   A + B*P + (C+D*P)*(SIN(2PI*T/NSETS)+2.*SIN(LON))*COS(LAT)
+*               WHERE T   = 1,NSTEPS
+*                     LON = 1,ILG
+*                     LAT = 1,ILA
+*                     P   = LVL(1), ... , LVL(ILEV)
+*
+*
+*     OUTPUT FILE...
+*      GG = OUTPUT SETS OF MULTI OR SINGLE LEVEL GRIDS
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NSETS (n)   = NUMBER OF INDIVIDUAL TIMESTEPS (DEF=1).
+*      DELT        = TIME DELTA BETWEEN SAMPLES IN SECONDS (DEF=0).
+*                    THIS ARGUMENT IS ALWAYS LESS THAN 99999 AND CAN
+*                    ONLY BE SET VIA THE COMMAND LINEY.
+*      DATEO (t1/t2) = INITIAL TIME (DEF=19790101/00). THESE TWO NUMBERS
+*                    STAND FOR YYYYMMDD AND HHMMSS. AGAIN, THEY CAN
+*                    ONLY BE SET VIA THE COMMAND LINE.
+*      NAME        = NAME ASSIGNED TO THE SET LABEL (DEF='DATA').
+*      ILEV  (plv) = NUMBER OF PRESSURE LEVELS IN SETS (DEF=16;MAX=999)
+*                    IF ILEV IS NEGATIVE, EACH -ILEV LVL VALUES ARE READ WITH
+*                    A I10 FORMAT OR AN E10.0 IF ITS VALUE CONTAINS A DECIMAL
+*                    POINT.
+*      ILG   (lon) = NUMBER OF DISTINCT LONGITUDE POINTS (DEF=128).
+*      ILAT  (lat) = NUMBER OF GAUSSIAN LATITUDES POINTS (DEF=64).
+*      NPACK (npg) = PACKING DENSITY DESIRED. NEGATIVE PACKING SUPPORTED
+*                    AND THE DEFAULT IS NO PACKING (DEF=-32).
+*      A,B,C,D     = PARAMETERS USED TO CALCULATE VALUES ON THE GRID (DEF=1.0).
+*      KIND        = VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
+*                    FILES AND THEN LV1 AND LV2 ARE ASSUMED TO CONTAIN DECODED
+*                    VALUES. FURTHERMORE, THIS PARAMETRE CAN ONLY BE SPECIFIED
+*                    IN COMMAND-LINE MODE. THE CURRENTLY SUPPORTED VALUES ARE:
+*                    'HAUTEUR'   , heights (m) with respect to sea level
+*                    'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                    'ETA'       , first version of the GEM ETA coordinate
+*                    'PRESSION'  , pressure (mb) (*** DEFAULT ***)
+*                    'ARBITRAIRE', arbitrary level (no units apply)
+*                    'HAUTEURS'  , heights (M) with respect to the surface
+*                    'HYBRIDE'   , hybrid GEM coordinate
+*                    'THETA'     , potential temperature coordinate
+*                    'GALCHEN'   , GalChen generalized coordinate
+*      LVL   (lv1) = ARRAY OF VERTICAL LEVELS TO BE USED IN IBUF(4) (DEF=500).
+*
+*      Notes: 1) The first input line is NOT read if any command-line
+*                parameters are passed.
+*             2) Furthermore, the second line will not be read either
+*                if the -def defaults processing mode is requested.
+*                These defaults are then as specified in the example
+*                below and ILEV is also reset to 16, for consistency.
+*             3) Finally, the -def parameter will be ignored if any
+*                level values are specified with the -lv1 parameter.
+*
+*      READ( 5,5010 ) NSETS,NAME,ILEV,ILG,ILAT,NPACK,A,B,C,D
+*      IF (ILEV.GT.0)
+*      READ( 5,5020 ) (LVL(I),I=1,ILEV)
+*      IF (ILEV.LT.0)
+*      READ( 5,5030 ) (LVL(I),I=1,-ILEV)
+*5010  FORMAT(10X,I5,1X,A4,4I5,4E10.0)
+*5020  FORMAT(16I5)
+*5030  FORMAT(8I10)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+* GRSET      10 TEMP   16  100   50  -16      273.      -10.       10.        1.
+*  10   20   30   50   70  100  150  200  250  300  400  500  700  850  925 1000
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*  (THIS WILL PRODUCE 10 SETS OF 16 LEVEL 100X50 GRIDS WITH NAME 'TEMP')
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR ABORT READING INPUT CARD 1
+*       2 ERROR ABORT READING INPUT CARD 2
+*       3 UNSUPPORTED DEFAULT
+*       4 MORE THAN ONE LEVEL TYPE
+*       5 LVL DOES NOT DATA CONSISTENT WITH KIND
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM grset
+*    1              (GG,       INPUT,       OUTPUT,
+*    2        TAPE11=GG, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ---------------------------------------------
+
+*     $Log: grset.ptn,v $
+*     Revision 4.17  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.16  2011/09/16 18:03:08  dugas
+*     - Ajouter l'option "-def LASTSTEP" qui implique de
+*       ne seulement produire que le dernier pas-de-temps.
+*     - Meilleur traitement des parametres relies aux dates.
+*
+*     Revision 4.15  2010/03/21 23:07:39  dugas
+*     Lire le parametre -name sur la ligne de commande (oubli).
+*
+*     Revision 4.14  2010/03/08 23:28:52  dugas
+*     Ajouter l'argument -T1 pour definir la date initiale.
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2008/04/25 21:38:39  dugas
+*     Permettre 20 caracteres pour les parametres reels sur la ligne de commande.
+*
+*     Revision 4.11  2007/12/20 21:06:37  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2002/04/22 14:11:26  dugas
+*     On peut maintenant specifier VKIND en appel.
+*
+*     Revision 4.9  2001/03/17 00:59:10  armnrbd
+*     Utiliser PUTHIGH plutot que PUTPARI.
+*
+*     Revision 4.8  2000/07/14 15:49:56  armnrbd
+*     Ajouter le parametre de ligne de commande "-delt".
+*     Corriger le traitement des options par defauts
+*     pour les niveaux verticaux.
+*
+*     Revision 4.7  2000/04/07 18:40:38  armnrbd
+*     Ajouter une liste complete de parametres de ligne de commande.
+*
+*     Revision 4.6  1998/07/03 02:26:28  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:38:58  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1996/05/13  20:45:32  armnrbd
+*     Corriger une erreur de declaration de JBUF.
+*
+*     Revision 4.3  1995/06/13  14:56:53  armnrbd
+*     Des-activer certaines initialisations effectuees sur les fichiers SQI.
+*
+*     Revision 4.2  1995/01/20  15:59:08  armnrbd
+*     Suite et fin de la correction precedente.
+*
+*     Revision 4.1  94/11/28  22:58:44  armnrbd
+*     Corriger le traitement du mode de fonctionnement par defaut.
+*     
+*     Revision 4.0  94/11/17  14:20:35  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.1  94/01/12  21:32:49  armnrbd
+*     Modifier l'appel a GETLIGN qui s'occupe des niveaux verticaux.
+*     
+*     Revision 3.0  93/10/13  13:56:19  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  92/11/14  17:58:54  armnrbd
+*     Definir des valeurs par defauts.
+*     
+*     Revision 1.4  92/10/13  15:00:13  armnrbd
+*     Compaction par defaut passe a 32 bits/mots (-32).
+*     
+*     Revision 1.3  92/04/01  14:07:34  armnrbd
+*     Corriger la documentation.
+*     
+*     Revision 1.2  92/03/17  12:33:30  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/11  11:51:09  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:46  armnrbd
+*     Initial revision
+*     
+
+*     JAN 17/91 - B.DUGAS, RPN. (CALL TO GETLIGN ADDED)
+*     NOV 15/90 - B.DUGAS, RPN. (PORT TO CY920/IRIX)
+*     MAY 11/83 - R.LAPRISE.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      CHARACTER*10 CLEVP(MAXLEV)
+      LOGICAL     OK,DEF,BIGF,LAST
+      CHARACTER   LIGNE*80,NAME*4,VTYP*16
+      REAL        G,TWOPI,ZERO,OMEG,P,CLJ,
+     +            A,B,C,D,RK,PR(MAXLEV),RLON
+      REAL*8      SL,WL,CL,RADL,WOSSL,HOURS,TIM
+      INTEGER     LVL(MAXLEV),HEAD,JBUF(taille_entete),I,J,K,L,ILG1,
+     +            ILATH,IBUF,NF,NSETS,ILEV,ILG,ILAT,
+     +            NPACK,LEN,NWDS,JPAK,MAXW,NT,DEET,
+     +            IER,IO,LIM1,LIM2,VKIND,VK,DEBUT,
+     +            YYYYMMDD,HHMMSS,stamp
+
+      POINTER   ( IG,     G(1) )
+      POINTER   ( IB,  IBUF(8) )
+
+      POINTER   ( ISL,   SL(1) )
+      POINTER   ( IWL,   WL(1) )
+      POINTER   ( ICL,   CL(0:1) )
+      POINTER   ( IRL, RADL(1) )
+      POINTER   ( IOL,WOSSL(1) )
+
+      LOGICAL     RPBLOC
+      INTEGER     GETKIND,newdate
+      CHARACTER*4 GETYP,PKTYP,GETKINDC*16
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,XIT,BURNF,
+     +            SETLAB,LBLCHK,HPALLOC,GAUSSG,
+     +            TRIGL,PUTFLD2,CONVPR,WRITLEV,GETYP,
+     +            RPBLOC,PUTHIGH,GETKIND,GETKINDC,
+     +            newdate
+ 
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        DEF   , OK   /
+     +           .FALSE.,.TRUE./
+
+      DATA        ( CLEVP(L), L=1,16 ) /
+     +              '   10','   20','   30','   50',
+     +              '   70','  100','  150','  200',
+     +              '  250','  300','  400','  500',
+     +              '  700','  850','  925',' 1000'
+     +                                  /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/grset.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+                   NF = 3
+      CALL JCLPNT( NF, 11, 5,6 )
+
+      TWOPI = 8.0*ATAN(1.0)
+
+***    GET DEFAULT PACKING TYPE.
+
+      PKTYP  = GETYP( 0 )
+      PKTYP  = PKTYP(1:2)
+
+***    DEFINE PARAMETRE DEFAULTS.
+
+      NSETS  =  1
+      DEET   =  0
+      NAME   = 'DATA'
+      ILEV   =  0
+      ILG    =  128
+      ILAT   =  64
+      NPACK  = -32
+      A      =  1.0
+      B      =  1.0
+      C      =  1.0
+      D      =  1.0
+      VKIND  =  2
+      VTYP   = ' '
+
+      YYYYMMDD = 19790101
+      HHMMSS   = 00 
+
+      LAST   =.FALSE.
+      BIGF   =.FALSE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=901,ERR=901,IOSTAT=IO) NSETS
+
+          OK = RPBLOC('DELT',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) DEET
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=901,ERR=901,IOSTAT=IO) YYYYMMDD
+
+          OK = RPBLOC('T12',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=901,ERR=901,IOSTAT=IO) HHMMSS
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NAME = LIGNE
+
+          OK = RPBLOC('PLV',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) ILEV
+
+          OK = RPBLOC('LON',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) ILG
+
+          OK = RPBLOC('LAT',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) ILAT
+
+          OK = RPBLOC('NPG',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) NPACK
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=901,ERR=901,IOSTAT=IO) A
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=901,ERR=901,IOSTAT=IO) B
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=901,ERR=901,IOSTAT=IO) C
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=901,ERR=901,IOSTAT=IO) D
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) VTYP = LIGNE
+
+          IF (VTYP.NE.' ')                                     THEN
+              CALL SETKIND( VTYP )
+              VKIND = GETKIND( )
+          END IF
+
+          DEF = RPBLOC('DEFAUT',LIGNE)
+
+          IF (DEF)                                             THEN
+              CALL LOW2UP( LIGNE,LIGNE )
+              IF (LIGNE == 'LASTSTEP') LAST = .TRUE.
+          END IF
+
+          OK  = RPBLOC('LV1',LIGNE)
+
+          IF (OK)                                              THEN
+
+              DEF      =.TRUE.
+
+              CLEVP(1) = LIGNE
+              ILEV     = 1
+
+              OK = RPBLOC('LV12',LIGNE)
+
+              IF (OK)                                          THEN
+
+                  CLEVP(2) = LIGNE
+                  ILEV     = 2
+
+                  OK = RPBLOC('LV13',LIGNE)
+
+                  IF (OK)                                      THEN
+
+                      CLEVP(3) = LIGNE
+                      ILEV     = 3
+
+                  END IF
+
+              END IF
+
+          ELSE
+
+              IF (DEF)                                         THEN
+                  IF (ILEV.EQ.1)                               THEN
+                      CLEVP(1) = '  500'
+                  ELSE IF (ILEV.EQ.0)                          THEN
+                      ILEV     = 16
+                  ELSE
+                      WRITE(6,6003) ILEV
+                      CALL                         XIT('  Grset ',-3 )
+                  END IF
+              END IF
+ 
+          END IF
+
+      ELSE
+
+***        READ IN DIMENSIONS AND CONSTANTS.
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+             GOTO 901
+          ELSE
+
+              IF (LIGNE.EQ.' ')                                THEN
+
+***                FIRST INPUT LINE IS EMPTY, USE PRIMARY DEFAULTS.
+
+                  LVL(1) = 500
+
+                  CALL BURNF
+                  GOTO 050
+
+              END IF
+
+              READ( LIGNE, 5010,END=901,ERR=901,IOSTAT=IO) 
+     +                          NSETS,NAME,ILEV,ILG,ILAT,NPACK,A,B,C,D
+
+          END IF
+
+      END IF  
+
+      STAMP = 0
+      ier = newdate( stamp, YYYYMMDD,HHMMSS*100, 3 )
+
+      IF (ILEV.LT.0)                                           THEN
+          ILEV = -ILEV
+          BIGF =.TRUE.
+      END IF
+
+      IF (.NOT.DEF)                                            THEN
+
+***        READ OPTIONAL SECOND INPUT LINE.
+
+          IF (BIGF)                                            THEN
+              DO  K=1,(ILEV-1)/8+1
+                  CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 902
+                  ELSE
+                      LIM1 = 8*(K-1)+1
+                      LIM2 = MIN( ILEV, 8*K )
+                      READ( LIGNE, 5030,END=902,ERR=902,IOSTAT=IO) 
+     +                                  (CLEVP(I),I=LIM1,LIM2)
+                  END IF  
+              END DO
+          ELSE
+              DO  K=1,(ILEV-1)/16+1
+                  CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 902
+                  ELSE
+                      LIM1 = 16*(K-1)+1
+                      LIM2 = MIN( ILEV, 16*K )
+                      READ( LIGNE, 5020,END=902,ERR=902,IOSTAT=IO) 
+     +                                  (CLEVP(I),I=LIM1,LIM2)
+                  END IF  
+              END DO
+          END IF
+
+          CALL BURNF
+
+      END IF
+
+***    CHECK LVL CODING.
+
+      DO  K=1,ILEV
+          IF (INDEX( CLEVP(K),'.' ).EQ.0 .AND. VTYP.EQ.' ')    THEN
+              READ( CLEVP(K),10, ERR=902,END=902,IOSTAT=IO ) LVL(K)
+              CALL CONVPR( LVL(K), PR(K), VK, -2 )
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  IF (VK.NE.VKIND)                             THEN
+                      IF (K.EQ.1)                              THEN
+                          VKIND = VK
+                      ELSE
+                          CALL                     XIT('  Grset ',-5 )
+                      END IF
+                  END IF
+                  CALL CONVPR( LVL(K),PR(K),VK, +2 )
+              END IF
+          ELSE
+             READ( CLEVP(K),11, ERR=902,END=902,IOSTAT=IO ) PR(K)
+             IF (PKTYP.EQ.'SQ')                                THEN
+                 CALL CONVPR( LVL(K), PR(K), VKIND, +2 )
+             ELSE
+                 CALL LVCODE( LVL(K), PR(K)/1000.,1 ) 
+             END IF
+          END IF
+      END DO
+
+  050 IF (NPACK.EQ.0) NPACK = -32
+
+      WRITE(6,6010) NSETS,NAME,ILEV,ILG,ILAT,NPACK,A,B,C,D
+
+      ILG1  = ILG+1
+      IF (PKTYP.EQ.'SQ') ILG1 = ILG
+
+      ILATH = ILAT/2
+      RK    = TWOPI/FLOAT(ILG)
+      OMEG  = TWOPI/FLOAT(NSETS)
+
+      VTYP = GETKINDC( VKIND )
+      CALL WRITLEV( PR,ILEV,VTYP )
+
+***    ASK FOR NECESSARY MEMORY. 
+
+      CALL SETLAB( JBUF, 'GRID',0,NAME,0,ILG1,ILAT,0,NPACK )
+      CALL LBLCHK( LEN, NWDS,JPAK,JBUF )
+
+      MAXW = LEN-HEAD
+
+      CALL HPALLOC( IB,LEN, IER,0 )
+      CALL HPALLOC( IG,NWDS,IER,0 )
+
+***    DEFINE GAUSSIAN POINTERS. NOTE THAT THESE REFLECT REAL*8
+***    QUANTITIES AND SHOULD ONLY BE ACCESSED THROUGH SUCH MEANS
+***    AS THE 'DOUBLE' FUNCTION.
+
+      CALL HPALLOC( ISL,ILAT,IER,8 )
+      CALL HPALLOC( IWL,ILAT,IER,8 )
+      CALL HPALLOC( ICL,ILAT,IER,8 )
+      CALL HPALLOC( IRL,ILAT,IER,8 )
+      CALL HPALLOC( IOL,ILAT,IER,8 )
+
+      CALL GAUSSG( ILATH, SL,WL,CL,RADL,WOSSL )
+      CALL TRIGL ( ILATH, SL,WL,CL,RADL,WOSSL )
+
+***    SETUP IBUF.
+
+      DO  I=1,HEAD
+          IBUF(I) = JBUF(I)
+      END DO
+
+      IF (PKTYP == 'SQ' .AND.
+     +   (STAMP /=  0   .OR. DEET /= 0))                       THEN
+          CALL PUTHIGH( DEET ,'DEET' ,IBUF )
+          CALL PUTHIGH( STAMP,'DATEO',IBUF )
+      END IF
+
+***    SET FIELD AS PER EQUATION.
+
+      IF (LAST)                                                THEN
+          DEBUT = NSETS-1 
+      ELSE
+          DEBUT = 0
+      END IF
+
+      DO 310 NT=DEBUT,NSETS-1
+         TIM = NT
+
+         DO 310 L=1,ILEV
+            P = PR(L)
+
+            DO 210 J=0,ILAT-1
+               CLJ = CL(J)
+
+               DO 200 I=1,ILG
+                  RLON=FLOAT(I-1)
+
+                  G(J*ILG1+I) = A + B*P 
+     +        + ( C + D*P ) * ( SIN(OMEG*TIM) + 2.0*SIN(RK*RLON) ) * CLJ
+
+  200          CONTINUE
+
+               IF (ILG.NE.ILG1)
+     +         G(J*ILG1+ILG1) = G(J*ILG1+1)
+
+  210       CONTINUE
+
+***          SAVE FIELD.
+
+            IBUF(2) = NT
+            IBUF(4) = LVL(L)
+*
+            IF (PKTYP.EQ.'SQ')                                 THEN
+                CALL PUTHIGH( NT,'NPAS',IBUF )
+                HOURS = NT * (DEET/3600.0_8)
+                CALL INCDATR( IBUF(2),STAMP,HOURS )
+            END IF
+
+            CALL PUTFLD2( 11, G, IBUF,MAXW )
+            IF (NT == NSETS-1) CALL PRTLAB( IBUF )
+
+  310 CONTINUE
+
+      CALL                                         XIT('  Grset ', 0 )
+
+***    E.O.F. ON INPUT.
+
+  901 IF (IO.NE.0) WRITE(6001) IO
+      CALL                                         XIT('  Grset ',-1 )
+  902 IF (IO.NE.0) WRITE(6001) IO
+      CALL                                         XIT('  Grset ',-2 )
+*-----------------------------------------------------------------------
+
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+ 0020 FORMAT(BN,E20.0)
+
+ 5010 FORMAT(10X,I5,1X,A4,4I5,4E10.0)
+ 5020 FORMAT(16A5)
+ 5030 FORMAT(8A10)
+
+ 6001 FORMAT(' Grset reports I/O error number ',I3,' on unit 5.')
+ 6003 FORMAT(' Unsupported default ILEV=',I3,'. Only 1- and 16-level'
+     +       ' defaults are provided.')
+
+ 6010 FORMAT(/' NSETS=',I7,  ',NAME=',A4,  ',ILEV=',I5,
+     1        ',ILG=',I5,    ',ILAT=',I5,  ',NPACK=',I5//
+     2        ' EQUATION=', E10.3,  ' + ', E10.3,
+     3        ' *P + (',    E10.3,  ' + ', E10.3,
+     4        ' *P) * (sin(2PI*T/NSTEPS)+2.*sin(LON)) *cos(LAT)'/)
+
+      END
+#     endif

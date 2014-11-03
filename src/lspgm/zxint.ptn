@@ -1,0 +1,428 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxint  ZXIN INPUT OUTPUT [ -scal VAL1 -a VAL2 -b VAL3 -label VAL4 ]
+*
+*
+*     DESCRIPTION...
+*      zxint  - GRAPHS LATITUDE AVG AND PRESSURE INTEGRAL OF A  CROSS-SECTION
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 29/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxint.ptn,v 4.9 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     PURPOSE - GRAPHS ONE CROSS-SECTION (FROM FILE ZXIN) WHICH IS AVERAGED
+*               IN LATITUDE AND INTEGRATED IN PRESSURE. THE VALUE OF THE
+*               GLOBAL INTEGRAL PER UNIT AREA IS ALSO PRINTED.
+*     NOTES   - 1) AT INPUT THE CROSS-SECTION IS ORDERED FROM S TO N AND
+*                  TOP TO BOTTOM.
+*               2) THE MAXIMUM LATITUDES AND LEVELS ARE SET TO 999.
+*
+*
+*     INPUT FILE...
+*      ZXIN = FILE CONTAINING ONE CROSS-SECTION.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      CONST     (scal) = MULTIPLICATIVE CONSTANT (DEFAULTS TO 1./9.80616)
+*      GMIN,GMAX (a,b)  = MIN AND MAX LIMITS FOR THE GRAPH OF PRESSURE
+*                         INTEGRAL VS. LATITUDE. IF BOTH ARE ZERO THE
+*                         LIMITS ARE CALCULATED.
+*      LABEL            = 80 CHARACTER LABEL PRINTED ON THE GRAPH.
+*
+*      READ( 5,5010 ) CONST,GMIN,GMAX
+*      READ( 5,5012 ) LABEL
+*5010  FORMAT(10X,3E10.0)
+*5012  FORMAT(A80)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*  ZXINT  0.10197671        0.        0.
+*  LABEL CARD GOES HERE
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEMS READING ZXIN
+*       2 FOUND DATA TYPE NOT ZONAL IN ZXIN
+*       3 ABORT ERROR READING ZXIN
+*       4 MORE THAN ONE SIZE FOR ARRAYS IN ZXIN
+*       5 ABORT ERROR READIND INPUT DIRECTIVES
+*       6 ABORT ERROR READIND INPUT LABEL
+*       7 ZXIN DOES NOT CONTAIN PRESSURE LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zxint
+*    +             ( ZXIN,       INPUT,       OUTPUT,
+*    +         TAPE1=ZXIN, TAPE5=INPUT, TAPE6=OUTPUT )
+*     -----------------------------------------------
+
+*     $Log: zxint.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2013/10/17 11:28:50  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.4  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1998/10/20 17:56:14  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.2  1998/07/03  02:26:51  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:36  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:23:06  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:09:56  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:43  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/23  13:50:56  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/03/16  14:21:46  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:06  armnrbd
+*     Initial revision
+*     
+
+*     Mai 21/91 - B.Dugas, RPN. (VERSION CY920/IRIX F77)
+*     JUN 13/89 - F.MAJAESS (CORRECT 6035 FORMAT STATEMENT)
+*     NOV 29/83 - J.D.HENDERSON, B.DUGAS.
+
+*-----------------------------------------------------------------------
+      IMPLICIT  none
+
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale , MAXLEV = 999
+
+      LOGICAL   OK
+      CHARACTER TYPE*4,LABEL*80,LIGNE*256
+      INTEGER   NF,NR, IO,IER, IXL,IJL, NLEV,NLEVG, VKIND,
+     +          LEV(MAXLEV), HEAD,JBUF(taille_entete),JPAK,
+     +          MAXW, LEN, J,K,L,NLAT,NHEM,NLATH,NLATH1,NWDS
+      REAL      FL(MAXLEV),PR(MAXLEV),PRH(MAXLEV+1),
+     +          G(MAXJ),CONST,GMIN,GMAX,ZERO
+      REAL*8    SL(MAXJ),CL(MAXJ),WL(MAXJ),WOSSL(MAXJ),
+     +          RAD(MAXJ),SUM,VAL,VALS,VALN, WLJ, F(MAXJ)
+
+      INTEGER,  DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,     DIMENSION(:), ALLOCATABLE :: XA
+
+      CHARACTER NOMPRG*256
+      COMMON   /PROGNAM/ NOMPRG
+
+
+      LOGICAL   RPBLOC
+      INTEGER   GETSIZ2
+      EXTERNAL  MACSPE,JCLPNT,GETLIGN,BURNF,GETSIZ2,
+     +          GETZX2,CMPLBL,GAUSSG,TRIGL2,SPLAT,XIT,RPBLOC
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxint.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      CALL JCLPNT( NF, 1, 5,6 )
+
+      NR = 0
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          CONST = 0.10197671
+          GMIN  = 0.0
+          GMAX  = 0.0
+          LABEL = ' '
+
+          OK = RPBLOC('SCAL',LIGNE)
+          IF (OK) READ( LIGNE, 0010, ERR=900,END=901,IOSTAT=IO ) CONST
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 0010, ERR=900,END=901,IOSTAT=IO ) GMIN
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 0010, ERR=900,END=901,IOSTAT=IO ) GMAX
+
+          OK = RPBLOC('LABEL',LIGNE)
+          IF (OK) READ( LIGNE, 5012, ERR=902,END=903,IOSTAT=IO ) LABEL
+
+      ELSE
+
+***        READ MULT. CONSTANT, GRAPH LIMITS, AND THE LABEL.
+
+          CALL GETLIGN( 5,LIGNE,256,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=901,IOSTAT=IO)
+     +                     CONST,GMIN,GMAX
+          END IF
+
+          CALL GETLIGN( 5,LIGNE,256,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 903
+          ELSE
+              READ( LIGNE, 5012,ERR=902,END=903,IOSTAT=IO) LABEL
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    DEFINE DEFAULT VALUES.
+
+      IF (CONST.EQ.0.0) CONST = 1.0/9.80616
+
+      IF (ABS(CONST).GE.1.0)                                   THEN
+          WRITE(6,6006) CONST
+      ELSE
+          WRITE(6,6007) 1.0/CONST
+      END IF
+      
+***    DETERMINE THE GRID SIZE.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      NLAT = JBUF(5)
+      NHEM = JBUF(7)
+
+      IF (MAXW.EQ.0 .OR. NLEV.GT.MAXLEV .OR.
+     +    NLEV.LE.0 .OR. NLAT.GT.MAXJ      )                   THEN
+          WRITE(6,6002) NLEV,NLAT,MAXW
+          CALL                                     XIT('  Zxint ',-1 )
+      END IF
+
+      WRITE(TYPE,4) JBUF(1)
+
+      IF (TYPE.NE.'ZONL')                                      THEN
+          WRITE(6,6003) TYPE
+          CALL                                     XIT('  Zxint ',-2 )
+      END IF
+
+***    ASK FOR WORKING MEMORY.
+
+      ALLOCATE( IBUF(LEN),XA(NLAT*NLEV) )
+    
+*-----------------------------------------------------------------------
+***    GET THE CROSS-SECTION. STOP IF THE FILE IS EMPTY.
+***    LEV WILL CONTAIN THE PRESSURE LEVEL VALUES IN MILLIBARS.
+
+  100 CALL GETZX2( 1, XA,NLAT,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( IBUF,XA )
+              IF (MAXW.EQ.0)                       GOTO 050
+              IF (NR.EQ.0) CALL                    XIT('  Zxint ',-3 )
+              CALL                                 XIT('  Zxint ', 0 )
+          END IF
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. MAXW.LT.NLEVG*NLAT)                 THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Fpow  ',-4 ) 
+          END IF
+
+***        COMPUTE PRESSURE HALF LEVELS FOR INTEGRAL IN P.
+***        BOTTOM BOUNDARY IS CHOSEN TO BE 1013.3 MB.
+***        PR,PRH ARE SET TO N/M**2.
+
+          DO  L=1,NLEVG
+              CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+              IF (VKIND.NE.2) CALL                 XIT('  Zxint ',-7 ) 
+              PR(L) = 100.*PR(L)
+          END DO
+
+          PRH(1)       = PR(1)*.5
+          DO 200 L=2,NLEVG
+              PRH(L)   = .5*(PR(L-1)+PR(L))
+  200     CONTINUE
+          PRH(NLEVG+1) = 1013.3*100.
+
+***        GAUSSG COMPUTES THE VALUE OF THE GAUSSIAN LATITUDES AND 
+***        THEIR SINES AND COSINES. TRIGL MAKES THEM GLOBAL (S TO N).
+
+          NLATH = NLAT/2
+          IF (NHEM.NE.0) NLATH = NLAT
+          CALL GAUSSG( NLATH, SL,WL,CL,RAD,WOSSL )
+          CALL TRIGL2( NLATH, SL,WL,CL,RAD,WOSSL,NHEM )
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***        AVERAGE EACH LEVEL IN LATITUDE. PLOT ON A GRAPH.
+
+          WRITE(6,6001) NR+1
+
+          DO 300 L=1,NLEVG
+              IXL     = (L-1)*NLAT
+              SUM     = 0.
+              DO 250 J=1,NLAT
+                  WLJ = WL(J)*.5
+                  SUM = SUM+XA(IXL+J)*WLJ
+  250         CONTINUE
+              FL(L)   = SUM
+              WRITE(6,6028) LEV(L),FL(L)
+  300     CONTINUE
+
+          CALL SPLAT( FL,NLEVG,1,NLEVG,1,0.,0. )
+
+***        THEN INTEGRATE THIS IN PRESSURE.
+
+          VAL     = 0.
+          DO 350 L=1,NLEVG
+              VAL = VAL+FL(L)*(PRH(L+1)-PRH(L))
+  350     CONTINUE
+          VAL     = VAL*CONST
+
+          WRITE(6,6030) VAL
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***        INTEGRATE EACH LATITUDE IN PRESSURE. PLOT ON A GRAPH (N TO S).
+
+          DO 450 J=1,NLAT
+
+              F(J)=0.
+              DO 400 L=1,NLEVG
+                  IJL  = (L-1)*NLAT+J
+                  F(J) = F(J)+XA(IJL)*(PRH(L+1)-PRH(L))
+  400         CONTINUE
+              F(J) = F(J)*CONST
+
+              K    = NLAT+1-J
+              G(K) = F(J)
+  450     CONTINUE
+
+          CALL SPLAT( G,NLAT,1,NLAT,1,GMIN,GMAX )
+
+***        AVERAGE THIS IN LATITUDE (S.HEM THEN N.HEM).
+
+          NLATH1  = 1
+
+          IF (NHEM.NE.1)                                       THEN
+              VALS     = F(1)*WL(1)*.5
+              DO  500 J=2,NLATH
+                  VALS = VALS+.5*F(J)*WL(J)
+  500         CONTINUE
+              VALS     = 2.*VALS
+              NLATH1   = NLATH+1
+          END IF
+
+          IF (NHEM.NE.2)                                       THEN
+              VALN     = 0.
+              DO  550 J=NLATH1,NLAT
+                  VALN = VALN+.5*F(J)*WL(J)
+  550         CONTINUE
+              VALN     = 2.*VALN
+          END IF
+
+          IF (NHEM.EQ.0)                                       THEN
+              VAL     =(VALS+VALN)*.5
+              WRITE(6,6035) VAL,VALS,VALN
+          ELSE IF (NHEM.EQ.1)                                  THEN
+              WRITE(6,6040) VALN
+          ELSE IF (NHEM.EQ.2)                                  THEN
+              WRITE(6,6045) VALS
+          END IF
+
+          WRITE(6,6050) LABEL
+
+      NR = NR+1
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  900 IF (IO.NE.0) WRITE(6,6100) IO
+  901 CALL                                         XIT('  Zxint ',-5 )
+
+  902 IF (IO.NE.0) WRITE(6,6100) IO
+  903 CALL                                         XIT('  Zxint ',-6 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,3E10.0)
+ 5012 FORMAT(A80)
+
+ 6001 FORMAT('1  ***** Zxint processing cross-section number ',I3/
+     +       '   ***********************************************'//)
+ 6002 FORMAT(' Too many or not enough levels/latitudes/words',
+     +       ' NLEV/NLAT/MAXW =',3I8)
+ 6003 FORMAT(' File should be typed ZONL, found ',A4)
+ 6006 FORMAT(' Zxint const =',1PE14.5/)
+ 6007 FORMAT(' Zxint 1/const =',1PE14.5/)
+ 6028 FORMAT('0 Latitude average at level ',I5,1PE15.6)
+ 6030 FORMAT('0  Global integral/unit area =',1PE15.6)
+ 6035 FORMAT('0 Integral/unit area..global =',1PE15.6,
+     1          '   S.Hem =',1PE15.6,'   N.Hem =',1PE15.6)
+ 6040 FORMAT('0 Integral/unit area.. N.Hem =',1PE15.6)
+ 6045 FORMAT('0 Integral/unit area.. S.Hem =',1PE15.6)
+ 6050 FORMAT('0',30X,A80)
+ 6100 FORMAT(' Zxint reports I/O error number ',I3,' on unit 5.')
+
+      END
+#     endif
+
+
+

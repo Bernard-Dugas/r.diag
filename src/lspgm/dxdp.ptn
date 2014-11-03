@@ -1,0 +1,856 @@
+#     if !defined (pression_au_toit)
+#         define   pression_au_toit 0.01
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      dxdp  XIN XOUT [LNSP] OUTPUT \ 
+*      [-kind VAL0 [VAL1] -l VAL2 [VAL3] -a VAL4 -d VAL5 -i VAL6 -def [VAL7] ]
+*
+*
+*     AUTHORS -  - R.Laprise ET J.D.Henderson, MAY 14 1983.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/dxdp.ptn,v 4.23 2014/09/25 20:20:47 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES VERTICAL DERIVATIVE FOR ALL SETS IN A FILE
+*
+*
+*     INPUT FILE...
+*      XIN  = INPUT FILE OF PRESSURE/ETA/GEMx LEVEL SETS (REAL OR COMPLEX)
+*             (MINIMUM NUMBER OF LEVELS IS 3)
+*      LNSP = (OPTIONAL) LOG OF SURFACE PRESSURE FIELD USED BY THE TERRAIN
+*             FOLLOWING COORDINATES TO DETERMINE THE LOCAL PRESSURE.
+*
+*     OUTPUT FILE... 
+*      XOUT = VERTICAL (PRESSURE OR LOG-PRESSURE) DERIVATIVES
+*             AT THE SAME LEVELS AS THE DATA IN FILE XIN
+*
+*      NOTE THAT THERE SHOULD BE AT LEAST 3 AND AT MOST 999 LEVELS IN XIN
+*
+*
+*     COMMAND-LINE PARAMETERS...
+*
+*      KIND (1)      = 0, (DEFAULT) USES SIMPLE CENTERED DIFFERENCES.
+*                      1, USE A WEIGHTED ALGORITHM, TAKING INTO ACCOUNT
+*                         THE POSSIBLY UN-EVEN LEVEL SPACING, SO THAT THE
+*                         SCHEME BECOMES SECOND-ORDER ACCURATE. SPECIFYNG
+*                         THE "def" COMMAND-LINE PARAMETER IS EQUIVALENT,
+*                         BUT THE "kind" KEY HAS PRECEDENCE OVER IT.
+*                      2, ALLOWS TO DO THE DERIVATIVE USING A WEIGHTED
+*                      LOG-PRESSURE DISCRETIZATION.
+*      KIND   (2)    = INPUT VERTICAL COORDINATE: POSSIBLE OPTIONS ARE
+*                     'PRES'/'ETA' FOR PRESSURE/GCM-ETA AND 'GEM'/'GEM2'/
+*                     'GEM3'/'GEM4' FOR THE DIFFERENT VERSIONS OF THE GEM
+*                      MODEL COORDINATE.
+*      LEVTYP (l 1)  ='FULL' FOR 'ETA' MOMENTUM VARIABLE, AND
+*                     'HALF' FOR 'ETA' THERMODYNAMIC ONE.
+*      LAY    (l 2)  = DEFINES THE POSITION OF LAYER INTERFACES IN RELATION
+*                      TO LAYER CENTRES FOR THE 'ETA' COORDINATE (SEE BASCAL).
+*      PTOIT (a)     = PRESSURE (PA) AT THE LID OF MODEL. THE DEFAULT VALUE
+*                      IS 0.01 OTHERWISE. THIS VALUE IS ONLY REQUIRED WITH
+*                      THE CCCma GCM VERTICAL COORDINATES.
+*
+*      The next two parametres are only used when COORD='GEM2' or 'GEM3'.
+*
+*      PREF  (d)     = REF PRESSURE (DEF 80000 PA).
+*      R     (i)     = REFERENCE EXPONENT (DEF 1.0)
+*
+*
+*     NOTES: 1) The program requires that data types be either of 'GRID',
+*               'SUBA' or 'ZONL' when operating with any of the terrain
+*               following vertical coordinates. The other types of data
+*               are only supported with pressure vertical coordinates.
+*            2) 'GEM' is the original GEM ETA coordinate, while 'GEM2' is
+*               the first GEM HYBRID coordinate as implemented by Edouard
+*               & Gravel in GEM/DM V2.2.0. 'GEM3' is the normalized version
+*               that was implemented in the V2.3.1 GEM/DM.
+*            3) The default value of KIND(2) is determined by the file type
+*               and the program will also try to determine it by the
+*               (internal) coding used for the coordinate itself.
+*            4) Specifying "-def AABB" will force the attempt to read
+*               a text file called aabb.nml, containing a FORTRAN
+*               namelist AABB_NML, which in turns will hold two arrays,
+*               A and B such that the local pressure at level K, PL(K),
+*               can be calculated as "A(K)+B(K)*PS". This then by-passes
+*               all of the normal COORD-related calculations for PL(K).
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NOT ENOUGH OR TOO MANY LEVELS IN FIRST SET OF XIN
+*       2 MORE THAN ONE SIZE IN FILE XIN
+*       3 NOT ENOUGH LEVELS IN LAST SET READ
+*       4 LEVELS DO NOT VARY MONOTONICALLY
+*       5 ILLEGAL "KIND" VALUE
+*       6 LNSP FILE MISSING OR EMPTY
+*       7 LNSP AND XIN NOT THE SAME SIZE
+*       8 PROBLEM READING PARAMETRES
+*       9 UNRECOGNIZED COORDINATE TYPE
+*      10 UNABLE TO CONTINUE (SEE NOTE 1)
+*      11 UNSUPPORTED VERTICAL COORDINATE IN XIN
+*      12 KIND(2) PARAMETRE AND XIN DATA MISMATCH
+*      13 MORE THAN ONE VERTICAL COORDINATE IN XIN
+*      14 UNABLE TO READ AABB NAMELIST
+*      15 WRONG NUMBER OF A,B IN AABB
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM dxdp
+*    +            ( XIN,        XOUT,       OUTPUT,
+*    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
+ 
+*     $Log: dxdp.ptn,v $
+*     Revision 4.23  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.22  2014/09/02 22:29:03  dugas
+*     Verifier que le nombre de parametres lus dans aabb.nml est correct.
+*
+*     Revision 4.21  2013/12/18 21:32:37  bernard
+*      - Lecture du fichier namelist aabb.nml. Celui-ci doit contenir le
+*        namelist FORTRAN AABB_NML, qui contient a son tour les deux
+*        vecteurs verticaux A et B. Ces derniers sont utilises dans
+*        dans le calcul de la pression locale (PL=A+B*PS).
+*      - Declarations EXTERNAL 'a la' F90.
+*
+*     Revision 4.20  2013/03/21 21:34:45  bernard
+*     Ajouter le support de VKIND=5003.
+*
+*     Revision 4.19  2012/07/02 21:19:46  dugas
+*     Corriger l'appel a GETTOC qui definit PTOIT8.
+*
+*     Revision 4.18  2011/09/16 17:54:03  dugas
+*     Ajouter la coordonnee ET16.
+*
+*     Revision 4.17  2011/06/15 18:15:34  dugas
+*     Simplifier la section de code qui fait un appel a LoPTOC.
+*
+*     Revision 4.16  2010/04/01 15:54:59  dugas
+*     Restaurer le support des donnees en coordonne de pression.
+*
+*     Revision 4.15  2010/02/15 22:36:39  dugas
+*     Support BETA de la coordonnee verticale GEM4.
+*
+*     Revision 4.14  2009/09/08 20:46:22  dugas
+*     Initialiser PR(NLEV)=1.0 si NLEV=1 (pour fichiers SQ).
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2008/04/28 15:41:58  dugas
+*     Ne plus tenir compte du cas non-SQ98.
+*
+*     Revision 4.11  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2005/04/14 18:07:36  dugas
+*     - Proteger PTOIT,PREF,R lors de l'appel a LIRPT.
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.9  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.8  2002/09/17 17:52:25  dugas
+*     Modifier/simplifier le traitement des coordonnees verticales hybrides
+*      de GEM (v2.2.0 et v2.3.1). Utilisation systematique de GETKIND et
+*      definition du type de coordonnee par defaut selon le genre de
+*      fichier rencontre (CCC ou RPN).
+*
+*     Revision 4.7  2002/02/02 00:51:54  dugas
+*     Ajouter le support de toutes les coordonnees ETA du GCM
+*
+*     Revision 4.6  2002/01/14 15:49:45  dugas
+*     Les coordonnees verticales de type SIG et ETxx du GCM/CCCma, de meme
+*      que la coordonnees GEM3 (v2.3.1) sont maintenant supportees.
+*
+*     Revision 4.5  1998/07/03 02:26:23  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1997/09/26  17:38:50  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1997/04/01  23:55:33  armnrbd
+*     Implanter le mode de calcul en log(p) de G.Brunet.
+*
+*     Revision 4.2  1996/11/26  20:15:04  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.1  1996/02/29  20:44:21  armnrbd
+*     Imprimer plus d'informations lors du traitement du cas MAXW=0
+*     et aussi quand le programme se mets a ignorer les LABLs.
+*
+*     Revision 4.0  1994/11/17  14:19:53  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:53  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  92/11/23  13:32:45  armnrbd
+*     Deuxieme BugFix ...
+*     
+*     Revision 1.4  92/11/23  13:27:23  armnrbd
+*     BugFix a l'implantation de GETSIZ2.
+*     
+*     Revision 1.3  92/11/09  22:39:57  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/10/13  15:55:49  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.1  92/03/23  12:06:07  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:40  armnrbd
+*     Initial revision
+*     
+***    MAY 14 1983 - R.LAPRISE **ET** NOV 27 1980 - J.D.HENDERSON 
+
+***    HISTORIQUES DES MODIFICATIONS:
+
+***    17 MAI 1991 - B.Dugas, RPN : VERSION CY920.
+
+*-----------------------------------------------------------------------
+      use diag_toc, only: GetTOC, LirTOC, LopTOC
+
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      REAL,       PARAMETER :: PTMIN = pression_au_toit
+
+      REAL(8)     PTOIT8,PREF8,R8
+      CHARACTER   PKTYP*2,GRTYP,
+     +            LIGNE*20,MESSAG*10,ENCORE*16
+      CHARACTER*4 NAME,TYPE,COORD,LEVTYP
+      LOGICAL     OK,LNSP,WEIGHT,MONOTON,MODETA,AABB,DEF
+      INTEGER     HEAD,KBUF(taille_entete),LBUF(taille_entete),
+     +            LEV(MAXLEV),NLEV,NLEVG,I,L,LL,N,NF,NR,MAXW,
+     +            MAX3,LEN,LEN3,NWDS,LAY,IO,KPAK,LPAK,I0,J0,
+     +            IER,BOTM,TOP,BOT,INC,HAUT,BAS,KIND,VKIND,TOC_NK,
+     +            TOC_NBR,NST,MEM,NC,IG10,IG20,IG1,IG2,NI,NJ,IUN
+      REAL        G(MAXLEV),PR(MAXLEV),DP(MAXLEV),BIGBIN,
+     +            XMEM1,XMEM2,ZERO,PR0(MAXLEV),PREF,R,
+     +            PTOIT,PTOIT0,PREF0,R0
+
+      REAL        A(MAXLEV+1), B(MAXLEV+1)
+      NAMELIST    /AABB_NML/ A,B
+
+      INTEGER,    DIMENSION(:),  ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:),  ALLOCATABLE :: GG
+
+      real,       dimension(:,:,:), pointer  :: local_pressure
+      real,       dimension(:,:),ALLOCATABLE :: LP
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
+      INTEGER,    EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,GETHIGH,FNOM,FCLOS
+      EXTERNAL    MACSPE,JCLPNT,XIT,GETSET2,CMPLBL,CONVPR,PUTSET2,
+     +            BASCAL,MONVERT,WRITLEV,COORDAB, GETPT,LIRPT,
+     +            SETPT,GENAB,GETFLD2,SETKINDi
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        WEIGHT / .FALSE. /,
+     +            MODETA / .FALSE. /
+      DATA        MESSAG / 'AUCUN' /,
+     +            ENCORE / 'PAS ENCORE DONNE' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/dxdp.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2,3, 6 )
+
+      PKTYP  = GETYP( 1 )
+
+      LNSP   = (NF.EQ.3)
+
+      KIND   = -1
+      LEVTYP = 'HALF'
+      LAY    =   0
+
+      COORD  = 'DEF'
+      PTOIT  =  PTMIN
+      PREF   = 80000.
+      R      = 1.0
+      AABB   =.FALSE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=900,ERR=900,IOSTAT=IO) KIND
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) COORD = LIGNE
+
+          OK = RPBLOC('L',LIGNE)
+          IF (OK) LEVTYP = LIGNE
+
+          OK = RPBLOC('L2',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=900,ERR=900,IOSTAT=IO) LAY
+
+          OK = RPBLOC('DEFAUT',LIGNE)
+          IF (OK) WEIGHT = .TRUE.
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=900,ERR=900,IOSTAT=IO) PTOIT
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=900,ERR=900,IOSTAT=IO) PREF
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=900,ERR=900,IOSTAT=IO) R
+
+          DEF = RPBLOC('DEFAUT',LIGNE)
+          IF (DEF .AND. LIGNE == 'AABB') AABB = .TRUE.
+
+      END IF
+
+***    ACCOUNT FOR DEFAULT TREATMENT.
+
+      IF (COORD.NE.' ') CALL LEADBLK( COORD )
+      IF (COORD.EQ.' ') COORD = 'DEF'
+      IF (AABB .AND. COORD == 'DEF') COORD = 'GEM'
+
+      IF (COORD     .NE.'DEF'  .AND.
+     +    COORD     .NE.'SIG ' .AND.
+     +    COORD     .NE.'ETA ' .AND.
+     +    COORD     .NE.'ET10' .AND.
+     +    COORD     .NE.'ET15' .AND.
+     +    COORD     .NE.'ET16' .AND.
+     +    COORD(1:3).NE.'GEM'  .AND.
+     +    COORD     .NE.'PRES' )                               THEN
+          CALL                                     XIT('  Dxdp  ',-9 )
+      ELSE
+     +IF (PKTYP.EQ.'SQ')                                       THEN
+
+          IF (COORD.EQ.'DEF'  .OR.
+     +        COORD.EQ.'GEM2' .OR.
+     +        COORD.EQ.'GEM3' )
+     +        CALL SETPT( PTOIT,PREF,R )
+
+          IF (COORD /= 'DEF')                                  THEN
+              If (COORD == 'GEM'   .or.
+     +            COORD == 'GEM2') CALL setkind('SIGMA')
+              If (COORD == 'GEM3'  .or.
+     +            COORD == 'GEM4') CALL setkind('HYBRID')
+          END IF
+
+      END IF
+
+      IF (KIND.EQ.-1)                                          THEN
+                      KIND = 0
+          IF (WEIGHT) KIND = 1
+      ELSE IF (KIND.GT.2 .OR. KIND.LT.-1)                      THEN
+          WRITE(6,6005) KIND
+          CALL                                     XIT('  Dxdp  ',-5 )
+      END IF
+
+      IF (KIND.EQ.1)                                           THEN
+          WRITE(6,6000)
+      ELSE IF (KIND.EQ.2)                                      THEN
+          WRITE(6,6099)
+      END IF
+
+      NR = 0
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, KBUF,LEN,NWDS,KPAK, LEV,NLEV )
+
+      IF (NLEV.EQ.0) WRITE(6,6150)
+      IF (MAXW.EQ.0 .OR.
+     +    NLEV.LT.3 .OR. NLEV.GT.MAXLEV) CALL      XIT('  Dxdp  ',-1 )
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+                                                                   
+          CALL LIRPT( 1 )
+          CALL GETPT( 1 , PTOIT0,PREF0,R0 )
+
+          IF (PTOIT0 == -1.)                                   THEN
+
+***            LITPT/GETPT DID NOT WORK.
+***            TRY LOOKKING FOR A !! RECORD.
+
+              CALL LirToc( 1, TOC_NBR )
+
+              IF (TOC_NBR > 0)                                 THEN
+
+***                WHAT DOES THIS TELL US ?
+
+                  GRTYP = GETHIC('GRTYP',KBUF )
+
+                  IF (GRTYP /= 'Z')                            THEN
+                      IG10 = -1 ; IG20 = -1
+                  ELSE
+                      IG10  = GETHIGH('IG1',KBUF )
+                      IG20  = GETHIGH('IG2',KBUF )
+                  END IF
+
+                  CALL GETTOC( 1, 'VER',VKIND, IG10,IG20 )
+                  CALL GETTOC( 1, 'NK',TOC_NK, IG10,IG20 )
+                 
+              ELSE
+
+***                NO HY AND NO !! RECORDS.
+
+                  VKIND = GETKIND()
+
+              END IF
+
+          ELSE
+                  
+              VKIND = GETKIND()
+
+          END IF
+
+          IF (VKIND /= 1    .AND.
+     +        VKIND /= 2    .AND.
+     +        VKIND /= 5    .AND.
+     +        VKIND /= 5001 .AND.
+     +        VKIND /= 5002 .AND.
+     +        VKIND /= 5003)                                   THEN
+              CALL                                 XIT('  Dxdp  ',-11)
+          ELSE IF (VKIND == 1)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM3'
+              IF (COORD.EQ.'PRES') CALL            XIT('  Dxdp  ',-12)
+          ELSE IF (VKIND == 2)                                 THEN
+              IF (COORD == 'DEF')  COORD = 'PRES'
+              IF (COORD /= 'PRES') CALL            XIT('  Dxdp  ',-12)
+          ELSE IF (VKIND == 5 .OR.
+     +             VKIND == 5001)                              THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM2'
+              IF (COORD.NE.'GEM2') CALL            XIT('  Dxdp  ',-12)
+          ELSE IF (VKIND == 5002 .OR. VKIND == 5003)           THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM4'
+              IF (COORD.NE.'GEM4') CALL            XIT('  Dxdp  ',-12)
+          END IF
+
+          IF (VKIND == 5001)                                   THEN
+              CALL GETTOC( 1, 'PTOP' ,PTOIT8, IG10,IG20 )
+              CALL GETTOC( 1, 'PREF' ,PREF8 , IG10,IG20 )
+              CALL GETTOC( 1, 'RC_1' ,R8    , IG10,IG20 )
+              PTOIT0 = PTOIT8 ; PREF0 = PREF8 ; R0 = R8
+          END IF
+
+      ELSE IF (COORD.EQ.'DEF')                                 THEN
+
+          COORD  = 'PRES'
+
+      END IF
+
+      DO  L=1,NLEV
+          CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+          IF (COORD.NE.'PRES' .AND. VKIND.EQ.2) PR(L) = PR(L) * 0.001
+      END DO
+
+      IF (PKTYP     /= 'SQ'   .AND.
+     +    COORD     /= 'PRES' .AND.
+     +    LEV(NLEV) ==   1  ) PR(NLEV) = 1.0
+
+      CALL WRITLEV( PR,NLEV,COORD )
+
+      IF (COORD.EQ.'PRES')                                     THEN
+          LNSP = .FALSE.
+      ELSE IF (.NOT.LNSP)                                      THEN
+          CALL                                     XIT('  Dxdp  ',-6 )
+      END IF
+
+      NI = KBUF(5) ; NJ = KBUF(6)
+      
+      IF (LNSP)                                                THEN
+
+          MAX3 = GETSIZ ( 3, LBUF,LEN3,NWDS,LPAK )
+          IF (MAX3.EQ.0) CALL                      XIT('  Dxdp  ',-6 )
+
+          MAXW = MAX( MAXW,MAX3 )
+          LEN  = MAX( LEN,LEN3 )
+
+          CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+          IF (.NOT.OK ) CALL                       XIT('  Dxdp  ',-7 )
+
+      END IF
+
+      WRITE(TYPE,0004) KBUF(1)
+
+      IF (LNSP           .AND.
+     +   (TYPE.NE.'GRID' .AND.
+     +    TYPE.NE.'SUBA' .AND.
+     +    TYPE.NE.'ZONL' ))                                    THEN
+
+***        TERRAIN FOLLOWING COORDINATE CAN ONLY BE
+***        USED WITH GRID/SUBA/ZONL TYPE OF DATA.
+
+          CALL                                      XIT('  Dxdp  ',-10)
+
+      END IF
+
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      ALLOCATE( GG(MAX( MAXW,NWDS*NLEV )),LP(NI,NJ),IBUF(LEN) )
+
+***     CHECK THAT PR IS MONOTONIC.
+
+      CALL MONVERT( PR,NLEV, TOP,BOT,INC, MONOTON )
+
+      IF (.NOT.MONOTON) CALL                       XIT('  Dxdp  ',-4 )
+
+      BOTM = BOT-INC
+
+      IF (COORD.EQ.'PRES')                                     THEN
+
+***       SET PR,PR0 TO THE PRESSURE IN N/M**2.
+
+          DO  L=1,NLEV
+              PR0(L) = PR(L)*100.
+              PR (L) = PR0(L)
+              IF (KIND.EQ.2)
+     +            PR (L) = LOG( PR(L) )
+          END DO
+
+      ELSE
+
+          PR0(1:NLEV) = PR(1:NLEV)
+
+          IF (COORD.EQ.'SIG') PTOIT = 0.0
+
+          IF (COORD(1:2).EQ.'ET')                              THEN
+
+***            EVALUATE LAYER INTERFACES FROM LEVTYP AND LAY.
+
+              IF (LEVTYP.EQ.'FULL')                            THEN
+                  CALL BASCAL( PR, IBUF, PR0,PR0,NLEV,LAY )
+              ELSE IF (LEVTYP.EQ.'HALF')                       THEN
+                  CALL BASCAL( IBUF, PR, PR0,PR0,NLEV,LAY )
+              END IF
+
+***            EVALUATE THE PARAMETERS OF THE
+***            ETA VERTICAL DISCRETIZATION.
+ 
+              CALL COORDAB( A,B, NLEV,PR, COORD,PTOIT )
+
+
+          ELSE IF (AABB)                                       THEN
+
+***            A and B are read form namelist file 'aabb.nml'.
+
+              IUN = 0 ; IO = 0
+              IF (FNOM( IUN, 'aabb.nml', 'SQE+OLD', 0 ) == 0)  THEN
+
+                  BIGBIN = -524288. ! -(2^^9)
+                  ! BIGBIN = BIGBIN*BIGBIN*BIGBIN
+                  A(:) = BIGBIN ; B(:) = BIGBIN
+
+                  READ( IUN, NML=AABB_NML, END=920,ERR=920, IOSTAT=IO )
+
+                  IER = FCLOS( IUN )
+
+                  LL = 0 ; DO  L=1,MAXLEV+1
+                      IF (A(L) == BIGBIN .OR. B(L) == BIGBIN) EXIT
+                      LL = LL+1
+                  END DO
+
+                  ! Check the number of valid (A,B) pairs.
+
+                  IF (LL /= NLEV .AND. LL /= NLEV-1)           THEN
+                      WRITE(6,6015) NLEV,LL
+                      CALL                         XIT('  Dxdp  ',-15) 
+                  ELSE IF (LL == NLEV-1)                       THEN
+                      A(LL+1) = 0. ; B(LL+1) = 1.0 ! Add surface values.
+                  END IF
+
+                  WRITE(6,6110)
+
+              ELSE
+                  GOTO 0920
+              END IF
+
+          ELSE IF (COORD.EQ.'GEM2' .OR.
+     +             COORD.EQ.'GEM3')                            THEN
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+***                CHECK IF XIN HOLDS A SET OF
+***                VALUES OF PTOIT,PREF AND R.
+
+                  IF (PTOIT0.NE.-1.)                           THEN
+                      PTOIT = PTOIT0
+                      PREF  = PREF0
+                      R     = R0
+                  END IF
+                  
+              END IF
+
+              IF (.NOT.MODETA .AND. COORD.EQ.'GEM3')           THEN
+
+                  MODETA =.TRUE.
+
+                  DO  L=1,NLEV
+                      PR0(L) = PR0(L) + ( 1.0 - PR0(L) ) * PTOIT / PREF
+                  END DO
+
+              END IF
+
+              WRITE(6,6400) LEVTYP,LAY,COORD,PTOIT,PREF,R
+
+              CALL GENAB( A,B, PR0, PTOIT,PREF,R, NLEV )
+
+           END IF
+
+      END IF
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CALL GETSET2( 1, GG,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+             
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( GG,LP,IBUF )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB2('  Output  ',IBUF )
+              WRITE(6,6200) NR
+              CALL                                 XIT('  Dxdp  ', 0 ) 
+
+          END IF
+
+***        BY-PASS (I.E. STRIP) LABEL RECORDS.
+
+          WRITE(TYPE,0004) IBUF(1) 
+          WRITE(NAME,0004) IBUF(3)
+
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR')              THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  WRITE(6,6300)
+                  MESSAG  = 'deja donne'
+              END IF
+              GOTO 100
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB2('  DXDP on ',IBUF )
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,KBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.NE.NLEVG)                      THEN
+              CALL PRTLAB2('  Read    ',IBUF )
+              CALL                                 XIT('  Dxdp  ',-2 ) 
+          END IF
+
+***        CHECK FOR (VERTICAL) REFERENCE RECORD CHANGES.
+
+          IF (PKTYP == 'SQ' .AND. TOC_NBR > 0)                 THEN
+
+              IG1   = GETHIGH('IG1' ,IBUF )
+              IG2   = GETHIGH('IG2' ,IBUF )
+
+              IF (GRTYP == 'Z')
+     +            CALL GETTOC( 1, 'VER',VKIND, IG1,IG2 )
+
+              IF (VKIND == 5001 .and. GRTYP == 'Z')            THEN
+                  CALL GETTOC( 1, 'PTOP' ,PTOIT8, IG1,IG2 )
+                  CALL GETTOC( 1, 'PREF' ,PREF8 , IG1,IG2 )
+                  CALL GETTOC( 1, 'RC_1' ,R8    , IG1,IG2 )
+                  PTOIT0 = PTOIT8 ; PREF0 = PREF8 ; R0 = R8
+                  IF (PTOIT0 /= PTOIT .or.
+     +                PREF0  /= PREF  .or.
+     +                R0     /= R     )                        THEN
+                      WRITE(6,6013)
+                      CALL                         XIT('  Dxdp  ',-13) 
+                  END IF
+              END IF
+
+          END IF
+
+***        CHECK THAT WE HAVE ENOUGH LEVELS.
+
+          IF (NLEVG.LT.3)                                      THEN
+              CALL                                 XIT('  Dxdp  ',-3 )
+          END IF
+
+          IF (LNSP)                                            THEN
+
+              NST = IBUF(2)
+
+***            GET LN(SF PRES) FOR THIS STEP.
+ 
+              CALL GETFLD2( 3, LP, TYPE,NST,' ',-1,IBUF,MAXW,OK )
+
+              IF (.NOT.OK)  CALL                   XIT('  Dxdp  ',-6 )
+              IF (NR.EQ.0)  CALL PRTLAB2('  Read    ',IBUF )
+
+              CALL CMPLBL( 0,KBUF, 0,IBUF, OK )
+              IF (.NOT.OK) CALL                    XIT('  Dxdp  ',-7 ) 
+
+***            CONVERT TO PRESSURE IN PASCALS.
+
+              DO  I=1,NWDS
+                  LP(I,1) = 100.*EXP( LP(I,1) )
+              END DO
+
+          END IF
+
+          if (COORD == 'GEM4')                                 then
+
+***            COMPUTE LN(LOCAL PRESSURE).
+
+              CALL LoPTOC( local_pressure, lev(1:nlev), LP, IG1,IG2, IN_LNP=.false. )
+
+          end if
+
+***        COMPUTE THE DERIVATIVE FROM THE TOP DOWN.
+***        ENDS USE ONE-SIDED DIFFERENCE. INTERIOR USES CENTERED DIFF.
+
+          I0 = 0 ; J0 = 1
+
+          DO  200 I=1,NWDS
+
+              I0 = I0+1
+              IF (I0 > NI)                                    THEN
+                  J0 = J0+1
+                  I0 = 1
+              END IF
+
+              DO  L=TOP,BOT,INC
+                  N    = (L-1)*NWDS+I
+                  G(L) = GG(N)
+              END DO
+
+              IF (COORD == 'GEM4')                             THEN
+                  PR(1:NLEV) = local_pressure(I0,J0,1:NLEV)
+                  IF (KIND == 2) PR(1:NLEV) = LOG( PR(1:NLEV) ) 
+              ELSE IF (COORD.NE.'PRES')                        THEN
+                  DO  L=1,NLEV
+                      IF (COORD.EQ.'GEM' .OR.
+     +                    COORD.EQ.'SIG' )                     THEN
+                          PR(L) = PTOIT + PR0(L) * ( LP(I,1) - PTOIT )
+                      ELSE
+                          PR(L) = A(L) + B(L) * LP(I,1)
+                      END IF
+                      IF (KIND.EQ.2) 
+     +                PR(L) = LOG( PR(L) ) 
+                  END DO
+              END IF
+
+              DP(TOP) = (  G(TOP+INC)- G(TOP) )
+     +                / ( PR(TOP+INC)-PR(TOP) )
+
+              IF (KIND.EQ.1 .OR. KIND.EQ.2)                    THEN
+
+                  DO  L=TOP+INC,BOTM,INC
+                      HAUT  = L-INC
+                      BAS   = L+INC
+                      XMEM1 = (PR(L   )-PR(HAUT)) / (PR(BAS )-PR(L   ))
+     +                      /           (PR(BAS ) -  PR(HAUT))
+                      XMEM2 = (PR(BAS )-PR(L   )) / (PR(L   )-PR(HAUT))
+     +                      /           (PR(BAS ) -  PR(HAUT))
+                      DP(L) =  XMEM1  *( G(BAS )  -   G(L   ))
+     +                      +  XMEM2  *( G(L   )  -   G(HAUT))
+                  END DO
+
+              ELSE IF (KIND.EQ.0)                              THEN
+
+***                USE SIMPLE CENTERED DIFFERENCE FOR INTERIOR POINTS.
+
+                  DO  L=TOP+INC,BOTM,INC
+                      DP(L) = (  G(L+INC)- G(L-INC) ) 
+     +                      / ( PR(L+INC)-PR(L-INC) )
+                  END DO
+
+              END IF
+
+              DP(BOT) = (  G(BOT)- G(BOTM) ) 
+     +                / ( PR(BOT)-PR(BOTM) )
+
+              IF (KIND.EQ.2)                                   THEN
+                  DO  L=TOP,BOT,INC
+                      DP(L) = DP(L)/PR0(L)
+                  END DO
+              END IF
+
+              DO  L=TOP,BOT,INC
+                  N     = (L-1)*NWDS+I
+                  GG(N) = DP(L)
+              END DO
+
+  200     CONTINUE
+
+***        SAVE GG ON FILE XOUT.
+
+          READ(NAME,0004) IBUF(3)
+
+          CALL SETKINDi( VKIND )
+          CALL PUTSET2( 2, GG, LEV,NLEV, IBUF,MAXW )
+
+      NR = NR+NLEV
+      GOTO 100 
+
+***    E.O.F. ON INPUT.
+
+ 0900 CALL                                         XIT('  Dxdp  ',-8 )
+ 0920 IF (IO.NE.0) WRITE(6,6014) IO
+      CALL                                         XIT('  Dxdp  ',-14 )
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0020 FORMAT(BN,E20.0)
+
+ 6003 FORMAT('0Dxdp on ',A4,2X,A4)
+ 6004 FORMAT(' Levels should be varying monotonically.')
+ 6005 FORMAT(' Found illegal KIND value =',I5)
+ 6013 FORMAT(' More that one input vertical coordinate.'/) 
+ 6014 FORMAT(' Unable to read A,B in aabb.nml namelist file,',
+     +       ' error no.',I5/)
+ 6015 FORMAT(' Wrong number of A,B entries in AABB namelist.',
+     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+
+ 6000 FORMAT(' Dxdp will use weighted differences.')
+ 6099 FORMAT(' Dxdp will use log-pressure weighted differences.')
+ 6100 FORMAT('0',I5,' levels = ...'/(15X,16I6))
+ 6110 FORMAT('  Using A and B from file aabb.nml'/)
+ 6150 FORMAT('...  Dxdp input file is empty.')
+ 6200 FORMAT(' Dxdp read',I6,' fields.')
+ 6300 FORMAT(' Dxdp is stripping label/character records...')
+ 6400 FORMAT('  Levtyp = ',A4,', lay = ',I5,', coord=',1X,A4,
+     +       ', p.lid (pa)=',F10.3/
+     +       '  p.ref (pa)=',F10.3,', r (exponent)=',F10.3)
+
+      END 
+#     endif

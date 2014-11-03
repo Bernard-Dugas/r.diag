@@ -1,0 +1,274 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 200000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      unbinn  TSIN EXPAND INPUT OUTPUT [ -a VAL1 -b VAL2 ]
+*
+*
+*     AUTHOR  - B.Dugas, JUIN 08/1988.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/unbinn.ptn,v 4.7 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      UNBINN FAIT LE TRAVAIL INVERSE DE BINNING. LE PROGRAMME LIT LE 
+*      NOMBRE DE CYCLES ET LE NOMBRE TOTAL DE POINTS TEMPORELS DESIRES 
+*      DANS LE FICHIER EXPAND. 
+*
+*
+*     PARAMETRE...
+*      CY   (a) = LE NOMBRE DE CYCLE TEMPORELS DANS LES DEUX FICHIERS
+*      LONG (b) = LE NOMBRE DE POINTS (TEMPORELS) DANS LES ENREGISTREMENTS DU
+*                 FICHIER EXPAND
+*
+*      READ(5,5000) CY,LONG
+*5000  FORMAT(10X,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* UNBINN.    20 1024
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 TSIN NOT IN TIME SERIES FORMAT
+*      2 PROBLEMS WITH PARAMETRES
+*      3 PREBLEMS READING TSIN
+*      4 DATA HAS MORE THAN ONE SIZE OR NOT IN TS FORMAT
+*      5 PREMATURE END ON FILE ON TSIN
+*      6 PREMATURE END ON FILE ON INPUT
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM UNBINN 
+*    1               (TSIN,        EXPAND,       INPUT,       OUTPUT, 
+*    2          TAPE1=TSIN,  TAPE2=EXPAND, TAPE5=INPUT, TAPE6=OUTPUT) 
+
+*     $Log: unbinn.ptn,v $
+*     Revision 4.7  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.5  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.2  1998/10/20 17:53:29  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.1  1998/05/21  20:20:56  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:22:17  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:21  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/04  09:13:58  armnrbd
+*     Initial revision
+*      
+***    JUIN 08/88 - B.DUGAS. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+ 
+      LOGICAL     OK 
+      CHARACTER   LIGNE*80
+      CHARACTER*4 KIND,NAME
+      REAL        PB,OCY,PO,VA
+      INTEGER     CY,BC,LONG,NIVEAU,MOTS,
+     +            IER,NF,NB,N,I,J,NSERIE,IO,
+     +            JBUF(HEAD),JPAK,LEN,NWDS,MAXW
+
+      INTEGER,    ALLOCATABLE :: IBUF(:),OU(:)
+      REAL,       ALLOCATABLE :: EXPAND(:),TSIN(:)
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ
+      EXTERNAL    JCLPNT,GETBUF2,GETLIGN,XIT,BURNF,
+     +            GETFLD2,PUTFLD2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/unbinn.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2, 5,6 )
+ 
+***    LIRE LE PREMIER TAMPON D'INFORMATION DE TSIN. 
+ 
+      MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW == 0) GOTO 901
+      IF (JBUF(6) /= 1) CALL                       XIT(' Unbinn ',-1 ) 
+ 
+***    SAUVER CERTAINES VALEURS A DES FINS DE COMPARAISONS. 
+ 
+      WRITE(KIND,4) JBUF(1) 
+      WRITE(NAME,4) JBUF(3) 
+
+      NIVEAU  = JBUF(4) 
+      MOTS    = JBUF(5) 
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          CY   = 0
+          LONG = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 0005, ERR=902,END=902,IOSTAT=IO ) CY
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 0005, ERR=902,END=902,IOSTAT=IO ) LONG
+
+      ELSE
+
+***        LIRE LA CARTE DE CONTROLE. 
+ 
+          CALL GETLIGN( 5, LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5000,ERR=902,END=902,IOSTAT=IO) CY,LONG
+              CALL BURNF
+          END IF
+
+      END IF
+ 
+      BC   = MOTS/CY
+      MAXW = MAX( MAXW, LONG )
+      LEN  = MAXW + HEAD + 4
+
+      IF (    CY   .LE. 0
+     +   .OR. BC   .LE. 0 
+     +   .OR. CY*BC.GT.LONG ) 
+     +    CALL                                     XIT(' Unbinn ',-2 ) 
+
+      WRITE(6,6100)  CY, BC 
+      CALL PRTLAB2(' Unbinn on : ', JBUF )
+ 
+***    NB EST LE NOMBRE DE BOITES. 
+***    PB EST LE NOMBRE DE POINTS DE EXPAND PAR BOITES. 
+ 
+      NB  = CY*BC 
+      PB  = FLOAT(LONG)/FLOAT(NB) 
+      OCY = 1.0/FLOAT(CY) 
+ 
+***    ALLOUER L'ESPACE DE TRAVAIL.
+
+      ALLOCATE( IBUF(LEN),EXPAND(LONG),TSIN(MOTS),OU(NB+1) )
+
+***    DETERMINER QUELS POINTS VONT DANS QUELLE BOITE. 
+ 
+      PO    = 0.0 
+      OU(1) = 0 
+      DO  N=2,NB 
+          PO    = PO + PB 
+          OU(N) = INT(PO) 
+      END DO
+      OU(NB+1) = LONG 
+ 
+*--------------------------------------------------------------------- 
+***    ALLER CHERCHER LA PROCHAINE SERIE. 
+ 
+      NSERIE = 0 
+  100 CALL GETFLD2( 1, TSIN, KIND,-1,NAME,NIVEAU, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6200) NSERIE, LONG 
+              IF (NSERIE.EQ.0) CALL                XIT(' Unbinn ',-3 ) 
+              CALL                                 XIT(' Unbinn ', 0 ) 
+          END IF 
+ 
+          IF (IBUF(5).NE.MOTS .OR. IBUF(6).NE.1)               THEN 
+              WRITE(6,6004) NSERIE+1 ; CALL PRTLAB( IBUF )
+              CALL                                 XIT(' Unbinn ',-4 ) 
+          END IF 
+ 
+***        ETENDRE LA VALEUR D'UN POINT DE TSIN A LA BOITE/REGION 
+***        CORRESPONDANTE DE EXPAND. 
+ 
+          DO  I=1,NB 
+              VA = TSIN(I) 
+              DO  J=OU(I)+1,OU(I+1) 
+                  EXPAND(J) = VA 
+              END DO
+          END DO
+ 
+***        SAUVER EXPAND. 
+ 
+          IBUF(5) = LONG 
+ 
+          CALL PUTFLD2( 2, EXPAND, IBUF,MAXW ) 
+ 
+      NSERIE = NSERIE+1 
+      GOTO 100 
+ 
+***    FIN PREMATUREE DU FICHIER TSIN. 
+ 
+  901 CALL                                         XIT(' Unbinn ',-5 ) 
+ 
+***    E.O.F. SUR INPUT ($IN). 
+ 
+  902 IF (IO /= 0) WRITE(6,6006) IO
+      CALL                                         XIT(' Unbinn ',-6 ) 
+*--------------------------------------------------------------------- 
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+
+ 5000 FORMAT(10X,2I5) 
+
+ 6004 FORMAT('0Record no,=',I5,', label = ')
+ 6006 FORMAT(' Unbinn reports I/O error number ',I3,' on unit 5.')
+
+ 6100 FORMAT('0Input time series consist of ',I5, 
+     +       ' cycles, each made of ',I4,' boxes. ') 
+ 6200 FORMAT('0Unbinn produced ',I5,' series, each of length ',I5,'.') 
+
+      END 
+#     endif

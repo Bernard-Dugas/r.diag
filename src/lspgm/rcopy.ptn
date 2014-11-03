@@ -1,0 +1,340 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      rcopy  XIN XOUT INPUT OUTPUT [ -a VAL1 -b VAL2 -name VAL3 ]
+*
+*
+*     AUTHOR - G.J.Boer (following XLIN), January 1993.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/rcopy.ptn,v 4.12 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      COPY LOGICAL RECORDS FROM RECORD NUMBERS N1 TO N2 INCLUSIVE
+*
+*      Note: A logical record is here understood to be the storage
+*            unit holding a single variable at a single level.
+*            As such, a physical record can include several
+*            such logical records. Multi-level zonal
+*            records are examples of this.
+*
+*
+*     INPUT FILE...
+*      XIN  = INPUT FILE (REAL OR COMPLEX)
+*
+*     OUTPUT FILE...
+*      XOUT = RECORDS FROM RECORD NUMBERS N1 TO N2
+*
+*
+*     PARAMETERS...
+*
+*      N1     (a)    = FIRST LOGICAL RECORD TO BE COPIED
+*      N2     (b)    = LAST LOGICAL RECORD TO BE COPIED ( N1 <= N2 )
+*      NEWNAM (name) = NEW NAME FOR OUTPUT LABEL. BLANK KEEPS OLD NAME
+*               
+*      Note: N1 AND N2 BOTH NEED BE GREATER THAN ZERO SINCE
+*            THE ORDINAL OF THE FIRST RECORD IN XIN IS 1.
+*
+*      READ(5,5010) N1,N2,NEWNAM
+*5010  FORMAT(10X,2I10,1X,A4)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* RCOPY           10        23 NAME
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY LEVELS IN ZONAL ARRAY
+*       2 ERROR READING/CHECKING INPUT PARAMETERS
+*       3 PREMATURE EOF ON XIN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM rcopy
+*     PROGRAM RCOPY (XIN,       XOUT,       INPUT,       OUTPUT,
+*    1         TAPE1=XIN, TAPE2=XOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ---------------------------------------------------------
+
+*     $Log: rcopy.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.10  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.9  2005/05/06 18:35:35  dugas
+*     Initialiser LEV(1) pour le cas ou NLEV=1.
+*
+*     Revision 4.8  2005/04/14 17:34:30  dugas
+*     Fonctionner un niveau a la fois.
+*
+*     Revision 4.7  2003/08/21 19:37:47  dugas
+*     Modifier la documentation automatique
+*
+*     Revision 4.6  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.5  2002/09/17 17:45:19  dugas
+*     Permettre des champs de tailles differentes (RECABT=NON).
+*
+*     Revision 4.4  2001/04/10 16:08:45  armnrbd
+*     Modifier la documentation automatique.
+*
+*     Revision 4.3  1999/05/10 19:38:52  armnrbd
+*     Corriger les appels a XIT.
+*
+*     Revision 4.2  1998/09/10 20:47:06  armnrbd
+*     Corriger la documentation.
+*
+*     Revision 4.1  1998/09/10  18:54:50  armnrbd
+*     Corriger les declarations et la lecture de NEWNAM.
+*
+*     Revision 4.0  1998/09/10  18:34:40  armnrbd
+*     Version initiale.
+*
+*     JAN / 93  - G.J.B.
+
+*-----------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      REAL        ZERO
+      LOGICAL     OK,RPBLOC
+      CHARACTER*4 NEWNAM,TYPE
+      CHARACTER   VALEUR*10,LIGNE*256
+      INTEGER     HEAD,LBUF(taille_entete),NLEV,NLEVG,
+     +            LEV(MAXLEV),NF,IO,LEN,NWDS,JPAK,MAXW,NR,
+     +            L,LR,WHERE,IER,N1,N2,NRCOPY
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: G
+
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,GETSET2,
+     +            XIT,CMPLBL,PUTFLD2,RPBLOC,GETFLD2,PRECEDE
+
+      LOGICAL     SETIO64
+      INTEGER     GETSIZ
+      EXTERNAL    GETSIZ,SETIO64
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/rcopy.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      NR     = 0
+      NRCOPY = 0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          N1     =  0
+          N2     =  0
+          NEWNAM = ' '
+
+          OK = RPBLOC('A',VALEUR)
+          IF (OK) READ( VALEUR, 10,ERR=900,IOSTAT=IO ) N1
+
+          OK = RPBLOC('B',VALEUR)
+          IF (OK) READ( VALEUR, 10,ERR=900,IOSTAT=IO ) N2
+
+          OK = RPBLOC('NAME',VALEUR)
+          IF (OK) NEWNAM = VALEUR(1:4)
+
+      ELSE
+
+***        READ A,B AND NEWNAM FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 903
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=902,IOSTAT=IO )
+     +                     N1,N2, NEWNAM
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (NEWNAM.EQ.' ')                                       THEN
+          WRITE(6,6007) N1,N2
+      ELSE
+          WRITE(6,6009) N1,N2,NEWNAM
+      END IF
+ 
+      IF (N1.GT.N2) CALL                           XIT('  Rcopy ',-2 )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ( 1, LBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) GOTO 903
+
+      ALLOCATE( IBUF(2*LEN),G(NWDS) )
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CONTINUE
+
+      IF (NR.LT.N2)                                            THEN
+
+          CALL GETFLD2( 1, G, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          LEV(1) = IBUF(4)
+          NLEVG  = 1
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,G )
+                  GOTO 050
+              END IF
+
+              IF (NRCOPY.LT.(N2-N1)) 
+     +        CALL PRTLAB( IBUF )
+              WRITE(6,6010) NR,NRCOPY
+
+              IF (NR    .EQ.0   .OR.
+     +            NRCOPY.EQ.0 ) CALL               XIT('  Rcopy ',-3 )
+              CALL                                 XIT('  Rcopy ', 0 ) 
+
+          END IF
+
+***        MAKE SURE TYPE AND NWDS ARE STILL CORRECTLY DEFINED.
+
+          WRITE(TYPE,4) IBUF(1)
+          NWDS = IBUF(5)*IBUF(6)
+          IF (TYPE.EQ.'ZONL')
+     +    NWDS = IBUF(5)
+
+          IF (TYPE.EQ.'ZONL' .AND. IBUF(6).NE.1)               THEN
+              CALL PRECEDE( 1,1 )
+              IF (IBUF(6).GT.MAXLEV) CALL          XIT('  Rcopy ',-1 ) 
+              CALL GETSET2( 1, G,LEV,NLEVG, IBUF,MAXW,OK )
+          END IF
+
+***        BY-PASS (I.E. STRIP) LABEL RECORDS.
+
+          WRITE(TYPE,4) IBUF(1) 
+
+          IF (TYPE.NE.'LABL')                                  THEN
+
+              DO  LR=NR+1,NR+NLEVG
+
+                  IF (LR.GE.N1 .AND. LR.LE.N2)                 THEN
+
+***                    SAVE G ON FILE XOUT AND CHANGE THE IBUF NAME
+***                    IF NEWNAM IS NON-BLANK. 
+
+                      L       = LR-NR
+                      WHERE   = (L-1)*NWDS+1
+                      IBUF(4) = LEV(L)
+
+                      IF (NEWNAM .NE. ' '  ) READ(NEWNAM,4) IBUF(3)
+                      IF (TYPE   .EQ.'ZONL') IBUF(6) = 1
+
+                      CALL PUTFLD2( 2, G(WHERE), IBUF,MAXW )
+
+                      IF (NRCOPY.EQ.   0   ) WRITE(6,6023) 
+                      IF (NRCOPY.EQ.   0   .OR.
+     +                    NRCOPY.EQ.(N2-N1)) 
+     +                    CALL PRTLAB( IBUF )
+
+                      NRCOPY = NRCOPY+1
+
+                  END IF
+
+              END DO
+
+          ELSE
+
+***            STRIP LABEL RECORDS.
+
+              GOTO 100
+
+          END IF
+
+          NR = NR+NLEVG
+          GOTO 100 
+
+      ELSE
+
+***        FINISHED READING XIN.
+
+          IF (NRCOPY.LT.(N2-N1)) 
+     +    CALL PRTLAB( IBUF )
+          WRITE(6,6010) NR,NRCOPY
+
+          IF (NR    .EQ.0   .OR.
+     +        NRCOPY.EQ.0 ) CALL                   XIT('  Rcopy ',-3 )
+          CALL                                     XIT('  Rcopy ', 0 ) 
+
+
+      END IF 
+
+***    E.O.F. ON UNIT #5.
+ 
+  900 IF (IO.NE.0) WRITE(6,6100) IO
+  902 CALL                                         XIT('  Rcopy ',-2 )
+
+***   E.O.F. ON UNIT #1.
+
+  903 CALL                                         XIT('  Rcopy ',-3 )
+*---------------------------------------------------------------------
+
+    4 FORMAT(A4)
+   10 FORMAT(BN,I10)
+
+ 5010 FORMAT(10X,2I10,1X,A4)
+
+ 6007 FORMAT('0 Rcopy N1,N2 =',2I10)
+ 6009 FORMAT('0 Rcopy N1,N2 =',2I10,', NEWNAM = ',A4)
+ 6010 FORMAT('0 Rcopy read',I6,' and copied',I6,' records.')
+ 6020 FORMAT(' First record read... '/1X,A4,I10,2X,A4,I10,4I6)
+ 6023 FORMAT(' Copied...')
+ 6100 FORMAT(' Rcopy reports I/O error number ',I3,' on unit 5.')
+
+      END 
+#     endif

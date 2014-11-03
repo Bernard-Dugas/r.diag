@@ -1,0 +1,257 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spectr  FCTS SPECTRA OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, JUILLET 18/86.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spectr.ptn,v 4.8 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CE PROGRAMME CALCULE LA MOYENNE (SUR LE GLOBE) DE LA 
+*      PUISSANCE DE SERIES TEMPORELLES (A DIFFERENTS POINTS 
+*      GEOGRAPHIQUES) EXPRIMEES EN COEFFICIENTS DE FOURIER. 
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 FCTS DOES NOT CONTAIN FOURIER ANALYSIS OF TS DATA
+*       2 ORIGINAL TS DATA NOT FROM ZONL OR GRID TYPE
+*       3 FIRST RECORD TOO LARGE
+*       4 UNABLE TO READ FIRST DATA RECORD
+*       5 PREMATURE EOF ON FILE FCTS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM SPECTR 
+*    1               (FCTS,SPECTRA,TAPE1=FCTS,TAPE2=SPECTRA, 
+*    2                OUTPUT,TAPE6=OUTPUT) 
+ 
+*     $Log: spectr.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2013/10/17 11:22:04  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/05/23 21:27:20  dugas
+*     Augmenter la taille du macro grille_maximale a 300K mots.
+*
+*     Revision 4.3  1998/07/03 02:26:39  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/05/21  20:20:54  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1996/01/26  21:38:47  armnrbd
+*     Modifier le calcul de la position des series temporelles.
+*
+*     Revision 4.0  1994/11/17  14:21:47  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:01  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/03/05  14:37:55  armnrbd
+*     Initial revision
+*      
+***    JUILLET 18/86 - B.DUGAS. 
+ 
+*---------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: HEAD = taille_entete
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+ 
+      LOGICAL     OK,B1,B2
+      CHARACTER*4 TYPE,NAME
+      REAL*8      SL(MAXJ),WL(MAXJ),CL(MAXJ),RADL(MAXJ),
+     +            WOSSL(MAXJ),WEIGHT,TOTW,OVTOTW,VAL
+      INTEGER     I,NF,NSER,IB,ILG,ILG1,ILAT,IER,
+     +            ILATH,LEN,IB2,LAT,LON,NIV,IHEM,MAXW,
+     +            LENI,NWDS,JBUF(HEAD),JPAK
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: SP
+      REAL,       DIMENSION(:), ALLOCATABLE :: TS
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETSIZ
+      EXTERNAL    JCLPNT,GETBUF2,XIT,GAUSSG,TRIGL2,
+     +            GETFLD2,PUTFLD2,GETSIZ
+
+      DATA        B1,B2  / .FALSE., .FALSE. / 
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spectr.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF   = 3 
+      CALL JCLPNT( NF, 1,2, 6 )
+
+      TOTW = 0.0 
+      NSER = 0 
+ 
+***    ALLER LIRE LE PREMIER TAMPON D'INFORMATION SUR UNITE 1. 
+ 
+      MAXW = GETSIZ( 1, JBUF,LENI,NWDS,JPAK )
+      IF (MAXW.EQ.0) GOTO 900
+
+      WRITE (TYPE,0004) JBUF(1) 
+      WRITE (NAME,0004) JBUF(3) 
+
+      ALLOCATE( IBUF(LENI),TS(MAXW),SP(MAXW) )
+
+***    EST-CE QU'ON A LE BON TYPE D'ENREGISTREMENTS ? 
+ 
+      IF (JBUF(6).NE.  1   .OR. 
+     1    JBUF(7).LT.10000 .OR. 
+     2    TYPE   .NE.'FOUR')                                   THEN 
+          WRITE(6,6000) 
+          CALL                                     XIT(' Spectr ',-1 ) 
+      END IF 
+ 
+      NIV   =  JBUF(4)
+
+***    QUEL EST LE TYPE DU FICHIER DE SORTIES. 
+
+      IB    =  JBUF(7) 
+      ILG1  =  IB/10000 
+      ILAT  = (IB-ILG1*10000)/10
+      IHEM  =  MOD( IB,10 )
+ 
+      IF (ILAT.GT.1)                                           THEN 
+          TYPE = 'GRID' 
+      ELSE IF (ILAT.EQ.1)                                      THEN 
+          TYPE = 'ZONL' 
+      ELSE 
+          CALL                                     XIT(' Spectr ',-2 ) 
+      END IF 
+ 
+      IF (IHEM.EQ.0) ILATH = ILAT/2 
+      IF (IHEM.NE.0) ILATH = ILAT
+
+      ILG  = ILG1-1 
+      LEN  = JBUF(5) 
+ 
+      IF (LEN.GT.MAXW .OR. ILAT.GT.MAXJ) CALL      XIT(' Spectr ',-3 ) 
+ 
+***    INITIALISONS L'ACCUMULATEUR SP. 
+ 
+      DO  I=1,LEN 
+          SP(I) = 0.0 
+      END DO
+ 
+***    CHAMPS DE L'INTEGRATION GAUSSIENNE DE SURFACE. 
+ 
+      CALL GAUSSG( ILATH, SL,WL,CL,RADL,WOSSL ) 
+      CALL TRIGL2( ILATH, SL,WL,CL,RADL,WOSSL, IHEM ) 
+*---------------------------------------------------------------------- 
+ 
+***    ALLONS CHERCHER UNE AUTRE SERIE. 
+ 
+  200 CALL GETFLD2( 1, TS, 'FOUR',-1,NAME,NIV, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+
+              IF (NSER.EQ.0) CALL                  XIT(' Spectr ',-4 ) 
+
+              READ (TYPE,0004) IBUF(1) 
+              CALL PRTLAB2(' Spectr on : ',IBUF )
+              WRITE(6,6010) NSER, TOTW 
+
+              OVTOTW = 1.0/TOTW 
+              DO  I=1,LEN 
+                  TS(I) = SP(I)*OVTOTW 
+              END DO
+
+              CALL PUTFLD2( 2, TS, IBUF,MAXW ) 
+              CALL                                 XIT(' Spectr ', 0 ) 
+
+          END IF 
+ 
+***        A QUEL POINT CETTE SERIE EST-T-ELLE VALABLE ? 
+ 
+          IB2     = IBUF(2) 
+          LAT     = (IB2-1)/ILG1+1
+          LON     = IB2-(LAT-1)*ILG1
+          WEIGHT  = WL(LAT)/FLOAT( 2*ILG )
+ 
+***        VERIFIER (UNE FOIS PAR LATITUDE SEULEMENT) 
+***        SI ON A LATITUDE 0 OU 360 (OU LES DEUX). 
+ 
+          IF (LON.EQ.1 .OR. LON.EQ.ILG1)                       THEN 
+              IF (LON.EQ.1)    B1 = .TRUE. 
+              IF (LON.EQ.ILG1) B2 = .TRUE. 
+              IF (B1 .AND. B2)                                 THEN 
+                  B1 = .FALSE. 
+                  B2 = .FALSE. 
+                  GOTO 200 
+              END IF 
+          END IF 
+ 
+***        EFFECTUER L'INTEGRATION DU SPECTRE DE TSIN ET 
+***        TENIR COMPTE DES NOMBRES D'ONDES NEGATIFS. 
+ 
+          SP(1)   = SP(1)+0.5*TS(1)*TS(1)*WEIGHT
+          DO 300 I=2,LEN 
+              VAL   = (DBLE( TS(2*I  ) )*TS(2*I  ) 
+     +              +  DBLE( TS(2*I-1) )*TS(2*I-1)) 
+              SP(I) = SP(I)+VAL*WEIGHT 
+  300     CONTINUE 
+ 
+      TOTW = TOTW+WEIGHT 
+      NSER = NSER+1 
+ 
+      GOTO 200 
+ 
+***    FIN PREMATUREE SUR UNITE 1. 
+ 
+  900 CALL                                         XIT(' Spectr ',-5 ) 
+*---------------------------------------------------------------------- 
+
+ 0004 FORMAT(A4) 
+
+ 6000 FORMAT('0Input file does not contain fourier coefficients', 
+     +       ' of time series.') 
+ 6010 FORMAT('0Processed ',I5,' series.'/ 
+     +       '0Total percentage of area covered by input file is ', 
+     +        E12.5) 
+
+      END 
+#     endif

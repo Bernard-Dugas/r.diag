@@ -1,0 +1,324 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      joinup  JOIN IN01 IN02 IN03 IN04 IN05 IN06 IN07 IN08 IN09 IN10 \ 
+*                   IN11 IN12 IN13 IN14 IN15 IN16 IN17 IN18 IN19 IN20 \ 
+*                   IN21 IN22 IN23 IN24 IN25 IN26 IN27 IN28 IN29 IN30 \ 
+*                   IN31 IN32 IN33 IN34 IN35 IN36 IN37 IN38 IN39 IN40 \ 
+*                   IN41 IN42 IN43 IN44 IN45 IN46 IN47 IN48 IN49 IN50 \ 
+*                   IN51 IN52 IN53 IN54 IN55 IN56 IN57 IN58 IN59 IN60 \ 
+*                   IN61 IN62 IN63 IN64 IN65 IN66 IN67 IN68 IN69 IN70 \ 
+*                   IN71 IN72 IN73 IN74 IN75 IN76 IN77 IN78 OUTPUT    \ 
+*                  -kind VAL1
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 30/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/joinup.ptn,v 4.13 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     PURPOSE - JOINS TOGETHER UP TO SEVENTY NINE FILES
+*
+*     NOTE    - 1) SEQUENCE CHECKING IS NOT PERFORMED.
+*               2) THERE NO LONGER IS A MAXIMUM RECORD LENGTH.
+*               3) MIXING OF PACKING TYPE IS NOT ALLOWED
+*
+*
+*     INPUT FILE(S)...
+*      IN01, ... ,IN78 = INPUT FILES TO BE JOINED
+*                        (UP TO 78 FILES CAN BE USED)
+*
+*     OUTPUT FILE...
+*      JOIN = FILE CONTAINING ALL OF THE ABOVE FILES JOINED.
+*
+*    [OPTIONAL] COMMAND-LINE ARGUMENT...
+*      KIND = DEFINE THE WRITING MODE FOR FILE JOIN. THE
+*             DEFAULT IS 'OVER' (FOR OVERWRITE). THE OTHER
+*             POSSIBILITY IS 'APPEND'.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 MORE THAN ONE PACKING TYPE
+*       2 NO INPUT FILES OR EMPTY INPUT FILES
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM joinup
+
+*     $Log: joinup.ptn,v $
+*     Revision 4.13  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.12  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.11  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.10  2006/09/19 19:06:01  dugas
+*     Ajouter l'option APPEND pour l'ecriture du fichier JOIN.
+*
+*     Revision 4.9  2003/12/10 22:32:47  dugas
+*     Corriger la documentation automatique
+*
+*     Revision 4.8  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.7  2001/10/11 11:22:55  armnrbd
+*     Possibilite de rassembler jusqu'a 78 fichiers d'un seul coup.
+*
+*     Revision 4.6  2001/03/16 21:53:14  armnrbd
+*     Augmenter le nombre des fichier d'entrees de 20 a 30.
+*
+*     Revision 4.5  1998/02/17 21:32:39  armnrbd
+*     Seconde iteration des modifs associes a la cle OPKTYP.
+*
+*     Revision 4.4  1997/12/10  18:14:59  armnrbd
+*     Avertir si la cle OPKTYP ne peut etre satisfaite.
+*
+*     Revision 4.3  1997/11/21  21:26:46  armnrbd
+*     Augmenter le nombres de fichiers de 10 a 20.
+*
+*     Revision 4.2  1997/10/10  19:05:36  armnrbd
+*     Activer le mode I/O a 64 bits.
+*     Utiliser HPALLOC/HPDEALLC pour la memoire dynamique.
+*
+*     Revision 4.1  1997/09/26  17:39:05  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:20:48  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:04:12  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:25  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  93/06/22  14:33:18  armnrbd
+*     Verifier la consistance entre les types de compactions
+*     utilises dans les differents fichiers a unir.
+*     
+*     Revision 1.3  92/11/09  15:52:38  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/24  21:26:58  armnrbd
+*     Ajouter le "endif" manquant a la fin de la section DOC.
+*     
+*     Revision 1.1  92/03/24  21:21:22  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:48  armnrbd
+*     Initial revision
+*     
+***    Historiques des modifications:
+
+***    17 mai 1991 - B.Dugas, RPN. (Version CY920/IRIX F77)
+***    NOV 30/81   - J.D.HENDERSON.
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+
+      CHARACTER    VALEUR*10
+      LOGICAL      OK,CHNGTYP
+      INTEGER      JBUF(taille_entete),HEAD, N,NF,
+     +             NR,NRECS, LEN,MAXW,NWDS,JPAK,ZERO, IER
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      INTEGER      GETSIZ
+      LOGICAL      SETIO64,RPBLOC
+      CHARACTER*4  GETYP,CURRENT,INTYP,OUTTYP,FILTYP
+      EXTERNAL     MACSPE,JCLPNT,GETSIZ,XIT,HPALLOC,
+     +             HPDEALLC,RECGET,RECPUT,GETYP,SETIO64,
+     +             GETFLD2,PUTFLD2,PUTYP,TYPSET,
+     +             RPBLOC,PUTPOSIT
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/joinup.ptn,v $'
+
+*--------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 80
+      CALL JCLPNT( NF, 10, 11,12,13,14,15,16,17,18,19,20,
+     +                     21,22,23,24,25,26,27,28,29,30,
+     +                     31,32,33,34,35,36,37,38,39,40,
+     +                     41,42,43,44,45,46,47,48,49,50,
+     +                     51,52,53,54,55,56,57,58,59,60,
+     +                     61,62,63,64,65,66,67,68,69,70,
+     +                     71,72,73,74,75,76,77,78,79,80,
+     +                     81,82,83,84,85,86,87,88, 6 )
+
+      IF (NF.LT.2)                                             THEN
+          WRITE(6,6012)
+          CALL                                     XIT(' Joinup ',-2 ) 
+      END IF
+
+      MAXW  =  0
+      NRECS =  0
+      NR    =  0
+      N     = 11
+
+      OUTTYP = GETYP( 0 )
+      FILTYP = GETYP( N )
+
+      INTYP  = FILTYP(1:2)
+
+      CALL TYPSET( CHNGTYP )
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) CALL LOW2UP( VALEUR,VALEUR )
+
+          IF (OK .AND. VALEUR.EQ.'APPEND')                     THEN
+              CALL PUTPOSIT( 10,VALEUR )
+              WRITE(6,6040)
+          END IF
+
+      END IF
+
+***    FIRST FILE TYPE CONSISTENCY CHECK.
+
+      IF (FILTYP.NE.OUTTYP .AND.
+     +    INTYP .NE.'SQ'   )                                   THEN
+          IF (CHNGTYP)                                         THEN
+              WRITE(6,6001)
+              CALL                                 XIT(' Joinup ',-1 )
+          ELSE
+              CALL PUTYP( 0, FILTYP )
+              OUTTYP = FILTYP
+          END IF
+      END IF
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    GET BASIC FILE STATISTICS.
+
+  100 MAXW = GETSIZ( N, JBUF,LEN,NWDS,JPAK )
+
+***    EMPTY FILE CHECK. GO TO NEXT FILE IF FILEV UNSUCCESSFUL.
+
+      IF (MAXW.EQ.0)                                           THEN
+          WRITE(6,6002)
+          GOTO 400
+      END IF
+
+***    ASK FOR NECESSARY MEMORY.
+
+      ALLOCATE( IBUF(LEN) )
+
+***    BOUCLE PRINCIPALE: LECTURE DE CHAQUE FICHIER D'ENTREE. 
+
+  200 CONTINUE
+
+***        SECOND FILE TYPE CONSISTENCY CHECK.
+
+          CURRENT = GETYP( N )
+
+          IF (CURRENT.NE.OUTTYP .AND.
+     +        INTYP .NE.'SQ'    )                              THEN
+              WRITE(6,6001) 
+              CALL                                 XIT(' Joinup ',-1 )
+          END IF
+      
+  300     CALL RECGET( N, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+***            VERIFIER POUR FIN DE FICHIER (OK=FAUX) OU
+***            BIEN POUR CHANGEMENT DE DIMENSION (MAXW=0).
+
+              IF (.NOT.OK)                                     THEN
+                  IF (MAXW.EQ.0)                               THEN
+                      DEALLOCATE( IBUF )
+                      GOTO 100
+                  END IF
+                  GOTO 400
+              END IF
+
+              CALL RECPUT( 10, IBUF )
+
+          NR=NR+1
+          GOTO 300
+
+  400     WRITE(6,6020) NR
+          NRECS = NRECS+NR
+
+***    PASSER AU PROCHAIN FICHIER ?
+
+      IF (N.LT.9+NF)                                           THEN
+          N  = N+1
+          NR = 0
+          IF (MAXW.EQ.0) GOTO 100
+          GOTO 200
+      END IF
+
+***    FIN DU TRAITEMENT.
+
+      WRITE(6,6030) NRECS
+      IF (NRECS.EQ.0) CALL                         XIT(' Joinup ',-2 )
+      CALL                                         XIT(' Joinup ', 0 )
+
+*--------------------------------------------------------------------
+ 6001 FORMAT(' More than one packing type ...'/)
+ 6002 FORMAT(' Empty input file found.')
+ 6012 FORMAT(' No input files specifies.')
+
+ 6020 FORMAT(1X,I6,' Records copied.')
+ 6030 FORMAT(1X,I6,' Total records in new file.')
+ 6040 FORMAT(' Working in append mode.')
+
+      END
+#     endif
+
+

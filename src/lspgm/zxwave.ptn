@@ -1,0 +1,399 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxwave  MEAN AMPS PHASES INPUT OUTPUT [ -lat VAL1 -m VAL2 ]
+*
+*
+*     DESCRIPTION...
+*      zxwave - MAKES CROSS-SECTION OF SPECTRAL AMPLITUDE AND PHASE
+*
+*
+*     AUTHOR  - S.Lambert, MAY 14/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxwave.ptn,v 4.11 2014/10/16 11:34:10 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES CROSS-SECTIONS OF THE AMPLITUDES AND PHASES FOR A
+*               ZONAL WAVENUMBER DECOMPOSITION OF FIELD X.
+*
+*     NOTES   - 1) CROSS-SECTIONS ARE PRODUCED FOR WAVENUMBERS UP TO A
+*                  GIVEN MAX. 
+*               2) INPUT IS SPHERICAL HARMONIC COEFFICIENTS FOR NLEV
+*                  PRESSURE LEVELS.
+*               3) MAXIMUM DIMENSIONS:  999 WAVES, 999 LATS AND 999 LEVS.
+*
+*
+*     INPUT FILE...
+*      MEAN   = GLOBAL SPECTRAL FIELDS
+*
+*     OUTPUT FILES...
+*      AMPS   = AMPLITUDE CROSS-SECTIONS
+*      PHASES = PHASE     CROSS-SECTIONS
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NLAT (lat) = NUMBER OF LATITUDES IN THE CROSS-SECTION
+*      M    (m)   = MAXIMUM ZONAL WAVENUMBER.
+*
+*      READ( 5,5000 ) NLAT,M
+*5000  FORMAT(10X,2I5)
+*     EXAMPLE...
+*
+*   ZXWAVE   52    6
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 REQUESTED NUMBER OF LATITUDES TOO LARGE
+*       2 REQUESTED NUMBER OF WAVES TOO LARGE
+*       3 PROBLEMS READING SPECTRAL FILE MEAN
+*       4 FILE MEAN IS NOT OF SPECTRAL TYPE
+*       5 NOT ENOUGH WAVES IN MEAN ARRAYS
+*       6 ABORT ERROR READING FILE MEAN
+*       7 ABORT ERROR READIND INPUT DIRECTIVES
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zxwave
+*     PROGRAM ZXWAVE (MEAN,       AMPS,       PHASES,       INPUT,
+*    1                                                      OUTPUT,
+*    2          TAPE1=MEAN, TAPE2=AMPS, TAPE3=PHASES, TAPE5=INPUT,
+*    3                                                TAPE6=OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: zxwave.ptn,v $
+*     Revision 4.11  2014/10/16 11:34:10  dugas
+*     Modifications commandees par la compilation avec GFORTRAN et IFORT.
+*
+*     Revision 4.10  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2013/10/17 11:36:13  bernard
+*     Utiliser les macros latitude_maximale et lm_maximal pour definir les parametres MAXJ et MAXLM, respectivement.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2000/03/20 21:56:25  armnrbd
+*     Modifier l'appel a SIGN dans ZXWWRK.
+*
+*     Revision 4.5  1999/04/08 22:00:55  armnrbd
+*     Remplacer MEMOIR par HPALLOC.
+*
+*     Revision 4.4  1998/10/20 17:45:08  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.3  1998/07/03  02:26:52  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/05/21  20:20:59  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1997/09/26  17:39:38  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:23:13  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:48  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  92/11/21  17:55:30  17:55:30  armnrbd (Bernard Dugas)
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/10/13  15:00:34  armnrbd
+*     Compaction par defaut passe a 32 bits/mots (-32).
+*     
+*     Revision 1.1  92/03/16  15:21:57  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/03/04  21:06:04  armnrbd
+*     Initial revision
+*     
+
+*     MAY 14/83 - R.LAPRISE.
+*     OCT   /78 - S. LAMBERT
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale , MAXLEV = 999
+      INTEGER, PARAMETER :: MAXLM = lm_maximal , HEAD = taille_entete
+
+      LOGICAL     OK
+      CHARACTER   LIGNE*80,KIND*4,AMP*4,PHSE*4
+      REAL*8      S(MAXJ),SIA(MAXJ),W(MAXJ),WOCS(MAXJ),RAD(MAXJ)
+      INTEGER     M,NFF, LEV(MAXLEV),MAXW,I,LSR(2,MAXLM+2),IO,
+     +            NLEV,NLAT,ILATH,JBUF(HEAD),JPAK,
+     +            LA,LR,LM,KTR,LRLMT,IER,NWDS,MAX1,
+     +            LEN,LEN1,LEN2
+
+      INTEGER,    ALLOCATABLE,DIMENSION(:) :: IBUF
+      REAL,       ALLOCATABLE,DIMENSION(:) :: F,AMPLI,PHASE
+      REAL(8),    ALLOCATABLE,DIMENSION(:) :: ALP,EPSI
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ2
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,GETSIZ2,XIT,DIMGT2,
+     +            HPALLOC,EPSCAL,GETSET2,GAUSSG,TRIGL,ZXWWRK,
+     +            SETLAB,PUTZX2,RPBLOC
+
+      DATA        AMP, PHSE / 'AMP', 'PHSE' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxwave.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF=5
+      CALL JCLPNT( NFF, 1,2,3, 5,6 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NLAT = 0
+          M    = 0
+
+          OK = RPBLOC('LAT',LIGNE)
+          IF (OK) READ( LIGNE, 0005, ERR=902,END=902,IOSTAT=IO ) NLAT
+
+          OK = RPBLOC('M',LIGNE)
+          IF (OK) READ( LIGNE, 0005, ERR=902,END=902,IOSTAT=IO ) M
+
+      ELSE
+
+***        READ A CARD CONTAINING ZONAL WAVENUMBER
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5000, ERR=902,END=902,IOSTAT=IO ) NLAT,M
+              CALL BURNF
+          END IF  
+
+      END IF
+
+      WRITE(6,6000) NLAT,M
+
+      MAX1  = M+1
+      ILATH = NLAT/2
+
+      IF (NLAT.LT.1 .OR. NLAT.GT.MAXJ) CALL        XIT(' Zxwave ',-1 )
+      IF (M   .LT.1 .OR. M   .GT.MAXLM) CALL       XIT(' Zxwave ',-2 )
+
+***    DETERMINE INPUT/OUTPUT RECORD SIZES.
+
+      MAXW = GETSIZ2( 1, JBUF,LEN1,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW.EQ.0 .OR. NLEV.LE.0
+     +              .OR. NLEV.GT.MAXLEV)                      THEN
+          WRITE(6,6003)  MAXW,NLEV,MAXLEV
+          CALL                                     XIT(' Zxwave ',-3 )
+      END IF
+
+      WRITE(KIND,4) JBUF(1)
+      IF (KIND.NE.'SPEC') CALL                     XIT(' Zxwave ',-4 )
+
+      LRLMT = JBUF(7)
+      CALL SETLAB( JBUF, 'ZONL',M-1,'AMP',1,NLAT,NLEV,0,-32 )
+      CALL LBLCHK( LEN2,NWDS,JPAK,JBUF)
+
+      LEN  = MAX( LEN1,LEN2 )
+      MAXW = LEN-HEAD
+
+***    DEFINE SPECTRAL ARRAY AND GAUSSIAN GRID PARAMETERS.
+
+      CALL GAUSSG( ILATH, S,W,SIA,RAD,WOCS )
+      CALL  TRIGL( ILATH, S,W,SIA,RAD,WOCS )
+
+      CALL DIMGT2( LSR,LA,LR,LM,KTR, LRLMT, 0,0 )
+
+      IF (MAX1.GT.LM) MAX1 = LM
+
+      IF (MAXLM.LT.LM-1) CALL                      XIT(' Zxwave ',-5 )
+
+***    ALLOCATE DYNAMIC MEMORY.
+
+      ALLOCATE( IBUF(LEN),F(2*LA*NLEV),ALP(LA+LM),EPSI(LA+LM),
+     +          AMPLI(NLAT*NLEV),PHASE(NLAT*NLEV), STAT=IER )
+
+***    CALCULATE EPSI.
+
+      CALL EPSCAL( EPSI,LSR,LM )
+
+***    READ F ONCE AND FOR ALL.
+
+      CALL GETSET2( 1, F, LEV,NLEV, IBUF,MAXW,OK )
+
+      CALL PRTLAB2(' Zxwave in :', IBUF )
+
+      IF (.NOT.OK)                                             THEN
+          CALL                                     XIT(' Zxwave ',-6 )
+      END IF
+
+***    SETUP OUTPUT LABEL.
+
+      CALL SETLAB( IBUF, 'ZONL',-1,' ',1,NLAT,NLEV,0,-32 )
+      IF (NLEV.EQ.1) IBUF(4) = LEV(1)
+
+      DO 700 M=1,MAX1
+
+***        DO CALCULATION ONE WAVE NUMBER AT A TIME
+
+          CALL ZXWWRK( F,AMPLI,PHASE, LA,NLAT,NLEV, 
+     +                 M,LM, ALP,EPSI,S,LSR )
+
+***        PUT THE RESULT ON FILES AMPS AND PHASES.
+
+          IBUF(2) = M-1
+
+          WRITE(AMP,4) IBUF(3)
+          CALL PUTZX2( 2, AMPLI,LEV, IBUF,MAXW )
+          IF (M.EQ.MAX1) CALL PRTLAB2(' Zxwave out:', IBUF )
+
+          WRITE(PHSE,4) IBUF(3)
+          CALL PUTZX2( 3, PHASE,LEV, IBUF,MAXW )
+          IF (M.EQ.MAX1) CALL PRTLAB2(' Zxwave out:', IBUF )
+
+  700 CONTINUE
+
+      CALL                                         XIT(' Zxwave ', 0 )
+
+***    E.O.F. ON INPUT.
+
+  902 CALL                                         XIT(' Zxwave ',-7 )
+*-----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+
+ 5000 FORMAT(10X,2I5)
+
+ 6000 FORMAT(' Zxwave using NLAT,M=',2I6)
+ 6003 FORMAT(' Problems reading MEAN/NLEV/MAXLEV',3I6)
+ 6006 FORMAT(' Error reading unit 1 at level no.',I6)
+
+      END
+      SUBROUTINE ZXWWRK (F,AMPLI,PHASE, LA,NLAT,NLEV, M,LM,
+     +                                  ALP,EPSI,S,LSR )
+
+      IMPLICIT    none
+
+      INTEGER     LA,NLAT,NLEV, M,LM, LSR(2,LM)
+      REAL        F(2,LA,NLEV),AMPLI(NLAT,NLEV),PHASE(NLAT,NLEV)
+      REAL*8      ALP(LA+LM),EPSI(LA+LM),S(NLAT),RAD2DEG,FR,FI
+
+      REAL*8      UN
+      INTEGER     J,K,L,LFI,LFF,NN,IP
+
+      EXTERNAL    ALPST2
+*-----------------------------------------------------------------------
+
+      UN = 1.0
+      RAD2DEG = 90./ATAN(1.0D0)
+
+      LFI = LSR(1,M)-1
+      LFF = LSR(1,M+1)-2
+      NN  = LFF-LFI
+      IP  = LSR(2,M)-1
+
+***    INITIALIZE AMPLI AND PHASE.
+
+      DO 100 L=1,NLEV
+
+          DO J=1,NLAT
+              AMPLI(J,L) = 0.
+              PHASE(J,L) = 0.
+          END DO
+
+  100 CONTINUE
+
+***    ACCUMULATE FR AND FI IN AMPLI AND PHASE. 
+***    CALCULATE ALP ONCE FOR ALL LEVELS.
+
+      DO 200 J=1,NLAT
+
+          CALL ALPST2( ALP,LSR,LM, S(J), EPSI )
+
+          DO L=1,NLEV
+
+              DO K=NN,1,-1
+                  AMPLI(J,L) = AMPLI(J,L)+F(1,K+LFI,L)*ALP(K+IP)
+                  PHASE(J,L) = PHASE(J,L)+F(2,K+LFI,L)*ALP(K+IP)
+              END DO
+
+          END DO
+
+  200 CONTINUE
+
+***    CALCULATE AMPLI AND PHASE FROM FR AND FI.
+
+      DO 300 L=1,NLEV
+
+          DO J=1,NLAT
+
+              FR = AMPLI(J,L)
+              FI = PHASE(J,L)
+
+                      AMPLI(J,L) = SQRT( FR*FR+FI*FI )
+              IF (M.NE.1)                                      THEN
+                      AMPLI(J,L) = AMPLI(J,L)+AMPLI(J,L)
+              ELSE
+                      AMPLI(J,L) = AMPLI(J,L)*SIGN( UN,FR )
+              END IF
+
+              IF ( (FI.EQ.0.) .AND. (FR.EQ.0.) )               THEN
+                      PHASE(J,L) = 0.
+              ELSE
+                      PHASE(J,L) = RAD2DEG*ATAN2(-FI,FR)
+                  IF (PHASE(J,L).LT.0.) PHASE(J,L) = PHASE(J,L)+360.
+                  IF (M         .EQ.1 ) PHASE(J,L) = 0.
+              END IF
+
+          END DO
+
+  300 CONTINUE
+
+*-----------------------------------------------------------------------
+      RETURN
+      END
+#     endif

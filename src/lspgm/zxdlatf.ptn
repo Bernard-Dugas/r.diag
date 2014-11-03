@@ -1,0 +1,379 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxdlatf  ZXIN ZXOUT OUTPUT
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV  7/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxdlatf.ptn,v 4.10 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     PURPOSE - READS 'G', 'A' OR 'B' GRID CROSS-SECTIONS FROM FILE ZXIN,
+*               COMPUTES THE LATITUDE DERIVATIVE OF THE CROSS SECTIONS
+*               USING FINITE DIFFERENCES AND PUTS THE RESULT ON FILE
+*               ZXOUT. TYPE 'G' (GAUSSIAN) IS ASSUMED FOR CCRN FILES.
+*
+*     NOTE    - MAX LATITUDES/LEVELS IS 999.
+*
+*
+*     INPUT FILE...
+*      ZXIN  = GLOBAL OR HEMISPHERIC CROSS-SECTIONS.
+*
+*     OUTPUT FILE...
+*      ZXOUT = LAT DERIVATIVES
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH LEVELS IN ZXIN
+*       2 FOUND UNSUPPORTED DATA TYPE IN ZXIN
+*       3 ABORT ERROR READING ZXIN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zxdlatf
+*     PROGRAM ZXDLATF (ZXIN,       ZXOUT,       OUTPUT,
+*    1           TAPE1=ZXIN, TAPE2=ZXOUT, TAPE6=OUTPUT)
+*     --------------------------------------------------------------
+
+*     $Log: zxdlatf.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2013/10/17 11:28:51  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2004/08/20 17:22:10  dugas
+*     Ajouter le support explicite des grilles A et B
+*
+*     Revision 4.5  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.4  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1998/10/20 18:26:48  armnrbd
+*     Corriger la documentation.
+*
+*     Revision 4.2  1998/07/03  02:26:50  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:36  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:23:03  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/31  19:06:59  armnrbd
+*     Ajouter le code pour mode hemispherique.
+*     
+*     Revision 3.0  93/10/13  13:57:40  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/19  15:15:32  15:15:32  armnrbd (Bernard Dugas)
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/03/16  14:04:36  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/03/04  21:05:53  armnrbd
+*     Initial revision
+*     
+
+*     MAY 14/83 - R.LAPRISE.
+*     NOV 07/80 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale , MAXLEV = 999
+
+      REAL        ZERO
+
+      CHARACTER   GRTYP
+      LOGICAL     OK,NEW
+      REAL*8      RAD(MAXJ),ALAT(MAXJ),RESLAT,DEG2RAD
+      REAL*8      SL(MAXJ),CL(MAXJ),WL(MAXJ),WOSSL(MAXJ)
+      INTEGER     LEV(MAXLEV),NFF, MAXW,NWDS,LEN,HEAD,JBUF(taille_entete),JPAK,
+     +            NR,NLEV,NLAT,NLATM,NLAT0,ILATH,
+     +            NHEM,NHEM0,J,L,BASEA,BASEB,IER,IG2
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: XA,XB
+
+      CHARACTER   KIND*4
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETHIGH
+      CHARACTER*4 GETYP,PKTYP,GETHIC
+      EXTERNAL    MACSPE,JCLPNT,XIT,GETYP,GETHIC,
+     +            GETZX2,GAUSSG,TRIGL2,PUTZX2,GETHIGH
+
+      DATA        GRTYP / 'G' /, IG2 / 0 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxdlatf.ptn,v $'
+
+*---------------------------------------------------------------------
+      DEG2RAD = ASIN( 1.D0 )/90.
+              
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+      NEW    = .TRUE.
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3
+      CALL JCLPNT( NFF, 1,2, 6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      NR = 0
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***    DYNAMICALLY REQUEST WORKING SPACE.
+
+  100 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW.EQ.0 .OR. NLEV.LE.0
+     +              .OR. NLEV.GT.MAXLEV)                      THEN
+          WRITE(6,6001)  NLEV,MAXLEV
+          CALL                                     XIT(' Zxdlatf',-1 )
+      END IF
+
+      WRITE(KIND,4) JBUF(1)
+
+      IF (KIND.NE.'ZONL')                                      THEN
+          WRITE(6,6002) KIND
+          CALL                                     XIT(' Zxdlatf',-2 )
+      END IF
+
+      NLAT0 = JBUF(5) 
+      NHEM0 = JBUF(7)
+      NWDS  = NLAT0*NLEV
+
+***    ASK FOR WORKING MEMORY.
+
+      ALLOCATE( IBUF(LEN),XA(NWDS),XB(NWDS) )
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+*    * GET ONE SET AT A TIME.
+
+  200 CALL GETZX2( 1, XA, NLAT,LEV,NLEV, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF,XA,XB )
+              NEW = .TRUE.
+              IF (MAXW.EQ.0) GOTO 100
+
+              WRITE(6,6110) NR
+              IF (NR.EQ.0) CALL                    XIT(' Zxdlatf',-3 )
+              CALL                                 XIT(' Zxdlatf', 0 )
+
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+          NHEM = IBUF(7)
+
+          IF (NEW            .OR. 
+     +        NHEM0.NE.NHEM  .OR.
+     +        NLAT0.NE.NLAT  )                                 THEN
+
+***            FIRST TIME ONLY...
+
+              NEW   = .FALSE.
+
+              NLAT0 = NLAT
+              NHEM0 = NHEM
+
+              NLATM = NLAT-1
+              ILATH = NLAT/2
+              IF (NHEM.NE.0) ILATH = NLAT
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+***                FOR SQI FILES, CHECK THE REAL DATA TYPE.
+                                    
+                  GRTYP = GETHIC( 'GRTYP',IBUF )
+                  IG2   = GETHIGH( 'IG2',IBUF )
+
+              END IF
+
+              IF (GRTYP.NE.'G')                                THEN
+ 
+                  IF (GRTYP.EQ.'A')                            THEN
+
+                      IF (NHEM.EQ.0)                           THEN
+                          RESLAT = 180./FLOAT( NLAT )
+                          IF (IG2.EQ.0)                        THEN
+                              ALAT(1) = -90.+0.5*RESLAT
+                          ELSE IF (IG2.EQ.1)                   THEN
+                              ALAT(1) = +90.-0.5*RESLAT
+                          END IF
+                      ELSE
+                          RESLAT =  90./FLOAT( NLAT )
+                          IF (NHEM.EQ.1)                       THEN
+                              IF (IG2.EQ.0)                    THEN
+                                  ALAT(1) =       0.5*RESLAT
+                              ELSE IF (IG2.EQ.1)               THEN
+                                  ALAT(1) = +90.0-0.5*RESLAT
+                              END IF
+                          ELSE IF (NHEM.EQ.2)                  THEN
+                              IF (IG2.EQ.0)                    THEN
+                                  ALAT(1) = -90.0+0.5*RESLAT
+                              ELSE IF (IG2.EQ.1)               THEN
+                                  ALAT(1) =      -0.5*RESLAT
+                              END IF
+                          END IF
+                      END IF
+
+                  ELSE IF (GRTYP.EQ.'B')                       THEN
+
+                      IF (NHEM.EQ.0)                           THEN
+                          RESLAT = 180./(FLOAT( NLAT )-1.)
+                          IF (IG2.EQ.0)                        THEN
+                              ALAT(1) = -90.
+                          ELSE IF (IG2.EQ.1)                   THEN
+                              ALAT(1) = +90.
+                          END IF
+                      ELSE
+                          RESLAT =  90./(FLOAT( NLAT )-1.)
+                          IF (NHEM.EQ.1)                       THEN
+                              IF (IG2.EQ.0)                    THEN
+                                  ALAT(1) =  00.0
+                              ELSE IF (IG2.EQ.1)               THEN
+                                  ALAT(1) = +90.0
+                              END IF
+                          ELSE IF (NHEM.EQ.2)                  THEN
+                              IF (IG2.EQ.0)                    THEN
+                                  ALAT(1) = -90.0
+                              ELSE IF (IG2.EQ.1)               THEN
+                                  ALAT(1) =  00.0
+                              END IF
+                          END IF
+                      END IF
+
+                  ELSE
+
+                      WRITE(6,6002) GRTYP
+                      CALL                         XIT(' Zxdlatf',-2 )
+
+                  END IF
+
+                  IF (IG2.EQ.1) RESLAT = -RESLAT
+
+                  RAD(1) = ALAT(1)*DEG2RAD
+
+                  DO  J=2,NLAT
+                      ALAT(J) = ALAT(J-1)+RESLAT
+                      RAD(J)  = ALAT(J)*DEG2RAD
+                  END DO
+
+              ELSE
+
+***                GAUSSG COMPUTES GAUSSIAN LATITUDES, COSINES, ETC.
+***                (NORTH HEMISPHERE, N TO S). TRIGL2 CONVERTS THESE
+***                VECTORS TO GLOBAL OR HEMISPHERIC (S TO N).
+
+                  CALL GAUSSG( ILATH,SL,WL,CL,RAD,WOSSL )
+                  CALL TRIGL2( ILATH,SL,WL,CL,RAD,WOSSL, NHEM )
+
+              END IF
+
+          END IF
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***        COMPUTE THE LATITUDE DERIVATIVE AND SAVE RESULT.
+***        FIRTS AND LAST LATITUDES USE ONE-SIDED DIFFERENCES. 
+***        ALL OTHER POINTS USE CENTERED DIFFERENCES.
+
+          DO  L=1,NLEV
+
+              BASEA = (L-1)*NLAT
+              BASEB = (L-1)*NLAT
+
+              XB(BASEB+1)     =       ( XA(BASEA+2)-XA(BASEA+1) )
+     +                        /            ( RAD(2)-RAD(1) )
+
+              DO  J=2,NLATM
+                  XB(BASEB+J) =     ( XA(BASEA+J+1)-XA(BASEA+J-1) )
+     +                        /          ( RAD(J+1)-RAD(J-1) )
+              END DO
+
+              XB(BASEB+NLAT)  =    ( XA(BASEA+NLAT)-XA(BASEA+NLATM) )
+     +                        /         ( RAD(NLAT)-RAD(NLATM) )
+
+          END DO
+
+          IF (IG2.EQ.1)                                        THEN
+
+***            ACCOUNT FOR REVERSED LATITUDES.
+
+              DO  L=1,NLAT*NLEV
+                  XB(L) = -XB(L)
+              END DO
+
+          END IF
+
+***        PUT THE RESULT ON FILE ZXOUT.
+
+                         IBUF(6) = NLEV
+          IF (NLEV.GT.1) IBUF(4) = 1
+
+          CALL PUTZX2( 2, XB,LEV, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+NLEV
+      GOTO 200
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6001 FORMAT(' Too many or not enough levels, NLEV/MAXLEV=',2I6)
+ 6002 FORMAT(' First file should be typed ZONL, found ',A)
+
+ 6110 FORMAT(1X,I6,' records read.')
+
+      END
+#     endif

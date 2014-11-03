@@ -1,0 +1,187 @@
+#! /bin/ksh
+#
+
+if [ $# = 0 ]; then
+  echo "
+  Genere un module \"stand-alone\" de r.diag pouvant
+  etre utilise en mode debug (dbx/pgdbg/xdb)
+
+  Appel...
+  Debug_Debug progname
+
+  ou progname est le nom du module r.diag a deboguer.
+
+  Le resultat est un fichier executable \${progname}.Abs
+
+  Voici la liste des arguments supplementaires disponibles a l'appel...
+
+  map     - Quel genre de liste des references externes (none/part/full) ?
+  o1      - Parametres supplementaires de compilation
+  o2      - Parametres supplementaires de compilation
+  echo    - Demande un listing detaille de l'execution
+  fixes   - Correctifs supplementaire sous forme de xxx.o
+  graph   - Utiliser ou pas les routines graphiques NCARlib
+  nodebug - OUI: Ne pas generer un code de type debug -g (def NON)
+  f90     - OUI: Chercher une source .f90 de preference (def NON)
+  rmnlib  - Librairie rmnlib (def rmn_014)
+  vgdlib  - Code vgrid_descriptors (def vgrid_310)
+  ddfun90 - Utiliser du code de precision etendue F90
+  "
+fi
+
+eval `cclargs   $0              "[Genere un module pouvant etre utilise en mode debug (dbx/xdb)]"\
+      -map      "part" ",,,,"   "[Specifier le type de liste des references externes (none/part/full)]"\
+      -o2+      "NON"  "OUI"    "[Parametres supplementaires de compilation]"\
+      -o1+      "NON"  "OUI"    "[Parametres supplementaires de compilation]"\
+      -echo     " "    "=-echo" "[Demande un listing detaille lors du travail]"\
+      -fixes    " "    ",,,,"   "[Correctifs supplementaire sous forme de fichiers pre-compiles]"\
+      -graph    "=-libgraph" "" "[Utiliser ou pas les routines graphiques NCARlib]"\
+      -nodebug  "NON"  "OUI"    "[Ne pas generer un code de type debug -g]"\
+      -f90+     "NON"  "OUI"    "[Chercher une source .f90 de preference ?]"\
+      -rmnlib   "rmnbeta_015" ",,,," "[Librairie rmnlib]"\
+      -vgdlib   "descrip"     ",,,," "[Code vgrid_descriptors"\
+      -ddfun90  "ddfun90"     ",,,," "[Code precision etendue F90]"\
+      ++ $*`
+#
+# Description...
+#    Cette script genere un module executable pouvant etre utilise en mode debug (dbx/xdb/???)
+#
+# Auteur...
+#    Bernard Dugas
+#
+# Revisions...
+#    001  - decembre 1999: version initiale (unifiee) construite a partir
+#                          des differentes scripts qui existaient auparavant.
+#    002  - janvier  2001: On utilise r.compile et les nouveaux fichiers std
+#    003  - decembre 2001: Ajouter la cle "-nodebug".
+#    004  - mars     2002: - Ajouter les cles "-rmnlib" et "-u"
+#                          - Completer l'option nodebug=non
+#    005  - mars     2007: - Ajouter les cles "-f90" et "-graph"
+#                          - Enlever la cle "-u"
+#    006  - octobre  2007: Ajouter la cle "-ip1" et passer a rmn_009.
+#    007  - ete      2009: passer a rmn_010
+#    008  - mars     2010: passer a rmn_011 (beta) et enlever libpriv.a
+#    009  - juin     2010: utiliser "-vgdlib" pour le code vgrid_descriptors
+#    010  - juillet  2010: Et hop ! Go pour rmn_011 ? Non, la rmn_012 !!
+#    011  - mai      2012: utiliser rmn_013 mais avec un moduledate.o different
+#    012  - novembre 2013: - Remplace ${ARMNLIB}/modeles/diag par ${DIAGNOSTIQUE}
+#                          - Enlever du code pour l'architecture hp720 (obsolete)
+#                          - ${libsrc} est maintenant dans le repertoire ${LIBPATH}
+#                          - Ajouter de la documentation qui est utilisee lors
+#                            des appels sans arguments
+#                          - Ajouter l'option d'utiliser du code de
+#                            precision etendue F90 (ddfun90)
+#    013  - fevrier  2014: - Utiliser rmn_014 mais encore avec un moduledate.o different
+#                          - Remplacer r.compile par s.compile et ${ARCH} par ${EC_ARCH}
+#
+CODEBETA=""
+#
+if [ "${o2}" = "OUI" ]; then
+  o2="-O 2"
+elif  [ "${o1}" = "OUI" ]; then
+  o2="-O 1"
+else
+  o2="-O 0"
+fi
+#
+if [ "${nodebug}" = "NON" ]; then
+  std='_g'
+  o2="${o2} -debug"
+else
+  STD=''
+fi
+#
+libsrc=lspgm_STD98.f.zip
+DIAGLIB=diag_sq98${std}
+#
+INCLUDE=${DIAGNOSTIQUE}/include/${EC_ARCH}
+FIXPATH=${DIAGNOSTIQUE}/lib/${EC_ARCH}
+LIBPATH=${DIAGNOSTIQUE}/lib/${EC_ARCH}
+LIBSRC=${LIBPATH}/${libsrc}
+#
+fixes="${fixes} ${FIXPATH}/*.o ${LIBPATH}/rdiag_version.o"
+LAPACK=lapack
+BLAS=blas
+DDFUN90=${ddfun90}
+#
+export USRLIBS XITVAL
+if [ "${HOSTTYPE}" = "IRIX64" ]; then
+   BLAS=
+fi
+#
+LANGUE=${CMCLNG:-english}
+#
+progname=$1
+if [ "${f90}" = "OUI" ]; then
+    main_source=${progname}.f90
+    other_source=${progname}.f
+else
+    main_source=${progname}.f
+    other_source=${progname}.f90
+fi
+#
+if [ -f "${main_source}" ]; then
+    reponse_LOCAL=non
+    while [ "${reponse_LOCAL}" != "oui" ]
+      do
+      if [ ${LANGUE} = english  ]; then echo "Use local ${main_source} ? (y/n) \c" ; fi
+      if [ ${LANGUE} = francais ]; then echo "Utiliser le ${main_source} local ? (o/n) \c" ; fi
+      read reponse_LOCAL
+      if [ ${reponse_LOCAL} = o -o ${reponse_LOCAL} = O -o\
+          ${reponse_LOCAL} = y -o ${reponse_LOCAL} = Y ]; then
+          reponse_LOCAL=oui
+      elif [ ${reponse_LOCAL} = n -o ${reponse_LOCAL} = N ]; then 
+          reponse_LOCAL=oui
+          unzip -o ${LIBSRC} ${main_source}
+      fi
+    done
+else
+    unzip ${LIBSRC} ${main_source}
+fi
+#
+if [ ! \( -f ${main_source} -o -f ${other_source} \) ]; then
+    echo "Impossible de trouver un fichier source FORTRAN pour ${progname}"
+    exit 99
+else
+    if [ -f ${other_source} -a ! -f ${main_source} ]; then
+        reponse_LOCAL=non
+        while [ "${reponse_LOCAL}" != "oui" ]
+          do
+          if [ ${LANGUE} = english  ]; then echo "Use local ${other_source} ? (y/n) \c" ; fi
+          if [ ${LANGUE} = francais ]; then echo "Utiliser le ${other_source} local ? (o/n) \c" ; fi
+          read reponse_LOCAL
+          if [ ${reponse_LOCAL} = o -o ${reponse_LOCAL} = O -o\
+              ${reponse_LOCAL} = y -o ${reponse_LOCAL} = Y ]; then
+              reponse_LOCAL=oui
+              main_source=${other_source}
+          elif [ ${reponse_LOCAL} = n -o ${reponse_LOCAL} = N ]; then 
+              echo "Impossible de trouver un fichier source FORTRAN pour ${progname}"
+              exit 99
+          fi
+        done
+    fi
+fi
+#
+ext=`echo ${main_source} | cut -d. -f2` ; source=${progname}_$$.${ext}
+#
+cat > ${source} <<EOF
+        program bidon
+        call ${progname}
+        stop
+        end
+EOF
+cat ${main_source} >> ${source} 2> /dev/null
+s.compile -o ${progname}.Abs -libpath ${LIBPATH} \
+          -libappl ${DIAGLIB} ${vgdlib} ${FIXES} -librmn ${rmnlib} \
+          ${graph} ${o2} -libsys "${DDFUN90} ${LAPACK} ${BLAS}" \
+          -includes ${INCLUDE} -obj "${fixes}" \
+          -src ${source} ${CODEBETA}
+#
+if [ $? != 0 ]; then
+    echo "Impossible de creer ${progname}.Abs ..."
+    exit 99
+fi
+#
+echo ' '
+echo ${progname}.Abs cree...
+exit 0

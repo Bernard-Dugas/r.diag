@@ -1,0 +1,984 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      tteste  XBAR VX YBAR VY MDIF TVALUE KVALUE DVALUE MASK \ 
+*      INPUT OUTPUT [ -a VAL1 -lx VAL2 -ly VAL3 -kind VAL4 [VAL5] [VAL6] ] 
+*
+*
+*     DESCRIPTION...
+*      tteste  - CONDUCT AN "EXACT" DIFFERENCE OF MEANS TEST.
+*
+*
+*     AUTHORS - F.Zwiers, JAN 25/85,
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/tteste.ptn,v 4.20 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     PURPOSE - CONDUCT A DIFFERENCE OF MEANS TEST. THE TEST WHICH IS CONDUCTED
+*               IS THE 'EXACT T-TEST' WHICH ASSUMES EQUALITY OF VARIANCES. UPON
+*               RETURN, THE PROGRAM REPORTS THE COMPUTED T-TEST VALUES IN TVALUE
+*               AS WELL AS RETURNING THE K-VALUE AND D-VALUE WHICH ARE RESPECTI-
+*               VELY THE TRANSFORMED SIGNIFICANCE LEVELS AND THE ACCEPTANCE
+*               /REJECTION FLAG.
+*
+*     NOTE - 1) TESTS ARE NOT PERFORMED WHEN THE "POOLED VARIANCE" IS
+*               APPROXIMATELY EQUAL TO THE NOISE INDUCED BY THE PACKING
+*               ALGORITHM.
+*            2) INTERPRETATION OF VX AND VY FILES IS CONTROLED BY INPUT
+*               PARAMETER IVAR.
+*            3) MASK FILE NEED NOT BE SPECIFIED IN THE PROGRAM CALLING
+*               SEQUENCE.(SEE OUTPUT FILES SECTION BELOW).
+*
+*
+*     INPUT FILES...
+*      XBAR   = FIELDS OF MEANS OF THE 'X-CONTROL' VARIABLE.
+*     (IF (IVAR.EQ.0) THEN
+*     (VX     = FIELDS OF THE VARIANCE OF X.
+*     (         SUM(X(I)-XBAR)**2/NX, I=1,...,NX.
+*     (OTHERWISE,
+*     (VX     = FIELDS OF THE STANDARD DEVIATION OF X.
+*     (         SQRT(SUM(X(I)-XBAR)**2/(NX-1)), I=1,...,NX.
+*      YBAR   = SAME AS XBAR EXCEPT FOR THE 'Y-EXPERIMENT' VARIABLE.
+*      VY     = SAME AS VX   EXCEPT FOR THE 'Y-EXPERIMENT' VARIABLE.
+*
+*     OUTPUT FILES...
+*      MDIF   = FIELDS OF MEAN DIFFERENCES COMPUTED AS D=(YBAR-XBAR).
+*      TVALUE = FIELDS OF 'T-VALUES' GIVEN BY
+*
+*                     T    = (YBAR-XBAR)/SDIF
+*
+*                     SDIF = SQRT( SP*(1/NX+1/NY) )
+*
+*                     SP   = THE 'POOLED' ESTIMATE OF VARIANCE
+*
+*                          = (NX*VX + NY*VY)/(NX+NY-2).
+*
+*               WHERE, VX AND VY ARE THE VARIANCES OF X AND Y
+*               VARIABLES RESPECTIVELY.
+*      KVALUE = FIELDS OF 'K-VALUES' OF TRANSFORMED SIGNIFICANCE LEVELS
+*               COMPUTED AS K IN:
+*
+*                     P    = ALPHA/( 5**(K-1) )
+*
+*               OR    K    = LOG ( ALPHA/P )+1
+*                               5
+*
+*               WHICH INDICATES THAT THE OBSERVED STATISTIC IS SIGNIFICANT
+*               AT THE  "ALPHA/(5**(K-1))" SIGNIFICANCE LEVEL.
+*               THUS K=1 INDICATES THAT THE OBSERVED STATISTIC IS JUST
+*               SIGNIFICANT AT THE ALPHA SIGNIFICANCE LEVEL.
+*               IF PLOTTED WITH UNIT CONTOUR INTERVALS, SUCCESSIVE
+*               CONTOURS WILL ENCLOSE REGIONS WHERE LOCALLY IT IS
+*               FIVE TIMES AS UNLIKELY THAT VALUES OF THE OBSERVED
+*               STATISTICS ARE CONSISTENT WITH THE NULL HYPOTHESIS
+*               THAN IN REGIONS OUTSIDE THE NEXT LOWER CONTOUR.
+*      DVALUE = FIELDS OF 'D-VALUES' COMPUTED AS:
+*                       __
+*                       ! 0  IF THE NULL HYPOTHESIS IS ACCEPTED
+*                   D = !
+*                       ! 1  IF THE NULL HYPOTHESIS IS REJECTED
+*                       --
+*
+*      MASK   = FIELDS OF 'MASK-VALUES' COMPUTED AS:
+*                       __
+*                       ! 1  IF THE TEST WAS     CONDUCTED
+*                MASK = !
+*                       ! 0  IF THE TEST WAS NOT CONDUCTED
+*                       --
+*
+*      NOTE   - THE MASK FILE IS NOT RETURNED IF THE PROGRAM IS NOT
+*               CALLED WITH OUTPUT FILE MASK.
+* 
+*
+*     INPUT PARAMETERS...
+*
+*      ALPHA (a)     = THE SIGNIFICANCE LEVEL OF THE TEST.
+*      ANX   (lx)    = THE NUMBER OF OBSERVATIONS IN THE CONTROL    DATA SET,
+*      ANY   (ly)    = THE NUMBER OF OBSERVATIONS IN THE EXPERIMENT DATA SET.
+*                      THE ACTUAL VALUE USED ARE RATHER NX AND NY DEFINED AS
+*                      NX = INT( ANX ) AND  NY = INT( ANY ).
+*                      IF NX >= 1 , NY >= 1 AND NX+NY >= 3 THEN
+*                         NX AND NY FROM THE INPUT CARD ARE USED IN THE
+*                         COMPUTATION OF THE NUMBER OF DEGREES OF FREEDOM.
+*                      OTHERWISE,
+*                         THE NX AND NY VALUES NEEDED IN THE COMPUTATION ARE
+*                         OBTAINED FROM THE RECORD LABELS OR FROM THE IP3
+*                         DESCRIPTORS, DEPENDING ON THE FILE TYPE OF THE
+*                         XBAR AND YBAR FILES.
+*      KIND (kind/1) = -1, REJECT THE NULL HYPOTHESIS IF P > 1 - ALPHA
+*                         (IE - CONDUCT A ONE TAILED TEST AND REJECT IF
+*                               THE TEST STATISTIC IS UNUSUALLY SMALL).
+*                    =  0, INDICATES A TWO TAILED TEST (REJECT IF
+*                          P > 1 - ALPHA/2   OR IF  P < ALPHA/2)
+*                          (IE - REJECT IF THE TEST STATISTIC IS
+*                                UNUSUALLY SMALL OR LARGE).
+*                    =  1, REJECT THE NULL HYPOTHESIS IF P < ALPHA
+*                          (IE - CONDUCT A ONE TAILED TEST AND REJECT IF
+*                                THE TEST STATISTIC IS UNUSUALLY LARGE).
+*      IVAR (kind/2) = A FLAG USED TO DETERMINE THE CONTENTS
+*                      OF THE VX AND VY FILES. THAT IS :
+*                      IF (IVAR.EQ.0) THEN
+*                        THE VX AND VY FILES CONTAIN THE
+*                        VARIANCES OF X AND Y, RESPECTIVELY.
+*                      OTHERWISE,
+*                        VX AND VY FILES CONTAIN THE UNBIASED ESTIMATES OF
+*                        THE STANDARD DEVIATIONS OF X AND Y, RESPECTIVELY.
+*      MATCH(kind/3) = A FLAG USED TO DETERMINE IF THE VARIABLE NAMES IN
+*                      XBAR AND YBAR *MUST* BE MATCHED. In this case, An
+*                      unmatched variables will generate an error abort.
+*                      THE DEFAULT BEHAVIOUR IS NOT TO CHECK THIS (=NO).
+*                      This option is only available with CMC/RPN files.
+*
+*      READ(5,5010) ALPHA,ANX,ANY,KIND,IVAR
+*5010  FORMAT(10X,E10.0,2F5.0,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+**TTESTE.      5.E-2  10.   5.    0    1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 PREMATURE EOF ON UNIT 5
+*       2 PREMATURE EOF ON UNIT 1 AND/OR 3
+*       3 INITIAL ILLEGAL DATA TYPE OR SDX/SDY NOT COMPATIBLE
+*       4 CANNOT READ FIRST RECORD IN XBAR
+*       5 PARAMETER NX TOO SMALL
+*       6 CANNOT READ RECORD IN VX
+*       7 MORE THAN ONE SIZE IN XBAR AND/OR VX
+*       8 CANNOT READ FIRST RECORD IN YBAR
+*       9 PARAMETER NY TOO SMALL
+*      10 NX+NY IS SMALLER THAN 3
+*      11 CANNOT READ RECORD IN VY
+*      12 MORE THAN ONE SIZE IN YBAR AND/OR VY
+*      13 MORE THAN ONE SIZE IN XBAR AND/OR YBAR
+*
+*     NON-FATAL CONDITIONS... 
+*     101 VERY SMALL VALUES FOUND IN VX OR VY
+*     102 NAMES OF MEAN FIELDS DO NOT MATCH
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM tteste
+*     PROGRAM TTESTE (XBAR,        VX,            YBAR,          VY,
+*    1                MDIF,        TVALUE,        KVALUE,        DVALUE,
+*    2                             MASK,          INPUT,         OUTPUT,)
+*    3          TAPE1=XBAR,  TAPE2=VX,      TAPE3=YBAR,    TAPE4=VY,
+*    4         TAPE10=MDIF, TAPE11=TVALUE, TAPE12=KVALUE, TAPE13=DVALUE,
+*    5                      TAPE14=MASK,    TAPE5=INPUT,   TAPE6=OUTPUT)
+*     ------------------------------------------------------------------
+*     $Log: tteste.ptn,v $
+*     Revision 4.20  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.19  2011/11/22 19:46:54  dugas
+*     Ajouter le mode 'FORCE NAME MATCH'.
+*
+*     Revision 4.18  2008/07/24 19:42:59  dugas
+*     Utiliser CALCEPS8 plutot que CALCEPS.
+*
+*     Revision 4.17  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.16  2008/04/25 21:10:56  dugas
+*     Toujours utiliser GET_IP1_STRING avant d'imprimer un niveau vertical.
+*
+*     Revision 4.15  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.14  2007/08/29 16:33:08  dugas
+*     Mettre plus de details dans le message d'avertissement 6140.
+*
+*     Revision 4.13  2005/04/14 18:15:49  dugas
+*     Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.12  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.11  2001/10/23 15:05:40  armnrbd
+*     Implanter RECABT='&NON' et sauver les noms de variables
+*     d'entrees dans l'etiquette des variables de sorties.
+*
+*     Revision 4.10  2001/03/17 21:41:37  armnrbd
+*     Remplacer GETPARI par GETHIGH.
+*
+*     Revision 4.9  2000/08/29 15:03:54  armnrbd
+*     Corriger les definitions de VY et EPSY pour des petites valeurs.
+*
+*     Revision 4.8  2000/03/20 21:43:50  armnrbd
+*     Associer un seul champs par pointeur.
+*
+*     Revision 4.7  1998/10/19 19:51:05  armnrbd
+*     Modifier la documentation.
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.6  1998/07/03  02:26:45  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  18:15:42  armnrbd
+*     Deuxieme phase de la generalisation de taille_entete.
+*
+*     Revision 4.4  1997/09/26  17:48:03  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1997/01/30  03:19:39  armnrbd
+*     Corriger la definition du MASK.
+*
+*     Revision 4.2  1996/12/12  19:58:42  armnrbd
+*     Corriger la sorties de K et D.
+*     Ajouter le support de fichiers SQI.
+*
+*     Revision 4.1  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.0  1995/12/21  20:26:21  armnrbd
+*     Version initiale.
+*
+
+*     JUN 05/94 - B.DENIS  (MODIFY CALCULATION OF XSCALE/YSCALE)
+*     MAR 07/94 - F.MAJAESS (MODIFY DATA SECTION)
+*     AUG 04/92 - E. CHAN   (MODIFY EXTRACTION/CALCULATION OF XMAX, XMIN,       
+*                            AND XSCALE DUE TO IMPLEMENTATION OF NEW PACKER)   
+*     JAN 29/92 - E. CHAN   (CONVERT HOLLERITH LITERALS TO ASCII)               
+*     OCT 10/89 - F.MAJAESS (FIX ERROR IN CALCULATING PACKING NOISE VALUE)      
+*     APR 29/88 - F.MAJAESS (REPLACE ABORT EXIT BY WARNING EXIT FOR 
+*                            UNMATCHED MEAN FIELD NAMES)
+*     NOV 06/87 - F.MAJAESS (ALLOW SUPPLYING VARIANCE OR UNBIASED 
+*                            ESTIMATES OF THE STANDARD DEVIATION AND
+*                            IMPLEMENT COMPUTATIONS OF K AND D-VALUES). 
+*     JAN 25/85 - F. ZWIERS 
+
+*---------------------------------------------------------------------------- 
+      IMPLICIT     none
+
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+      CHARACTER*4  NAMEX,NAMEY,NAMEVX,NAMEVY
+      CHARACTER    LIGNE*80,SLEV*15,CMATCH*15
+      LOGICAL      OK,OK1,OK2,OK3,LNXNY,NRMLXIT,
+     +             MASK,MATCH,NMATCH,NORETRY,VAR
+      REAL*8       D,K,P,T,WK1,WK2,WK3,WK4,ALPHA,SP,SDIF
+      CHARACTER*4  TYPE,GRID,SUBA,ZONL,CMDIF,CMASK,CD,CK,CT
+      REAL*8       XBAR,YBAR,VX,VY,FMASK,DIF,ANX,ANY,DFP,FACT,
+     +             EPSVX(MAXLEV),EPSVY(MAXLEV),EPSV(MAXLEV),FNX,
+     +             FNY,EPSX(MAXLEV),EPSY(MAXLEV),EPS(MAXLEV)
+      INTEGER      IBUFW(taille_entete),IBUFX(taille_entete),IBUFY(taille_entete),IBUFZ(taille_entete)
+      INTEGER      IBUF,LEV(MAXLEV),NLEV,NLEVX,NLEVY,NLVVX,NLVVY,
+     +             IO,NX,NY,MAXW,NWDS,WHERE,NF,LEN,LEN1,LEN2,LEN3,
+     +             LEN4,MAXW1,MAXW2,MAXW3,MAXW4,XPAK,YPAK,IER,NREC,
+     +             KIND,IVAR,CNT,I,L,NDFP,MEM
+
+      POINTER    ( P1,     D(1) ),( P12,    VY(1) ),( P13,   WK4(1) )
+      POINTER    ( P2,     T(1) )
+      POINTER    ( P3,     K(1) ),( P32,    VX(1) ),( P33,   WK3(1) )
+      POINTER    ( P4,     P(1) )
+      POINTER    ( P5,   WK1(1) ),( P52,  XBAR(1) )
+      POINTER    ( P6,   WK2(1) ),( P62,  YBAR(1) )
+      POINTER    ( P7,   DIF(1) )
+      POINTER    ( P8, FMASK(1) )
+      POINTER    ( P9,  IBUF(8) )
+
+      REAL*8       CALCEPS8
+      CHARACTER*4  PKTYP,GETYP
+      INTEGER      GETSIZ2,GETHIGH
+      LOGICAL      RPBLOC,SETIO64,is_on
+      EXTERNAL     JCLPNT,GETSTAT,GETLIGN,BURNF,HPALLOC,
+     +             PROBT,HTEST,GETSIZ2,WRITLEV2,HPDEALLC,
+     +             GETSET2,CMPLBL,XIT,PUTSET2,CALCEPS8,
+     +             GETYP,GETHIGH,PUTHIC,RPBLOC,SETIO64,
+     +             is_on
+
+#     include     "zlabel.cdk"
+
+      DATA         GRID  /'GRID'/,
+     +             SUBA  /'SUBA'/,
+     +             ZONL  /'ZONL'/,
+     +             CMDIF /'MDIF'/,
+     +             CMASK /'MASK'/
+      DATA         CD    /'D'/,
+     +             CK    /'K'/,
+     +             CT    /'T'/
+
+      DATA         NRMLXIT,MATCH,MASK,NMATCH / 2*.TRUE.,2*.FALSE. /
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/tteste.ptn,v $'
+
+*---------------------------------------------------------------------- 
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 11 
+      CALL JCLPNT( NF, 1,2,3,4, 10,11,12,13, 14, 5,6 )
+
+      NREC = 0
+
+***    RETREIVE FILE TYPE.
+
+      PKTYP = GETYP( 1 )
+
+      CALL GETSTAT( 14,LIGNE )
+      IF (LIGNE.EQ.'OLD' .OR.
+     +    LIGNE.EQ.'NEW') MASK = .TRUE.
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      CMATCH = ' '
+      NAMEVX = ' ' ; NAMEX = ' '
+      NAMEVY = ' ' ; NAMEY = ' '
+
+      ZNAME  = ' '
+      ZTYPE  = ' '
+      ZLABEL = ' '
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ALPHA = 0.0
+          ANX   = 0.0
+          ANY   = 0.0
+          KIND  =  0
+          IVAR  =  0
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,0005, END=8000,ERR=8000,IOSTAT=IO ) KIND
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) READ(LIGNE,0005, END=8000,ERR=8000,IOSTAT=IO ) IVAR
+
+          OK = RPBLOC('KIND3',LIGNE)
+          IF (OK) CMATCH = LIGNE
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) ALPHA
+
+          OK = RPBLOC('LX',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) ANX
+
+          OK = RPBLOC('LY',LIGNE)
+          IF (OK) READ(LIGNE,0010, END=8000,ERR=8000,IOSTAT=IO ) ANY
+
+      ELSE
+
+***        GET ALPHA, ANX, ANY, KIND AND IVAR.
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 8000
+          ELSE
+              READ( LIGNE,5010, END=8000,ERR=8000,IOSTAT=IO )
+     +                          ALPHA,ANX,ANY,KIND,IVAR
+              CALL BURNF
+          END IF
+
+      END IF
+
+      OK = .false. ; IF (CMATCH /= ' ') OK = is_on( CMATCH )
+
+      IF (OK)                                                  THEN
+          if (pktyp(1:2) == 'SQ')                              THEN
+              NMATCH = OK
+              WRITE(6,6170)
+          ELSE
+              WRITE(6,6171) pktyp
+          END IF
+      END IF
+
+      WRITE(6,6110) ALPHA,ANX,ANY,KIND,IVAR 
+      NX = INT( ANX+0.0001 )
+      NY = INT( ANY+0.0001 )
+
+***    CHECK NX, NY AND IVAR.
+
+      IF ((NX.LT.1) .OR. (NY.LT.1) .OR. (NX+NY.LT.3))          THEN
+          LNXNY =.TRUE.
+      ELSE
+          LNXNY =.FALSE. 
+      END IF 
+
+      IF (IVAR.EQ.0)                                           THEN 
+          VAR =.TRUE.
+      ELSE
+          VAR =.FALSE. 
+      END IF 
+
+***    DETERMINE SIZES AND ALLOCATE MEMORY.
+
+  100 MAXW1 = GETSIZ2( 1, IBUFW,LEN1,NWDS,XPAK, LEV,NLEV )
+      MAXW3 = GETSIZ2( 3, IBUFY,LEN3,NWDS,XPAK, LEV,NLEVY)
+
+      IF (.NOT.LNXNY)                                          THEN
+          MAXW2 = GETSIZ2( 2, IBUFX,LEN2,NWDS,YPAK, LEV,NLVVX)
+          MAXW4 = GETSIZ2( 4, IBUFZ,LEN4,NWDS,YPAK, LEV,NLVVY)
+      ELSE
+          MAXW2 = MAXW1 ; LEN2 = LEN1 ; NLVVX = NLEV  
+          MAXW4 = MAXW3 ; LEN4 = LEN3 ; NLVVY = NLEVY 
+      END IF
+
+      IF (MAXW1.LE.0 .OR.
+     +    MAXW2.LE.0 .OR.
+     +    MAXW3.LE.0 .OR.
+     +    MAXW4.LE.0) GOTO 9000
+
+      LEN  = MAX( LEN1 ,LEN2 ,LEN3 ,LEN4  )
+      MAXW = MAX( MAXW1,MAXW2,MAXW3,MAXW4 )
+
+      WRITE( TYPE,0004) IBUFW(1)
+      IF (TYPE.EQ.'ZONL') NWDS = IBUFW(5)
+
+      CALL WRITLEV2( LEV,NLEV,IBUFW )
+
+      CALL CMPLBL( 0,IBUFW, 0,IBUFY, OK1 )
+
+      IF (.NOT.LNXNY)                                          THEN
+          CALL CMPLBL( 0,IBUFW, 0,IBUFX, OK2 )
+          CALL CMPLBL( 0,IBUFW, 0,IBUFZ, OK3 )
+      ELSE
+          OK2 = .TRUE. ; OK3 = .TRUE.
+      END IF
+
+      OK = OK1 .AND. OK2 .AND. OK3
+
+      IF (NREC .EQ. 0    .AND.
+     +   (.NOT.OK        .OR.
+     +    NLEV .NE.NLEVY .OR.
+     +    NLEV .NE.NLVVX .OR.
+     +    NLEV .NE.NLVVY .OR.
+     +   (TYPE .NE.GRID .AND.
+     +    TYPE .NE.SUBA .AND.
+     +    TYPE .NE.ZONL ) ) )                                  THEN
+          WRITE(6,6051) NLEV,NLEVY,NLVVX,NLVVY
+          CALL                                     XIT(' Tteste ',-3 )
+      END IF
+
+      MEM = MAX( MAXW,NWDS*NLEV )
+
+      CALL HPALLOC( P1,6*MEM,IER,8 )
+      P2 = LOC(     D(MEM+1) )
+      P3 = LOC(     T(MEM+1) )
+      P4 = LOC(     K(MEM+1) )
+      P5 = LOC(     P(MEM+1) )
+      P6 = LOC(   WK1(MEM+1) )
+
+      P12 = P1
+      P13 = P1
+      P32 = P3
+      P33 = P3
+      P52 = P5
+      P62 = P6
+
+      CALL HPALLOC( P7,2*MEM+LEN,IER,8 )
+      P8 = LOC(   DIF(MEM+1) )
+      P9 = LOC( FMASK(MEM+1) )
+*-----------------------------------------------------------------------
+
+ 1000 CONTINUE
+
+***        READ XBAR.
+
+          CALL GETSET2( 1, XBAR, LEV,NLEVX, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+
+              IF (NREC.EQ.0)                                   THEN
+                  WRITE(6,6010) 
+                  CALL                             XIT(' Tteste ',-4 ) 
+              END IF
+
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL                             HPDEALLC(P1,IER,0 )
+                  CALL                             HPDEALLC(P7,IER,0 )
+                  GOTO 100
+              END IF
+
+              WRITE(6,6060) NREC 
+
+              IF (NRMLXIT.AND.MATCH)                           THEN
+                  CALL                             XIT(' Tteste ', 0 )
+              ELSE 
+                  IF (.NOT.NRMLXIT) CALL           XIT(' Tteste ',-101)
+                  IF (.NOT.MATCH)   CALL           XIT(' Tteste ',-102)
+              END IF
+
+          END IF
+
+          DO  L=1,NLEVX
+              WHERE = (L-1)*NWDS+1
+              EPSX(L) = CALCEPS8( XBAR(WHERE),NWDS,IBUF(8) )
+          END DO
+
+***        CHECK SIZE CONSISTENCY.
+
+          CALL CMPLBL( 0,IBUF, 0,IBUFW, OK1 )
+
+          DO  I=1,taille_entete 
+              IBUFW(I) = IBUF(I) 
+          END DO
+
+          WRITE(NAMEX,0004) IBUFW(3)
+
+          IF (LNXNY)                                           THEN
+              IF (PKTYP(1:2).EQ.'SQ')                          THEN
+                  NX = GETHIGH('IP3',IBUF )
+              ELSE
+                  NX = IBUFW(2)
+              END IF
+          END IF
+          IF (NX.LT.1)                                         THEN 
+              WRITE(6,6080) NX
+              CALL                                 XIT(' Tteste ',-5 ) 
+          END IF
+
+          FNX  = DBLE( NX ) 
+
+***        READ VX.
+
+          IF (NX.GT.1)                                         THEN 
+
+              CALL GETSET2( 2, VX, LEV,NLVVX, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  IF (MAXW.EQ.0)                               THEN
+                      CALL PRECEDE( 1,NLEVX )
+                      CALL                         HPDEALLC(P1,IER,0 )
+                      CALL                         HPDEALLC(P7,IER,0 )
+                      GOTO 100
+                  END IF
+                  WRITE(6,6020) 
+                  CALL                             XIT(' Tteste ',-6 ) 
+              END IF
+
+              WRITE(NAMEVX,0004) IBUF(3)
+
+***            CHECK SIZE CONSISTENCY.
+
+              CALL CMPLBL( 0,IBUF, 0,IBUFW, OK2 )
+
+              WRITE(TYPE,0004) IBUFW(1)
+
+              OK = (OK1 .AND. OK2)
+
+              IF (.NOT.OK        .OR.
+     +            NLEVX.GT.NLEV  .OR.
+     +            NLEVX.NE.NLVVX .OR.
+     +           (TYPE .NE.GRID .AND.
+     +            TYPE .NE.SUBA .AND.
+     +            TYPE .NE.ZONL )   )                          THEN
+                  WRITE(6,6060) NREC
+                  WRITE(6,6050) ; WRITE(6,6051) NLEVX,NLVVX
+                  CALL PRTLAB( IBUFW ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT(' Tteste ',-7 )
+              END IF
+
+              IF (.NOT.VAR)                                    THEN
+
+***            CONVERT UNBIASED STANDARD DEVIATION
+***            ESTIMATES TO VARIANCES.
+
+                  FACT = (FNX-1.0)/FNX
+                  DO  I=1,NWDS*NLEVX 
+                      VX(I) = FACT*( VX(I)**2 )
+                  END DO
+
+              END IF
+
+              DO  L=1,NLEVX
+                  WHERE = (L-1)*NWDS+1
+                  EPSVX(L) = CALCEPS8( VX(WHERE),NWDS,IBUF(8) )
+              END DO
+
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          ELSE
+
+***            SET VX TO ZERO IF NX=1. 
+
+              DO  I=1,NWDS*NLEVX
+                  VX(I) = 0.0
+              END DO
+              DO  L=1,NLEVX
+                  EPSVX(L) = 1.0
+              END DO
+
+              NAMEVX = ' '
+
+          END IF
+
+***        READ YBAR.
+
+          NORETRY = .TRUE.
+
+ 1100     CALL GETSET2( 3, YBAR, LEV,NLEVY, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              IF (MAXW.EQ.0)                                   THEN
+                  IF (ZNAME == ' ')                            THEN
+                                  CALL PRECEDE( 1,NLEVX )
+                     IF (NX.GT.1) CALL PRECEDE( 2,NLVVX )
+                  ELSE
+                                  CALL PRECEDE( 1,-1 )
+                     IF (NX.GT.1) CALL PRECEDE( 2,-1 )
+                  END IF
+                  CALL                             HPDEALLC(P1,IER,0 )
+                  CALL                             HPDEALLC(P7,IER,0 )
+                  GOTO 100
+              END IF
+              IF (NORETRY)                                     THEN
+                  CALL PRECEDE( 3,-1 )
+                  ZNAME = NAMEX ; NORETRY = .FALSE.
+                  GOTO 1100
+              ELSE
+                  WRITE(6,6030)
+                  CALL                             XIT(' Tteste ',-8 ) 
+              END IF
+          END IF
+
+          WRITE(NAMEY,0004) IBUF(3)
+
+***        CHECK FOR POSSIBLE MISSMATCH IN INPUT VARIABLES.
+
+          IF (NMATCH .AND. NAMEX /= NAMEY)                     THEN
+              CALL PRECEDE( 3,-1 )
+              ZNAME = NAMEX
+              WRITE(6,6161) trim(NAMEX),trim(NAMEY)
+              GOTO 1100
+          END IF
+
+          ZNAME = ' '
+
+          DO  L=1,NLEVY
+              WHERE = (L-1)*NWDS+1
+              EPSY(L) = CALCEPS8( YBAR(WHERE),NWDS,IBUF(8) )
+          END DO
+
+***        CHECK SIZE CONSISTENCY.
+
+          CALL CMPLBL( 0,IBUF, 0,IBUFW, OK1 )
+
+          DO  I=1,taille_entete 
+              IBUFY(I) = IBUF(I) 
+          END DO
+
+          IF (LNXNY)                                           THEN
+              IF (PKTYP(1:2).EQ.'SQ')                          THEN
+                  NY = GETHIGH('IP3',IBUF )
+              ELSE
+                  NY = IBUFY(2)
+              END IF
+          END IF 
+          IF (NY.LT.1)                                         THEN 
+              WRITE(6,6090) NY
+              CALL                                 XIT(' Tteste ',-9 ) 
+          END IF
+
+          FNY  = DBLE( NY ) 
+
+          IF (NX+NY.LT.3)                                      THEN
+              WRITE(6,6120) NX,NY 
+              CALL                                 XIT(' Tteste ',-10 )
+          END IF
+
+***        READ VY.
+
+          IF (NY.GT.1)                                         THEN 
+
+              NORETRY = .TRUE.
+
+ 1200         CALL GETSET2( 4, VY, LEV,NLVVY, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  IF (MAXW.EQ.0)                               THEN
+                                   CALL PRECEDE( 1,NLEVX )
+                      IF (NX.GT.1) CALL PRECEDE( 2,NLVVX )
+                                   CALL PRECEDE( 3,NLEVY )
+                      CALL                         HPDEALLC(P1,IER,0 )
+                      CALL                         HPDEALLC(P7,IER,0 )
+                      ZNAME = ' '
+                      GOTO 100
+                  END IF
+                  IF (NORETRY)                                 THEN
+                      CALL PRECEDE( 4,-1 )
+                      ZNAME = NAMEVX ; NORETRY = .FALSE.
+                      GOTO 1200
+                  ELSE
+                      WRITE(6,6040) 
+                      CALL                         XIT(' Tteste ',-11 ) 
+                  END IF
+              END IF
+
+              WRITE(NAMEVY,0004) IBUF(3)
+
+***            AGAIN, CHECK FOR POSSIBLE MISSMATCH IN INPUT VARIABLES.
+
+              IF (NMATCH .AND. NAMEVX /= ' '
+     +                   .AND. NAMEVX /= NAMEVY)               THEN
+                 CALL PRECEDE( 4,-1 )
+                 ZNAME = NAMEVX
+                 WRITE(6,6162) trim(NAMEVX),trim(NAMEVY)
+                 GOTO 1200
+              END IF
+
+              ZNAME = ' '
+
+***            CHECK SIZE CONSISTENCY.
+
+              CALL CMPLBL( 0,IBUF, 0,IBUFW, OK2 )
+
+              WRITE(TYPE,0004) IBUFY(1)
+
+              OK = (OK1 .AND. OK2)
+
+              IF (.NOT.OK        .OR.
+     +            NLEVY.GT.NLEV  .OR.
+     +            NLEVY.NE.NLVVY .OR.
+     +           (TYPE .NE.GRID .AND.
+     +            TYPE .NE.SUBA .AND.
+     +            TYPE .NE.ZONL )   )                          THEN
+                  WRITE(6,6060) NREC
+                  WRITE(6,6050) ; WRITE(6,6051) NLEVY,NLVVY
+                  CALL PRTLAB( IBUFY ) ; CALL PRTLAB( IBUF )
+                  CALL                             XIT(' Tteste ',-12 )
+              END IF
+
+              IF (.NOT.VAR)                                    THEN
+
+***            CONVERT UNBIASED STANDARD DEVIATION
+***            ESTIMATES TO VARIANCES.
+
+                  FACT = (FNY-1.0)/FNY
+                  DO  I=1,NWDS*NLEVY
+                      VY(I) = FACT*(VY(I)**2) 
+                  END DO
+
+              END IF
+
+              DO  L=1,NLEVY
+                  WHERE = (L-1)*NWDS+1
+                  EPSVY(L) = CALCEPS8( VY(WHERE),NWDS,IBUF(8) )
+              END DO
+
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          ELSE
+
+***        SET VY TO ZERO IF NY=1. 
+
+              DO  I=1,NWDS*NLEVY
+                  VY(I) = 0.0
+              END DO
+              DO  L=1,NLEVY
+                  EPSVY(L) = 1.0
+              END DO
+
+          END IF
+
+***        LAST CONSISTENCY CHECK.
+
+          CALL CMPLBL( 0,IBUFW, 0,IBUFY, OK )
+
+          IF (.NOT.OK  .OR.
+     +        NLEVX.NE.NLEVY)                                  THEN
+              WRITE(6,6060) NREC
+              WRITE(6,6050)
+              CALL PRTLAB( IBUFW ) ; CALL PRTLAB( IBUFY )
+              CALL                                 XIT(' Tteste ',-13 ) 
+          END IF
+
+          IF (IBUFW(3).NE.IBUFY(3))                            THEN 
+              IF (MATCH)                                       THEN
+                 MATCH =.FALSE.
+                 WRITE(6,6140) NAMEX,NAMEY
+              END IF
+          ELSE
+              NAMEY = ' '
+          END IF
+
+          DO  L=1,NLEVX
+              EPS (L) = MAX( EPSX (L),EPSY (L) )
+              EPSV(L) = MAX( EPSVX(L),EPSVY(L) )
+          END DO
+
+          DFP  = FNX+FNY-2.0 
+          NDFP = NX+NY-2
+          FACT = 1.0/FNX + 1.0/FNY
+
+***        COMPUTE THE MEAN DIFFERENCES. 
+
+          DO  I=1,NWDS*NLEVX
+              DIF(I) = YBAR(I)-XBAR(I) 
+          END DO
+
+***        COMPUTE THE T-STATISTICS AND CHECK
+***        # OF OCCURENCES OF VERY SMALL SP. 
+
+          DO  L=1,NLEVX
+
+              CNT = 0
+
+              DO  I=(L-1)*NWDS+1,L*NWDS
+
+                  SP   = ( FNX*VX(I) + FNY*VY(I) ) / DFP 
+                  SDIF = SQRT( SP*FACT )
+                  IF (    SDIF     .LE.EPSV(L) .OR.
+     +                ABS( DIF(I) ).LE.EPS (L) )               THEN 
+                      FMASK(I) = 0.0 
+                      T(I) = 0.0 
+                      CNT  = CNT+1
+                  ELSE 
+                      FMASK(I) = 1.0 
+                      T(I)     = DIF(I)/SDIF
+                  END IF
+
+              END DO
+
+              IF (CNT.GE.1)                                    THEN 
+                  NRMLXIT =.FALSE. 
+                  CALL GET_IP1_STRING( LEV(L),SLEV )
+                  WRITE(6,6130) CNT,NAMEX,NWDS,SLEV
+              END IF
+
+          END DO
+
+***        COMPUTE THE P-VALUES AS 
+***    
+***                    P = PROB( STUDENT'S T > OBSERVED T )
+***    
+***             IE, P = PROB THAT T IS GREATER THAN THE OBSERVED VALUE 
+***             ASSUMING THAT THE NULL HYPOTHESIS OF EQUALITY OF MEANS 
+***             IS CORRECT.
+***    
+
+          CALL PROBT( T,NDFP,NWDS*NLEVX,P, WK1,WK2,WK3,WK4 ) 
+
+***        WRITE OUT THE RESULTS 
+
+          DO  I=1,taille_entete 
+              IBUF(I)=IBUFW(I) 
+          END DO
+
+          IF (PKTYP(1:2).EQ.'SQ')                               THEN
+              CALL PUTHIC( NAMEX,'ETIK1',IBUF )
+              CALL PUTHIC( NAMEY,'ETIK2',IBUF )
+              IF (PKTYP.NE.'SQ89')                              THEN
+                  CALL PUTHIC( '  ','ETIK3',IBUF )
+                  CALL PUTHIC( '  ','ETIK4',IBUF )
+              END IF
+          END IF
+
+***        WRITE OUT MEAN DIFFERENCES. 
+
+          READ(CMDIF,0004) IBUF(3)
+          CALL PUTSET2( 10, DIF, LEV,NLEVX, IBUF,MAXW ) 
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        WRITE OUT T-VALUES. 
+
+          READ(CT,0004) IBUF(3)
+          CALL PUTSET2( 11, T, LEV,NLEVX, IBUF,MAXW ) 
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        COMPUTE K AND D-VALUES. 
+
+          CALL HTEST( P,NWDS*NLEV, ALPHA, KIND, K,D )
+
+***        WRITE OUT K-VALUES. 
+
+          READ(CK,0004) IBUF(3)
+          CALL PUTSET2( 12, K, LEV,NLEVX, IBUF,MAXW )
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+***        WRITE OUT D-VALUES. 
+
+          READ(CD,0004) IBUF(3)
+          CALL PUTSET2( 13, D, LEV,NLEVX, IBUF,MAXW )
+          IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          IF (MASK)                                            THEN
+
+***            WRITE OUT MASK-VALUES.
+
+              READ(CMASK,0004) IBUF(3)
+              CALL PUTSET2( 14, FMASK, LEV,NLEVX, IBUF,MAXW ) 
+              IF (NREC.EQ.0) CALL PRTLAB( IBUF )
+
+          END IF
+
+      ZNAME = ' '
+      NREC = NREC+NLEVX
+      GOTO 1000 
+
+***    EOF ON UNIT #5. 
+
+ 8000 CONTINUE
+      WRITE(6,6070) 
+      CALL                                         XIT(' Tteste ',-1 )
+
+***    EOF ON UNIT 1 and/OR 3.
+
+ 9000 CONTINUE
+      WRITE(6,6150) 
+      CALL                                         XIT(' Tteste ',-2 )
+
+*-------------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 format(BN,I5)
+ 0010 format(BN,E10.0)
+
+ 5010 FORMAT(10X,E10.0,2F5.0,2I5)
+
+ 6010 FORMAT(' File of means for variable X empty.')
+ 6020 FORMAT(' Unexpected eof on file of X variance.')
+ 6030 FORMAT(' Unexpected eof on file of Y means.')
+ 6040 FORMAT(' Unexpected eof on file of Y variance.')
+ 6050 FORMAT(' Corresponding field labels do not match.')
+ 6051 FORMAT(' Number of levels found: ',4I5)
+ 6060 FORMAT(' Conducted T-Tests on ',I5,' pairs of mean fields.')
+ 6070 FORMAT('  The TTESTE card is missing.')
+ 6080 FORMAT(' Illegal # of control obs. NX= ',I10)
+ 6090 FORMAT(' Illegal # of experimental obs. NY= ',I10)
+ 6110 FORMAT(' TTESTE.   ',E10.1,2F5.0,2I5)
+ 6120 FORMAT(' Illegal # of data points, NX= ',I10,', NY= ',I10)
+ 6130 FORMAT(' WARNING ',I6,' detected very small sdif out of ',A,I7,
+     +       ' computed values at level ',A)
+ 6140 FORMAT(' ** NOTE - Unmatched mean field names ',A,1X,A,' **.')
+ 6150 FORMAT(' ** Unable to begin reading mean files **.')
+ 6161 FORMAT(' While looking for  ',A,', found ',A,' in means...')
+ 6162 FORMAT(' While looking for  ',A,', found ',A,' in variances...')
+ 6170 FORMAT(/' Strict name matching is ON !'/)
+ 6171 FORMAT(/' Strict name matching UNAVAILABLE !'/)
+
+*-----------------------------------------------------------------------
+
+      END 
+#     endif

@@ -1,0 +1,1006 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      select2  IN S1 [S2] INPUT OUTPUT \ 
+*            [ -t1   VAL1 -t2  VAL2 -t3    VAL3 \ 
+*              -lv1  VAL4 -lv2 VAL5 -name "VAL6" ["VAL7"] \ 
+*              -kind VAL8 ["VAL9"] ["VAL10"] ["VAL11"] -na ]
+*
+*
+*     DESCRIPTION...
+*      select2 - SELECTS UP TO TWO REQUESTED VARIABLES FROM A FILE 
+*
+* 
+*     AUTHORS   - F.Zwiers AND B.Dugas, JAN 14/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/select2.ptn,v 4.23 2014/09/25 20:20:52 dugas Exp $
+*
+* 
+*     PURPOSE  - SELECT ALL VARIABLES (OR 1 OR 2 SPECIFIED VARIABLES) BETWEEN
+*                TIMESTEPS T1 AND T2 MAKING SURE THAT FOR EACH VARIABLE,
+*                *** RECORDS ARE IN THE CORRECT TIME ORDER ***
+*
+*     NOTE     - SELECT2 SUPPORTS SEVERAL TECHNIQUES FOR MEASURING TIME
+* 
+*
+*     INPUT FILE... 
+*      IN = FILE CONTAINING GRID OR SPECTRAL FIELDS TO BE SELECTED. 
+* 
+*     OUTPUT FILES... 
+*      S1 = FIRST  SELECTED VARIABLE (OR ALL VARIABLES) 
+*      S2 = SECOND SELECTED VARIABLE 
+* 
+*
+*     INPUT PARAMETERS... 
+* 
+*      NT1,NT2   = TIMESTEP RANGE (INCLUSIVE).
+*      (t1,t2)     1) IF (NT1=-1) OR (NT1,NT2 BLANK) ==> SELECT ALL INTERVALS 
+*                     (AND THEN ANT1,NT2 ARE IGNORED). THE TIME INTERVAL IS
+*                     THEN THAT BETWEEN THE FIRST TWO VALID TIMESTEPS. 
+*                  2) IF ONLY ONE OR THE OTHER OF NT1 AND NT2 IS SPECIFIED
+*                     POSITIVE, THIS COMPLETELY DETERMINE THE DESIRED RANGE.
+*      ANT1,ANT2 = USED TO COMPUTE THE TIMESTEP INCREMENT "INT" (OR T3).
+*      (t3)        1) ANT2 IS USED *ONLY* IF THE NUMBER VALUE OF ANT1 IS NOT 
+*                     EQUAL TO ZERO AND THEN, ONLY IF, WHEN IT IS CONVERTED,
+*                     IT RESULTS IN A NUMBER CONSISTING OF FULL 5 DIGITS
+*                     FROM (0,...,9; NO ' ' OR '-' ALLOWED IN ANT2). 
+*                     THIS HAS SIMILAR EFFECT TO READING INT FROM ANT1 AND
+*                     ANT2 FIELDS WITH A I10 FORMAT.
+*                  2) INT IS COMPUTED FROM ONLY ANT1 IF THE CONVERTED NUMBER
+*                     VALUE OF ANT1 IS EQUAL TO ZERO (ANT2 IGNORED) OR ANT2 
+*                     FIELD CONTAINS OTHER THAN (0,...,9). 
+*                     THIS HAS SIMILAR EFFECT TO READING INT FROM ANT1 FIELD 
+*                     WITH A I5 FORMAT. 
+*                  3) THE RESULING VALUE OF INT IS RESET TO 1 IF IT IS ZERO.
+*                  4) DIFFERENT ACTIONS ARE TAKEN ACCORDING TO THE SIGN OF INT
+*                     INT  >0, DATA IS SELECTED EVERY INT STEPS FROM STEP NT1
+*                          <0, DATA IS SELECTED FROM THE FIRST TIMESTEP OF ANY 
+*                              OF THE SELECTED NAMES IN THE INTERVAL NT1 TO NT2
+*                              BY INCREMENT OF IABS(INT), TILL NT2 IS REACHED
+*                              OR EXCEEDED, NOT ABORTING ON OUT OF SEQUENCE
+*                              TIMESTEPS.
+*                  5) THE UNITS USED ARE SUPPOSED TO BE CONSISTENT WITH
+*                     THOSE USED IN NT1 AND NT2 (AS DEFINED BY DTM) AND
+*                     THE PROGRAM DOES NOT ATTEMPT TO CHECK THIS.
+*      LV1,LV2   = LEVEL RANGE (INCLUSIVE) USUALLY AS CODED INTEGERS.
+*     (lv1,lv2)    1) IF (LV1=-1) OR (LV1,LV2 BLANK) ==> SELECT ALL LEVELS 
+*                  2) IF ONLY ONE OR THE OTHER OF LV1 AND LV2 IS SPECIFIED
+*                     POSITIVE (AFTER DECODING BY LVACODE), THIS COMPLETELY
+*                     DETERMINES THE DESIRED RANGE.
+*                  3) IF BOTH ARE SPECIFIED, LV2 >= LV1.
+*                  IN COMMAND-LINE MODE, LV1 AND LV2 MAY ALSO BE THE REAL
+*                  DECODED LEVEL VALUES. IN THAT CASE, THE LEVEL TYPE
+*                  PARAMETER *** ABSOLUTELY HAS TO BE SPECIFIED ***.
+*      KIND(2)   = VERTICAL LEVEL TYPE. ONLY USE THIS WITH IN RPN STD FILES
+*                  AND WHEN LV1 AND LV2 CONTAIN DECODED VALUES. FURTHERMORE,
+*                  THIS PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*                  THE CURRENTLY SUPPORTED VALUES ARE:
+*                  'HAUTEUR'   , heights (m) with respect to sea level
+*                  'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                  'ETA'       , first version of the GEM ETA coordinate
+*                  'PRESSION'  , pressure (mb)
+*                  'ARBITRAIRE', arbitrary level (no units apply)
+*                  'HAUTEURS'  , heights (M) with respect to the surface
+*                  'HYBRIDE'   , hybrid GEM coordinate
+*                  'THETA'     , potential temperature coordinate
+*                  'GALCHEN'   , GalChen generalized coordinate
+*
+*      KIND(3)   = OUTPUT FILE MODE. KNOWN VALUES ARE "APPEND", "OVER".
+*                  THE DEFAULT IS TO OVERWRITE ALL OUTPUT FILES.
+*      KIND(4)   = DATA TYPE (AS IN TYPVAR FOR CMC/RPN FILES) TO
+*                  LOOK FOR. THE DEFAULT IS ' ', I.E. NONE.
+*
+*      NAME1     = FIRST VARIABLE TO BE SELECTED FOR FILE S1. 
+*     (name)       IF   (NAME1 IS ' ALL' OR NAME1 IS BLANK) 
+*                  THEN  ALL VARIABLES ARE SELECTED. 
+*      NAME2     = SECOND VARIABLE TO BE SELECTED FOR FILE S2. 
+*      DTM       = FLAG TO INDICATE METHOD OF TIME MEASUREMENT.
+*     (kind(1))  = 0 ==> IBUF(2),T1,T2 AND T3 IN KOUNT UNITS.
+*                = 1 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHH
+*                        AND T3 IS IN HOURS.
+*                = 2 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYMMDDHHMM
+*                        **** (YYYYMMDDHHMM in command-line mode) ****
+*                        AND T3 IS IN MINUTES AND NO LEAP YEAR.
+*                = 3 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHH
+*                        AND T3 IS IN HOURS. BUT NOW, LEAP YEARS ARE
+*                        ACCOUNTED FOR.
+*      NA        = 0(1)  STOP(CONTINUE) ON OUT OF SEQUENCE TIMESTEPS.
+*
+*      NOTES: 1) DTM   = 0,1 OR 2 DO NOT TAKE LEAP YEARS INTO ACCOUNT
+*                        AND ARE INTENDED FOR USE WITH MODEL OUTPUT.
+*             2) ONLY ONE VERTICAL LEVEL TYPE IS SUPPORTED WHEN A VERTICAL
+*                LEVEL INTERVAL IS SPECIFIED. EITHER OF FATAL ERRORS 7 OR 8
+*                ARE OTHERWISE DETECTED (TIMESTEP REPITITION) AS TWO LEVEL
+*                TYPES WILL ALWAYS GENERATE TWO SETS OF VARIABLES.
+* 
+*      READ( 5,5010 ) NT1,NT2,ANT1,ANT2, LV1,LV2,
+*    +                NAME1,NAME2,DTM,NA
+*5010  FORMAT(10X,5X,2I10,2A5,2I5,5X,2(1X,A4),2I5) 
+*
+*
+*     TWO EXAMPLE OF INPUT CARD... 
+*   
+* SELECT.  STEP  79020024  86060708    -10012  500  550 NAME GDEV 
+*   
+* SELECT2. STEP         0    999999   72 LEVS  500  500 NAME  PHI
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+* THE SECOND LINE WILL CREATE A TIME SERIES OF 500MB GPH FIELDS SAMPLED
+* EVERY 72 TIME STEP. THE PROGRAM WILL ABORT IF OBSERVATIONS ARE NOT 
+* AVAILABLE AT TIME STEPS WHICH ARE MULTIPLES OF 72 OR IF ANY OBSERVATIONS 
+* ARE MISSING OR OUT OF TIME SEQUENCE.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 DTM HASH ILLEGAL VALUE
+*       2 T1 NOT IN RECOGNIZED FORMAT
+*       3 T2 NOT IN RECOGNIZED FORMAT
+*       4 ERROR READING FIRST SET ON FILE IN
+*       5 NO RECORDS SAVED, OUTPUT EMPTY
+*       6 FOUND TIME NOT IN RECOGNIZED FORMAT ON FILE IN
+*       7 TIMESTEP OUT OF SEQUENCE FOR FIRST VARIABLE
+*       8 TIMESTEP OUT OF SEQUENCE FOR SECOND VARIABLE
+*       9 ERROR ABORT READING  INPUT PARAMETERS
+*      10 PREMATURE EOF ON FILE IN
+*      12 MORE THAN ONE KIND OF INPUT LEVEL REQUESTED
+*      13 MISMATCH BETWEEN NUMBER OF VARIABLES AND FILE NAMES
+*      14 FILE IN IS EMPTY (NEW)
+*
+*     NON-FATAL CONDITIONS...
+*     101 FOUND DISCONTINUOUS TIME SEQUENCE
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM select2
+*     PROGRAM SELECT2 (IN,       S1,       S2,      INPUT,      OUTPUT,
+*    1           TAPE1=IN,TAPE11=S1,TAPE12=S2,TAPE5=INPUT,TAPE6=OUTPUT)
+*     -----------------------------------------------------------------
+
+*     $Log: select2.ptn,v $
+*     Revision 4.23  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.22  2013/12/18 21:22:23  bernard
+*      - Declarations EXTERNAL 'a la' F90.
+*      - Remplacer INT par INT8 (probleme avec pgdbg).
+*      - Eliminer une section redondante de calculs
+*        impliquant ANT1, ANT2 et INT8.
+*
+*     Revision 4.21  2013/11/01 19:12:10  bernard
+*     Correction de la derniere modification.
+*
+*     Revision 4.20  2013/10/28 21:19:41  bernard
+*     Ajouter un seuil de tolerance lors des comparaisons de ALEV(L) avec RLV1 et RLV2.
+*
+*     Revision 4.19  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.18  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.17  2008/04/25 21:26:08  dugas
+*     Ne plus demander que les niveaux varient de facon monotone.
+*
+*     Revision 4.16  2007/12/20 21:01:15  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.15  2006/09/19 18:59:56  dugas
+*     Ajouter TYPVAR comme critere de recherche.
+*
+*     Revision 4.14  2005/04/14 17:40:41  dugas
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*     - Implementer le mode APPEND (ajout de donnee) en sortie.
+*     - Verifier la coherence entre certains arguments:
+*       nombre de noms fichiers vs noms variables.
+*
+*     Revision 4.13  2004/11/12 16:38:27  dugas
+*     Remplacer le format interne (I5) par (BN,I5).
+*
+*     Revision 4.12  2003/08/21 19:54:28  dugas
+*     Modifier le code pour tenir compte des fichiers contenant plus d'un
+*      type de niveaux verticaux. Dans ce cas, le programme fonctionnera
+*      lorsque le mode ALLEV est actif. Sinon, un message d'erreur sera
+*      genere (-7 ou -8, selon la variable en cause).
+*
+*     Revision 4.11  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.10  2003/05/23 20:08:29  dugas
+*     En mode "arguments de ligne de commande" seulement, permettre des
+*      valeurs de LV1 et LV2 reels.  Dans ce cas, le nouvel arguments
+*      -KIND doit etre specifie pour determiner le type de ces
+*      niveaux verticaux (VKIND).
+*
+*     Revision 4.9  1999/07/23 15:41:01  armnrbd
+*     Utiliser le common ZZABORT pour determiner la valeur de
+*     la cle "-na" en mode parametres de ligne de commande.
+*
+*     Revision 4.8  1999/06/08 01:39:34  armnrbd
+*     Corriger certains formats de sortie pour les dates.
+*
+*     Revision 4.7  1998/10/19 19:43:30  armnrbd
+*     Modifier la documentation.
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.6  1998/05/21  20:20:53  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.5  1998/02/18  16:42:17  armnrbd
+*     Passer au mode I/O 64 bits.
+*     Utiliser HPALLOC plutot que MEMOIRH.
+*     Verifier les niveaux input avec CHKLVLC.
+*     Ne plus demander que LV! soit plus petit que LV2.
+*
+*     Revision 4.4  1997/05/30  18:08:29  armnrbd
+*     Modifier le traitement de ZNAME.
+*
+*     Revision 4.3  1996/11/26  20:16:06  armnrbd
+*     Corriger le support des niveaux verticaux decroissants.
+*
+*     Revision 4.2  1995/02/15  23:32:44  armnrbd
+*     Tenir compte de niveaux croissants ou decroissants dans les donnees.
+*
+*     Revision 4.1  95/01/23  10:33:20  10:33:20  armnrbd (Bernard Dugas)
+*     Corriger le mode selection unique pour fichier SQI.
+*     
+*     Revision 4.0  94/11/17  14:21:31  14:21:31  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.4  94/09/21  13:07:58  armnrbd
+*     Ne pas faire verifier NT3 par NEWTIM. Les unites sont ainsi
+*     supposees etre coherentes avec celle de NT1 et NT2 (DTM).
+*     
+*     Revision 3.3  94/09/20  13:24:24  armnrbd
+*     Ajouter la cle "-na" et modifier le format de sortie
+*     lorsqu'il manque des pas de temps, pour que celui-ci
+*     puisse etre utilise par LININT.
+*     
+*     Revision 3.2  94/08/16  21:06:15  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.1  94/05/18  22:17:21  22:17:21  armnrbd (Bernard Dugas)
+*     Implanter le support de RPBLOC.
+*     Harmoniser les defauts avec SELECT.
+*     
+*     Revision 3.0  93/10/13  13:56:51  13:56:51  armnrbd (Bernard Dugas)
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  92/11/12  10:20:10  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/10/28  10:20:42  armnrbd
+*     Corriger l'implantation de /RECABT/.
+*     
+*     Revision 1.1  92/03/30  12:00:56  armnrbd
+*     Premier jeu de corrections.
+*     
+*     Revision 1.0  92/03/30  10:36:48  armnrbd
+*     Initial revision
+*     
+*     JAN 14/85 - F. ZWIERS
+*
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER,     PARAMETER :: MAXLEV = 999 , HEAD = taille_entete
+      REAL(8),     PARAMETER :: RSMALL0 = 1.D-7
+
+      REAL(8)      RSMALL,RS1,RS2
+      REAL         RLV1,RLV2,HOLD,
+     +             ALEV(MAXLEV)
+      CHARACTER*80 LIGNE,TYPVAR*2
+      CHARACTER*20 VALEUR,CKIND,CIOM
+      CHARACTER    ANT1*5,ANT2*5,
+     +             ALV1*15,ALV2*15,NUM(10)
+      LOGICAL      FIRST1,FIRST2,NA,ALLEV,
+     +             OK,RLV,ALTIM,NEGINT,ZSETN
+      INTEGER*8 :: N,NT1,NT2,NT3,IT1,IT2
+      INTEGER*8 :: ZERO=0,MUN=-1,INT8,LAST1
+      INTEGER*8 :: TIME,TIME1,TIME2,LAST2
+      INTEGER*8 :: UN_MILLION=1 00 00 00
+      CHARACTER*4  NOM,NIL,ALL,TYPE, NAME1,NAME2
+      INTEGER      WARN2,NIVEAU,JBUF(HEAD),VKIND0,VK,
+     +             LEV(MAXLEV),KIND,VKIND,IP1,PERIOD,
+     +             VKIND1,VKIND2,I,J,L,IL,NRECS,NREC,
+     +             NREC1,NREC2,NLEV,NLEVG,NF,LV1,LV2,
+     +             INTP,DTM,WARN1,INA,IO,LEV2(MAXLEV),
+     +             JPAK,NBR,NBRLVL,MAXW,NWDS,LEN
+  
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,      DIMENSION(:), ALLOCATABLE :: F
+
+      LOGICAL      NOABORT
+      COMMON      /ZZABORT/ NOABORT
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+#     include "zlabel.cdk"
+
+      CHARACTER*4  GETYP,PKTYP
+      EXTERNAL     GETYP
+
+      CHARACTER*4, EXTERNAL :: SETNAM
+      INTEGER*8,   EXTERNAL :: Y2KDAT8,NEWTIM
+      INTEGER,     EXTERNAL :: GETSIZ2,GETKIND
+      LOGICAL,     EXTERNAL :: RPBLOC,SETIO64
+      EXTERNAL     JCLPNT,BURNF,PUTPOSIT,LOW2UP,
+     +             XIT,GETSET2,PUTSET2,LVACODE,
+     +             SETKIND,CONVPR,FILEV,
+     +             STAMP2DATE,SET_DTM
+
+      DATA         NUM    / '0','1','2','3','4','5','6','7','8','9' / 
+      DATA         TYPVAR / ' '     /
+      DATA         NIL    / '    '  /, 
+     +             ALL    / 'ALL'   /,
+     +             CIOM   / 'OVER'  /,
+     +             RLV    / .FALSE. /,
+     +             ALLEV  / .FALSE. /,
+     +             ALTIM  / .FALSE. /,
+     +             FIRST1 / .TRUE.  /,
+     +             FIRST2 / .TRUE.  /,
+     +             NA     / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/select2.ptn,v $'
+
+*---------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5
+      CALL JCLPNT (NF, 1, 11,12, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      IF (PKTYP.EQ.'SQ')                                      THEN
+          CALL FILEV( LEV,NLEV,JBUF,1 )
+          IF (NLEV.LE.0) GOTO 904
+      END IF
+
+      VKIND0 = GETKIND( )
+
+      CALL GETSTAT( 1,VALEUR )
+      IF (VALEUR.NE.'OLD') CALL                    XIT (' Select ',-14) 
+
+      NAME1 = ' '
+      NAME2 = ' '
+      CKIND = ' '
+      VKIND = VKIND0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+          LIGNE = ' '
+
+***        CHECK PARAMETRE BLOCK.
+
+          DTM   = 0
+          NT1   = 0
+          NT2   = 0
+          ANT1  = '    1'
+          ANT2  = ' '
+          LV1   =-1
+          LV2   =-1
+          RLV1  =-1.0
+          RLV2  =-1.0
+
+          OK = RPBLOC('T1',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I16)',ERR=901,IOSTAT=IO) NT1
+          IF (OK) LIGNE(16:25) = VALEUR
+
+          OK = RPBLOC('T2',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I16)',ERR=901,IOSTAT=IO) NT2
+          IF (OK) LIGNE(26:35) = VALEUR
+
+          OK = RPBLOC('T3',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I16)',ERR=901,IOSTAT=IO) INT8
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)', ERR=901,IOSTAT=IO) DTM
+          IF (OK) LIGNE(71:75) = VALEUR
+
+          OK = RPBLOC('KIND2',VALEUR)
+          IF (OK) CKIND = VALEUR
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          ENDIF
+
+          VKIND1 = VKIND
+
+          OK = RPBLOC('KIND3',VALEUR)
+          IF (OK) CIOM = VALEUR
+
+          OK = RPBLOC('KIND4',VALEUR)
+          IF (OK) TYPVAR = VALEUR
+
+          OK = RPBLOC('LV1',VALEUR)
+          IF (OK)                                              THEN
+              LIGNE(46:50) = VALEUR
+              PERIOD = INDEX( VALEUR, '.' )
+              IF (PERIOD.EQ.0 .AND. CKIND.EQ.' ')              THEN
+                  READ(VALEUR,'(BN,I10)'  ,ERR=901,IOSTAT=IO)  LV1
+                  CALL  CONVPR( LV1, RLV1, VKIND1, -2 )
+              ELSE
+                  READ(VALEUR,'(BN,E10.0)',ERR=901,IOSTAT=IO) RLV1
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( LV1, RLV1, VKIND,  +2 )
+                  ELSE
+                      CALL LVCODE( LV1, RLV1/1000.,1 ) 
+                  ENDIF
+              END IF
+          END IF
+
+          VKIND2 = VKIND1
+
+          OK = RPBLOC('LV2',VALEUR)
+          IF (OK)                                              THEN
+              LIGNE(51:55) = VALEUR
+              PERIOD = INDEX( VALEUR, '.' )
+              IF (PERIOD.EQ.0 .AND. CKIND.EQ.' ')              THEN
+                  READ(VALEUR,'(BN,I10)'  ,ERR=901,IOSTAT=IO)  LV2
+                  CALL  CONVPR( LV2, RLV2, VKIND2, -2 )
+              ELSE
+                  READ(VALEUR,'(BN,E10.0)',ERR=901,IOSTAT=IO) RLV2
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( LV2, RLV2, VKIND,  +2 )
+                  ELSE
+                      CALL LVCODE( LV2, RLV2/1000.,1 ) 
+                  ENDIF
+              END IF
+          ELSE
+               LV2 =  LV1
+              RLV2 = RLV1
+          END IF
+
+          OK = RPBLOC('NAME',VALEUR)
+          IF (OK) READ(VALEUR,'(A4)',    ERR=901,IOSTAT=IO) NAME1
+          IF (NAME1.NE.' ') CALL LEADBLK( NAME1 )
+          IF (NAME1.NE.' ' .AND. NAME1.NE.'ALL')               THEN
+
+           OK = RPBLOC('NAME2',VALEUR)
+           IF (OK) READ(VALEUR,'(A4)',   ERR=901,IOSTAT=IO) NAME2
+
+          END IF
+
+          IF (INT8 < ZERO)                                     THEN 
+              NEGINT = .TRUE. 
+              INT8    = -INT8
+          ELSE 
+              NEGINT = .FALSE. 
+          END IF 
+
+      ELSE
+
+***        READ THE CONTROL CARD...
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010,IOSTAT=IO,ERR=901,END=901) 
+     +                     NT1,NT2,ANT1,ANT2, LV1,LV2,
+     +                     NAME1,NAME2,DTM,INA
+              CALL BURNF
+
+              CALL  CONVPR( LV1, RLV1, VKIND1, -2 )
+              CALL  CONVPR( LV2, RLV2, VKIND2, -2 )
+
+              IF (NAME1.NE.' ') CALL LEADBLK( NAME1 )
+          END IF
+
+          IF (INA.NE.0) NA = .TRUE.
+
+***        CONVERT ANT1 AND CHECK IF ANT2 IS TO BE USED IN
+***        ASSIGNING A VALUE TO 'INT8'. 
+
+          IF (ANT1(5:5).EQ.'-')                                THEN 
+              INT8    = 0 
+              NEGINT = .TRUE. 
+          ELSE 
+              READ( ANT1,'(BN,I5)',ERR=901,IOSTAT=IO ) INT8 
+              IF (INT8 < 0)                                    THEN 
+                  NEGINT = .TRUE. 
+                  INT8    = -INT8 
+              ELSE 
+                  NEGINT = .FALSE. 
+                  IF (INT8 == ZERO) GOTO 200
+              END IF 
+          END IF 
+
+***        CHECK AND ADD TO INT ANT2 IF IT IS A 
+***        5 DIGITS NUMBER CONSISTING OF (0-9). 
+ 
+          DO  J=1,5 
+              IF (ANT2(J:J) >= '0' .and. ANT2(J:J) <= '9') CYCLE
+              GOTO 200 
+          END DO
+
+          READ( ANT2,'(BN,I5)',ERR=901,IOSTAT=IO ) INTP
+          INT8 = 100000*INT8 + INTP 
+
+      END IF
+
+  200 IF (INT8 == ZERO) INT8 = 1 
+
+      CALL SET_DTM( DTM )
+
+      IF (NOABORT) NA = .TRUE.
+
+      IF (VKIND1.NE.VKIND2) CALL                   XIT(' Select2',-12)
+
+      IF (NAME2.NE.' ') CALL LEADBLK( NAME2 )
+      IF (NAME1.NE.' ') NAME1 = SETNAM( 1,NAME1 )
+      IF (NAME2.NE.' ') NAME2 = SETNAM( 1,NAME2 )
+
+      IF ((NF.LT.3  .AND. NAME2.NE.' ') .OR.
+     +    (NF.LT.2)) CALL                          XIT(' Select2',-13)
+
+***    POSSIBLY RESET OUTPUT FILES TO 'APPEND' MODE.
+
+      CALL LOW2UP( CIOM,CIOM )
+
+      IF (CIOM.EQ.'APPEND')                                    THEN
+          CALL PUTPOSIT( 11,CIOM )
+          IF (NF.GT.2)                                         THEN
+              CALL PUTPOSIT( 12,CIOM )
+          END IF
+      END IF
+
+      IF (DTM.LT.0 .OR. DTM.GT.3)                              THEN
+          WRITE(6,6001) DTM
+          CALL                                     XIT(' Select2',-1 )
+      END IF
+
+***    CONSIDER OTHER PARTICULAR OR DEFAULT VALUES.
+
+      IF      (NT1          == MUN .OR.
+     +         LIGNE(16:35) == ' ' )                           THEN
+                                       ALTIM = .TRUE.
+      ELSE IF (LIGNE(16:25) == ' ' )                           THEN
+                                       NT1   =  NT2
+                                       INT8  =   1
+      ELSE IF (LIGNE(26:35) == ' ' )                           THEN
+                                       NT2   =  NT1
+                                       INT8  =   1
+      END  IF
+
+      IF      (LV1         .EQ.-1 .OR.
+     +         LIGNE(46:55).EQ.' ' )                           THEN
+                                       ALLEV = .TRUE.
+      ELSE IF (LIGNE(46:50).EQ.' ' )                           THEN
+                                       LV1   =  LV2
+                                      RLV1   = RLV2
+      ELSE IF (LIGNE(51:55).EQ.' ' )                           THEN
+                                       LV2   =  LV1
+                                      RLV2   = RLV1
+      END  IF
+
+                                       ZSETN = .FALSE.
+      IF (NAME1.EQ.' ')                NAME1 =  ALL
+
+      IF (.NOT.ALTIM)                                          THEN
+
+***        CHECK THAT THE DATE FORMAT HAS
+***        FOUR DIGITS FOR THE YEAR.
+
+          NT1 = Y2KDAT8( NT1 )
+          NT2 = Y2KDAT8( NT2 )
+
+          IF (NEGINT)                                          THEN
+              WRITE(6,6150) NT1,NT2,-INT8 
+          ELSE
+              WRITE(6,6150) NT1,NT2, INT8 
+          END IF
+
+      ELSE
+          WRITE(6,6151)
+      END IF
+
+      IF (.NOT.ALLEV)                                          THEN
+
+          CALL GET_IP1_STRING( LV1,ALV1 )
+          CALL GET_IP1_STRING( LV2,ALV2 )
+
+          CALL LEADBLK( ALV1 )
+          CALL LEADBLK( ALV2 )
+
+          IF (CKIND.EQ.' ' .AND. VKIND0.NE.VKIND1)             THEN
+              DO  I=LEN_TRIM( ALV1 ),1,-1
+                  IF (ALV1(I:I).EQ.' ') EXIT
+              END DO
+              IF (I.NE.0) ALV1 = ALV1(1:I)
+          END IF
+          IF (CKIND.EQ.' ' .AND. VKIND0.NE.VKIND2)             THEN
+              DO  I=LEN_TRIM( ALV2 ),1,-1
+                  IF (ALV2(I:I).EQ.' ') EXIT
+              END DO
+              IF (I.NE.0) ALV2 = ALV2(1:I)
+          END IF
+
+          WRITE(6,6200) TRIM( ALV1 ),TRIM( ALV2 )
+
+          IF (RLV1.GT.RLV2)                                    THEN
+              HOLD  = RLV1
+              RLV1  = RLV2
+              RLV2  = HOLD
+              WRITE(6,6009)
+          END IF
+
+      ELSE
+          WRITE(6,6201)
+      END IF
+
+      WRITE(6,6250) NAME1,NAME2
+
+      IF (TYPVAR.NE.' ')                                       THEN
+          ZTYPE = TYPVAR
+          WRITE(6,6500) TYPVAR
+      END IF
+
+      IT1 = NT1
+      IT2 = NT2
+
+      IF (.NOT.ALTIM)                                          THEN
+
+          NT1 = NEWTIM( IT1,DTM, OK )
+          IF (.NOT.OK) CALL                        XIT(' Select2',-2 )
+
+          NT2 = NEWTIM( IT2,DTM, OK )
+          IF (.NOT.OK) CALL                        XIT(' Select2',-3 )
+
+          NT3 = INT8
+
+      ELSE
+
+          IF (DTM == 2)                                        THEN
+              NT1 =   01 01 01 00 00
+              NT2 = ( 9999 * UN_MILLION + 12 31 23 ) * 100 + 59
+          ELSE IF (DTM /= 0)                                   THEN
+              NT1 =   01 01 01 00
+              NT2 =   9999 * UN_MILLION + 12 31 23 
+          ELSE
+              NT1 =   0
+              NT2 =   30010099 ! ( 30 01 01 00 ) - 1
+          END IF
+          NT3 = -1
+
+      END IF
+
+***    INITIALIZE COUNTERS.
+
+***    NREC  = NUMBER OF RECORDS READ
+***    NREC1 = NUMBER OF RECORDS WRITTEN TO UNIT 11
+***    NREC2 = NUMBER OF RECORDS WRITTEN TO UNIT 12
+***    WARN  = A FLAG WHICH INDICATES WHETHER OR NOT WARNINGS HAVE
+***            BEEN ISSUED
+
+      NREC  = 0
+      NREC1 = 0
+      NREC2 = 0
+      WARN1 = 0
+      WARN2 = 0
+
+      LAST1 = 0
+      LAST2 = 0
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  250 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.EQ.0) GOTO 904
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(2*LEN),F(MAX( MAXW,NWDS*NLEV )) )
+
+***    READ THE NEXT SET OF GRIDS FROM FILE 1. 
+***    STOP AT EOF OR IF STEP NUMBER EXCEEDS NT2.
+
+      IF (NAME1.NE.ALL .AND. 
+     +    NAME2.EQ.' ')                ZNAME =  NAME1
+      IF (ZNAME.NE.' ')                ZSETN = .TRUE.
+
+      
+      IF (ALLEV)                                               THEN
+          VKIND1 = GETKIND( )
+          VKIND2 = VKIND1
+      END IF
+
+  300 CALL GETSET2( 1, F,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF,F )
+
+              IF (MAXW.EQ.0)                                   THEN
+                  IF (ZSETN)
+     +            ZNAME = ' '
+                  ZSETN = .FALSE.
+                  GOTO 250
+              END IF
+
+              WRITE(6,6300) NREC  , NREC1,NREC2
+                            NRECS = NREC1+NREC2
+
+              IF (NREC .EQ. 0 ) CALL               XIT(' Select2',-4 ) 
+              IF (NRECS.EQ. 0 ) CALL               XIT(' Select2',-5 ) 
+              IF (WARN1.NE. 0   .OR.
+     +            WARN2.NE. 0 )                                THEN
+                  IF (WARN1.NE.0) WRITE(6,6101) '1',WARN1
+                  IF (WARN2.NE.0) WRITE(6,6101) '2',WARN2
+                  CALL                             XIT(' Select2',-101)
+              END IF
+              CALL                                 XIT(' Select2', 0 ) 
+
+          END IF
+
+          CALL STAMP2DATE( IBUF(2),TIME )
+          N    = NEWTIM( TIME,DTM, OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL                                 XIT(' Select2',-6 )
+          END IF
+
+          WRITE(TYPE,4) IBUF(1)
+          WRITE(NOM,4) IBUF(3)
+
+          NREC = NREC+NLEVG
+ 
+          NBRLVL = NLEVG
+
+          DO  L=1,NLEVG
+              LEV2(L) = LEV(L)
+          END DO
+
+          IF (ZSETN) ZNAME = NAME1
+
+***        IF TIMESTEP AND LEVEL NUMBERS ARE NOT WITHIN THE REQUESTED
+***        INTERVALS, GO BACK AND READ THE NEXT RECORD.
+ 
+          IF (.NOT.( ALTIM .OR. ( NEGINT.AND.FIRST1.AND.FIRST2 ) ) .AND.
+     +       ( N  <  NT1   .OR.
+     +         N  >  NT2   .OR.
+     +         MOD(  N-NT1,NT3 ) /= ZERO ) )
+     +         GOTO 300
+
+          IF (.NOT.ALLEV)                                      THEN
+
+              KIND = GETKIND( )
+
+              IF (KIND.NE.VKIND) GOTO 300
+
+              DO  L=1,NLEVG
+                  CALL CONVPR( LEV(L), ALEV(L), VK, -1 )
+              END DO
+
+***            SAVE APPROPRIATE LEVELS.
+
+              IL = 0
+              DO  L=1,NLEVG
+                  RSMALL = RSMALL0
+                  IF (ABS( ALEV(L) ) > 0.0) RSMALL = RSMALL*ABS( ALEV(L) )
+                  RS1 = ALEV(L)-DBLE( RLV1 ) ; RS2 = ALEV(L)-DBLE( RLV2 )
+                  IF (RS1 >= -RSMALL .AND. RS2 <= RSMALL)   THEN
+                      DO  I=1,NWDS
+                          F(IL*NWDS+I) = F((L-1)*NWDS+I)
+                      END DO
+                      IL = IL+1
+                      LEV2(IL) = LEV(L)
+                  END IF
+              END DO
+
+              NBRLVL = IL
+
+          END IF
+
+          IF (NBRLVL.LT.1) GOTO 300
+
+          IF (TYPE.EQ.'ZONL') IBUF(6) = NBRLVL
+
+          IF (NBRLVL.EQ.1) IBUF(4)= LEV2(1)
+
+          IF (NAME1.EQ.ALL .OR. NAME1.EQ.NOM)                  THEN
+
+              IF (ALLEV) KIND = GETKIND( )
+
+***            IF THE FIRST NAME IS 'ALL' OR REQUESTED, 
+***            WRITE ON FILE 11. 
+ 
+              IF (FIRST1)                                      THEN
+
+***                SAVE FIRST BUFFER VALUE.
+
+                  IF (NEGINT .AND. FIRST2)                     THEN 
+                      NT1    = N 
+                      WRITE(6,6350) NT1 
+                  END IF 
+
+                  FIRST1 = .FALSE. 
+                  LAST1  = N
+                  TIME1  = TIME
+                  
+              ELSE IF (LAST1 /= N)                             THEN
+
+***                CHECK FOR TIMESTEP CONSISTENCY.
+
+                  IF (ALTIM .AND. NT3.EQ.-1)                   THEN
+                      NT3 = N-LAST1
+                      INT8 = NT3
+                      WRITE(6,6450) INT8
+                  END IF
+
+                  IF (LAST1+NT3 /= N)                          THEN
+                      IF (NEGINT .OR. NA)                      THEN
+                          NBR = (N-LAST1)/NT3-1
+                          WRITE(6,6400) '1',TIME1,TIME,NBR,DTM
+                          WARN1  = WARN1+1
+                      ELSE
+                          WRITE(6,6089) '1',TIME1,TIME,INT8
+                          CALL                     XIT(' Select2',-7 )
+                      END IF
+                  END IF
+                          
+                  LAST1 = N
+                  TIME1 = TIME
+
+              ELSE IF (NAME1.NE.ALL .AND.
+     +           .NOT.(ALLEV .AND. VKIND1.NE.KIND))            THEN
+
+                  IF (NEGINT .OR. NA)                          THEN
+                      NBR = (N-LAST1)/NT3-1
+                      WRITE(6,6400) '1',TIME1,TIME,NBR,DTM
+                      WARN1  = WARN1+1
+                  ELSE
+                      WRITE(6,6089) '1',TIME1,TIME,INT8
+                      CALL                         XIT(' Select2',-7 )
+                  END IF
+
+              END IF
+
+              IF (ALLEV) VKIND1 = KIND
+
+              CALL PUTSET2( 11, F, LEV2,NBRLVL, IBUF,MAXW )
+              NREC1 = NREC1+NBRLVL
+ 
+          ELSE IF (NAME2.NE.NIL .AND. NAME2.EQ.NOM)            THEN
+
+              IF (ALLEV) KIND = GETKIND( )
+
+***            IF SECOND NAME IS REQUESTED, WRITE ON FILE 12.
+ 
+              IF (FIRST2)                                      THEN
+
+***                SAVE FIRST BUFFER VALUE.
+
+                  IF (NEGINT .AND. FIRST1)                     THEN 
+                      NT1    = N 
+                      WRITE(6,6350) NT1 
+                  END IF 
+
+                  FIRST2 = .FALSE. 
+                  LAST2  = N
+                  TIME2  = TIME
+                  
+              ELSE IF (LAST2.NE.N)                             THEN
+
+***                CHECK FOR TIMESTEP CONSISTENCY.
+
+                  IF (LAST2+NT3.NE.N)                          THEN
+                      IF (NEGINT .OR. NA)                      THEN
+                          NBR = (N-LAST2)/NT3-1
+                          WRITE(6,6400) '2',TIME2,TIME,NBR,DTM
+                          WARN2 = WARN2+1
+                      ELSE
+                          WRITE(6,6089) '2',TIME2,TIME,INT8
+                          CALL                     XIT(' Select2',-8 )
+                      END IF
+                  END IF
+                          
+                  LAST2 = N
+                  TIME2 = TIME
+
+              ELSE IF (.NOT.(ALLEV .AND. VKIND2.NE.KIND))      THEN
+
+                  IF (NEGINT .OR. NA)                          THEN
+                      NBR = (N-LAST2)/NT3-1
+                      WRITE(6,6400) '2',TIME2,TIME,NBR,DTM
+                      WARN1  = WARN2+1
+                  ELSE
+                      WRITE(6,6089) '2',TIME2,TIME,INT8
+                      CALL                     XIT(' Select2',-8 )
+                  END IF
+                  
+              END IF
+
+              IF (ALLEV) VKIND2 = KIND
+
+              CALL PUTSET2( 12, F, LEV2,NBRLVL, IBUF,MAXW )
+              NREC2 = NREC2+NBRLVL
+ 
+          END IF
+
+***    GO GET NEXT RECORD.
+
+      GOTO 300 
+ 
+***    ERROR/EOF ON INPUT (UNIT 5).
+ 
+  901 IF (IO.NE.0) WRITE(6,6010) IO
+      CALL                                          XIT(' Select2',-9 )
+
+***    PREMATURE EOF ON UNIT 1.
+
+  904 CALL                                          XIT(' Select2',-10 ) 
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+ 5010 FORMAT(10X,5X,2I10,2A5,2I5,5X,2(1X,A4),2I5) 
+
+ 6001 FORMAT(' Unknown DTM processing value =',I5)
+ 6009 FORMAT(' Lv1 must be smaller or equal than lv2. Switching them.')
+ 6010 FORMAT(' I/O error no. ',I3,' detected.')
+
+ 6089 FORMAT(' (',A,') Found timestep out of sequence',
+     +       ' (Last/Current/Int)=',3I14)
+ 6101 FORMAT(' Variable no. ',A,' has ',I5,' missing sequences.')
+
+ 6150 FORMAT('0Select times ',I14,' (T1)  to ',I14,
+     +       ' (T2) in steps of',I10,' (T3)') 
+ 6151 FORMAT('0Select times  ... ALL TIMES.')
+ 6200 FORMAT(' Select levels',A,'  to ',A)
+ 6201 FORMAT(' Select levels ... ALL LEVELS.')
+ 6250 FORMAT(' Variable names =',2(2X,A)) 
+ 6300 FORMAT('0Records in =',I6,', records out =',2I6)
+ 6350 FORMAT(' Negative T3 reset, T1 reset to ',I14) 
+ 6400 FORMAT(' Name #',A,2X,2I14,2I5)
+ 6450 FORMAT(' Reset T3 to ',I14)
+ 6500 FORMAT(' Looking for TYPVAR=',A)
+
+      END 
+#     endif

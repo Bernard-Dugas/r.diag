@@ -1,0 +1,430 @@
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 1000000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      fullcor  IN MAT INPUT OUTPUT [ -a VAL1 ]
+*
+*
+*     AUTHOR - B.Dugas, juin 29/88.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fullcor.ptn,v 4.8 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CALCUL DES CORRELATIONS ENTRES TOUS LES M ENREGISTREMENTS
+*      D'UN FICHIER. LA MATRICE DE CORRELATION MAT EST SAUVEE EN 
+*      MODE COLONNE. LES ELEMENTS DU FICHIER IN NE SONT PAS NECES-
+*      SAIREMENT NORMALISES. LE PROGRAMME PEUT CALCULER LES CORRE-
+*      LATION DEPHASEE.
+*
+*      LE PROGRAMME N'EFFECTUE AUCUNE VERIFICATION DE LA COHERENCE
+*      DES PAS DE TEMPS, NOMS OU NIVEAUX QUI SE TROUVENT DANS LES
+*      DESCRIPTEURS D'ENREGISTREMENTS.
+*
+*     PARAMETRE...
+*      LAG (a) = DEPHASAGE EN UNITE D'ENREGISTREMENTS DU FICHIER.
+*
+*      READ(5,5000) LAG
+*5000  FORMAT(10X,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*FULLCOR      5
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 REQUESTED LAG LARGER THAN RECORD SIZE
+*       2 MEMORY ALLOCATION PROBLEM
+*       3 PROBLEM READING FILE IN
+*       4 MORE THAN ONE RECORD SIZE
+*       5 PREMATURE EOF ON INPUT
+*       6 PREMATURE EOF ON IN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM FULLCOR 
+*    1                (      IN,       MAT,       INPUT,      OUTPUT, 
+*    2                 TAPE1=IN, TAPE2=MAT, TAPE5=INPUT,TAPE6=OUTPUT) 
+ 
+*     $Log: fullcor.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  1998/10/20 17:32:14  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.3  1998/07/03  01:46:37  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/05/21  20:20:47  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1995/08/04  19:08:29  armnrbd
+*     Modifier l'entete de la matrice de sortie.
+*
+*     Revision 4.0  1994/11/17  14:20:07  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:01  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/24  15:37:11  armnrbd
+*     Initial revision
+*      
+***    JUIN 29/88 - B. DUGAS. 
+ 
+***    OCTOBRE  13/88 : ON SAUVE TOUTE LA MATRICE EN MODE COLONNE 
+***     ...             PLUTOT QU'EN MODE SYMMETRIQUE. 
+***    NOVEMBRE 09/88 : AJOUTER LA POSSIBILITE DE CORRELATION DEPHASEE. 
+***     ...             MODIFIER LE FORMAT D'IMPRESSION DES MATRICES. 
+***    AVRIL    05/89 : ON NE SUPPOSE PLUS QUE LES SERIES ONT ETE NORMA- 
+***     ...             LISEES. 
+***    AVRIL    13/89 : ON AJOUTE LE CALCUL DU DETERMINANT DE LA MATRICE 
+***     ...             DE CORRELATION. 
+ 
+*---------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXMEM
+      PARAMETER ( MAXMEM= memoire_maximale )
+
+ 
+      LOGICAL     OK,ERR
+      CHARACTER   LIGNE*80
+      REAL(8)     OLEN,RMS
+      REAL(8)     VAR,MEAN,COR,COR1,COR2,COR3,DETMAT
+      INTEGER     JBUF(HEAD),JPAK,NWDS,MAXW,LEN, NF,IO,MEM, 
+     +            WHERE1,WHERE2, I,J,L,M,M2,N,N1,N2,N3,
+     +            IER,LAG,NEWL,INFO
+ 
+      real(8),    allocatable, dimension(:) :: dat,mat
+      integer,    allocatable, dimension(:) :: ibuf,ipiv
+ 
+      LOGICAL,    external :: RPBLOC,SETIO64
+      EXTERNAL    LBLCHK,JCLPNT,GETLIGN,XIT,
+     +            GETFLD2,PUTFLD2,SETLAB,DPOTRF,
+     +            DGETRF,SUIVANT,PRECEDE,CMPLBL
+ 
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/fullcor.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2, 5,6 )
+ 
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          LAG = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=998,ERR=998,IOSTAT=IO) LAG
+
+      ELSE
+
+***        LECTURE DU DEPHASAGE DESIRE. 
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 998
+          ELSE
+              READ( LIGNE, 5000,ERR=998,END=998,IOSTAT=IO ) LAG
+              CALL BURNF
+          END IF
+
+      END IF
+
+      LAG = ABS( LAG ) 
+      WRITE(6,6000) LAG 
+ 
+***    LIRE UNIT#1 POUR DETERMINER LE NOMBRE D'ENREGISTREMENTS ET 
+***    LEUR TAILLE. 
+ 
+       M = 0
+  100  CALL SUIVANT( 1, JBUF, ERR,OK )
+          IF (.NOT.OK ) GOTO 101
+          IF (     ERR) GOTO 999
+          M = M+1
+          GOTO 100
+  101 IF (M.EQ.0) GOTO 999
+      CALL PRECEDE( 1,-1 )
+ 
+***    DEFENISSONS LES CONSTANTES DE TRAVAIL. 
+ 
+      CALL LBLCHK( LEN,NWDS,JPAK,JBUF )
+      MAXW = LEN+HEAD
+
+      M2   = M*M 
+      NEWL = NWDS-LAG 
+      IF (NEWL.LT.1) CALL                          XIT(' Fullcor',-1 ) 
+
+      OLEN = 1.0/DBLE( NEWL ) 
+ 
+***    DETERMINONS LA MEMOIRE DONT ON A BESOIN ...
+ 
+      MEM = M*NWDS + M2 + M + LEN 
+ 
+      IF (MEM.GT.MAXMEM)                                       THEN
+          WRITE(6,6002) MEM-MAXMEM
+          CALL                                     XIT(' Fullcor',-2 )
+      END IF
+ 
+***    ... ET DEFINISSONS LES POINTEURS CORRESPONDANTS.
+ 
+      Allocate( DAT(M*NWDS),MAT(M2),IPIV(M),IBUF(LEN), STAT=IER)
+
+      If (ier /= 0 .or. loc( MAT ) == 0)                       THEN
+          WRITE(6,6022) ier,MEM
+          CALL                                     XIT(' Fullcor',-2 )
+      End If
+
+***    LECTURE DE TOUTES LES DONNEES. CALCUL DE LA MOYENNE 
+***    ET DE LA VARIANCE. NORMALISATION LES DONNEES. 
+ 
+      DO 300 I=1,M 
+ 
+          WHERE1 = (I-1)*NWDS 
+          CALL GETFLD2( 1, DAT(WHERE1+1), ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         then
+              WRITE(6,6003) M ; CALL PRTLAB( IBUF )
+              CALL                                 XIT(' Fullcor',-3 )
+          END IF
+ 
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Fullcor',-4 )
+
+          MEAN = 0.0 
+          DO  J=1,NWDS 
+              MEAN = MEAN + DAT(WHERE1+J) 
+          END DO
+          MEAN = MEAN/FLOAT(NWDS) 
+ 
+          VAR = 0.0 
+          DO  J=1,NWDS 
+              DAT(WHERE1+J) = DAT(WHERE1+J)-MEAN 
+              VAR           = VAR + DAT(WHERE1+J)*DAT(WHERE1+J)
+          END DO
+
+          VAR = VAR/NWDS
+          RMS = SQRT(VAR) 
+ 
+          If (RMS > 1e-300)                                    THEN
+              DO  J=1,NWDS 
+                  DAT(WHERE1+J) = DAT(WHERE1+J)/RMS 
+              END DO
+          End If
+ 
+  300 CONTINUE 
+ 
+      IF (LAG.EQ.0)                                            THEN 
+ 
+***    INITIALISER LA DIAGONALE DE MAT ET FAIRE LE CALCUL POUR 
+***    LA PARTIE INFERIEURE DE LA MATRICE. (LAG .EQ. 0) 
+ 
+          DO 400 N=1,M 
+ 
+              N1      = M*(N-1)+N 
+              WHERE1  = NWDS*(N-1) 
+ 
+              MAT(N1) = 1.0 
+ 
+              DO 400 L=N+1,M 
+ 
+                  N2     = M*(N-1)+L 
+                  N3     = M*(L-1)+N 
+                  WHERE2 = NWDS*(L-1) 
+ 
+                  COR    = 0.0 
+                  DO  I=1,NWDS 
+                      COR = COR+DBLE( DAT(WHERE1+I) )*DAT(WHERE2+I) 
+                  END DO
+ 
+                  MAT(N2) = COR*OLEN 
+                  MAT(N3) = MAT(N2) 
+ 
+  400     CONTINUE 
+ 
+      ELSE 
+ 
+***    INITIALISER LA DIAGONALE DE MAT ET FAIRE LE CALCUL POUR 
+***    TOUTE LA MATRICE. (LAG .NE. 0) 
+ 
+          DO 500 N=1,M 
+ 
+              N1      = M*(N-1)+N 
+              WHERE1  = NWDS*(N-1) 
+ 
+              COR1 = 0.0 
+              DO  I=1,NEWL 
+                  COR1 = COR1+DAT(WHERE1+I)*DAT(WHERE1+I+LAG) 
+              END DO
+ 
+              MAT(N1) = COR1*OLEN 
+ 
+              DO 500 L=N+1,M 
+ 
+                  N2     = M*(N-1)+L 
+                  N3     = M*(L-1)+N 
+                  WHERE2 = NWDS*(L-1) 
+ 
+                  COR2   = 0.0 
+                  COR3   = 0.0 
+                  DO  I=1,NEWL 
+                      COR2 = COR2
+     +                     + DBLE( DAT(WHERE1+I    ) )*DAT(WHERE2+I+LAG) 
+                      COR3 = COR3
+     +                     + DBLE( DAT(WHERE1+I+LAG) )*DAT(WHERE2+I    ) 
+                  END DO
+ 
+                  MAT(N2) = COR2*OLEN 
+                  MAT(N3) = COR3*OLEN 
+ 
+  500     CONTINUE 
+ 
+      END IF 
+ 
+***    IMPRIMER ET SAUVER LES COLONNES DE MAT. 
+ 
+      CALL SETLAB( IBUF, 'ZONL',-1,'CORR',-1,M,1,0,-32 ) 
+ 
+      IF (LAG.EQ.0)                                            THEN 
+          WRITE(6,6100) 
+          WRITE(6,6102) (N, N=M,1,-1) 
+      ELSE 
+          WRITE(6,6101) 
+          WRITE(6,6102) (N, N=1,M) 
+      END IF 
+ 
+ 
+      DO 600 N=1,M 
+
+          IBUF(2) = N 
+          DO  L=1,M
+              DAT(L) = MAT(M*(N-1)+L)
+          END DO
+
+          IF (LAG.EQ.0)                                        THEN 
+              WRITE(6,6110) N, (DAT(L), L=M,N,-1) 
+          ELSE 
+              WRITE(6,6110) N, (DAT(L), L=1,M) 
+          END IF 
+
+          CALL PUTFLD2( 2, DAT, IBUF,MAXW ) 
+
+  600 CONTINUE 
+ 
+***    CALCUL DU DETERMINANT DE LA MATRICE MAT. 
+
+      IF (LAG.EQ.0)                                            THEN
+
+***        UTILISONS UNE FACTORISATION DE MAT EN MODE CHOLESKY,
+***        APPROPRIEE POUR UNE MATRICE SYMMETRIQUE.
+ 
+          CALL DPOTRF( 'U',M, MAT,M, INFO )
+
+          DETMAT = 1.0
+          DO  I=1,M
+              DETMAT = DETMAT*MAT((I-1)*M+I)
+          END DO
+
+          WRITE(6,6120) DETMAT*DETMAT,'DPOTRF',INFO
+
+      ELSE
+ 
+***        ON UTILISE UNE FACTORISATION DE MAT DE TYPE LU,
+***        APPROPRIEE POUR UNE MATRICE GENERALE.
+
+          CALL DGETRF( M,M, MAT,M, IPIV, INFO )
+
+          DETMAT = 1.0
+          DO  I=1,M
+              DETMAT = DETMAT*MAT((I-1)*M+I)
+          END DO
+
+          WRITE(6,6120) DETMAT,'DGETRF',INFO
+
+      END IF
+ 
+***    FIN NORMALE. 
+
+      CALL                                         XIT(' Fullcor', 0 ) 
+ 
+***    PAS DE SECTION SUR UNIT#5. 
+ 
+  998 CALL                                         XIT(' Fullcor',-5 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT#1. 
+ 
+  999 CALL                                         XIT(' Fullcor',-6 ) 
+*---------------------------------------------------------------------- 
+
+ 0005 FORMAT(BN,I5)
+ 5000 FORMAT(10X,I5) 
+
+ 6000 FORMAT(' Lag = ',I5) 
+ 6002 FORMAT(' Missing at least ',I9,'words of available memory.')
+ 6022 FORMAT(' ALLOCATE error = ',I5,' while requesting ',I9,' words.')
+ 6003 FORMAT(' At record No.',I5,', ibuf= ')
+ 6100 FORMAT(/' The lower half of the symmetric', 
+     +       ' correlation matrix is given by :'/) 
+ 6101 FORMAT(/' The lag-correlation matrix is given by :'/) 
+ 6102 FORMAT(2X,I6,4X,I6,4X,I6,4X,I6,4X,I6,4X,I6, 
+     +       4X,I6,4X,I6,4X,I6,4X,I6,4X,I6,4X,I6) 
+ 6110 FORMAT(/' COLUMN ',I6/(1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3, 
+     +       1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3)) 
+ 6120 FORMAT(/' The determinant of this matrix is ',E13.7/
+     +        ' Factorization by ',A6,' reports Info=',I5)
+ 
+      END 
+#     endif

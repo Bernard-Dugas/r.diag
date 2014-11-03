@@ -1,0 +1,731 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if !defined (nombre_de_taches)
+#         define   nombre_de_taches 4
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggacof  GGFILE SPFILE INPUT OUTPUT  [-lrt VAL1  -lmt  VAL2  \ 
+*                                           -ktr VAL3  -kuv [VAL4] \ 
+*                                           -npg VAL5  -kind VAL6  \ 
+*                                           -def VAL7 ]
+*
+*
+*
+*     DESCRIPTION...
+*      ggacof  - CONVERTS GAUSSIAN GRID (OR ZONAL CROSS-SECTION) FILE TO
+*                SPECTRAL COEFFICIENT FILE
+*
+*
+*     AUTHOR  - J.D.Henderson, 31 MARS 1981.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggacof.ptn,v 4.13 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     PURPOSE - CONVERTS A FILE OF GAUSSIAN GRIDS (OR GAUSSIAN ZONAL
+*               CROSS-SECTIONS) TO SPECTRAL COEFFICIENTS.
+*     NOTE    - THE ZONAL CASE OUTPUT SPECTRAL ARRAY HAS NON-ZERO VALUES
+*               ONLY FOR THE M=0 PART (ESSENTIALY, THE LEGENDRE TRANSFORM).
+*               ALL SPECTRAL FIELDS WILL BE OF THE SAME SIZE.
+*
+*
+*     INPUT FILE...
+*      GGFILE = FILE OF GAUSSIAN GRIDS (GLOBAL, HEMISPHERIC OR ZONAL)
+*
+*     OUTPUT FILE...
+*      SPFILE = SPECTRAL COEFFICIENTS.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      LRT,LMT = N,M TRUNCATION SPECTRAL WAVE NUMBERS
+*      KTR     = TRUNCATION TYPE (0,1=RHOMBOIDAL, DEFAUT=2=TRIANGULAR)
+*      KUV     = 0 FOR NORMAL ANALYSIS (PRIMARY DEFAULT)
+*                1 TO CONVERT REAL WINDS TO MODEL WINDS (SECONDARY DEFAULT)
+*      KPACK   = SPECTRAL PACKING DENSITY. 0 DEFAULTS TO AT LEAST 64 BITS
+*      (npg)     AND MORE, IF THE INPUT RECORD SPECIFIED MORE THAN THAT.
+*      KIND      DETERMINES THE PROCESSING OPTION IN THE FOLLOWING WAY
+*              = 0 ==> GLOBAL INPUT GRIDS, GLOBAL COEFFICIENTS OUTPUT,
+*              > 0 ==> HEMISPHERIC INPUT, SYMMETRIC COEFFICIENTS,
+*              < 0 ==>  "     "      "    ANTI-SYMMETRIC COEFFICIENTS,
+*
+*      NOTES 1) IF (INPUT KHEM.EQ.0) AND (KIND.NE.0), THE ABSOLUTE VALUE
+*               OF KIND WILL REPLACE KHEM AND AN INFORMATIVE MESSAGE 
+*               WILL BE PRINTED.
+*            2) KTR=1 IS AUTOMATICALLY MODIFIED TO KTR=0. HISTORICALLY,
+*               THESE ARE THE TWO VALUES USED AT RPN AND CCCMA TO
+*               SPECIFY RHOMBOIDAL TRUNCATIONS, RESPECTIVELY.
+*            3) Specifying "-def Z" implies that the spectral transform
+*               will be executed even if the input grid is of type 'Z'.
+*
+*      READ( 5,5010 ) LRT,LMT,KTR,KUV,KPACK,KIND
+*5010  FORMAT(10X,6I5)
+*
+*     COMMENTS CONCERNING THE USAGE OF KUV...
+*
+*      THIS PARAMETER IS ONLY RELEVANT FOR VECTOR COMPONENTS AND SHOULD
+*      NEVER BE USED FOR SCALAR FIELDS. SPECTRAL PROJECTIONS OF VECTOR
+*      COMPONENTS CAN ONLY BE CARRIED ON SO-CALLED MODEL COMPONENTS,
+*      WHICH ARE ASSUMED THE BE THE REAL WINDS MULTIPLIED BY
+*
+*                  COS( LAT )/( EARTH RADIUS ).
+*
+*      THE MODEL WINDS ARE THUS CONTINUOUS AT THE POLES AND CAN THEN
+*      BE CORRECTLY PROJECTED. THE NORMAL MODE OF OPERATION ASSUMES
+*      THE PRESENCE OF SO-CALLED MODEL WINDS AND DOES NO CONVERSIONS.
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*   GGACOF   30   30    0    1    2    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNKNOWN TRUNCATION (KTR NOT EQUAL 0 OR 2)
+*       2 INPUT GRID TYPE IS NOT GAUSSIAN
+*       3 MORE THAN ONE SIZE IN GGFILE
+*       4 KIND NOT ZERO IN ZONAL CASE
+*       5 ERROR ABORT READING INPUT
+*       6 PREMATURE EOF ON GGFILE
+*       7 OUTPUT ARRAY IS TOO LARGE
+*       8 UNABLE TO ALLOCATE WORKING MEMORY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggacof
+*    +               (GGFILE,       SPFILE,       INPUT,       OUTPUT,
+*    +          TAPE1=GGFILE, TAPE2=SPFILE, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ----------------------------------------------------------------
+ 
+*     $Log: ggacof.ptn,v $
+*     Revision 4.13  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.12  2013/10/16 20:21:33  bernard
+*      - Declarations 'a la' F90
+*      - Utiliser les macros latitude_maximale et lm_maximal pour definir MAXJ et MAXM, respectivement
+*      - Tous les calculs se font en mode 64 bits, de meme que l'I/O (npg=-64 par defaut)
+*      - Gestion des allocationa de memoire avec ALLOCATE plutot que HPALLOC/DEHPALLC
+*      - Ajouter l'option de forcer le calcul meme si le type de grille n'est pas GRID.
+*        Pour ce faire, on passe le GRTYP approprie come valeur a l'argument "-def"
+*      - Ne plus faire d'appel a MACSPE
+*
+*     Revision 4.11  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.10  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.9  2001/02/14 17:16:26  armnrbd
+*     Changer la valeur de defaut de KTR.
+*     Utiliser GETHIC et GETHIGH plutot que GETPARC,
+*     GETXGI et CXGAIG pour determiner la valeur de IG2.
+*
+*     Revision 4.8  2000/03/07 21:40:49  armnrbd
+*     Ajouter des commentaires sur l'usage du parametre "-kuv".
+*
+*     Revision 4.7  1999/10/01 17:42:38  armnrbd
+*     Ajouter un code d'erreur dans les cas d'aliasing lineaire.
+*
+*     Revision 4.6  1998/07/23 19:55:02  armnrbd
+*     Modifier le traitement associe a la routine MPSERV.
+*
+*     Revision 4.5  1998/07/23  03:25:18  armnrbd
+*     Renverser l'ordre des latitudes pour une grille Lat-Long si IG2=1.
+*
+*     Revision 4.4  1998/07/03  02:26:25  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1998/06/11  18:49:31  armnrbd
+*     La valeur par defaut de KPAK devient -32.
+*
+*     Revision 4.2  1997/09/26  18:36:02  armnrbd
+*     Deuxieme phase de la generalisation de taille_entete.
+*
+*     Revision 4.1  1997/09/26  17:38:54  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:20:12  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.3  94/08/09  15:06:37  armnrbd
+*     Re-activer les modes de travail hemispheriques.
+*     
+*     Revision 3.2  94/08/08  13:15:49  armnrbd
+*     Corriger la documentation automatique.
+*     
+*     Revision 3.1  94/03/08  15:18:56  armnrbd
+*     Corriger la documentation.
+*     
+*     Revision 3.0  93/10/13  13:56:05  13:56:05  armnrbd (Bernard Dugas)
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.6  93/08/04  12:51:29  12:51:29  armnrbd (Bernard Dugas)
+*     Utiliser CLRLMT dans les calculs de lrlmt.
+*     Utiliser l'option d'allocation Real*8 de HPALLOC.
+*     
+*     Revision 1.5  93/03/02  10:42:20  armnrbd
+*     Corriger le traitement des coupes zonales.
+*     
+*     Revision 1.4  92/12/21  15:33:40  armnrbd
+*     Utiliser FFTINI2 (SFFT au niveau FACTOR5a).
+*     Implanter defaut primaire/secondaire pour KUV.
+*     
+*     Revision 1.3  92/12/19  23:01:53  armnrbd
+*     Utiliser RPBLOC pour passer les parametres.
+*     Utiliser les symmetries hemispheriques dans les transformees de legendre.
+*     
+*     Revision 1.2  92/03/17  12:33:01  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/10  16:15:48  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:43  armnrbd
+*     Initial revision
+*     
+ 
+*     JAN 17/91 - B.DUGAS    (CALL TO GETLIGN ADDED)
+*     NOV 16/90 - B.DUGAS    (VERSION CY920/IRIX F77: LGTST, GCOF, ETC.)
+*     MAI 12/89 - B.DUGAS    (CORRIGER LA VALEUR DU SCALAIRE IASIZE ET
+*                             SURTOUT CORRIGER LA BOUCLE 300 DE FRAST ...)
+*     NOV 28/88 - B.DUGAS    (CAS DE GRILLES HEMISPHERIQUES SYMMETRIQUES/
+*                             ANTI-SYMM, UTLISER "CALL MEMORY" ET ENLEVER
+*                             LA LIMITE DE DIMENSION SPECTRALE T42 ...).
+*     DEC 17/87 - F.MAJAESS. (FIX THE PROGRAM SO THAT IT WON'T ABORT FOR
+*                             THE ZONAL CASE WITH M DIFFERENT FROM ZERO).
+*     AUG 13/85 - B.DUGAS    (AUGMENTER DIM SPECTRALE A T42).
+*     MAR 31/81 - J.D.HENDERSON
+ 
+*---------------------------------------------------------------------------
+      IMPLICIT      none
+
+      REAL(8), PARAMETER :: ZERO = 0.0
+      INTEGER, PARAMETER :: HEAD = taille_entete
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXM = lm_maximal , MAXNP = 64
+
+      LOGICAL       OK
+      CHARACTER(4)  TYPE,NAME
+      CHARACTER     GRTYP,TYPEG
+      CHARACTER     LIGNE*80,VALEUR*10,PKTYP*2
+      INTEGER       KHEM,LAZ,LMZ,LRLMTZ,NZX,LRT,LMT,IO
+      INTEGER       LEV(MAXNP),ZLEV,NR,ILEV,NSP,NGG,MAXLR
+      INTEGER       IB(HEAD,MAXNP),IFAC(20),LSR(2,MAXM),I,J,L
+      INTEGER       JBUF(HEAD),KPAK,NP,NFF,NPKGG,IER
+      INTEGER       ILG1,ILH,ILATH,LGG,LA,LA2,LR,LM,LRLMT,KTR,MAXL
+      INTEGER       MAXW,NWDS,LENSPE,LENGRD,ILG,ILAT,KUV,KIND,NLEV
+      REAL(8)       CL(MAXJ),RAD(MAXJ),WOSSL(MAXJ),SL(MAXJ),WL(MAXJ)
+      REAL(8)       DALP,DP
+
+      INTEGER       IG1,IG2,IG3,IG4
+      REAL          XG1,XG2,XG3,XG4
+
+      INTEGER,      DIMENSION(:),ALLOCATABLE :: IBUF
+      REAL(8),      DIMENSION(:),ALLOCATABLE :: AP,CT,WRK,TRIG,WG,WZ
+      REAL(8),      DIMENSION(:),ALLOCATABLE :: WS,P,CA,ALP,EPSI
+
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+C$    INTEGER       mpserv,Bidon
+C$    EXTERNAL      mpserv
+
+      LOGICAL,      EXTERNAL :: RPBLOC,SETIO64
+      INTEGER,      EXTERNAL :: GETHIGH,CLRLMT
+      CHARACTER(4), EXTERNAL :: GETHIC,GETYP
+      EXTERNAL      JCLPNT,GETLIGN,BURNF
+      EXTERNAL      GETBUF2,DIMGT2,LBLCHK,SETLAB,FFTINI2
+      EXTERNAL      LGTST,GETFLD2,GCOF,LWBW,PUTFLD2,XIT,ROWORD
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggacof.ptn,v $'
+
+*===================================================================
+***    ACCEDER LES FICHIERS D'E/S.
+ 
+                   NFF  = 4
+      CALL JCLPNT (NFF, 1,2, 5,6 )
+ 
+      PKTYP = GETYP( 1 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+*-------------------------------------------------------------------
+
+***    READ SPECTRAL N AND M TRUNCATION NUMBERS. USE (IR,IR) FOR TRI-
+***    ANGULAR IR TRUNCATION. FOR WINDS USE (IR+1,IR). IF KUV=1, CON-
+***    VERT  REAL WINDS  TO MODEL WINDS.  KPACK IS THE OUTPUT PACKING
+***    DENSITY  (0 DEFAULTS TO 2).  KIND DETERMINES CERTAIN  TYPES OF
+***    PROCESSING OPTIONS.
+  
+      TYPEG = ' '
+
+      IF (RPBLOC( ' ',VALEUR ))                                    THEN
+
+          LRT  = 0
+          LMT  = 0
+          KTR  = 2
+          KUV  = 0
+          KPAK = 0
+          KIND = 0
+
+          OK = RPBLOC('LRT',VALEUR)
+          IF (OK) READ(VALEUR,10,ERR=9000,IOSTAT=IO) LRT
+          OK = RPBLOC('LMT',VALEUR)
+          IF (OK) READ(VALEUR,10,ERR=9000,IOSTAT=IO) LMT
+          OK = RPBLOC('KTR', VALEUR)
+          IF (OK) READ(VALEUR,10,ERR=9000,IOSTAT=IO) KTR 
+          OK = RPBLOC('KUV', VALEUR)
+          IF (OK) READ(VALEUR,10,ERR=9000,IOSTAT=IO) KUV
+          OK = RPBLOC('NPG', VALEUR)
+          IF (OK) READ(VALEUR,10,ERR=9000,IOSTAT=IO) KPAK
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ(VALEUR,10,ERR=9000,IOSTAT=IO) KIND
+
+          OK = RPBLOC('DEFAUT',TYPEG )
+          CALL LOW2UP( TYPEG,TYPEG )
+          IF (TYPEG == 'G') TYPEG = ' '
+
+      ELSE
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                             THEN
+              GOTO 9001
+          ELSE
+              READ( LIGNE, 5010, ERR=9000,END=9001,IOSTAT=IO ) 
+     +                           LRT,LMT,KTR,KUV,KPAK,KIND
+              CALL BURNF
+          END IF  
+
+      END IF
+  
+      IF (KUV  .EQ.1)   WRITE(6,6100)
+      IF (KIND .GT.0)   WRITE(6,6110)
+      IF (KIND .LT.0)   WRITE(6,6120)
+      IF (KIND .NE.0)   KIND = KIND/IABS(KIND)
+      IF (KTR  .EQ.1)   KTR  = 0
+
+      IF (KTR  .NE.0 .AND. KTR.NE.2)                           THEN
+          WRITE(6,6001) KTR
+          CALL                                     XIT(' Ggacof ',-1)
+      END IF
+  
+      LRLMT = CLRLMT( LRT+1,LMT+1,KTR,.TRUE. )
+  
+      CALL DIMGT2( LSR, LA, LR,LM,KTR,LRLMT, KIND,-1 ) 
+      CALL DIMGT2( LSR, LA2,LR,LM,KTR,LRLMT,  0,  -1 ) 
+      WRITE(6,6130) LA,LR,LM,KTR,LRLMT
+  
+***    READ THE FIRST INFO BUFFER FIELD TO GET THE TYPE, SIZES.
+  
+      NR=0
+ 
+      CALL GETBUF2( -1, JBUF,HEAD,OK )
+      CALL PRTLAB( JBUF )
+      IF (.NOT.OK) GOTO 9002
+  
+                     KHEM =      JBUF(7)
+      IF (KPAK.EQ.0) KPAK = MIN( JBUF(8),-64 )
+ 
+***    CHECK THE NUMBER OF PARALLEL THREADS AVAILABLE.
+
+      NP    =  MIN( 1, MAXNP )
+C$    NP    =  nombre_de_taches
+C$    NP    = mpserv('THREADS',NP)
+C$    Bidon = mpserv('BLOCK',Bidon)
+
+      WRITE(TYPE,4) JBUF(1)
+
+***    CHECK THAT THE INPUT IS ON A GAUSSIAN GRID.
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          GRTYP = GETHIC ('GRTYP',JBUF )
+          IG2   = GETHIGH('IG2'  ,JBUF )
+          IF (GRTYP /= 'G' .AND. GRTYP /= TYPEG)               THEN
+              WRITE(6,6002) GRTYP
+              if (TYPEG /= ' ') WRITE(6,6003) TYPEG
+              CALL                                 XIT(' Ggacof ',-2 )
+          ELSE IF (GRTYP == TYPEG)                             THEN
+              IG2 = 0
+          END IF
+      ELSE
+          IF (TYPE /= 'GRID') CALL                 XIT(' Ggacof ',-2 ) 
+          GRTYP = 'G'
+          IG2   =  0
+      END IF
+
+************************************************************************
+      IF (TYPE /= 'ZONL')                                      THEN
+***********************************************************************
+
+***        GRID FIELD CASE.
+  
+          ILG1  = JBUF(5)
+          ILAT  = JBUF(6)
+  
+          IF (KHEM.EQ.0 .NEQV. KIND.EQ.0)                      THEN
+              WRITE(6,6150) KHEM,KIND
+              KHEM = IABS(KIND)
+          END IF
+ 
+          ILATH = ILAT/2
+
+          IF (KIND.NE.0)                                       THEN 
+              KIND  = KIND/IABS(KIND)
+              ILATH = ILAT
+          END IF
+  
+          ILG   = ILG1-1
+          IF (MOD( ILG1,2 ).EQ.0) ILG = ILG1
+    
+          ILH   = ILG/2+1
+          LGG   = ILG1*ILAT
+          KIND  = KIND*KHEM
+  
+***        DETERMINE NECESSARY JBUF SIZE.
+ 
+          CALL LBLCHK( LENGRD, NWDS,NPKGG,JBUF )
+          CALL SETLAB( JBUF, 'SPEC',-1,' ',-1,LA,1,LRLMT,KPAK ) 
+          CALL LBLCHK( LENSPE, NWDS,KPAK,JBUF )
+  
+          MAXW  = MAX(LENSPE,LENGRD)-HEAD
+  
+          IF (ILG.LT.3*(LM-1)+1) WRITE(6,6160)
+          IF (KTR.EQ.0) MAXLR = LR+LM-2
+          IF (KTR.EQ.2) MAXLR = LR   -1
+          IF (ILG .LT.2*(LM-1)+1 .OR.
+     +        ILAT.LT.(MAXLR+1)  )                             THEN
+              WRITE(6,6007) 
+              CALL                                 XIT(' Ggacof ',-7 )
+          END IF
+  
+*---------------------------------------------------------------------
+***        ALLOCATE MEMORY.
+
+          allocate( AP  (  ILH *2 * ILAT      ), \
+                    ALP (( LA2    + LM   ) *NP), \
+                    CA  (  LA2                ), \
+                    CT  (  LA2 *2          *NP), \
+                    EPSI(( LA2    + LM   )    ), \
+                    P   (  LA     * ILATH     ), \
+                    TRIG(  ILG    * 6         ), \
+                    WG  (  LGG             *NP), \
+                    WRK (  ILG *2          *NP), \
+                    WS  (( LA  *2 )        *NP), \
+                    IBUF(  MAXW   + HEAD      ), STAT=IER )
+          
+          IF (IER /= 0) CALL                      XIT(' Ggacof ',-8 )
+
+*-------------------------------------------------------------------
+***        FIRST TIME ONLY, SET CONSTANTS FOR SPECTRAL TO GRID
+***        TRANSFORMATIONS. 
+
+          CALL FFTini2( TRIG,IFAC,ILG, IER ) 
+
+          CALL LGTST( ILAT,LRLMT, SL,WL, CA,P,DP,
+     +                CL,RAD,WOSSL,  ALP,DALP,EPSI,
+     +                LSR,LA,LM, .TRUE.,.FALSE., KIND,NP)
+
+          MAXL = NP
+ 
+          WRITE(6,6170) LR,LM,ILG1,ILAT,MAXL
+  
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+  100     ILEV = 0
+          NGG  = 1
+
+              DO 200 L=1,MAXL
+  
+                  CALL GETFLD2( 1, WG(NGG), 'GRID',-1,' ',-1,
+     +                             IBUF,MAXW,OK )
+  
+                  IF (.NOT.OK)                                 THEN
+                      IF (ILEV.EQ.0) GOTO 400
+                      GOTO 250
+                  END IF
+  
+                  IF (IBUF(5).NE.ILG1 .OR. IBUF(6).NE.ILAT)    THEN
+                      CALL                         XIT(' Ggacof ',-3 )
+                  END IF
+  
+                  DO  I=1,HEAD
+                      IB(I,L) = IBUF(I)
+                  END DO
+   
+                  IF (PKTYP.EQ.'SQ' .AND. IG2.EQ.1)
+     +                CALL ROWORD( WG(NGG),WRK,ILG1,ILAT )
+
+                  ILEV = ILEV+1
+                  NGG  = NGG+LGG
+  
+  200         CONTINUE
+
+***            CONVERT ILEV GRIDS TO SPECTRAL COEFF.
+  
+  250         IF (KUV.EQ.1) 
+     +            CALL LWBW( WG, ILG1,ILAT,ILEV,CL, 1 )
+ 
+              DO 300 L=1,ILEV
+                  NSP = (L-1)*LA*2+1
+                  NGG = (L-1)*LGG +1
+                  CALL GCOF( WG(NGG),WS(NSP), AP,P,KIND, 
+     +                       ILG1,ILAT,LA,ILH, NP,LM,ILG, 
+     +                       CT,LSR,IFAC,WRK, TRIG,WL )
+  300         CONTINUE
+
+*-------------------------------------------------------------------
+***            WRITE ALL THE SPECTRAL FIELDS ONTO FILE 2.
+  
+              NSP = 1
+              DO 350 L=1,ILEV 
+  
+                  DO  I=9,HEAD
+                      IBUF(I) = IB(I,L)
+                  END DO
+
+                  WRITE(NAME,'(A4)') IB(3,L)
+                  CALL SETLAB( IBUF,'SPEC',IB(2,L),NAME,IB(4,L),
+     +                               LA,      1,  LRLMT,  KPAK )
+
+                  IF (NR .EQ.0) CALL PRTLAB( IBUF )
+                  CALL PUTFLD2( 2, WS(NSP), IBUF,MAXW )
+  
+                  NSP = NSP+2*LA
+                  NR  = NR+1
+  
+  350         CONTINUE
+  
+***            STOP IF ALL GRIDS HAVE BEEN PROCESSED.
+***            OTHERWISE, GO BACK FOR THE NEXT SET.
+  
+  400         IF (.NOT.OK)                                     THEN
+                  WRITE(6,6000) NR
+                  CALL                             XIT (' Ggacof ', 0 ) 
+              ENDIF 
+  
+          GOTO 100
+
+*********************************************************************  
+      ELSE
+*********************************************************************
+
+***        ZONAL CROSS-SECTION CASE.
+  
+          IF (KIND.NE.0)                                       THEN
+              WRITE(6,6004)
+              CALL                                 XIT (' Ggacof ',-4 )
+          END IF
+  
+          LAZ    = LA
+          LMZ    = LM
+          LRLMTZ = LRLMT
+  
+          IF (LMT.NE.0)                                        THEN
+              LA    = LR
+              LM    = 1
+              LRLMT = CLRLMT( LR,LM,KTR,.TRUE. )
+          END IF
+  
+          ILAT  = JBUF(5)
+          ILATH = ILAT/2
+          IF (KIND.NE.0) ILATH = ILAT
+          ZLEV  = JBUF(6)
+          CALL PRTLAB( JBUF )
+  
+          MAXW  = MAX( 2*LAZ+1, ILAT*ZLEV )*2+4
+  
+*------------------------------------------------------------------
+***        ALLOCATE MEMORY.
+
+          allocate( AP  (  HEAD                   ), \
+                    CT  (  HEAD                   ), \
+                    TRIG(  HEAD                   ), \
+                    WRK (  HEAD                   ), \
+                    ALP (( LAZ    + LMZ  ) * NP*2 ), \
+                    CA  (  LAZ    + LMZ           ), \
+                    EPSI(( LAZ    + LMZ  )     *2 ), \
+                    P   (  LAZ    * ILATH         ), \
+                    WZ  (  ZLEV   * ILAT   *(NP+1)), \
+                    WS  (  ZLEV   * LAZ *2 *(NP+1)), \
+                    IBUF(  MAXW   + HEAD          ), STAT=IER )
+          
+          IF (IER /= 0) CALL                      XIT(' Ggacof ',-8 )
+
+***        FIRST TIME ONLY, SET CONSTANTS FOR
+***        SPECTRAL-GRID TRANSFORMATION.
+  
+          CALL LGTST( ILAT,LRLMT, SL,WL, CA,P,DP,
+     +                CL,RAD,WOSSL, ALP,DALP,EPSI,
+     +                LSR,LA,LM, .TRUE.,.FALSE., KHEM,NP )
+  
+          MAXL = NP
+
+          WRITE(6,6180) LR,LMZ,ILAT,MAXL
+  
+*--------------------------------------------------------------------------
+***        READ AS MANY CROSS-SECTIONS AS POSSIBLE.
+***        KUV=1 CONVERTS REAL WINDS TO MODEL WINDS.
+  
+ 1000     ILEV = 0
+          NZX  = 1
+
+          DO 1100 L=1,MAXL
+  
+                  IF (ZLEV.EQ.1)                               THEN
+                      CALL GETFLD2( 1, WZ(NZX), 'ZONL',-1,' ',-1,
+     +                                 IBUF,MAXW,OK ) 
+                      NLEV = 1
+                  ELSE
+                      CALL GETZX2(  1, WZ(NZX),ILAT,LEV,NLEV, 
+     +                                 IBUF,MAXW,OK )
+                  END IF
+  
+                  IF (.NOT.OK)                                 THEN
+                     IF (ILEV.EQ.0) GOTO 1450
+                     GOTO 1150
+                  END IF
+  
+                  DO  I=1,HEAD
+                      IB(I,L) = IBUF(I) 
+                  END DO
+  
+                  ZLEV = NLEV
+                  ILEV = ILEV+ZLEV
+                  NZX  = NZX +ZLEV*ILAT
+  
+ 1100         CONTINUE
+  
+***            CONVERT ILEV FIELDS TO SPECTRAL COEFF.
+***            NORMAL SPEC FIELDS ARE (LR,LM) BUT WINDS ARE (LRW,LM).
+  
+ 1150         IF (KUV.EQ.1) 
+     +            CALL LWBW( WZ, 1,ILAT,ILEV,CL, 1 )
+ 
+              DO 1250 L=1,ILEV
+                  NSP = (L-1)*LAZ*2+1
+                  NZX = (L-1)*ILAT +1
+                  CALL GCOF( WZ(NZX),WS(NSP), AP,P,KIND,
+     +                       1,ILAT,LA,1, NP,1,1, 
+     +                       CT,LSR,IFAC,WRK,TRIG,WL )
+ 1250         CONTINUE
+  
+***            WRITE ALL THE SPECTRAL FIELDS ONTO FILE 2.
+  
+              NSP = 1
+              DO 1400 L=1,ILEV/ZLEV
+
+                  DO  I=9,HEAD
+                      IBUF(I) = IB(I,L)
+                  END DO
+
+                  WRITE(NAME,'(A4)') IB(3,L)
+                  CALL SETLAB( IBUF, 'SPEC',IB(2,L),NAME,  IB(4,L),
+     +                                LAZ,     1,   LRLMTZ,KPAK  )
+  
+***                ZERO OUT COEFFICIENT THAT WERE NOT CALCULATED.
+  
+                  DO 1300 I=2*LA,2*LAZ-1
+                      WS(NSP+I) = ZERO
+ 1300             CONTINUE
+  
+                  IF (ZLEV.EQ.1)                               THEN
+                      CALL PUTFLD2( 2, WS(NSP), IBUF,MAXW ) 
+                      NSP = NSP+2*LAZ
+                  ELSE
+                      DO 1350 I=1,ZLEV
+                          IBUF(4) = LEV(I)
+                          CALL PUTFLD2( 2, WS(NSP), IBUF,MAXW )
+                          NSP = NSP+2*LAZ
+ 1350                 CONTINUE
+                  END IF
+  
+                  NR  = NR+ZLEV
+  
+ 1400         CONTINUE
+  
+***            STOP IF ALL GRIDS HAVE BEEN PROCESSED.
+***            OTHERWISE GO BACK FOR THE NEXT SET.
+  
+ 1450         IF (.NOT.OK)                                     THEN
+                  WRITE(6,6000) NR
+                  CALL                             XIT(' Ggacof ', 0 )
+              END IF
+  
+          GOTO 1000 
+  
+************************************************************************
+      ENDIF
+************************************************************************
+
+***    E.O.F. ON INPUT.
+ 
+ 9000 IF (IO.NE.0) WRITE(6,6190) IO
+ 9001 WRITE(6,6005) 
+      CALL                                         XIT (' Ggacof ',-5 )
+  
+***    E.O.F. ON UNIT 1.
+  
+ 9002 WRITE(6,6006) 
+      CALL                                         XIT (' Ggacof ',-6 )
+  
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+   10 FORMAT(BN,I10)
+ 
+ 5010 FORMAT(10X,6I5)
+ 
+ 6000 FORMAT('0',I6,' records converted.')
+ 
+ 6001 FORMAT(' Unsupported truncation (KTR) =',I5)
+ 6002 FORMAT(' Input grid type is not gaussian, GRTYP=',A)
+ 6003 FORMAT(' And it is not GRTYP=',A)
+ 6004 FORMAT(' Kind has to be zero in zonal cross-section cases.')
+ 6005 FORMAT(' Empty/Illegal input record.')
+ 6006 FORMAT(' Empty data file.')
+ 6007 FORMAT(' Input grid too small to prevent linear aliasing.')
+ 
+ 6100 FORMAT('0 Include wind conversion.'/)
+ 6110 FORMAT(' Symmetric hemispheric processing requested.')
+ 6120 FORMAT(' Anti-Symmetric hemispheric processing requested.')
+ 6130 FORMAT('0LA,LR,LM,KTR,LRLMT=',4I8,I10)
+ 6150 FORMAT(' Mismatch between input grid type (KHEM=',I6,')',
+     +       ' and requested'/' processing option (KIND=',I6,');',
+     +       ' KIND has precedence.')
+ 6160 FORMAT(' Possible quadratic aliasing in longitude.')
+ 6170 FORMAT(' SPEC=',2I5,'  GRID=',2I5,'  MAXLEV=',I5)
+ 6180 FORMAT(' SPEC=',2I5,'  ZONL=',I5,'  MAXLEV=',I5)
+ 6190 FORMAT(' Ggacof reports I/O error number ',I3,' on unit 5.')
+  
+      END 
+#     endif

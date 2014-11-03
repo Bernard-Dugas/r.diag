@@ -1,0 +1,1116 @@
+#     include "diagmacros.cdk"
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 20000000
+#     endif
+#     if !defined (nombre_entree_scrap)
+#         define   nombre_entree_scrap 50
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggatim  INFIL OUTFIL MASK INPUT OUTPUT [-dlat1 VAL1 -dlat2 VAL2
+*                                              -dlon1 VAL3 -dlat2 VAL4 
+*                                              -kind  VAL5]
+*
+*
+*     DESCRIPTION...
+*      GGATIM  - CONVERT GAUSSIAN GRIDS TO A NUMBER OF TIME SERIES
+*
+*
+*     AUTHORS  - F.Zwiers AND B.Dugas, DEC/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggatim.ptn,v 4.22 2014/10/09 21:43:21 dugas Exp $
+*
+*
+*     PURPOSE - TRANSPOSE A FILE OF (REAL OR COMPLEX) GRIDS, ZONAL PROFILES OR
+*               SPECTRAL ARRAYS TO PRODUCE A FILE OF  TIME SERIES OR TO  PRODUCE
+*               A TIME SERIES AT A SINGLE POINT IN A GRID, ZONAL PROFILE OR
+*               SPECTRAL ARRAY.
+*
+*     WARNING - THIS PROGRAM DOES NO TIME SEQUENCE CHECKING.
+*
+*
+*     INPUT FILES...
+*      INFIL = A TIME SERIES OF GRIDS, ZONAL PROFILES OR SPECTRAL ARRAYS
+*              FOR A REPEATABLE SEQUENCE OF VARIABLES ON THE SAME NUMBER
+*              OF VERTICAL LEVELS.  IT IS ASSUMED THAT INPUT RECORDS ARE
+*              ARRANGED IN PROPER TIME/VARIABLE/LEVEL SEQUENCE.
+*      MASK  = (OPTIONNAL) GEOGRAPHY MASK FILE CONTAINNING THE POSITIONS
+*               AT WHICH THE TIME SERIES ARE TO BE CONSTRUCTED.
+*
+*     OUTPUT FILE...
+*      OUTFIL =  A FILE OF TIME SERIES (ONE RECORD FOR EACH POINT)
+*                WITH THE STANDARD TIME SERIES LABEL -->
+*
+*                     IBOUT(1) = COEF IF SPECTRAL INPUT. UNCHANGED OTHERWISE
+*                     IBOUT(2) = LINEAR POSITION IN THE ORIGINAL ARRAY.
+*                     IBOUT(3) = NAME
+*                     IBOUT(4) = LEVEL
+*                     IBOUT(5) = LENGTH OF SERIES
+*                     IBOUT(6) = 1
+*                     IBOUT(7) = DIMENSIONS OF ARRAY KHEM (IN FORMAT CCCRRRK,
+*                                WHERE CCC IS THE NUMBER OF LONGITUDES AND RRR
+*                                IS THE NUMBER OF LATITUDES,  OR  LRLMT)
+*                     IBOUT(8) = PACKING DENSITY
+*
+*
+*      INPUT PARAMETERS...
+*
+*       (dlat1) ILAT1 <= 0                ==> TRANSPOSE THE ENTIRE GRID OR 
+*                                             ZONAL PROFILE.
+*       (dlat2) ILAT2 = (dlon2) ILON2 = 0 ==> SELECT THE TIME SERIES AT ROW 
+*                                             NUMBER ILAT1 AND COLUMN NUMBER 
+*                                             ILON1.
+*       (dlat1) ILAT1 = (dlat2) ILAT2   \ 
+*               AND                      >==> SELECT THE TIME SERIES AT ROW 
+*       (dlon1) ILON1 = (dlon2) ILON2   /     NUMBER ILAT1 AND COLUMN NUMBER 
+*                                             ILON2.
+*
+*       (kind) IMASK .NE. 0               ==> READ A MASK FILE OF 0'S OR 1'S 
+*                                             TO EXTRACTTHE DESIRED TIME SERIES. 
+*                                             DISREGARD THE OTHER INPUT PARAME-
+*                                             TERS ON THIS AND ANY OTHER CARD.
+*                                             THIS PARAMETRE IS ONLY READ ON
+*                                             THE FIRST INPUT CARD.
+*
+*       ANY OTHER VALUES OF ILAT1, ILON1 AND ILAT2, ILON2 INDICATE THAT
+*       TIME SERIES ARE TO BE CONSTRUCTED FOR ALL POINTS CONTAINED IN THE
+*       REGION WHICH HAS POINT (ILAT1, ILON1) AT ITS SOUTH-WEST CORNER
+*       AND HAS (ILAT2, ILON2) AT ITS NORTH-EAST CORNER.
+*
+*       NOTES - TO CONSTRUCT TIME SERIES IN A REGION WHICH SPANS THE
+*               GREENWICH MERIDIAN, IT IS NECESSARY TO DIVIDE THE REGION
+*               INTO TWO PARTS AND TO SUPPLY TWO GGATIM CARDS. A MAXIMUM
+*               OF NINE CARDS CAN BE READ.
+*             - 'GGATIM' CARDS ARE READ AND EXECUTED ONE AT A TIME UNTIL
+*               INPUT IS EXHAUSTED THEREBY ALLOWING THE USER TO SELECT A
+*               NUMBER OF TIME  SERIES AT VARIOUS  POINTS IN ONE CALL TO
+*               GGATIM.
+*             - THE PROGRAM USES SCRATCH FILES TO SEPERATE THE VARIABLES
+*               AND/OR THE LEVELS. EACH SYSTEM IMPOSES A LIMIT TO THE
+*               NUMBER OF SUCH FILES. THIS IN TURN IMPOSES A LIMIT ON
+*               THE NUMBER OF VARIABLES AND/OR LEVELS.
+*             - IN THE COMPLEX 'CMPL' CASE, THE OPERATION ACTUALLY
+*               YIELDS THE CONJUGATE TRANSPOSE MATRIX.
+*             - GGATIM IS THE FUNCTIONAL INVERSE OF TIMAGG.
+*               
+*
+*      READ( 5,5010 ) ILAT1,ILON1,ILAT2,ILON2,IMASK
+*5010  FORMAT(10X,5I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* GGATIM     24   44   27   47    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ILLEGAL DATA TYPE
+*       2 ILLEGAL BOX COORDINATES
+*       3 ILLEGAL COORDINATE FOR SINGNE TIME SERIE (TS)
+*       4 UNABLE TO UNPACK MASK FILE OR MASK HAS WRONG DIMENSIONS
+*       5 MASK FILE IS FULL OF ZEROES
+*       6 MEMORY ALLOCATION PROBLEMS
+*       7 TS TOO LONG (SINGLE TS MODE)
+*       8 ERROR ABORT READING INPUT
+*       9 ERROR ABORT READING INFIL
+*      10 ERROR ABORT READING MASK
+*      11 ABORT OPENNING SCRATCH FILE
+*      12 MEMORY ALLOCATION PROBLEMS
+*      13 UNSOPPORTED INPUT TYPE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggatim
+*    1               (INFIL,       OUTFIL,       MASK,       INPUT,
+*    2                                                       OUTPUT,
+*    3          TAPE1=INFIL, TAPE2=OUTFIL, TAPE3=MASK, TAPE5=INPUT,
+*    4                                                 TAPE6=OUTPUT)
+*     --------------------------------------------------------------
+
+*     $Log: ggatim.ptn,v $
+*     Revision 4.22  2014/10/09 21:43:21  dugas
+*     Conserver les dates de validites pour les fichiers CMC/RPN.
+*
+*     Revision 4.21  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.20  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.19  2010/04/01 16:08:43  dugas
+*     Corriger l'appel a WRITLEV2.
+*
+*     Revision 4.18  2010/02/20 20:47:58  dugas
+*     - Gestion dynamique de la memoire via ALLOCATE/DEALLOCATE.
+*     - Pour les fichiers CMC/RPN, IP3 contient l'ordinal de la position
+*       du point dans la grille d'origine et DEET le nombre de secondes
+*       entre les deux premiers echantillons.
+*
+*     Revision 4.17  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.16  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.15  2006/07/04 19:05:58  dugas
+*     Ajouter le support des grilles CMC/RPN de type Y et Z.
+*
+*     Revision 4.14  2004/11/12 16:42:07  dugas
+*     Verification explicite des types supportes de donnees.
+*
+*     Revision 4.13  2000/04/14 03:10:41  armnrbd
+*     Corriger la sortie d'erreur -6.
+*
+*     Revision 4.12  2000/04/07 21:01:53  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.11  1999/06/30 15:43:58  armnrbd
+*     Travailler en mode 64 bits lors de la creation de
+*     series temporelles isolees (i.e. extractions de dates).
+*
+*     Revision 4.10  1999/04/27 02:09:51  armnrbd
+*     Ajouter le support des fichiers standards RPN.
+*
+*     Revision 4.9  1998/07/03  02:26:25  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.8  1997/09/26  18:15:42  armnrbd
+*     Deuxieme phase de la generalisation de taille_entete.
+*
+*     Revision 4.7  1997/09/26  17:38:55  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.6  1996/11/12  19:19:56  armnrbd
+*     Modifier la sequence d'appel a JCLPNT.
+*
+*     Revision 4.5  1996/02/22  01:59:50  armnrbd
+*     Ajuster le parametre MAXVAR a la hausse.
+*
+*     Revision 4.4  1996/02/16  20:19:07  armnrbd
+*     Corriger le mode non_FULL.
+*
+*     Revision 4.3  1996/02/13  18:42:17  armnrbd
+*     Corriger la re-definition de MAXW.
+*
+*     Revision 4.2  1996/02/03  04:37:34  armnrbd
+*     Augmenter la taille possible de NLEVAR.
+*
+*     Revision 4.1  1996/01/24  21:32:29  armnrbd
+*     Corriger une erreur dans la lecture des parametres.
+*
+*     Revision 4.0  1994/11/17  14:20:16  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/04/12  13:07:30  armnrbd
+*     Version a plusieurs niveaux et/ou variables.
+*     
+*     Revision 3.0  93/10/13  13:56:07  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.6  93/02/24  15:47:26  armnrbd
+*     Utiliser "CALL PRECEDE" plutot que "REWIND".
+*     
+*     Revision 1.5  93/02/21  16:33:18  armnrbd
+*     Ajouter le support de RPBLOCK.
+*     Allouer le champs TS avec HPALLOC/HPDEALLC.
+*     
+*     Revision 1.4  92/11/30  21:36:29  armnrbd
+*     Remettre une code d'exit "0" apres un premier jeu de parametre.
+*     
+*     Revision 1.3  92/11/09  18:15:01  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/17  12:33:26  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/10  16:48:34  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:44  armnrbd
+*     Initial revision
+*     
+
+*     JAN 17/91 - B.DUGAS, RPN. (CALL TO GETLIGN ADDED)
+*     DEC 13/90 - B.DUGAS, RPN. (VERSION CY920/IRIX F77)
+
+*------------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      INTEGER,    PARAMETER :: MAXDIR = 99
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: MAXVAR = 999
+      INTEGER,    PARAMETER :: MAXIO  = nombre_entree_scrap
+
+      CHARACTER    LIGNE*80,GRTYP
+      REAL*8       CXIN8,CXOUT8,DELT,ECOULE
+      REAL         XIN,XOUT,CXIN,CXOUT,CTS
+      CHARACTER*4  VARIAB(MAXVAR),VALEUR,
+     +             CMASK,CCOEF,CKIND,PKTYP
+      LOGICAL      OK,BOX,SPEC,ZONL,FULL,MASK,CMPL
+      INTEGER      IXIN,IXOUT,I,J,K,L,N,IBOUT(HEAD),NF,
+     +             MAXW,LEN1,LEN,NWDS,MEM,IPAK,II,IJ,IO,
+     +             IER,K1,K2,NCOLS,NROWS,NSER,NS,ILAT1(MAXDIR),
+     +             ILAT2(MAXDIR),ILON1(MAXDIR),ILON2(MAXDIR),NL,
+     +             IMASK,NBLOCK,NSET,IROW,ICOL,IADD,KIND,NWDO,
+     +             LENV,SIZEX,SIZEY,LEV(MAXLEV),NLEV,NVAR,
+     +             NLEVAR,JBUF(HEAD),NLEVAM,STEP(MAXVAR),
+     +             NLVAR0,NLVAR1,BLOC,MAXTS,ITIME,
+     +             IER1,IER2,IER3,DEET,DATEO
+
+      POINTER    ( PT, CTS(2,1) )
+      POINTER    ( XI2, XIN (1) ),( XI3,CXIN  (2,1) )
+      POINTER    ( XI4,IXIN (1) ),( XI5,CXIN8 (2,1) )
+      POINTER    ( XO2, XOUT(1) ),( XO3,CXOUT (2,1) )
+      POINTER    ( XO4,IXOUT(1) ),( XO5,CXOUT8(2,1) )
+
+      real(8),     dimension(:), allocatable :: XIN8,XOUT8
+      real,        dimension(:), allocatable :: TS,XMSK 
+      integer,     dimension(:), allocatable :: IBUF,MSK
+
+      INTEGER      GETSIZ3
+      CHARACTER*4  GETHIC,GETYP
+      LOGICAL      RPBLOC,PBLOK,SETIO64
+      EXTERNAL     GETSIZ3,RPBLOC,JCLPNT,XIT,
+     +             GETLIGN,GETFLD2,PUTFLD2,WRITEF,READF,
+     +             PRECEDE,WRITLEV2,PUTHIC,SETIO64,
+     +             GETMSET,GETHIC,GETYP,PUTHIGH
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         MASK  / .FALSE./
+      DATA         MAXTS / memoire_maximale /
+      DATA         CMASK / 'MASK' /,
+     +             CCOEF / 'COEF' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggatim.ptn,v $'
+
+*---------------------------------------------------------------------- 
+***    ACCEDER LES FICHIERS D'E/S.
+
+                   NF  = 5
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+
+      NSER  =  0
+      PBLOK = .FALSE.
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    CHECK INPUT FILE.
+ 
+      MAXW = GETSIZ3( 1, JBUF,LEN1,NWDS,IPAK, .TRUE.,
+     +                   LEV,NLEV, VARIAB,NVAR, MAXVAR )
+
+      IF (MAXW .LE.0) GOTO 901
+
+      KIND   = JBUF(1)
+      WRITE(CKIND,0004) KIND
+      ITIME  = JBUF(2)
+      SIZEX  = JBUF(5)
+      SIZEY  = JBUF(6)
+      NLEVAR = NLEV*NVAR
+      NLEVAM = NLEVAR-1
+
+      SPEC = .FALSE.
+      ZONL = .FALSE.
+      CMPL = .FALSE.
+
+      IF (CKIND .EQ. 'CMPL') CMPL = .TRUE.
+      IF (CKIND .EQ. 'ZONL') ZONL = .TRUE.
+      IF (CKIND .EQ. 'SPEC')                                   THEN
+          WRITE(6,6030)
+          SPEC = .TRUE.
+      END IF
+
+      IF (CKIND.NE.'GRID'  .AND.
+     +    CKIND.NE.'CMPL'  .AND.
+     +    CKIND.NE.'ZONL'  .AND.
+     +    CKIND.NE.'SUBA'  .AND.
+     +    CKIND.NE.'SPEC' )                                    THEN
+          WRITE(6,6013) CKIND
+          CALL                                     XIT(' Ggatim ',-13)
+      END IF
+
+***    ONLY Y- AND Z-TYPE CMC/RPN SUBA
+***    GRIDS ARE SUPPORTED BY GGATIM.
+
+      IF (CKIND.EQ.'SUBA'  .AND.
+     +    PKTYP.EQ.'SQ'   )                                    THEN
+          GRTYP = GETHIC('GRTYP',JBUF )
+          IF (GRTYP.NE.'Y' .AND.
+     +        GRTYP.NE.'Z')                                    THEN
+              WRITE(6,6013) GRTYP
+              CALL                                 XIT(' Ggatim ',-13)
+          END IF
+      END IF
+
+***    ALLOUER L'ESPACE NECESSAIRE AU TRAVAIL.
+
+      allocate( XMSK (NWDS),
+     +           MSK (NWDS),       stat=IER1 )
+      allocate( XIN8 (NWDS*NLEVAR),
+     +          XOUT8(NWDS*NLEVAR),stat=IER2 )
+      allocate( IBUF (LEN1),       stat=IER3 )
+
+      IER = MAX( IER1,IER2,IER3 )
+      IF (IER.NE.0) CALL                           XIT(' Ggatim ',-6 )
+
+      XI2 = loc( XIN8(1) )
+      XI3 = loc( XIN8(1) )
+      XI4 = loc( XIN8(1) )
+      XI5 = loc( XIN8(1) )
+
+      XO2 = loc( XOUT8(1) )
+      XO3 = loc( XOUT8(1) )
+      XO4 = loc( XOUT8(1) )
+      XO5 = loc( XOUT8(1) )
+
+      IF (ZONL)                                                THEN
+          NWDS   = SIZEX
+          SIZEY  = SIZEX
+          SIZEX  = 1
+          VALEUR = GETHIC('NEWL',IBUF )
+          IF (VALEUR.EQ.'NEWL') JBUF(4) = 1
+      END IF
+
+      WRITE(6,6020) ; CALL PRTLAB( JBUF )
+      WRITE(6,6025) (VARIAB(I),I=1,NVAR)
+
+      CALL WRITLEV2( LEV,NLEV,JBUF )
+
+***    SET UP TIME SERIES LABEL
+ 
+      DO  I=1,HEAD
+          IBOUT(I) = JBUF(I)
+      END DO
+
+      IBOUT(1)     = KIND
+      IBOUT(6)     = 1
+
+      NCOLS        = SIZEX
+      NROWS        = SIZEY
+
+      IBOUT(7)     = (NCOLS*1000+NROWS)*10+JBUF(7)
+
+      IF (SPEC)                                                THEN
+          NCOLS    = NCOLS*2
+          IBOUT(7) = JBUF(7)
+          READ(CCOEF,0004) IBOUT(1)
+      END IF
+
+      IBOUT(8)     = JBUF(8)
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          CALL PUTHIGH( 0,'DEET',IBOUT )
+          IF (ZONL) CALL PUTHIC( ' ','NEWL', IBOUT )
+          IF (SPEC) CALL PUTHIC( '&','GRTYP',IBOUT )
+      END IF
+
+***    RE-DEFINE NWDS FOR NOW ON.
+
+      IF (CMPL) NWDS = SIZEX*SIZEY
+*------------------------------------------------------------------------
+ 
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK (ONCE ONLY).
+
+          ILAT1(1) = 0
+          ILAT2(1) = 0
+          ILON1(1) = 0
+          ILON2(1) = 0
+          IMASK    = 0
+          N        = 1
+
+          OK = RPBLOC('DLON1',LIGNE)  
+          IF (OK) READ(LIGNE,0005,ERR=900,END=900,IOSTAT=IO) ILON1(1)
+
+          OK = RPBLOC('DLON2',LIGNE)  
+          IF (OK) READ(LIGNE,0005,ERR=900,END=900,IOSTAT=IO) ILON2(1)
+
+          OK = RPBLOC('DLAT1',LIGNE)  
+          IF (OK) READ(LIGNE,0005,ERR=900,END=900,IOSTAT=IO) ILAT1(1)
+
+          OK = RPBLOC('DLAT2',LIGNE)  
+          IF (OK) READ(LIGNE,0005,ERR=900,END=900,IOSTAT=IO) ILAT2(1)
+
+          OK = RPBLOC('KIND',LIGNE)  
+          IF (OK) READ(LIGNE,0005,ERR=900,END=900,IOSTAT=IO) IMASK
+
+          OK = RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        READ *ALL* DIRECTIVE CARDS.
+
+          N = 0
+  050     CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              IF (N.NE.0) GOTO 100
+              CALL                              XIT(' Ggatim ', 0 )
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO) 
+     +        ILAT1(N+1),ILON1(N+1),ILAT2(N+1),ILON2(N+1),I
+          END IF
+
+          N = N+1
+
+***        SAUVER L'INDICATEUR DE MASQUE.
+
+          IF (N.EQ.1) IMASK = I
+
+
+          IF (N.LE.MAXDIR)                                     THEN
+              GOTO 050
+          ELSE
+              CALL BURNF
+          END IF
+
+      END IF
+
+  100 NSET = N
+      WRITE(6,6040) ILAT1(1),ILON1(1),ILAT2(1),ILON2(1),IMASK,
+     +             (ILAT1(I),ILON1(I),ILAT2(I),ILON2(I),I=2,NSET)
+ 
+ 
+      BOX  = .TRUE.
+      FULL = .FALSE.
+
+      IF (IMASK.EQ.0)                                          THEN
+ 
+***        INITIALIZE THE MASK.
+
+          DO  II=1,NWDS
+              XMSK(II) = 0.0
+          END DO
+
+          DO  II=1,NSET
+
+***            INTERPRET *ALL* THE GGATIM CARDS.
+ 
+              IF (ILAT1(II).LE.0)                              THEN
+                  NSER = NWDS
+                  DO  K=1,NSER
+                      MSK(K) = K
+                  END DO
+                  GOTO 150
+              END IF
+ 
+              IF (ILAT2(II).EQ.0 .AND. ILON2(II).EQ.0)         THEN
+                  ILAT2(II) = ILAT1(II)
+                  ILON2(II) = ILON1(II)
+              END IF
+ 
+              IF (ILON1(II).EQ.0 .AND. ILON2(II).EQ.0)         THEN
+                  ILON1(II) = 1
+                  ILON2(II) = NCOLS
+              END IF
+ 
+              IF (ILAT1(II).GT.ILAT2(II) .OR.
+     +            ILON1(II).GT.ILON2(II) .OR.
+     +            ILAT1(II).LT.1         .OR.
+     +            ILAT2(II).GT.NROWS     .OR.
+     +            ILON1(II).LT.1         .OR.
+     +            ILON2(II).GT.NCOLS     )                     THEN
+                  WRITE(6,6050)
+                  CALL                             XIT(' Ggatim ',-2 )
+              END IF
+
+***            TENIR COMPTE DE CETTE LIGNE DE COORDONNEES.
+
+              DO  J=ILAT1(II),ILAT2(II)
+                  IJ = (J-1)*NCOLS
+                  DO  I=IJ+ILON1(II),IJ+ILON2(II)
+                      XMSK(I) = 1.0
+                  END DO
+              END DO
+
+          END DO
+  
+      ELSE
+ 
+***        READ THE MASK FILE IF WE NEED ONE. THIS IS
+***        REAL IF KIND CORRESPONDS TO ANY TYPE OF GRID
+***        OR ZONL ARRAY.
+ 
+          IF (CMPL) CKIND = 'GRID'
+          CALL GETFLD2( 3, XMSK, CKIND,-1,CMASK,-1, IBUF,MAXW,OK )
+ 
+          IF (.NOT.OK          .OR.
+     +       (IBUF(5).NE.SIZEX .OR. IBUF(6).NE.SIZEY))
+     +        CALL                                 XIT(' Ggatim ',-4 )
+ 
+      END IF
+
+***    DETERMINE NSER AND MSK.
+ 
+      NSER = 0
+      DO  I=1,NWDS
+          IF (XMSK(I).NE.0.)                                   THEN
+              NSER      = NSER+1
+              MSK(NSER) = I
+          END IF
+      END DO
+
+      IF (NSER.EQ.0)                                           THEN
+          WRITE(6,6065)
+          CALL                                     XIT(' Ggatim ',-5 )
+      END IF
+
+  150 IF (NSER.EQ.1   ) BOX  = .FALSE.
+      IF (NSER.EQ.NWDS) FULL = .TRUE.
+
+*-----------------------------------------------------------------------
+***    MAIN IF BLOCK
+ 
+      IF (BOX)                                                 THEN
+ 
+          NLVAR0 = 1
+          NLVAR1 = MIN( MAXIO,NLEVAR )
+
+***        TREAT A MAXIMUM OF MAXIO VARIABLE/LEVELS AT A TIME.
+
+          DO  BLOC=1,(NLEVAR-1)/MAXIO+1
+
+          CALL PRECEDE( 1,-1)
+
+***        ASSIGN/INITIALIZE THE NLEVAR WORK FILES.
+ 
+          DO  NF=11,11+NLVAR1-NLVAR0
+              OPEN  ( NF, ERR=903,IOSTAT=IO,
+     +                    STATUS='SCRATCH',FORM='UNFORMATTED' )
+              REWIND( NF, ERR=903,IOSTAT=IO)
+          END DO
+ 
+***        TRANSPOSE A REGION.
+***        -------------------------------------------------------------
+***          
+ 
+***        DETERMINE THE LENGTH OF THE SERIES, UNPACK
+***        AND GATHER THEM IN THE SCRATCH FILES.
+ 
+          LEN = 0
+  200     CONTINUE
+
+              CALL GETMSET( 1, XIN, LEV,NLEV, STEP,.TRUE.,
+     +                         VARIAB,NVAR, IBUF,MAXW,OK )
+
+              IF (OK)                                          THEN
+ 
+                  LEN = LEN+1
+
+                  IF (.NOT.FULL)                               THEN
+ 
+                      DO  N=NLVAR0,NLVAR1
+                          NF = 11+N-NLVAR0
+                          NL = (N-1)*NWDS
+                          IF (CMPL)                            THEN
+                              DO  J=1,NSER
+                                  CXOUT(1,J) = CXIN(1,NL+MSK(J))
+                                  CXOUT(2,J) = CXIN(2,NL+MSK(J))
+                              END DO
+                              CALL WRITEF( NF ,IXOUT,NSER*2 )
+                          ELSE
+                              DO  J=1,NSER
+                                  XOUT(J) = XIN(NL+MSK(J))
+                              END DO
+                              CALL WRITEF( NF ,IXOUT,NSER )
+                          END IF
+                      END DO
+ 
+                  ELSE
+
+                      DO  N=NLVAR0,NLVAR1
+                          NF = 11+N-NLVAR0
+                          IF (CMPL)                            THEN
+                              NL = (N-1)*NSER*2+1
+                              CALL WRITEF( NF ,IXIN(NL), NSER*2 )
+                          ELSE
+                              NL = (N-1)*NSER+1
+                              CALL WRITEF( NF ,IXIN(NL), NSER )
+                          END IF
+                      END DO
+ 
+                  END IF
+ 
+                  IF (BLOC  ==  1  .AND.
+     +                LEN   ==  2  .AND.
+     +                PKTYP == 'SQ')                           THEN
+                      CALL DIFDATR( IBUF(2),ITIME,DELT )
+                      DEET = NINT( 3600*DELT )
+                  END IF
+
+***                ALLER LIRE LE PROCHAIN JEUX.
+
+                  GOTO 200
+ 
+              END IF
+ 
+          IF (BLOC.EQ.1)                                       THEN
+              WRITE(6,6070) ; CALL PRTLAB( IBUF )
+              WRITE(6,6080) LEN
+          END IF
+
+          IO = 0
+
+***        DETERMINE THE NUMBER OF TIME SERIES (NS) WHICH CAN BE
+***        STORED IN MEMORY SIMULTANEOUSLY AND CHECK THAT THEY
+***        EACH CAN BE FIT INTO NVAR*NLEV*NWDS WORDS.
+
+
+  250     CONTINUE
+
+              IF (CMPL)                                        THEN
+                  NS = MIN( NSER,MAXTS/(LEN*2) )
+              ELSE
+                  NS = MIN( NSER,MAXTS/LEN )
+              END IF
+
+              IF (NS.LT.1) CALL                    XIT(' Ggatim ',-6 )
+
+***            ALLOCATE TS ARRAY.
+ 
+              MEM = NS*LEN
+              IF (CMPL) MEM = MEM*2
+
+              allocate( TS(MEM),stat=IER )
+
+          IF (IER.NE.0)                                        THEN
+              MAXTS = 2*MAXTS/3
+              GOTO 250
+          END IF
+
+          IF (BLOC.EQ.1)                                       THEN
+              WRITE(6,6090) NS
+              IBOUT(5) = LEN
+          END IF
+ 
+          PT = loc( TS(1) )
+
+***        FAUT-IL AGRANDIR XIN (ET XOUT) ?
+ 
+          IF (LEN.GT.NLEVAR*NWDS)                              THEN
+              deallocate( XIN8,XOUT8 )
+              allocate( XIN8(LEN),XOUT8(LEN),stat=IER )
+
+              IF (IER.NE.0) CALL                   XIT(' Ggatim ',-6 )
+
+              XI2 = loc( XIN8(1) )
+              XI3 = loc( XIN8(1) )
+              XI4 = loc( XIN8(1) )
+              XI5 = loc( XIN8(1) )
+
+              XO2 = loc( XOUT8(1) )
+              XO3 = loc( XOUT8(1) )
+              XO4 = loc( XOUT8(1) )
+              XO5 = loc( XOUT8(1) )
+          END IF
+ 
+***        FAUT-IL AGRANDIR IBUF ?
+
+          if (len > LEN1-(HEAD+4))                             THEN
+              LEN1 = LEN+HEAD+4
+              JBUF(1:HEAD) = IBUF(1:HEAD)
+              deallocate( IBUF ) ; allocate( IBUF(LEN1) )
+              IBUF(1:HEAD) = JBUF(1:HEAD)
+          end if
+
+          NBLOCK = NSER/NS
+          IF (NBLOCK*NS.LT.NSER) NBLOCK = NBLOCK+1
+
+***        INITIALIZE I/O BUFFER.
+
+          IBUF(1:HEAD) = IBOUT(1:HEAD)
+
+          IF (PKTYP == 'SQ') CALL PUTHIGH( DEET,'DEET',IBUF )
+
+***        CONSTRUCT TIME SERIES NS AT A TIME
+***        FOR EACH NLEV*NVAR LEVELS/VARIABLES.
+ 
+          DO  II=NLVAR0,NLVAR1
+
+              L  = MOD( II-1,NLEV )+1
+              N  = (II-1)/NLEV+1
+              NF = 11+II-NLVAR0
+
+              DO  I=1,NBLOCK
+ 
+***                RETREIVE NS FIELDS FROM UNIT NF.
+
+                  REWIND NF
+
+                  K1 = (I-1)*NS+1
+                  K2 = MIN( I*NS,NSER )
+ 
+                  DO  J=1,LEN
+
+                      IF (CMPL)                                THEN
+
+***                        CTS WILL CONTAIN THE COMPLEX CONJUGATE.
+
+                          CALL READF( NF ,IXIN,NSER*2,OK )
+                          IF (.NOT.OK) GOTO 903
+ 
+                          IJ = J-K1*LEN
+                          DO  K=K1,K2
+                              CTS(1,K*LEN+IJ) =  CXIN(1,K)
+                              CTS(2,K*LEN+IJ) = -CXIN(2,K)
+                          END DO
+
+                      ELSE
+
+                          CALL READF( NF ,IXIN,NSER,OK )
+                          IF (.NOT.OK) GOTO 903
+ 
+                          IJ = J-K1*LEN
+                          DO  K=K1,K2
+                              TS(K*LEN+IJ) = XIN(K)
+                          END DO
+
+                      END IF
+ 
+                  END DO
+ 
+***                MOVE THIS BLOCK TO DISK.
+ 
+                  DO  K=K1,K2
+ 
+                      IROW  = (MSK(K)-1)/NCOLS + 1
+                      ICOL  =  MSK(K)-(IROW-1)*NCOLS
+
+                      IBUF(2) = (II-1)*NWDS
+
+                      IF (ZONL)                                THEN
+                          IBUF(2) = IBUF(2)+IROW
+                      ELSE
+                          IBUF(2) = IBUF(2)+(IROW-1)*NCOLS+ICOL
+                      END IF
+
+                      IADD = (K-K1)*LEN+1
+
+                      READ(VARIAB(N),4) IBUF(3)
+                      IBUF(4) = LEV(L)
+
+***                    FAIRE EN SORTE QUE DATEV CONTIENNE LA
+***                    DATE DU DEBUT DE LA SERIE TEMPORELLE.
+
+                      IF (PKTYP == 'SQ')                       THEN
+                          CALL PUTHIGH( IBUF(2),'IP3',IBUF )
+                          ECOULE = -( IBUF(2)*( DBLE( DEET )/ 60) )/60
+                          CALL INCDATR( DATEO,ITIME,ECOULE )
+                          CALL PUTHIGH( DATEO,'DATEO',IBUF )
+                      END IF                          
+
+                      IF (CMPL)                                THEN
+                          CALL PUTFLD2( 2, CTS(1,IADD), IBUF,MAXW )
+                      ELSE
+                          CALL PUTFLD2( 2, TS(IADD), IBUF,MAXW )
+                      END IF
+
+                  END DO
+ 
+              END DO
+
+***            CLOSE SCRATCH NF FILE.
+
+              CLOSE ( NF )
+
+          END DO
+
+***        CLEANUP SECTION OF THE BLOC DO LOOP. 
+***        START BY REMOVING THE OLD WORK FILES.
+
+          DO  NF=11,11+NLVAR1-NLVAR0
+              CLOSE ( NF, ERR=903,IOSTAT=IO )
+          END DO
+ 
+***        UPDATE NLVAR0 AND NLVAR1.
+
+          NLVAR0 = NLVAR1+1
+          NLVAR1 = MIN( NLVAR1+MAXIO,NLEVAR )
+
+          END DO
+
+***        DE-ALLOCATE TS ARRAY.
+
+          deallocate( TS )
+
+      ELSE
+ 
+***        PICK OUT A TIME SERIES AT A SINGLE POINT
+***        ---------------------------------------------------------
+ 
+          OK = SETIO64(.TRUE.)
+
+          LEN  = 0
+          LENV = 0
+          NWDO = NWDS
+          IADD = MSK(1)
+
+  300     CONTINUE
+ 
+              CALL GETMSET( 1, XIN8,LEV,NLEV, STEP,.TRUE.,
+     +                         VARIAB,NVAR, IBUF,MAXW,OK )
+ 
+              IF (OK)                                          THEN
+ 
+***                SAUVER LA POSITION DEMANDEE.
+
+                  IF (CMPL)                                    THEN
+                      DO  N=1,NLEVAR
+                          NL = (N-1)*NWDS+IADD
+                          CXOUT8(1,N+LENV) = CXIN8(1,NL)
+                          CXOUT8(2,N+LENV) = CXIN8(2,NL)
+                      END DO
+                  ELSE
+                      DO  N=1,NLEVAR
+                          NL = (N-1)*NWDS+IADD
+                          XOUT8(N+LENV) = XIN8(NL)
+                      END DO
+                  END IF
+
+                  LEN  = LEN+1
+                  LENV = LEN*NLEVAR
+
+                  IF (LEN == 2 .AND. PKTYP == 'SQ')            THEN
+                      CALL DIFDATR( IBUF(2),ITIME,DELT )
+                      DEET = NINT( 3600*DELT )
+                  END IF
+
+                  IF (LEN       .GE.NWDO .OR.
+     +                LEN+HEAD+4.GE.LEN1  )                    THEN
+ 
+                      DO  N=1,HEAD
+                          JBUF(N) = IBUF(N)
+                      END DO
+
+***                    IL FAUT AGRANDIR XIN8/XOUT8 ET/OU IBUF.
+ 
+                      deallocate( XIN8,IBUF )
+
+                      IF (CMPL)                                THEN
+
+                          NWDO = LEN*2
+                          MAXW = MAX( MAXW,NWDO*NLEVAR*2 )
+                          LEN1 = MAXW+HEAD+4
+                      
+***                        COMMENCER PAR XIN8 ET IBUF.
+
+                          allocate( XIN8(NWDO*NLEVAR*2),IBUF(LEN1*2) )
+
+                          XI2 = loc( XIN8(1) )
+                          XI3 = loc( XIN8(1) )
+                          XI4 = loc( XIN8(1) )
+                          XI5 = loc( XIN8(1) )
+
+***                        TRANSFERER LE CONTENU DE CXOUT8 VERS CXIN8.
+
+                          DO  IJ=1,LEN*NLEVAR
+                              CXIN8(1,IJ) = CXOUT8(1,IJ)
+                              CXIN8(2,IJ) = CXOUT8(2,IJ)
+                          END DO
+
+***                        AGGRANDIR CXOUT8 ET RETAURER SON CONTENU.
+
+                          deallocate( XOUT8 )
+                          allocate( XOUT8(NWDO*NLEVAR*2) )
+
+                          XO2 = loc( XOUT8(1) )
+                          XO3 = loc( XOUT8(1) )
+                          XO4 = loc( XOUT8(1) )
+                          XO5 = loc( XOUT8(1) )
+
+                          DO  IJ=1,LEN*NLEVAR
+                              CXOUT8(1,IJ) = CXIN8(1,IJ)
+                              CXOUT8(2,IJ) = CXIN8(2,IJ)
+                          END DO
+
+                      ELSE
+
+                          NWDO = LEN*2
+                          MAXW = MAX( MAXW,NWDO*NLEVAR )
+                          LEN1 = MAXW+HEAD+4
+
+***                        COMMENCER PAR XIN8 ET IBUF.
+
+                          allocate( XIN8(NWDO*NLEVAR),IBUF(LEN1*2) )
+
+                          XI2 = loc( XIN8(1) )
+                          XI3 = loc( XIN8(1) )
+                          XI4 = loc( XIN8(1) )
+                          XI5 = loc( XIN8(1) )
+
+***                        TRANSFERER LE CONTENU DE XOUT8 VERS XIN8.
+
+                          DO  IJ=1,LEN*NLEVAR
+                              XIN8(IJ) = XOUT8(IJ)
+                          END DO
+
+***                        AGGRANDIR XOUT8 ET RETAURER SON CONTENU.
+
+                          deallocate( XOUT8 )
+                          allocate( XOUT8(NWDO*NLEVAR) )
+
+                          XO2 = loc( XOUT8(1) )
+                          XO3 = loc( XOUT8(1) )
+                          XO4 = loc( XOUT8(1) )
+                          XO5 = loc( XOUT8(1) )
+
+                          DO  IJ=1,LEN*NLEVAR
+                              XOUT8(IJ) = XIN8(IJ)
+                          END DO
+
+                      END IF
+
+                      DO  N=1,HEAD
+                          IBUF(N) = JBUF(N)
+                      END DO
+
+                  END IF
+
+                  GOTO 300
+ 
+              END IF
+ 
+***        WRITE THE NLEVAR TIME SERIES TO DISK
+ 
+          NSER = 1
+          WRITE(6,6070) ; CALL PRTLAB( IBUF )
+
+          IBUF(1:HEAD) = IBOUT(1:HEAD)
+
+          IBUF(5) = LEN
+
+          IF (PKTYP == 'SQ')
+     +        CALL PUTHIGH( DEET,'DEET',IBUF )
+
+          DO  N=1,NVAR
+          DO  L=1,NLEV
+
+              II      = (N -1)*NLEV+    L
+              IBUF(2) = (II-1)*NWDS+IADD
+ 
+              READ(VARIAB(N),4) IBUF(3)
+              IBUF(4) = LEV(L)
+
+***            FAIRE EN SORTE QUE DATEV CONTIENNE LA
+***            DATE DU DEBUT DE LA SERIE TEMPORELLE.
+
+              IF (PKTYP == 'SQ')                               THEN
+                  CALL PUTHIGH( IBUF(2),'IP3',IBUF )
+                  ECOULE = -( IBUF(2)*( DBLE( DEET )/ 60) )/60
+                  CALL INCDATR( DATEO,ITIME,ECOULE )
+                  CALL PUTHIGH( DATEO,'DATEO',IBUF )
+              END IF                          
+
+***            TRANSPOSER XOUT DANS XIN ...
+
+              LENV = II
+
+              IF (CMPL)                                        THEN
+                  DO  K=1,LEN
+                      CXIN8(1,K) =  CXOUT8(1,LENV)
+                      CXIN8(2,K) = -CXOUT8(2,LENV)
+                      LENV       =  LENV+NLEVAR
+                  END DO
+              ELSE
+                  DO  K=1,LEN
+                      XIN8(K) = XOUT8(LENV)
+                      LENV    = LENV+NLEVAR
+                  END DO
+              END IF
+                 
+              CALL PUTFLD2( 2, XIN8, IBUF,MAXW )
+ 
+          END DO
+          END DO
+
+      END IF
+ 
+***    FIN DU PROGRAMME.
+
+      WRITE(6,6120) NLEVAR,NSER
+      CALL                                         XIT(' Ggatim ', 0 )
+
+*-----------------------------------------------------------------------------
+***    END OF PROCESSING.
+ 
+  900 IF (IO.GT.0) WRITE(6,6000) IO
+      CALL                                         XIT(' Ggatim ',-8 )
+ 
+  901 WRITE(6,6009)
+      CALL                                         XIT(' Ggatim ',-9 )
+
+  902 IF (IO.NE.0) WRITE(6,6000) IO
+      WRITE(6,6010)
+      CALL                                         XIT(' Ggatim ',-10 )
+
+  903 IF (IO.GT.0) WRITE(6,6000) IO
+      WRITE(6,6011) NF
+      CALL                                         XIT(' Ggatim ',-11 )
+ 
+*-----------------------------------------------------------------------
+ 
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+
+ 5010 FORMAT(10X,5I5)
+
+ 6000 FORMAT(/' Ggatim reports I/O error number ',I3)
+ 6009 FORMAT(/' Ggatim empty input file OR record too large.')
+ 6010 FORMAT(/' Ggatim empty mask file.')
+ 6011 FORMAT(/' Ggatim abort with scratch file no. ',I3)
+ 6013 FORMAT(/' Ggatim abort on grid type ',A)
+
+ 6020 FORMAT(/' First record of the input file:')
+ 6025 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6030 FORMAT(/' Record KIND is not GRID or ZONL.')
+ 6040 FORMAT(/' Ggatim parametres   LAT1 LON1 LAT2 LON2 MASK'/
+     +          20X,5I5/(20X,4I5))
+ 6050 FORMAT(/' Region specified incorrectly.')
+ 6060 FORMAT(/' Point specified incorrectly.')
+ 6065 FORMAT(/' Mask record is full of zeroes.') 
+ 6070 FORMAT(/' Last record of the input file:')
+ 6080 FORMAT(/' Input file contains ',I10,' timesteps.')
+ 6090 FORMAT(/' Time series will be processed in blocks of ',
+     +          I5,' time series.')
+ 6100 FORMAT(/' Selected time series are of length ',I7,
+     +        ' observations.'/' Maximum length which can be ',
+     +        ' accomodated by Ggatim is ',I7,' total observations.')
+ 6110 FORMAT(/' Input file contains more than',I7,' records.')
+ 6120 FORMAT( ' Produced ',I2,' sets of ',I5,' time series.'/)
+ 
+*-----------------------------------------------------------------------
+ 
+      END
+#     endif

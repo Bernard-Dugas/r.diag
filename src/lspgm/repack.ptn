@@ -1,0 +1,412 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      repack  XIN XOUT INPUT OUTPUT [-npg VAL1 -kind VAL2 [VAL3]]
+*
+*     DESCRIPTION...
+*      repack - REPACKS A FILE 
+* 
+*
+*     AUTHOR  - J.D.Henderson AND R.Laprise, MAY 13/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/repack.ptn,v 4.17 2014/09/25 20:20:52 dugas Exp $
+* 
+*
+*     PURPOSE - REPACKS A COMPLETE FILE WITH A NEW PACKING DENSITY. 
+* 
+*
+*     INPUT FILE... 
+*      XIN  = FILE TO BE REPACKED. 
+* 
+*     OUTPUT FILE... 
+*      XOUT = COPY OF FILE XIN PACKED WITH NEW PACKING DENSITY. 
+* 
+*
+*     INPUT PARAMETERS... 
+* 
+*      NEWPAK  = NEW PACKING DENSITY FOR THE FILE. POSITIVE NUMBERS
+*      (npg)     STAND FOR THE PACKING DENSITY WITH RESPECT TO HOST
+*                WORDS (i.e. NEWPAK DATUMS PER WORD). NEGATIVE VAL-
+*                UES STAND FOR THE NUMBER OF BITS TO USE IN PACKING
+*                EACH DATUM (i.e. -newpak BITS ARE THEN USED).
+*
+*      KIND(1) = This paramatre is only relevant when 1) NEWPAK=-16
+*                or -32 and 2) with RPN/CMC files. Then, its possible
+*                values are 'STD' and 'TURBO'. The later forces the
+*                use of Yves Chartier's Turbo Compression Algorithms
+*                as implemented in 2006, while the former can be used
+*                to remove the TURBO compression. Not specifying it
+*                preserves the compression type.
+*
+*      KIND(2) = When KIND(1) = 'TURBO', specifies the type of
+*                compression to be used. The possible values are...
+*                'ENV' (use the FST_OPTIONS="TURBOCOMP=????" variable);
+*                'BEST' (as the name implies);
+*                'FAST' (again, as the name implies).
+*
+*                The primary default behaviour is to get this from the
+*                environment. It this fails, the secondary default is
+*                set to 'BEST' mode.
+* 
+*      READ( 5,5010 ) NEWPAK,KIND(1),KIND(2)
+*5010  FORMAT(10X,I5,5X,A5,1X,A4)
+*
+*
+*     EXAMPLE... 
+* 
+* REPACK.   -16 
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       2 ERROR ABORT READING INPUT
+*       3 PREMATURE EOF IN FILE XIN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM repack
+*    +         (       XIN,        XOUT,       INPUT,       OUTPUT,
+*    +          TAPE1= XIN, TAPE2= XOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+ 
+*     $Log: repack.ptn,v $
+*     Revision 4.17  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.16  2012/09/07 20:16:51  dugas
+*     Appel a SET_TURBO_COMPRESS(F) lorsque KIND1=STD.
+*
+*     Revision 4.15  2010/12/01 17:01:28  dugas
+*     Correction de la documentation des sorties d'erreurs.
+*
+*     Revision 4.14  2008/07/24 19:45:10  dugas
+*     Ne pas recompacter les enregistrements ++.
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.11  2007/08/29 16:15:56  dugas
+*     Corriger la declaration a GETSIZ et ajouter le support des compressions TURBO a 32 bits
+*
+*     Revision 4.10  2006/12/18 13:11:55  dugas
+*     - Preserver le type de compression lorsque KIND(1) n'est pas specifie
+*     - Ajouter le support du mode turbo 32-bits (DATYP=133)
+*
+*     Revision 4.9  2006/04/26 22:32:32  dugas
+*     Implanter support de la compression turbo de YRC.
+*
+*     Revision 4.8  2005/04/14 17:34:30  dugas
+*     Fonctionner un niveau a la fois.
+*
+*     Revision 4.7  2004/11/09 00:30:05  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3.
+*
+*     Revision 4.6  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.5  1999/04/08 16:35:21  armnrbd
+*     Seconde iteration de la correction precedente.
+*
+*     Revision 4.4  1999/04/07 19:54:55  armnrbd
+*     Deplacer la desallocation de memoire (lorsque MAXW=0).
+*
+*     Revision 4.3  1998/07/20 17:07:41  armnrbd
+*     Utiliser GETLAB/PUTLAB pour traiter les enregistrements LABL.
+*
+*     Revision 4.2  1998/07/03  02:26:35  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/28  19:57:58  armnrbd
+*     Travailler en mode 64 bits (calculs et I/O).
+*     Utiliser HPALLOC plutot que MEMOIR pour les allocations.
+*
+*     Revision 4.0  1994/11/17  14:21:26  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:06:01  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:47  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.7  93/01/07  14:53:54  armnrbd
+*     Corriger l'utilisation du parametre "-npg VAL1".
+*     
+*     Revision 1.6  92/12/15  15:38:13  armnrbd
+*     Ajouter le parametre "-npg" sur la ligne de commande.
+*     
+*     Revision 1.5  92/11/10  17:18:46  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.4  92/09/15  11:57:27  armnrbd
+*     Correction a l'edition precedente.
+*     
+*     Revision 1.3  92/09/15  11:44:14  armnrbd
+*     Implanter le systeme RECABT.
+*     
+*     Revision 1.2  92/03/17  14:59:52  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/11  22:09:43  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:53  armnrbd
+*     Initial revision
+*     
+
+***    MAY 13/83 - R.LAPRISE, J.D.HENDERSON, CCRN.
+
+***    HISTORIQUE DES MODIFICATIONS:
+***    ... 12 OCTOBRE 1990 - B.DUGAS, RPN : 
+***        -  VERSION CY920/IRIX.
+***    ... 14 NOVEMBRE 1990 - B.DUGAS, RPN :
+***        -  VERSION SIMPLE PRECISION (REAL ET NON PAS REAL*8)
+***        -  VALEURS NEGATIVES DE PACKING (-NOMBRE DE BITS) SUPPORTEES.
+***    ... 13 DECEMBRE 1990 - B.DUGAS, RPN :
+***        -  ALLOCATION DE MEMOIRE DYNAMIQUE AVEC 'CALL MEMOIR'.
+***    ... 17 JANVIER 1991  - B.DUGAS, RPN :
+***        -  AJOUTER UN APPEL A GETLIGN.
+
+*---------------------------------------------------------------------
+      IMPLICIT    none
+
+      REAL        ZERO
+      LOGICAL     OK,TURBO,NOTURBO
+      CHARACTER*4 TYPE,KIND1*5,KIND2,NOM,
+     +            VALEUR*5,LIGNE*80,CHAINE*256
+      INTEGER     JBUF(taille_entete),JPAK,HEAD,
+     +            NF,NR,LENIN,LENOUT,NWDS,LEN,LENLAB,
+     +            MAXW,MAXWIN,IO,NEWPAK,IER,TURBO16,
+     +            TURBO32,COMPRESSION_LEVEL,
+     +            STD16,STD32
+
+      LOGICAL,    EXTERNAL :: SETIO64,RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ,ARMN_COMPRESS_GETLEVEL
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,XIT,LBLCHK,
+     +            GETFLD2,PUTFLD2,GETLAB,PUTLAB,
+     +            ARMN_COMPRESS_SETLEVEL
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: G
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        TURBO,NOTURBO / .FALSE.,.FALSE. /,
+     +            TURBO16,TURBO32,STD16,STD32 / 134,133,1,5 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/repack.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64( .TRUE. )
+
+      NR = 0
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NEWPAK = 0
+          KIND1  = ' '
+          KIND2  = 'ENV'
+
+          OK = RPBLOC('NPG',VALEUR)
+          IF (OK) READ( VALEUR, '(BN,I5)',END=902,ERR=901,IOSTAT=IO) 
+     +                  NEWPAK 
+
+          OK = RPBLOC('KIND' ,VALEUR)
+          IF (OK) KIND1 = VALEUR
+
+          OK = RPBLOC('KIND2',VALEUR)
+          IF (OK) KIND2 = VALEUR
+
+      ELSE
+
+***        READ THE NEW PACKING DENSITY FROM A CARD. 
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5010,END=902,ERR=901,IOSTAT=IO)
+     +                          NEWPAK,KIND1,KIND2
+              CALL BURNF
+          END IF
+
+          IF (KIND2.EQ.' ') KIND2 = 'ENV'
+
+      END IF
+
+      IF (KIND1.NE.' ') CALL LOW2UP(KIND1,KIND1)
+      IF (KIND2.NE.' ') CALL LOW2UP(KIND2,KIND2)
+
+      IF (NEWPAK ==  -16 .OR. NEWPAK == -32)                   THEN
+          IF (KIND1 == 'TURBO')   TURBO =  .TRUE.
+          IF (KIND1 == 'STD'  ) NOTURBO =  .TRUE.
+      END IF
+
+      IF (TURBO)                                               THEN
+
+***       Definir le niveau de compression en mode TUBO (BEST/FAST).
+***       Ce bout de code s'inspire de FSTCOMPRESS de Yves Chartier.
+
+          IF (KIND2(1:3).EQ.'ENV') THEN
+              COMPRESSION_LEVEL = ARMN_COMPRESS_GETLEVEL()
+              IF (COMPRESSION_LEVEL.EQ.-1) COMPRESSION_LEVEL = 1
+          ELSE
+                                           COMPRESSION_LEVEL = 1
+CCC           IF (KIND2.EQ.'BEST')         COMPRESSION_LEVEL = 1
+              IF (KIND2.EQ.'FAST')         COMPRESSION_LEVEL = 0
+          END IF
+          CALL ARMN_COMPRESS_SETLEVEL( COMPRESSION_LEVEL )
+          IF (COMPRESSION_LEVEL.EQ.0) KIND2 = 'FAST'
+          IF (COMPRESSION_LEVEL.EQ.1) KIND2 = 'BEST'
+          WRITE(6,6150) KIND2
+
+      ELSE IF (NOTURBO)                                        THEN
+
+***        Ne pas utiliser la compression TURBO.
+
+          CALL SET_TURBO_COMPRESS(.FALSE.)
+
+      END IF
+
+      WRITE(6,6010) NEWPAK 
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST DATA INFO BUFFER.
+
+  100 MAXWIN = GETSIZ( 1, JBUF,LENIN,NWDS,JPAK )
+      IF (MAXWIN.LE.0) GOTO 904
+
+      JBUF(8) = NEWPAK
+      CALL LBLCHK( LENOUT, NWDS,JPAK,JBUF )
+
+      LEN  = MAX( LENIN,LENOUT )
+      MAXW = LEN-HEAD
+
+      ALLOCATE( IBUF(2*LEN),G(NWDS) )
+
+***    READ THE NEXT FIELD FROM FILE XIN.
+ 
+  150 CALL GETFLD2( 1, G, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,G )
+                  GOTO 100
+              END IF
+              CALL PRTLAB( IBUF )
+              WRITE(6,6020) NR
+              CALL                                XIT(' Repack ', 0 )
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+ 
+          WRITE(TYPE,4) IBUF(1)
+          WRITE(NOM,4)  IBUF(3)
+
+          IF (TYPE.EQ.'LABL')                                  THEN
+
+***            LABL RECORDS ARE COPIED UNCHANGED.
+
+              LENLAB = IBUF(5)
+
+              CALL GETLAB( 0, CHAINE, IBUF,LENLAB, OK )
+
+              IF (NOM.EQ.'LABL')                               THEN
+                  CALL PUTLAB( 2, CHAINE, IBUF,LENLAB,
+     +                                   .FALSE. , .FALSE. )
+              ELSE IF (NOM.EQ.'FILE')                          THEN
+                  CALL PUTLAB( 2, CHAINE, IBUF,LENLAB, 
+     +                                   .TRUE.  , .FALSE. )
+              ELSE IF (NOM.EQ.'INFO')                          THEN
+                  CALL PUTLAB( 2, CHAINE, IBUF,LENLAB, 
+     +                                   .FALSE. , .TRUE.  )
+              END IF
+
+          ELSE
+
+***            CHANGE THE PACKING DENSITY AND SAVE ON FILE XOUT. 
+
+              IF (NEWPAK.EQ.-16)                               THEN
+                  IF (TURBO)        
+     +                CALL puthigh( TURBO16,'DATYP',IBUF )
+                  IF (KIND1.EQ.'STD')
+     +                CALL puthigh( STD16  ,'DATYP',IBUF )
+              ELSE IF (NEWPAK.EQ.-32)                          THEN
+                  IF (TURBO) 
+     +                CALL puthigh( TURBO32,'DATYP',IBUF )
+                  IF (KIND1.EQ.'STD')
+     +                CALL puthigh( STD32  ,'DATYP',IBUF )
+              END IF
+
+              IF (TYPE.NE.'CHAR' .AND.
+     +            NOM .NE.'++'   )
+     +            IBUF(8) = NEWPAK
+
+              CALL PUTFLD2( 2, G, IBUF,MAXW )
+
+          END IF
+
+      NR = NR+1 
+      GOTO 150 
+
+***    E.O.F. ON UNIT #5.
+
+  901 IF (IO.NE.0)                                WRITE(6,6100) IO
+  902 CALL                                        XIT(' Repack ',-2 )
+
+***    PREMATURE E.O.F. ON UNIT #1.
+
+  904 CALL                                        XIT(' Repack ',-3 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+
+ 5010 FORMAT(10X,I5,5X,A5,1X,A4)
+
+ 6010 FORMAT('0New packing density =',I5)
+ 6020 FORMAT(1X,I6,'  records read.')
+ 6100 FORMAT(' Repack reports I/O error number ',I3,' on unit 5.')
+ 6150 FORMAT(/'***  Turbo-compression level set to ',A,' ***'/)
+      END 
+#     endif

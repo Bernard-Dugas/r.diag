@@ -1,0 +1,519 @@
+#     if !defined (memoire_maximale)
+#         define  memoire_maximale 10000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      pcomp  EOF DATA COMPP OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, AVRIL 21/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/pcomp.ptn,v 4.5 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CALCUL DES COMPOSANTES  PRINCIPALES A PARTIR DE  LA MATRICE DES 
+*      FACTEURS ET DES  VALEURS PROPRES DE LA  MATRICE DE  COVARIANCE. 
+*      LE CALCUL S'EFFECTUE 
+*
+*      1) SOIT EN  PROJETTANT LES EOFS (FACTEURS) SUR LES DONNEES ORI- 
+*         GINALES, I.E. 
+*
+*         COMPP(I,T) = SUM(J=1,NWDS) (EOF(I,J)*DATA(J,T))/VAL(I)
+*
+*      2) SOIT  EN FAISANT SUBIR AUX COMPOSANTES PRINCIPALES UNE ROTA- 
+*         TION CORRESPONDANTE A CELLE QU'ON SUBIT LES EOF'S, I.E. 
+*
+*         RCOMP(I,T) = SUM(J=1,NFAC) [COMP(T,J)*RMAT(J,I)]
+*
+*      OU RMAT EST  L'INVERSE TRANSPOSE DE LA  MATRICE LUE SUR  TAPE2. 
+*      DE PLUS, DANS CE DERNIER CAS, TAPE1=COMP ET TAPE3=RCOMP. 
+*
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH LEVELS
+*       2 FILE 1 AND 2 RECORD SIZE INCONSISTENT
+*       3 INCOMPLETE SET ON FILE 1
+*       4 INCOMPLETE SET ON FILE 2
+*       5 DATA TYPE IS COMPLEX
+*       6 MEMORY ALLOCATION PROBLEM
+*       6 INCOMPLETE VECTOR SET
+*       7 UNABLE TO PERFORM ROTATION
+*       8 ERROR READING INPUT PARAMETERS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM PCOMP 
+*    1              (      EOF,       DATA,       COMPP,       OUTPUT, 
+*    2               TAPE1=EOF, TAPE2=DATA, TAPE3=COMPP, TAPE6=OUTPUT) 
+
+*      $Log: pcomp.ptn,v $
+*      Revision 4.5  2014/09/25 20:20:51  dugas
+*      Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*      Revision 4.4  2008/05/03 21:06:30  dugas
+*      Modification generale pour r.gppf.
+*
+*      Revision 4.3  2007/12/20 21:09:34  dugas
+*      Corriger l'appel a JCLPNT.
+*
+*      Revision 4.2  2000/03/20 20:32:35  armnrbd
+*      Associer un seul champs par pointeur.
+*      Enlever la routine CLRPCOMP et ses appels.
+*
+*      Revision 4.1  1998/05/21 20:20:52  armnrbd
+*      Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:21:18  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:39  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/08/04  11:55:12  armnrbd
+*     Utiliser l'option d'allocation Real*8 de HPALLOC.
+*     
+*     Revision 1.0  93/03/05  12:05:31  armnrbd
+*     Initial revision
+*      
+***    AVRIL 21/87 - B. DUGAS. 
+ 
+***    MODIFIEE LE 11 FEVRIER 1988 PAR B. DUGAS ... 
+***    ... ELEMINATION  DU TRAITEMENT  SPECIAL DANS  LE CAS TS. EOF ET 
+***        DATA DOIVENT MAINTENANT ETRE DU MEME TYPE. 
+***    MODIFIEE LE 16 FEVRIER 1988 PAR B. DUGAS ... 
+***    ... POSSIBILITE  D' UTILISER UNE MATRICE DE TRANSFORMATION PRO- 
+***        VENANT DE EOFROT (APPROPRIE DANS LE CAS OU EOF CONTIENT LES 
+***        EOFS AYANT SUBITS  UNE ROTATION  ===>  NON-ORTHOGONAUX DANS 
+***        L'ESPACE). 
+***    ... NORMALISATION DES COMPP DANS LE CAS ORIGINAL. 
+***    ... ON NE LIT PLUS  LE CHAMPS  DES VALEURS  PROPRES. 
+***    MODIFIEE LE 30 MARS 1988 PAR B. DUGAS ... 
+***    ... MODIFIER LE TAMPON D'INFORMATION POUR TENIR COMPTE DU  FAIT 
+***        QUE LES RESULTATS SONT DES SERIES TEMPORELLES. 
+***    MODIFIEE LE 27 JUIN 1988 PAR B. DUGAS ... 
+***    ... MENTIONNER QUELLES COMPOSANTES ONT DUE ETRE AJUSTEE. 
+***    MODIFIEE LE 06 AVRIL 1989 PAR B.DUGAS ... 
+***    ... LA MATRICE DE ROTATION EST LUE EN MODE COLONNES. 
+***    MODIFIEE LE 01 MAI 1989 PAR B.DUGAS ... 
+***    ... TENIR COMPTE DU FAIT QUE LES TAMPONS D'INFORMATION DES CO- 
+***        LONNES DE CETTE MATRICE DE ROTATION ONT ETE MODIFIES. 
+ 
+*---------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     MAXLEV           , HEAD
+      PARAMETER ( MAXLEV = 999     , HEAD = taille_entete )
+      INTEGER     MAXMEM
+      PARAMETER ( MAXMEM= memoire_maximale )
+ 
+      LOGICAL     OK,ERR
+      CHARACTER*4 KIND,NOM
+      REAL        CMP,RCMP,GG,MAT,VAL,VEC
+      REAL*8      RMAT,DETMAT,AMEAN,VALN,SUM
+      INTEGER     IBUF(HEAD),IPAK,JBUF, DIMCOV, LEV(MAXLEV), 
+     +            WHERE,NWDS,NWDS1,MAXW,MAXW1,MAXW2,LENR,LEN1,
+     +            LEN2,LEN,M,NLEV,NLEV1,PIVO,WRK,INFO,IER(6),
+     +            NF,ILG,ILAT,MEM,I,J,K,L,N,NM
+ 
+      POINTER    (ICMP,  CMP(1)), (IVEC, VEC(1)), (IGG,    GG(1)), 
+     +           (IRM0, RMAT(1)), (IRM1, MAT(1)), (IRCM, RCMP(1)),
+     +           (IWRK,  WRK(1)), (IVAL, VAL(1)), (JBF,  JBUF(8)),
+     +           (IPIV, PIVO(1))
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2,JCLPNT,SUIVANT,PRECEDE,XIT,HPALLOC,
+     +            GETFLD2,PUTFLD2,DGETRF,DGETRI
+ 
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/pcomp.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2,3, 6 )
+ 
+***    LIRE UNIT 2 POUR DETERMINER LE TYPE DE CALCUL. 
+ 
+      MAXW2 = GETSIZ2( 2, IBUF,LEN2,NWDS,IPAK, LEV,NLEV )
+      IF (MAXW2.EQ.0) GOTO 9999
+ 
+      WRITE(NOM,4) IBUF(3) 
+      IF (NOM.NE.'RMAT')                                       THEN
+ 
+*---------------------------------------------------------------------- 
+***    PREMIER CAS DE CALCUL MENTIONNE DANS L'INTRODUCTION. 
+***    DETERMINER LES DIMENSIONS DU PROBLEME. 
+ 
+      IF (NLEV.LE.0 .OR. NLEV.GT.MAXLEV) CALL      XIT('  Pcomp ',-1 ) 
+ 
+***    DIMENSIONS X/Y. 
+ 
+      ILG  = IBUF(5) 
+      ILAT = IBUF(6) 
+ 
+***    NOMBRE DE FACTEURS SUR UNITE 1. 
+ 
+      MAXW1 = GETSIZ2( 1, IBUF,LEN1,NWDS1,IPAK, LEV,NLEV1 )
+      IF (MAXW1.EQ.0) GOTO 9999
+ 
+      IF (NLEV1.NE.NLEV .OR.
+     +    NWDS1.NE.NWDS ) CALL                     XIT('  Pcomp ',-2 ) 
+
+      M = 0 
+  050 DO  L=1,NLEV 
+          CALL SUIVANT( 1, IBUF, ERR,OK )
+              IF (.NOT.OK ) GOTO 100
+              IF (     ERR) GOTO 9999
+          END DO
+          M = M+1 
+      GOTO 050 
+ 
+  100 IF (MOD( M,NLEV ).NE.0) CALL                 XIT('  Pcomp ',-3 ) 
+      CALL PRECEDE( 1,-1 )
+ 
+***    NOMBRES DE CHAMPS SUR UNITE 2. 
+ 
+      LEN = 0 
+  150 DO  L=1,NLEV 
+          CALL SUIVANT( 2, IBUF, ERR,OK )
+              IF (.NOT.OK ) GOTO 200
+              IF (     ERR) GOTO 9999
+          END DO
+          LEN = LEN+1 
+      GOTO 150 
+ 
+  200 IF (MOD( LEN,NLEV ).NE.0) CALL               XIT('  Pcomp ',-4 ) 
+      CALL PRECEDE( 2,-1 )
+ 
+      NWDS   = ILG*ILAT 
+      DIMCOV = NWDS*NLEV 
+      WRITE(KIND,4) IBUF(1)
+ 
+      IF (KIND.EQ.'SPEC' .OR. 
+     +    KIND.EQ.'FOUR' .OR.
+     +    KIND.EQ.'CMPL') CALL                     XIT('  Pcomp ',-5 ) 
+ 
+      WRITE(6,6100) M, LEN 
+ 
+      LENR = MAX( LEN1,LEN2 )
+      MAXW = LENR-HEAD
+
+***    DEMANDONS LA MEMOIRE DONT ON A BESOIN SI C'EST POSSIBLE ... 
+ 
+      MEM = M*(1+LEN+DIMCOV)+DIMCOV+LENR
+ 
+      IF (MEM.GT.MAXMEM)                                       THEN 
+          WRITE(6,6006) MEM-MAXMEM 
+          CALL                                     XIT('  Pcomp ',-6 ) 
+      END IF 
+ 
+***    ... ET DEFENISSONS LES POINTEURS. 
+ 
+      Call hpalloc( IVAL, M        , IER(1),1 )
+      Call hpalloc( ICMP, M*LEN    , IER(2),1 )
+      Call hpalloc( IVEC, M*DIMCOV , IER(3),1 )
+      Call hpalloc( IGG , DIMCOV   , IER(4),1 )
+      Call hpalloc( JBF , LENR     , IER(5),1 )
+ 
+***    LECTURE DES FACTEURS. 
+ 
+      DO 250 N=0,M-1
+          DO  L=0,NLEV-1 
+
+              WHERE = DIMCOV*N+NWDS*L+1 
+              CALL GETFLD2( 1, VEC(WHERE), KIND,-1,' ',LEV(L+1), 
+     +                                     JBUF,MAXW,OK ) 
+
+              IF (.NOT.OK)                                     THEN 
+                  WRITE(6,6007) L+1,N+1
+                  CALL                             XIT('  Pcomp ',-7 ) 
+              END IF 
+
+          END DO
+  250 CONTINUE 
+ 
+***    CALCUL DES VALEURS PROPRES ASSOCIEES AUX FACTEURS. 
+ 
+      DO 300 N=1,M 
+          VALN = 0.0 
+          WHERE = (N-1)*DIMCOV 
+          DO  I=1,DIMCOV 
+              VALN = VALN+VEC(WHERE+I)*VEC(WHERE+I) 
+          END DO
+          VAL(N) = VALN 
+  300 CONTINUE 
+ 
+***    LECTURE DES DONNEES ET LEUR PROJECTION SUR LES EOFS. 
+ 
+      DO 350 I=1,LEN 
+
+          DO  L=0,NLEV-1
+
+              WHERE = NWDS*L+1 
+              CALL GETFLD2( 2, GG(WHERE), KIND,-1,' ',LEV(L+1), 
+     +                                    JBUF,MAXW,OK ) 
+
+              IF (.NOT.OK)                                     THEN 
+                  WRITE(6,6008) L+1,I
+                  CALL                             XIT('  Pcomp ',-8 ) 
+              END IF 
+              
+          END DO
+          DO  N=0,M-1
+
+              WHERE = DIMCOV*N
+              SUM   = 0.0 
+
+              DO  L=1,DIMCOV 
+                  SUM = SUM+VEC(WHERE+L)*GG(L) 
+              END DO
+
+              CMP(N*LEN+I) = SUM 
+
+          END DO
+
+  350 CONTINUE 
+ 
+***    VERIFIER QUE LES MOYENNES SONT NULLES ... 
+ 
+      NM    =0 
+      DO 400 N=1,M 
+
+          WHERE = LEN*(N-1) 
+
+          AMEAN = 0.0 
+          DO  L=1,LEN 
+              AMEAN = AMEAN+CMP(WHERE+L) 
+          END DO
+          AMEAN = AMEAN/LEN 
+
+          IF (ABS(AMEAN).GT.SQRT(VAL(N))/100.)                      THEN 
+
+              NM = NM+1 
+              DO  L=1,LEN 
+                  CMP(WHERE+L) = CMP(WHERE+L)-AMEAN 
+              END DO
+              WRITE(6,6120) N, AMEAN*AMEAN 
+
+          END IF 
+
+  400 CONTINUE 
+ 
+      IF (NM.NE.0) WRITE(6,6130) NM 
+ 
+***    ... ET QUE LES VARIANCES = 1. 
+ 
+      DO 550 N=1,M 
+          VALN  = VAL(N) 
+          WHERE = LEN*(N-1) 
+          DO  L=1,LEN 
+              CMP(WHERE+L) = CMP(WHERE+L)/VALN 
+          END DO
+  550 CONTINUE 
+ 
+***    ON ECRIT LES RESULTATS. 
+ 
+      JBUF(4) = 1 
+      JBUF(5) = LEN 
+      JBUF(6) = 1 
+      JBUF(7) = M*10000+10 
+      DO 600 N=1,M
+
+           WHERE   = LEN*(N-1)+1 
+           JBUF(2) = N+1000 
+           CALL PUTFLD2( 3, CMP(WHERE), JBUF,MAXW ) 
+
+  600 CONTINUE 
+ 
+*---------------------------------------------------------------------- 
+      ELSE 
+
+***    SECOND CAS DE CALCUL MENTIONNE DANS L'INTRODUCTION. 
+ 
+      M = IBUF(5) 
+ 
+***    DIMENSION DES COMPOSANTES PRINCIPALES. 
+ 
+      MAXW1 = GETSIZ2( 1, IBUF,LEN1,LEN,IPAK, LEV,NLEV )
+      IF (MAXW1.EQ.0) GOTO 9999
+ 
+      IF (NLEV.NE.1)                                           THEN 
+          WRITE(6,6009)
+          CALL                                     XIT('  Pcomp ',-9 ) 
+      END IF 
+ 
+      LENR = MAX( LEN1,LEN2 )
+      MAXW = LENR-HEAD
+
+      WRITE(KIND,4) IBUF(1) 
+      WRITE(NOM, 4) IBUF(3) 
+ 
+      WRITE(6,6100) M,LEN 
+ 
+***    DEMANDONS LA MEMOIRE DONT ON A BESOIN SI C'EST POSSIBLE ... 
+
+      MEM  = M*(2*LEN+2*M+65)+LENR
+
+      IF (MEM.GT.MAXMEM)                                       THEN 
+          WRITE(6,6006) MEM-MAXMEM 
+          CALL                                     XIT('  Pcomp ',-10) 
+      END IF 
+ 
+***    ... ET DEFENISSONS LES POINTEURS. 
+ 
+      Call hpalloc( ICMP, M*LEN , IER(1),1 )
+      Call hpalloc( IRCM, M*LEN , IER(2),1 )
+      Call hpalloc( IRM0, M*M   , IER(3),8 )
+      Call hpalloc( IWRK, M*64  , IER(4),1 )
+      Call hpalloc( IPIV, M     , IER(5),1 )
+      Call hpalloc( JBF , LENR  , IER(6),1 )
+ 
+      IRM1 = IRM0
+
+***    LECTURE DE LA MATRICE DE ROTATION (EN MODE 
+***    COLONNES) SIMPLE PRECISION.
+ 
+      DO 1050  N=1,M
+
+          NM = (N-1)*M+1 
+          CALL GETFLD2( 2, MAT(NM), 'GRID',1000+N,'RMAT',1,
+     +                                JBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL                                 XIT('  Pcomp ',-11) 
+          END IF
+
+ 1050 CONTINUE
+ 
+***    TRANSFERT DE MAT A RMAT.
+
+      DO  I=M*M,1,-1
+          RMAT(I) = MAT(I)
+      END DO
+
+***    ON FACTORISE RMAT EN MOT LU.
+ 
+      CALL DGETRF( M,M, RMAT,M, PIVO, INFO )
+
+      IF (INFO.NE.0)                                           THEN
+          WRITE(6,6012) 'DGETRF',INFO,
+     +                  (PIVO(I),I=1,M)
+          CALL                                     XIT('  Pcomp ',-12)
+      END IF
+
+***    CALCUL DU DETERMINANT. LA TRACE DE LA FORME LU DE LA MATRICE
+***    RMAT NOUS DONNE SON DETERMINANT, LA DIAGONALE DE L ETANT 
+***    IDENTIQUEMENT UN. LE DETERMINANT D'UN PRODUIT EST LE PRODUIT 
+***    DES DETERMINANT.
+
+      DETMAT = 1.0
+      DO  I=1,M
+          DETMAT = DETMAT*RMAT((I-1)*M+I)
+      END DO
+
+***    ON INVERSE RMAT.
+
+      CALL DGETRI( M, RMAT,M, PIVO, WRK,M*64, INFO )
+ 
+      IF (INFO.NE.0)                                           THEN
+          WRITE(6,6012) 'DGETRI',INFO,
+     +                  (PIVO(I),I=1,M)
+          CALL                                     XIT('  Pcomp ',-12)
+      END IF
+
+      WRITE(6,6110) DETMAT 
+ 
+***    LECTURE DES COMPOSANTES PRINCIPALES ORIGINALES. 
+ 
+      DO 1100 N=1,M
+
+          WHERE = LEN*N+1 
+          CALL GETFLD2( 1, CMP(WHERE), KIND,N+1000,NOM,1, 
+     +                                 JBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6013) N 
+              CALL                                 XIT('  Pcomp ',-13) 
+          END IF 
+
+ 1100 CONTINUE 
+ 
+***    CALCUL PROPREMENT DIT. 
+ 
+      DO 1150 J=1,M 
+          DO  I=1,LEN 
+              SUM = 0.0 
+              DO  K=0,M-1 
+                  SUM = SUM+CMP(K*LEN+I)*RMAT(K*M+J) 
+              END DO
+              RCMP((J-1)*LEN+I) = SUM 
+          END DO
+ 1150 CONTINUE 
+ 
+***    ON ECRIT LES RESULTATS. 
+ 
+      DO 1200 N=1,M
+           WHERE   = LEN*(N-1)+1 
+           JBUF(2) = N+1000 
+           CALL PUTFLD2( 3, RCMP(WHERE), JBUF,MAXW ) 
+ 1200 CONTINUE 
+
+      END IF
+*---------------------------------------------------------------------- 
+***    FIN NORMALE DES CALCULS. 
+ 
+      CALL                                         XIT('  Pcomp ', 0 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR UNITES 1 OU 2. 
+ 
+ 9999 CALL                                         XIT('  Pcomp ',-14) 
+*---------------------------------------------------------------------- 
+
+    4 FORMAT(A4) 
+
+ 6006 FORMAT(' Missing at least ',I6,'words of available memory.')
+ 6007 FORMAT(' Read error on unit 1 for level No ',I5,' of eof No ',I5) 
+ 6008 FORMAT(' Read error on unit 2 for level No ',I5, 
+     +       ' of timestep no ',I5) 
+ 6009 FORMAT(' More than one vertical level in pc file ... aborting.') 
+ 6012 FORMAT(' Problem with LAPACK routine',A6/
+     +       ' Info =',I5,', IPIV='/(20X,12I5))
+ 6013 FORMAT(' Read error on unit 1 for pc no ',I5) 
+ 6100 FORMAT(' Pcomp working with ',I5,' components and ',I5, 
+     +       ' cases.') 
+ 6110 FORMAT(' The determinant of the transformation matrix is ',E13.7) 
+ 6120 FORMAT(' The square of the case mean of the ',I5,'th pc was ', 
+     +         E13.7) 
+ 6130 FORMAT(' ...The pc case means where non-zero in',I5,' instances', 
+     +       ' and were corrected.'/ 
+     +       ' The case means of the original data should be checked.') 
+ 
+      END 
+#     endif

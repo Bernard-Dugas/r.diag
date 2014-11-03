@@ -1,0 +1,230 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spcdns  ALPHA BETA ANS OUTPUT
+*
+*
+*     DESCRIPTION...
+*      spcdns  - CONTRIBUTION OF SPH. HAR. COEF. TO GLOBAL MEAN OF PRODUCT
+*
+*
+*     AUTHORS - S.Lambert AND J.D.Henderson, NOV/79.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spcdns.ptn,v 4.10 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES THE CONTRIBUTION OF EACH PAIR OF SPHERICAL
+*               HARMONIC COEFFICIENTS TO THE GLOBAL AVERAGE OF THE PRODUCT
+*               OF THE TWO INPUT FILES.
+*
+*
+*     INPUT FILES...
+*       ALPHA = FIRST  SPECTRAL FILE
+*       BETA  = SECOND SPECTRAL FILE
+*
+*     OUTPUT FILE...
+*       ANS   = CONTRIBUTIONS TO THE GLOBAL AVERAGE
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR READING ALPHA
+*       2 ERROR READING BETA
+*       3 ALPHA AND BETA NOT THE SAME SIZE.
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spcdns
+*     PROGRAM SPCDNS (ALPHA,       BETA,       ANS,       OUTPUT,
+*    1          TAPE1=ALPHA, TAPE2=BETA, TAPE3=ANS, TAPE6=OUTPUT)
+*     -----------------------------------------------------------
+
+*     $Log: spcdns.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2013/10/16 19:58:56  bernard
+*     Declarations 'a la' F90.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.5  2000/09/25 04:04:28  armnrbd
+*     Utiliser le mode IO64.
+*
+*     Revision 4.4  1999/11/17 20:42:22  armnrbd
+*     Modifier l'allocation de memoire dynamique.
+*
+*     Revision 4.3  1998/07/03 02:26:37  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/05/21  20:20:53  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1995/08/26  17:05:50  armnrbd
+*     Calculer la partie imaginaire en plus de la partie reelle.
+*
+*     Revision 4.0  94/11/17  14:21:41  14:21:41  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.0  93/10/13  13:56:58  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/10  21:22:36  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/04/28  12:30:07  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:54  armnrbd
+*     Initial revision
+*     
+*     MAY 13/83 - R.LAPRISE.
+*     DEC 01/80 - J.D.HENDERSON
+*     NOV   /79 - S. LAMBERT
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+
+      LOGICAL     OK
+      CHARACTER*4 TYPE
+      REAL*8      HOLD
+      INTEGER     LSR,LR,LM,LA,KTR,J,K,NRECS,NFF,
+     +            JBUF(HEAD),KBUF(HEAD),IER,
+     +            JPAK,KPAK,LEN,LEN2,
+     +            MAXW,MAXW2,NWDS
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,NBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: F,G
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL,    EXTERNAL :: SETIO64
+      INTEGER,    EXTERNAL :: GETSIZ
+      EXTERNAL    JCLPNT,GETFLD2,XIT,DIMGT2,PUTFLD2,CMPLBL
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spcdns.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+      NRECS = 0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                          XIT(' Spcdns ',-1 )
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.NE.'SPEC') GOTO 050
+
+      IF (NRECS.EQ.0) CALL PRTLAB( JBUF )
+
+  051 MAXW2 = GETSIZ( 2, KBUF,LEN2,NWDS,KPAK )
+      IF (MAXW2.LE.0) CALL                         XIT(' Spcdns ',-2 )
+
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.NE.'SPEC') GOTO 051
+
+      IF (NRECS.EQ.0) CALL PRTLAB( KBUF )
+
+      CALL CMPLBL( 0,JBUF, 0,KBUF, OK )
+      IF (.NOT.OK) CALL                            XIT(' Spcdns ',-3 )
+
+      MAXW = MAX( MAXW,MAXW2 )
+      LEN  = MAX( LEN,LEN2 )
+
+      ALLOCATE( F(NWDS),G(NWDS), IBUF(2*LEN),NBUF(2*LEN) )
+
+  100 CALL GETFLD2( 1, F, 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( F,G, IBUF,NBUF )
+                  GOTO 050
+              END IF
+              WRITE(6,6100) NRECS
+              IF (NRECS.EQ.0) CALL                 XIT(' Spcdns ',-1 )
+              CALL                                 XIT(' Spcdns ', 0 )
+          END IF
+
+          CALL GETFLD2( 2, G, 'SPEC',-1,' ',-1, NBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL PRECEDE( 1,1 )
+                  DEALLOCATE( F,G, IBUF,NBUF )
+                  GOTO 050
+              END IF
+              CALL                                 XIT(' Spcdns ',-2 )
+          END IF
+
+          CALL CMPLBL( 0,JBUF, 0,KBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Spcdns ',-3 )
+
+***        DO THE ACTUAL DEEDS. GET LA,LR FROM IBUF(7) VIA DIMGT2.
+
+          CALL DIMGT2( LSR, LA,LR,LM,KTR,IBUF(7), 0,1 )
+
+          DO  K=1,LA*2-1,2
+              HOLD   = F(K)  *G(K) + F(K+1)*G(K+1)
+              G(K+1) = F(K+1)*G(K) - F(K)  *G(K+1)
+              G(K)   = HOLD
+          END DO
+          DO  K=1,LR*2-1,2
+              G(K) = G(K)*0.5
+          END DO
+
+          CALL PUTFLD2( 3, G, IBUF,MAXW )
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+      NRECS = NRECS+1
+      GOTO 100
+*----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+
+ 6100 FORMAT('0Spcdns processed ',I4,' records.')
+
+      END
+#     endif

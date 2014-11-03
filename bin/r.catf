@@ -1,0 +1,81 @@
+#! /bin/sh
+#
+zxzxzx=${DIAGNOSTIC_EXIT:=DIAGNOSTIC_EXIT}
+if [ -s "${zxzxzx}" ]; then exit 0 ; fi
+#
+cclargs  0$          "[copier/deplacer des fichiers avec cat ou mv]"\
+      -d       "non" "oui" "[fichier_entree remplace fichier_sortie, i.e. mode mv]"\
+      -na      "non" "oui" "[ne pas generer de codes d'erreurs]"\
+      ++ $* > ${TMPDIR}/cclargs_r.catf.out$$
+#
+. ${TMPDIR}/cclargs_r.catf.out$$ && /bin/rm -f ${TMPDIR}/cclargs_r.catf.out$$
+# 
+# Auteur: B. Dugas, RPN - 1992
+#
+# Revisions: 1) ete       1995 - Ajouter le mode "mv".
+#            2) printemps 1997 - Verifier l'etat de fichier_sortie.
+#            3) janvier   1999 - Supporter plus d'un fichier source (en mode mv)
+#                                et reviser l'utilisation des codes d'erreurs.  
+#            4) juin      2003 - modifier l'appel a cclargs (enlever eval) (K.Winger)
+#
+LANGUE=${CMCLNG:-english}
+#
+if [ $# -lt 2 ] ; then
+     echo " "
+     echo "Usage: r.catf input_file output_file [-d] [-na]"
+     echo " "
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "not enough arguments in r.catf" > ${zxzxzx}
+          fi
+          exit 1
+     else
+          exit 0
+     fi
+fi
+#
+if [ "${ECHO_COMMAND_LINE:-PAS_DEFINI}" != "PAS_DEFINI" ]; then
+     if [ "${d}" = oui -o \( -d $2 -a $# = 2 \) ] ; then
+          echo "mv $*"
+     elif [  ! -f $2 ] ; then
+          echo "cat $1 >  $2"
+     else
+          echo "cat $1 >> $2"
+     fi
+fi
+#
+if [ "${d}" = oui -o \( -d $2 -a $# = 2 \) ] ; then
+     ${MV:-mv} $* 2> /dev/null
+     STATUS=$?
+elif [ $# -gt 2 ] ; then
+     echo " "
+     if [ ${LANGUE} = english  ]; then echo "more than one input file in cat mode" ; fi
+     if [ ${LANGUE} = francais ]; then echo "plus d'un fichier d'entree en mode cat" ; fi
+     echo " "
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "more than one input file in cat mode" > ${zxzxzx}
+          fi
+          exit 2
+     else
+          exit 0
+     fi
+elif [ ! -f $2 -a ! -h $2 ] ; then
+     cat $1 >  $2 2> /dev/null
+     STATUS=$?
+else        
+     cat $1 >> $2 2> /dev/null
+     STATUS=$?
+fi
+#
+if [ ${STATUS} != 0 ]; then
+     if [ ${LANGUE} = english  ]; then echo "error ${STATUS} with mv or cat" ; fi
+     if [ ${LANGUE} = francais ]; then echo "erreur ${STATUS} avec mv ou cat" ; fi
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "error ${STATUS} in r.catf with mv or cat" > ${zxzxzx}
+          fi
+          exit $STATUS
+     fi
+fi
+exit 0

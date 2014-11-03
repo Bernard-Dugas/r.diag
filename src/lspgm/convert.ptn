@@ -1,0 +1,4934 @@
+#     if !defined (nombre_de_rapports)
+#         define   nombre_de_rapports 50000
+#     endif
+#     if defined (AUTO_DOC)
+*
+* Sequence d'appel...
+*  convert  -rpn   fichstd    -ccrn     fichccc    [-help]    [-sqi]    \ 
+*          [-delt  [valeur]]  [-date    [valeur]]  [-info     [valeur]] \ 
+*          [-time] [-tri]     [-siecle   valeur]   [-stamp    [valeur]] \ 
+*          [-es    [valeur]]  [-mbhr]   [-laslon]  [-typvar   [valeur]] \ 
+*          [-grtyp  valeur]   [-datyp    valeur]\ 
+*          [-xg1    valeur     -xg2      valeur]   [-etiket    valeur]  \ 
+*          [-xg3    valeur     -xg4      valeur]   [-bisect]  [-nobox]  \ 
+*          [-keep   valeur]   [-lnsppa] [-pmslmb]  [-ip3dat]  [-lev1mb] \ 
+*          [-opktyp valeur]   [-newnam] [-label]   [-mvalue   [valeur]] \ 
+*          [-levtyp   valeur] [-ip1con]
+*         
+*
+*
+* Auteur: B.Dugas, RPN - septembre 1990.
+* Derniere revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/convert.ptn,v 4.85 2014/10/16 02:24:34 dugas Exp $
+*
+* 
+* Objet:
+* -----
+*  CONVERT effectue soit la transformation d'un fichier de format CMC/RPN
+*  (RND ou SQI) en un fichier de format CCCma,  soit l'operation inverse.
+*  Les tampons d'informations sont  eux-memes convertis dans la mesure du
+*  possible. De meme et toujours dans la mesure du possible, les rapports
+*  de compaction sont aussi conserves.
+*
+*  Au final, le type de conversion est determine par le contenu des fichiers
+*  dont les noms  sont specifies sur la ligne de commande.  Un seul de ces
+*  noms devraient correspondre a un fichier existant. Le second fichier sera
+*  alors cree et son type sera different du fichier existant. Si par hasard
+*  les deux fichiers existent, la valeur de l'argument a la cle -keep sera
+*  alors utilisee pour determiner quel sera le fichier source. Le fichier
+*  destination est alors ecrase. Notez que par defaut, keep=RPN.
+*
+* Parametres d'appel:                                           Valeurs defauts
+* ------------------                                            ---------------
+*
+*    rpn = Fichier standard rpn RaNDom ou SeQuentiel/Indexe    >    Aucune    <
+*          Il est important de noter que les nom de fichiers
+*          rpn ne contenant que des majuscules sont changes
+*          en minuscules. Les autres formes de noms ne sont
+*          pas modifies
+*   ccrn = Fichier ccrn SEQuenciel/FORtran/UNFormatted         >    Aucune    <
+*   keep = Determine quel fichier sera la source lorsque
+*          les deux fichiers existent a l'appel.               >  RPN  /  CCC <
+*
+*    sqi = Type du fichier rpn de sortie (RND/SQI)             >  RND  /  SQI <
+*   info = Niveau des messages retournes (DEBUG/WARNIN/FATALE) > ERRORS/INFORM<
+*  nobox = Ne pas imprimer de boites d'informations            >  NON  /  OUI <
+*   help = Affiche ce texte decrivant le programme et son      >  NON  /  OUI <
+*          utilisation. Aucune autre tache de conversion 
+*          n'est alors effectuee par le programme
+*    tri = Trier les enregistrements RPN avant lecture selon   >  NON  /  OUI <
+*          les cles DATEO/NPAS/TYPVAR/ETIKET/NOMVAR/IP1. Cette
+*          option ne s'applique pas aux fichiers sequentiels 
+*          non-indexes pre-1989
+*
+* bisect = Tenir compte des annees bisectiles dans les         >  NON  / OUI  <
+*          calculs de date et de pas de temps
+*   date = Date de depart de l'analyse >DATE TIME STAMP<       >   -1  / JOUR <
+*          Si CCRN==>RPN, par defaut dateo=10179001
+*          Si RPN==>CCRN et date>0, la date lue dans le
+*          fichier RPN sera utilisee comme date de validitee
+*          De plus, npas sera recalcule comme la difference
+*          entre ces deux dates (en pas de temps, si delt>0
+*          ou bien en heures, sinon)
+*   delt = Valeur d'un pas de temps en secondes.               >   -1  / HEURE<
+*          Notez que cette valeur a preseance sur toutes
+*          celles qui seraient lues dans le fichier d'entree
+* ip3dat = Si egal a OUI, ibuf(2) contient en fait un nombre   >  NON  /  OUI <
+*          d'echantillon qui doit etre transfere vers ip3
+* siecle = Si defini, en mode CCRN==>RPN, ibuf(2) contient     >   -1  /   -1 <
+*          deja une date CCRN a laquelle il faut ajouter la
+*          valeur du parametre siecle. Apres ceci, on aura
+*          ibuf(2) =  ibuf(2) + ( siecle * 1 00 00 00 00 )
+*  stamp = Si egal a OUI, le parametre date contient deja un   >  OUI  /  NON <
+*          >DATE TIME STAMP< code. Sinon, cet argument est
+*          de la forme YYYYMMDDHHMMSS
+*   time = Avec ip3dat, date et delt, determine le traitement  >  NON  /  OUI <  
+*         du descripteur contenant l'information temporelle:
+*      a)  Si RPN==>CCRN ...
+*          ...  et time=OUI   Alors  ibuf(2) = datev
+*          ...  et time=NON   Alors  ibuf(2) = npas
+*      b)  Si CCRN==>RPN ...
+*          i)   Si ip3dat=OUI, ip3=ibuf(2) et ip2=npas=0
+*          ii)  Si ibuf(2) contient deja une date CCC valide
+*               Alors datev=ibuf(2) et on tente de sauver:
+*               1) ip2 et npas, si dateo et delt sont definis
+*               2) ip2 et dateo, si npas et delt le sont
+*          iii) Si delt.NE.-1 et time=OUI
+*               Alors date=datev et npas=ip2=0 
+*          iv)  Sinon
+*               Alors date=dateo et npas=ibuf(2)
+*
+*  label = Si RPN==>CCRN, la valeur du champs ETIKET est
+*          sous la forme d'un enregistrement de type LABEL     >  NON  /  OUI <
+
+* laslon = Ajout/Retrait d'une longitude lorsqu'on reproduit   >  NON  /  OUI <
+*          RPN vers/de CCRN dans le cas de grille lat-lon 
+*
+*     es = Type de variable d'humidite dans le fichier ccrn.   >   ES  /  HU  <
+*          Cette valeur sera utilisee si CCRN==>RPN. Dans le
+*          sens inverse, es='ALL' implique que 'HU', 'SHUM',
+*          'HR' et 'RHUM' seront toutes renommees a 'ES'. La
+*          variable 'ES' restera telle quelle. Par contre, si
+*          ES='HR'/'RHUM', seules ces deux variables seront
+*          renommees. Idem lorsque es='HU'/'SHUM'.  
+* ip1con = Convertir ou non le format des IP1                  >  OUI  /  NON <
+* lev1mb = La valeur lev=1 doit etre interpretee comme etant   >  NON  /  OUI <
+*          pression=1 MB et non pas comme etant sigma=1.0 
+* levtyp = Determine le type de coordonnee verticale lors de   >   -1  /   -1 <
+*          la conversion d'un fichier CCRN. Les valeurs
+*          reconnues sont les suivantes:
+*             =0, hauteur (m) par rapport au niveau de la mer
+*             =1, sigma (0.0 -> 1.0) * 1000
+*             =2, pression (mb)
+*             =3, type a-dimensionnel (ordinal)
+*             =4, hauteur (M) par rapport au niveau du sol
+*             =5, coordonnee hybride
+*             =6, coordonnee Theta
+*             =7, pression (Pa)
+*             =999, deja en format IP1 (CMC/RPN)
+*   mbhr = Le mouvement vertical RPN (si NOMVAR='WW') est      >  NON  /  OUI <
+*          en unite de mb/heure plutot que Pascal/seconde
+* lnsppa = Cle pouvant etre utilisee pour que le champs LNSP
+*          soit lu et ecrit en ln(Pascal) plutot qu'en ln(MB)  >  NON  /  OUI <
+* pmslmb = Cle pouvant etre utilisee pour que le champs MSLP
+*          soit lu et ecrit en Mb plutot qu'en Pascal          >  NON  /  OUI <
+*
+* newnam = Convertir les noms et unites au besoin. Si newnam   >  OUI  /  NON <
+*          contient DYN ou PHY, seulement les variables
+*          dynamiques ou physiques seront converties
+* typvar = Le type de variable. Previsions, Observations ...   >   P   /   O  <
+* etiket = L'etiquette a inserer dans le fichier RPN           >'CCRN SEQ'/' '<
+* datyp  = Forcer l'ecriture avec un type particulier. Ceci    >    Aucune    <
+*          n'a de sens que pour les donnees reelles/entieres
+*          et n'aura aucun effet pour les donnees complexes
+* mvalue = Valeur associee aux donnees manquante dans les      >    Aucune    <
+*          fichiers CCC. La valeur 'OFF' desactive ce
+*          traitement lors de l'ecriture de ces fichiers.
+*
+*  grtyp = Valeur GRTYP d'une grille CCRN d'entree. Surtout    >    Aucune    <
+*          utile dans le cas ou il ne serait pas possibles de
+*          distinguer entre des grilles lat/long avec ou sans
+*          poles, entre des grilles hemispheriques et des  
+*          grilles polaire-stereographiques, etc ...
+* xg1,xg2,xg3,xg4
+*        = Parametres definissant la grille (CCRN) d'origine
+*          si c'est une grille polaire-stereographique N ou S  >    Aucuns    <
+* 
+*      Notez que si grtyp ou l'un des xgi doit etre specifie en
+*      entree, tous les autre descripteurs de grilles doivent
+*      aussi l'etre.
+*
+* opktyp = Exiger le traitement de la partie (SORTIE-CCC)
+*          selon un type particulier de compaction (PK84,PK92) >  PK84 / **** <
+*          Cette valeur peut aussi etre specifiee par la 
+*          variable d'environment DEFAULT_PACKING_TYPE
+*
+* Notes - Certains parametres peuvent etre specifies par un enregistrement
+* *       ccc de type='LABL', nom='INFO' sur lequel on ecrit:
+* *
+* *                     typvar,etiket,grtyp,
+* *                     ig1,ig2,ig3,ig4,
+* *                     deet,npas,neq1,ip3
+* *
+* *      avec le format suivant:
+* *
+* *      format(4x,a2,2x,a12,4x,a1,2(6x,i4),3(4x,i6),2x,i8,2x,a1,8x,i4)
+* *
+* *      Les valeurs touvees sur un LABL de ce type ont d'ailleur preseance 
+* *      sur les parametres. neq1 peut etre I,J ou K (N//neq1 Not Equal 1).
+* *
+* *      De plus, les xg1,xg2,xg3 et xg4 sont relies aux ig1,ig2,ig3 et ig4
+* *      par le biais des routines cxgaig et cigaxg.
+* *
+* *      Consultez le document RPN: "An introduction to RPN standard files"
+* *      par Y. Chartier pour plus de renseignements sur les fichiers RPN.
+* *
+* ****
+*
+*
+*     Codes de sortie...
+*       0 Pas d'erreur
+*       1 Pas de noms de fichiers d'E/S
+*       2 Les fichiers d'E/S sont tous deux vides ou inexistants
+*       3 Fichier d'E/S de type inconnu
+*       4 Grille CCRN de type inconnu
+*       5 Les grilles CCRN de type FOUR ne sont pas supportees
+*       6 Impossible de convertir IHEM vers GRTYP
+*       7 Erreur d'ecriture sur fichier standard
+*       8 Erreur de lecture du dictionnaire standard
+*       9 Type de donnees (datyp) ne pouvant etre converties
+*      10 Erreur de lecture des donnees du fichier standard
+*      11 Un des noms declares pointe a un fichier du mauvais type
+*      12 Option TRI indisponible pour un fichier SQI
+*      13 Option TRI sur fichier zonal ayant plus d'une section ++
+*      14 Probleme de conversion de date dans TIM2DAT
+*      15 TMPDIR ou BIG_TMPDIR non definis
+*      16 Specifications de grille manquant
+*      17 Series temporelles non supportees pour ce grtyp
+*      18 Choisir un seul des arguments SIGMA ou PASCAL
+*      19 Valeur non reconnue pour argument NEWNAM
+*      20 Label de type INFO incompatible 
+*      21 Series temporelles non supportees
+*      22 Probleme de series temporelles spectrales
+*      23 Options incompatibles: IP1CONV=F et OLD_STYLE_IP1=T
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM convert
+*    +                (      rpn,       ccrn,       output,
+*    +                 tape1=rpn, tape2=ccrn, tape6=output)
+
+***    Auteur: B.Dugas, RPN - septembre 1990: Version 1.0
+
+***    Effectuer la conversion de fichiers (standards-rpn) de/a (ccrn).
+
+***    Historique des modifications:
+***   
+***    ... Le 14 novembre 1990, B. Dugas, RPN (V1.1) - IBUF est en 
+***        simple precision. Par consequent, la routine de conversion
+***        M4BA8  est supprimee et CCRNBIT passe de 64 a 32. La version
+***        CRAY doit remettre  cette valeur a 64.  Enfin,  les valeurs
+***        de compaction negatives sont maintenant acceptees du cote CCRN.
+***   
+***    ... Le 28 novembre 1990, B. Dugas, RPN (V1.2) - Ajouter la cle 
+***        GTYP pour specifier le type de grille d'entree CCRN. 
+***   
+***    ... Le 07 decembre 1990, B. Dugas, RPN (V1.3) - Allocations de
+***        memoire dynamique avec 'call MEMOIR'.  De plus, nouvel appel 
+***        a MACSPE. Enfin, les 8 premiers caracteres significatifs (i.e.
+***        15 a 22) des labels ordinaires sont maintenant places dans la
+***        variable ETIKET.
+***   
+***    ... Le 07 janvier 1991, B. Dugas, RPN (V1.31) - Utiliser JBUF 
+***        avant l'appel a MEMOIR dans la section RPN.
+***   
+***    ... Le 29 janvier 1991, B. Dugas, RPN (V1.32) - 'SHUM' = 'HU',
+***                                                    'RHUM' = "HR'.
+***   
+***    ... Le 6 fevrier 1991, B. Dugas, RPN - Correction d'une erreur
+***        dans le traitement des LABL p/r a ETIKET.                  
+***   
+***    ... Le 17 fevrier 1991, B. Dugas, RPN (V1.33) - Modification de
+***        l'allocation de memoire dans le cas de dimensions variables.
+***        Correction d'un bogue dans cette meme section.  Finalement,
+***        modification de la conversion (ni/nj/nk) en (type/ilg/ilat).
+***   
+***    ... Le 15 avril 1991, B. Dugas, RPN (V1.40) -  Ajout  de la cle
+***        LASLON  qui determine si une longitude  est AJOUTEE/ENLEVEE
+***        lorsqu'on passe de RPN/CCRN vers CCRN/RPN. La valeur de de- 
+***        faut est NON.  Ajout de la cle NOBOX, afin de pas  imprimer 
+***        de boites d'informations a la sortie.
+***   
+***    ... Le 1 mai 1991, B. Dugas, RPN (V1.50) -  Ajout de la cle TRI
+***        determinant si un tri prealable est effectue sur un fichier
+***        d'entree de type RPN. Notons que cette cle est inactive sur
+***        le CRAY. Sauvegarde de ip3 avec putlab..
+***   
+***    ... Le 15 juillet 1991, B. Dugas, RPN (V1.51) - Correction d'un
+***        bogue dans l'appel a XGAIG.
+***   
+***    ... Le 30 aout 1991, B. Dugas, RPN (V1.52)  -  Utiliser infon a
+***        la fin de la partie RPN pour decider de continuer on non la
+***        conversion.
+***   
+***    ... Le 10 septembre 1991,  B. Dugas, RPN (V1.60)  -  NMAX passe
+***        de 4000 a 10000 enregistrements.  Et SURTOUT, utiliser fst-
+***        luk plutot que fstlir.
+***   
+***    ... Le 19 septembre 1991,  B. Dugas, RPN (V1.61)  -  Corriger un
+***        bogue dans le calcul de NWDS dans la section CCRN  (deplacer
+***        un appel a LBLCHK).
+***   
+***    ... Le 08 octobre 1991,  B. Dugas, RPN (V1.62)  -  Tenir compte
+***        de NEWL dans le cas type=ZONL.
+***   
+***    ... Le 06 janvier 1992, B. Dugas, RPN (V1.70)  -  Les cles DELT
+***        et DATE sont activees pour la partie CCRN. Une nouvelle cle
+***        MBHR specifiant  le type de mouvement  vertical RPN desire.
+***        Un autre cle TYPVAR definit ce champs pour la conversion de
+***        CCRN a RPN.
+***   
+*     $Log: convert.ptn,v $
+*     Revision 4.85  2014/10/16 02:24:34  dugas
+*      - Modifications commandees par la compilation avec GFORTRAN et IFORT.
+*      - Implementer le support des valeurs manquantes (via "-mvalue").
+*      - Supprimer les compilations conditionnelles pour CRAY et NEC.
+*      - Corriger un bogue lie a l'option "-keep".
+*      - Mise-a-jour de la documentation interne.
+*
+*     Revision 4.84  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.83  2013/10/16 21:05:53  bernard
+*     Declaration EXTERNAL 'a la' F90.
+*
+*     Revision 4.82  2013/02/07 21:46:21  bernard
+*     Ajouter l'option de convertir ou non le format des IP1 (IP1CON).
+*
+*     Revision 4.81  2012/05/17 19:26:16  dugas
+*     Ajouter levtyp=999 pour tenir compte du cas ou LEV(CCC) est deja en format IP1.
+*
+*     Revision 4.80  2011/06/06 19:25:38  dugas
+*     Noms de fichiers a 512 caracteres max.
+*
+*     Revision 4.79  2010/12/01 17:25:00  dugas
+*     - Ajouter le support du type 'KIND' de variables pour les fichiers
+*       CCRN et leur conversion en series temporelles RPN. Les nouveaux
+*       codes d'erreurs 21 et 22 sont associes a ce traitement.
+*     - Deplacer le traitement de la variable DATEI apres l'ouverture des
+*       fichiers de donnees. Le sens que prends cette variables depends
+*       de cette information.
+*
+*     Revision 4.78  2010/10/23 17:03:40  dugas
+*     Gros menage dans les conversions de noms et unites.
+*
+*     Revision 4.77  2010/06/10 22:52:41  dugas
+*      - Modifier le traitement de lev/ip1 pour les enregistrements TicTac et TocToc.
+*      - Sauver IP1 dans l'enregistrement INFO. Ajouter un code d'erreur si celui-ci
+*        n'est pas de longueur appropriee a la lecture.
+*      - Supprimer les conditions CPP CRAY et NEC64.
+*
+*     Revision 4.76  2010/05/06 16:33:44  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles est maintenant controle par des appels
+*       aux routines Accept_LeapYear() et Ignore_LeapYear().
+*     - Les arguments de type dates peuvent avoir jusqu'a 20 caracteres de
+*       long (I20) et sont lus dans des variables de type INTEGER(8).
+*     - La routine TIM2DAT utilise maintenant NEWDATE, INCDATR et DIFDATR
+*       plutot que d'effectuer elle-meme ses calculs.
+*
+*     Revision 4.75  2009/09/08 20:43:45  dugas
+*     - Enlever tout traitement des jours juliens.
+*     - Conversion d'unites pour TD.
+*
+*     Revision 4.74  2009/01/23 22:31:50  dugas
+*     - Modifier le sens de la cle '-es'. Si es='ALL', alors
+*       'HU', 'SHUM' et 'RHUM" seront tous renommes a 'ES'.
+*     - Etendre le sens de la cle '-newnam'. Ceci est maintenant
+*       une cle a valeur caracteres: Le valeurs reconnues sont
+*       'DYN', 'PHY', 'ALL' et 'NONE', denotant ainsi le type
+*       de variables subissant une conversion de noms/unites.
+*       Les anciennes valeurs 'OUI', 'NON', etc. sont
+*       egalement supportees.
+*     - Les variables 'CLLX', 'BSLX' et 'TPLX' ne sont plus
+*       associes aux nuages haut, intermediaire et bas.
+*
+*     Revision 4.73  2008/11/24 22:13:44  dugas
+*     - Traitement different des variables MT et ME vers PHIS.
+*     - Verifier tous les codages des coordonnees modeles de ip1
+*       correpondant a COORD=1.0 pour la defintion de LEV=1.
+*     - On peut aller jusqu'a l'an 100 AD dans TIM2DAT.
+*
+*     Revision 4.72  2008/05/03 21:10:46  dugas
+*     - Modification generale pour r.gppf.
+*     - Generaliser l'usage des fonctions logiques is_on/is_off.
+*
+*     Revision 4.71  2008/04/28 15:41:58  dugas
+*     Ne plus tenir compte du cas non-SQ98.
+*
+*     Revision 4.70  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.69  2007/08/29 19:48:50  dugas
+*     - Utiliser la focntion NEWDATE plutot que IDATMG2/DATMGP2 dans TIM2DAT.
+*     - Correction lie au traitement 64 bits de donnees complexes (datyp=8).
+*     - Les datyp 129,133 et 134 sont maintenant supportes.
+*     - Ajouter la cle -datyp pour forcer l'ecriture avec un type particulier.
+*       Ceci n'a de sens que pour les donnees reelles/entieres et n'aura aucun
+*       effet pour les donnees complexes.
+*     - Changer 'SIC' pour 'SICN'.
+*
+*     Revision 4.68  2007/03/12 20:12:11  dugas
+*     Corriger la lecture du parametre -typvar (A1 --> A2).
+*
+*     Revision 4.67  2006/09/19 19:07:25  dugas
+*     Corriger ILG pour les enregistrements caracteres CCCma.
+*
+*     Revision 4.66  2006/07/13 21:50:27  dugas
+*     Supporter le nouveau format Z32 (DATYP=8) pour les donnees complexes
+*      dans les fichiers standards RPN/CMC (i.e. type SPEC/FOUR/CMPL).
+*
+*     Revision 4.65  2006/06/19 16:32:58  dugas
+*     PMSL en Mb plutot qu'en Pascal avec cle -pmslmb.
+*
+*     Revision 4.64  2005/12/12 22:53:29  dugas
+*     - Ajouter les messages informatifs de XDF (XDFOPT) avec mode -info.
+*     - Corriger les appels a FSTOPC.
+*
+*     Revision 4.63  2005/11/22 19:52:45  dugas
+*     Tenir compte du fait que les niveaux verticaux des fichiers
+*      CCCma peuvent parfois etre codes en unites de pascals plutot
+*      qu'en MB.
+*
+*     Revision 4.62  2005/05/06 18:29:31  dugas
+*     Corriger le traitement du fichier PLTINFO.
+*
+*     Revision 4.61  2004/12/10 00:39:37  dugas
+*     Modifier le COMMON DEXIT et convertir les unites de VT.
+*
+*     Revision 4.60  2004/11/26 15:53:24  dugas
+*     Corriger un commentaire.
+*
+*     Revision 4.59  2004/09/13 16:51:59  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.58  2003/12/10 23:15:48  dugas
+*     - Ajouter les parametres LEVTYP, LEV1MB et SIECLE.
+*     - Toujours utiliser DATYP=5 (IEEE) en mode 64 bits.
+*     - Corriger la documentation automatique.
+*
+*     Revision 4.57  2003/10/24 20:58:43  dugas
+*     Implementer du code compatible RS6000
+*
+*     Revision 4.56  2003/09/15 15:53:03  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.55  2003/07/05 14:47:59  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.54  2003/05/23 21:21:37  dugas
+*     Preciser le traitement des series temporelles:
+*      les grilles L, Y et Z ne sont pas supportees.
+*
+*     Revision 4.53  2002/12/06 16:20:22  dugas
+*     Modifier le traitement des champs a 64 bits en I/O
+*
+*     Revision 4.52  2002/09/17 18:12:04  dugas
+*     Corriger la documentation automatique
+*
+*     Revision 4.51  2002/04/22 14:12:55  dugas
+*     Ajouter le type VKIND=4 (Hauteurs)
+*
+*     Revision 4.50  2002/01/14 15:40:50  dugas
+*     Ajouter le support du descripteur de coordonnee verticale 'HY'.
+*
+*     Revision 4.49  2001/12/14 15:24:17  dugas
+*     Ajouter un code d'erreur lorsqu'il manque des descripteurs de grilles
+*
+*     Revision 4.48  2001/11/20 22:56:01  armnrbd
+*     S'assurer que IP2 est plus petit que 32768 dans le
+*     bloc d'information recupere d'un fichier STD98.
+*
+*     Revision 4.47  2001/05/14 14:44:02  armnrbd
+*     Ajouter le parametre "-ip3dat" permettant de sauver IBUF(2)
+*     dans IP3 (utile dans le cas de sorties de TIMAVG and Co.).
+*
+*     Revision 4.46  2001/01/19 00:31:11  armnrbd
+*     Tenir compte des enregistrements >> et ^^ dans la conversion.
+*     Mettre a jour l'information sauvee sur l'etiquette INFO en
+*      y ajoutant  des copies de VKIND, DATEO et IP2.
+*     Modifier le traitement du parametre "-info".
+*
+*     Revision 4.45  2001/01/18 14:04:45  armnrbd
+*     Ajouter le support pour le type 3 de coordonee (convpr).
+*
+*     Revision 4.44  2000/07/20 17:02:43  armnrbd
+*     Sauver ig1,ig2,ig3,ig4, ip3 et grtyp dans la section tri.
+*
+*     Revision 4.43  2000/04/07 21:52:44  armnrbd
+*     Ajouter le parametre de ligne de commande "-stamp".
+*
+*     Revision 4.42  2000/03/17 21:24:05  armnrbd
+*     Changer "formated" par "formatted" dans un des OPEN.
+*
+*     Revision 4.41  2000/03/15 20:44:13  armnrbd
+*     Corriger une erreur de calcul de la date dans TIM2DAT lors
+*     de conversion CCRN ==> RPN, si IBUF(2) contient une date.
+*
+*     Revision 4.40  1999/05/14 20:49:11  armnrbd
+*     Utiliser le repertoire BIG_TMPDIR.
+*
+*     Revision 4.39  1999/04/08 22:08:19  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.38  1999/02/18 20:55:59  armnrbd
+*     Remplace 01010100 par 1901010100 dans TIM2DAT.
+*     Utiliser DATMGP2 pour decoder les DATE TIME STAMP dans cette meme routine.
+*
+*     Revision 4.37  1999/02/02  22:21:37  armnrbd
+*     Ajouter le support des grilles Lambert (grtype=!).
+*     Corriger un bogue dans la conversion de P0 (spectral).
+*
+*     Revision 4.36  1998/12/01  19:06:55  armnrbd
+*     Mieux isoler le cas PR=0.0 dans CONVPP.
+*
+*     Revision 4.35  1998/10/22  20:21:39  armnrbd
+*     Corriger le traitement de tres petites pressions dans CONVPP.
+*
+*     Revision 4.34  1998/09/23  02:23:21  armnrbd
+*     Corriger un appel a CONVPP et
+*     corriger le premier appel a CONVPR
+*     dans la routine CONVPP elle-meme !!
+*
+*     Revision 4.33  1998/09/22  21:01:55  armnrbd
+*     Si tri=vrai, enlever tous les ++ sauf le premier.
+*
+*     Revision 4.32  1998/09/04  17:06:09  armnrbd
+*     Mettre a jour le numero de version.
+*
+*     Revision 4.31  1998/08/27  15:54:47  armnrbd
+*     Forcer datyp=0 si npak=-64.
+*
+*     Revision 4.30  1998/07/23  03:26:34  armnrbd
+*     Deplacer la routine ROWORD vers le fichier UTIL.
+*
+*     Revision 4.29  1998/07/21  19:31:34  armnrbd
+*     Corriger la conversion vers IP1 dans CONVPR si SIGMA est vrai.
+*
+*     Revision 4.28  1998/07/07  18:28:22  armnrbd
+*     Remplacer IDATMGP,DATMGP par IDATMG2,DATMGP2 et faire
+*      appel a la fonction NEWDATE pour exercer un controle
+*      sur le DATE-TIME STAMP (probleme relie a Y2K).
+*
+*     Revision 4.27  1998/06/11  14:15:31  armnrbd
+*     Passer en mode de calculs a 64 bits.
+*     Tenir compte de datyp (support des donnees entiers).
+*     Ajouter la routine CONVPP pour convertir les ++.
+*     Utiliser HPALLOC pour allouer la memoire dynamique.
+*     Generaliser l'usage de CONVPR.
+*     Utiliser GETHIC et PUTHIC pour NEWL.
+*     Mettre lev=0 si on a NEWL.
+*     Enlever la routine CLSCONV.
+*     Ajouter REAL2D, pour passer de/vers real vers/de real*8.
+*
+*     Revision 4.26  1998/05/20  14:42:02  armnrbd
+*     Si IBUF(4)=0 alors IP1 l'est egalement.
+*
+*     Revision 4.25  1998/05/06  17:15:54  armnrbd
+*     Augmenter la taille de CHAIN3.
+*     Tenir compte de la valeur speciale de IP1 pour decoder NEWL.
+*
+*     Revision 4.24  1998/02/19  17:23:47  armnrbd
+*     Passer de SQ97 a SQ98.
+*
+*     Revision 4.23  1997/09/26  17:38:48  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.22  1997/06/06  17:34:42  armnrbd
+*     Corriger la definition de CHAIN3 pour un fichier RND.
+*     Corriger l'utilisation de la routine TASADR.
+*
+*     Revision 4.21  1997/06/03  16:36:21  armnrbd
+*     Preparations en vue de l'implantation des fichiers standarts 97.
+*     Notamment, ajout de la cle -NEWNAM controlant les conversions
+*      de noms et d'unites d'un format a l'autre.
+*
+*     Revision 4.20  1997/05/09  14:00:53  armnrbd
+*     Corriger l'allocation de memoire en mode I/O 64 bits.
+*     Modifier la verification des parametres I/O en mode 64 bits.
+*
+*     Revision 4.19  1997/04/25  13:24:38  armnrbd
+*     Changer les unites de GZ selon le type de fichiers.
+*
+*     Revision 4.18  1997/04/01  18:13:14  armnrbd
+*     Utiliser les nouveaux appels a FNOM et WKOFFIT.
+*
+*     Revision 4.17  1996/11/12  19:33:15  armnrbd
+*     Modifier la routine LNP2MB et ses appels.
+*
+*     Revision 4.16  1996/10/15  17:17:11  armnrbd
+*     Corriger la conversion de LNSP. Ajouter une cle qui
+*     continuera de convertir de ln(Pascal) a/de MB. Le comportement
+*     par defaut est maintenant de ne pas faire de conversion
+*     d'unites.
+*
+*     Revision 4.15  1996/09/19  18:38:46  armnrbd
+*     Ajouter la cle -keep.
+*
+*     Revision 4.14  1996/06/21  15:00:23  armnrbd
+*     Ajouter le support des variables SU,SV,SR,ST,PW et PS.
+*     Ajouter la routine MM2CM pour convertir les unites de PW.
+*
+*     Revision 4.13  1996/04/25  18:59:07  armnrbd
+*     Permettre un DEET > 32767 dans un cas bien particulier.
+*
+*     Revision 4.12  1996/03/28  02:44:51  armnrbd
+*     Ajouter le support de niveaux pressions fractionnaires
+*     pour les fichiers SQI (en ajoutant la routine CONVPR).
+*
+*     Revision 4.11  1996/02/29  20:42:10  armnrbd
+*     Modifier le traitement des variables DATE et DELT dans
+*     le cas de conversions de type RPN==>CCRN.
+*
+*     Revision 4.10  1995/11/30  18:22:40  armnrbd
+*     Corriger une erreur dans le traitement des enregistrements
+*     de niveaux verticaux '++' lorsqu'on demande d'effectuer un tri.
+*
+*     Revision 4.9  1995/11/13  16:25:29  armnrbd
+*     Ajouter le support de fichiers de type DATA.
+*
+*     Revision 4.8  1995/11/03  18:38:10  armnrbd
+*     Corriger le traitement du tri lorsque DATEO couvre plus d'une annee.
+*
+*     Revision 4.7  1995/10/26  13:25:04  armnrbd
+*     Corriger une erreur dans le tri de DATEO.
+*
+*     Revision 4.6  1995/08/31  21:54:44  armnrbd
+*     Ajouter la cle "-label" modifiant le contenu des enregistrements
+*     de type LABL lors de conversion de fichiers RPN en fichiers CCRN.
+*
+*     Revision 4.5  1995/05/31  14:04:28  armnrbd
+*     Augmenter "nombre_de_rapports" a 50000.
+*
+*     Revision 4.4  1995/03/23  21:21:42  armnrbd
+*     Corriger la lecture de fichiers de type SQI.
+*
+*     Revision 4.3  1995/03/17  10:55:29  armnrbd
+*     Modifier la routine de tri pour calculer le jour correctement.
+*
+*     Revision 4.2  95/02/13  19:34:52  armnrbd
+*     Ajouter un appel a FIXNINJ.
+*     
+*     Revision 4.1  94/11/23  15:29:43  armnrbd
+*     Corriger le traitement des fichiers SQI.
+*     
+*     Revision 4.0  94/11/17  14:19:38  14:19:38  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.15  94/09/16  11:12:55  armnrbd
+*     Modifier la conversion de IBUF(2) a DATEO,NPAS,IP2 dans le cas
+*     ou les cles "date" et "delt" sont toutes deux specifiees.
+*     
+*     Revision 3.14  94/07/11  16:07:40  armnrbd
+*     Remplacer BACKSPACE par PRECEDE.
+*     
+*     Revision 3.13  94/07/05  16:13:39  armnrbd
+*     Modifier la docs quand a ce qui concerne la specification
+*     des parametres GRTYP et XG1, XG2, XG3 et XG4 en entree.
+*     
+*     Revision 3.12  94/06/21  11:18:36  armnrbd
+*     Augmenter MAXRAP.
+*     Enlever un appel incorrect a CLSCONV.
+*     
+*     Revision 3.11  94/05/17  13:56:54  13:56:54  armnrbd (Bernard Dugas)
+*     Modifier la conversion du parametre 0<IP1<10 .
+*     
+*     Revision 3.10  94/05/16  15:00:36  armnrbd
+*     Modifier l'ordre des champs pour l'option TRI.
+*     
+*     Revision 3.9  94/04/25  11:57:13  armnrbd
+*     Modifier le traitement des nom de fichier ccrn.
+*     
+*     Revision 3.8  94/03/15  16:26:02  armnrbd
+*     Ameliorer le support des XGi et GRTYP.
+*     
+*     Revision 3.7  94/03/08  12:05:25  armnrbd
+*     Traiter IP1=2000 comme un niveau sigma=0.
+*     
+*     Revision 3.6  94/02/01  19:45:19  armnrbd
+*     Verifier pour la presence d'un / avanr d'aller voir sur TMPDIR.
+*     
+*     Revision 3.5  94/02/01  18:32:35  18:32:35  armnrbd (Bernard Dugas)
+*     Corriger un bogue dans le traitement de V1 et V2.
+*     
+*     Revision 3.4  94/01/12  09:49:41  09:49:41  armnrbd (Bernard Dugas)
+*     Ajouter le support des variables d'environnement suivantes:
+*     1) TMPDIR dans le cas d'un fichier source CCRN
+*     2) DIAGNOSTIC_EXIT
+*     3) DEBUG_MODE
+*     4) VRBOSE
+*     Les noms de fichiers RPN et CCRN peuvent etre en Majuscules/Minuscules
+*     plutot que seulement en Minuscules.
+*     
+*     Revision 3.3  93/12/10  16:28:16  16:28:16  armnrbd (Bernard Dugas)
+*     Tenir compte de NPAS plus grand que 2**15.
+*     Enlever la routine TAJUST dans TIM2DAT.
+*     Modifier le sens de la cle TIME.
+*     
+*     Revision 3.2  93/11/19  12:49:52  armnrbd
+*     Corriger un bogue dans la conversion de champs SUBA.
+*     
+*     Revision 3.1  93/11/11  12:57:34  armnrbd
+*     Corriger un bogue dans l'utilisation de LVCODE.
+*     
+*     Revision 3.00  93/10/13  13:55:43  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 2.40  93/05/19  13:38:58  armnrbd
+*     Ne plus convertir MG,SO,V1 ET V2 en entiers.
+*     L'option LASLON  ne s'applique qu'aux grilles de type lat-lon.
+*     
+*     Revision 2.38  93/01/26  15:59:19  armnrbd
+*     Remplacer DEFAULTPACKINGTYPE par DEFAULT_PACKING_TYPE.
+*     
+*     Revision 2.37  93/01/26  00:07:16  armnrbd
+*     Remplacer les cles PK84 et PK92 par les cles IPKTYP et OPKTYP.
+*     
+*     Revision 2.36  92/12/16  15:32:07  armnrbd
+*     Mode HELP si aucun fichier n'est specifie a l'appel.
+*     
+*     Revision 2.35  92/12/11  23:56:38  armnrbd
+*     Implanter le support de grilles de type "L" avec le type SUBA.
+*     
+*     Revision 2.34  92/12/11  16:52:46  armnrbd
+*     Premiere version supportant le type SUBA.
+*     
+*     Revision 2.33  92/11/10  10:59:41  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 2.32  92/10/28  22:00:26  armnrbd
+*     Utiliser MEMOIRH plutot que MEMOIR.
+*     
+*     Revision 2.31  92/10/28  13:57:29  armnrbd
+*     Forcer PACK negatifs partout sauf sur le CRAY et le NEC64.
+*     
+*     Revision 2.30  92/09/28  14:23:34  armnrbd
+*     Ajouter le traitement des donnees DATYP=0.
+*     
+*     Revision 2.29  92/09/15  16:35:12  armnrbd
+*     Modifier la conversion (IHEM==>GRTYP/IGi).
+*     
+*     Revision 2.28  92/09/15  15:54:58  armnrbd
+*     Tenir compte du fait que GRTYP peut changer.
+*     
+*     Revision 2.27  92/09/04  14:29:35  armnrbd
+*     Modifier le facteur de compaction dans le cas datyp INTEGER.
+*     
+*     Revision 2.26  92/09/02  14:01:12  armnrbd
+*     Correction d'un bogue (#if defined CRAY) avec les XGi.
+*     
+*     Revision 2.25  92/08/27  15:55:02  armnrbd
+*     Corriger le traitement des IGx dans le cas PS.
+*     
+*     Revision 2.24  92/08/26  15:59:58  armnrbd
+*     Changer "DATYP=2" par "DATYP=4".
+*     
+*     Revision 2.23  92/07/15  10:16:30  armnrbd
+*     Corriger les appels a ENTOSNO.
+*     
+*     Revision 2.22  92/07/10  16:31:53  armnrbd
+*     Declaration de ENTOSNO comme EXTERNAL.
+*     
+*     Revision 2.21  92/07/09  12:04:42  armnrbd
+*     Modifier le traitement de la variable SNO.
+*     
+*     Revision 2.20  92/06/29  16:23:13  armnrbd
+*     Ajouter le traitement de GT et corriger celui de WL/WF.
+*     
+*     Revision 2.19  92/06/26  12:26:52  armnrbd
+*     Ajouter le traitement de ENV et DR.
+*     
+*     Revision 2.18  92/06/06  14:36:44  armnrbd
+*     Implanter un support  de MAXBITS.
+*     
+*     Revision 2.17  92/06/05  17:30:34  armnrbd
+*     BugFix: declaration de PAS2MB en EXTERNAL.
+*     
+*     Revision 2.16  92/06/05  17:20:43  armnrbd
+*     Correction aux nomvars de PVEG et SVEG.
+*     
+*     Revision 2.15  92/06/05  17:06:03  armnrbd
+*     Ajouter la conversion entiere de SOIL, PVEG et SVEG.
+*     
+*     Revision 2.14  92/05/29  15:18:34  armnrbd
+*     Ajouter la cle bisect pour tenir compte des annees bisectiles.
+*     Ajouter la verification pour PN et PMSL de meme que la
+*      routine PAS2MB.
+*     
+*     Revision 2.13  92/05/27  22:13:25  armnrbd
+*      Corriger le format #10 dans le cas CRAY ou NEC.
+*     
+*     Revision 2.12  92/05/27  16:36:42  armnrbd
+*     Autre BugFix...
+*     
+*     Revision 2.11  92/05/27  16:02:00  armnrbd
+*     Terminer la revision precedentes.
+*     
+*     Revision 2.10  92/05/27  15:14:16  armnrbd
+*     Ajouter les cles ETIKET,IG1,IG2,IG3,IG4.
+*     Modifier le sens de la cle TIME.
+*     Mettre la documentation interne a jour.
+*     
+*     Revision 2.03  92/05/22  09:54:46  armnrbd
+*     Toujours initialiser dateo dans le cas CCC ==> RPN.
+*     
+*     Revision 2.02  92/05/20  16:46:51  armnrbd
+*     Tenir compte de lenlab dans les appels a GETLAB.
+*     
+*     Revision 2.01  92/05/13  10:26:37  armnrbd
+*     Petit bugfix au cas "defined CRAY ou NEC"
+*     
+*     Revision 2.00  92/05/13  10:18:22  armnrbd
+*     Ajouter la cle SIGMA decrivant la variable verticale du fichier
+*     CCRN d'entree.  Modifier TIM2DAT afin d'empecher des IP2 et NPAS
+*     trop grand. Pour ce faire ajouter la routine TAJUST.
+*     Ajouter un support pour de nouveaux type spectraux standarts. La
+*     conversion CCRN spetraux ==> RPN spectraux se fait par le biais
+*     du nouveau DATYP=5 (IEEE-754 troncque).
+*     
+*     Revision 1.81  92/04/21  21:35:12  armnrbd
+*     Changer NMAX en parametre MAXRAP.
+*     Installer les "if defined CRAY" pour le code CRAY.
+*     
+*     Revision 1.80  92/03/19  11:08:35  armnrbd
+*     Ajouter la documentation automatique: On ajoute la cle
+*     HELP (appellant) la routine QQQDOC et le bloc AUTO_DOC.
+*     
+      implicit none
+
+      integer       MAXBITS
+      parameter   ( MAXBITS = 32 )
+
+      integer       NBRCLE,       MAXRAP
+      parameter   ( NBRCLE = 39,  MAXRAP = nombre_de_rapports )
+
+      character*1   neq1
+      character*4   n(MAXRAP+1),esnam,newnam
+      character*16  cles(NBRCLE),blanc
+      character*512 def1(NBRCLE),def2(NBRCLE)
+      character*512 chaine
+
+      integer       iu1,iu2,iu3, i,ipos,nrec,   lenn1,lenn2,
+     +              nil,  exfin, idatm,iopdatm, inconnu,exdb,
+     +              indx, idatyp,nextyp, lsr,la,lr,lm,ktr,lrlmt,
+     +              imin, imax,  valeur, range, levtyp0,levtyp,
+     +              BITSMOT
+
+***    Champs utilises par la setion de tri.
+
+      character     gtyp   (MAXRAP+1)
+      real          press  (MAXRAP+1)
+      real*8        hours
+      integer              anne,mois,  jour,heur,  minu,seco, dates(14)
+      character*24  chain3(MAXRAP+1),  exempl
+      integer(8) :: date8 (MAXRAP+1), valnum8,cent=100
+      integer       date  (MAXRAP+1), niveau(MAXRAP+1), delt(MAXRAP+1),
+     +              heure (MAXRAP+1), findex(MAXRAP+1), pas (MAXRAP+1),
+     +              dimr(3,MAXRAP+1), dtyp  (MAXRAP+1), siecle,
+     +              grix(4,MAXRAP+1), sample(MAXRAP+1), bits(MAXRAP+1),
+     +              valnum,i1,i2,i3,  ind12,ind22,ind32,
+     +              dummy,            ind11,ind21,ind31
+
+***    Pointeurs logiques.
+
+      logical       Vrai,Faux,  rpn,ccrn,lasl, tri,timdat,
+     +              suba,spec,  char,cmpl,data,bisect,box,times,
+     +              sqi,mbhr,sigma, infom,infog,info,slab,keep1,
+     +              lnsppa,pmslmb,ip3dat,lev1mb,ip1conv,
+     +              pascal, ok
+
+      real*8,       dimension(:), allocatable :: buffer
+      external  gz2dam,  intarel, kel2cen, laslong, lnp2mb,  ms2koms, 
+     +          ms2not,  pas2mbh, pas2mb,  roword,  tim2dat, trouvn, 
+     +          csortc,  csorte,  csortr,  entosno, real2d,  low2up,
+     +                   datmgp2, precede, mm2cm,   convpp
+
+***   *****
+***   *****
+
+***    Variables et fonctions necessaires a la partie rpn...
+
+      character typvar*2,              nomvar*4,
+     +          etiket*16,etikt0*16,   grtyp*1,grtyp0*1
+
+      integer   dateo,deet,            npas,ni,nj,nk,  
+     +          ip1,ip2,ip3,infon,     npak,datyp,nbits,
+     +          liste(MAXRAP+1),       extra1,extra2,extra3,
+     +          ig1,ig2,ig3,ig4,       swa,lng,dltf,ubc
+
+      integer   ni0,nj0,nk0,ip10,ip20, ftyp1,ftyp2, vkind,
+     +          datei,dateo0,npas0,    deet0,deeti, vkind0
+
+      real      xg1,xg2,xg3,xg4
+
+      logical   holacar, rewrit
+
+      integer   ifrm, fstfrm,xdfopt, iecr, fstecr,  wkoffit,
+     +                fstlir,fstinl, kind, fstlis,  iprm,fstprm,
+     +          inf,  fstinf,fstsui, iluk, fstluk,  rwd, fstrwd,
+     +          inbr1,fstnbr,fstouv, ierr1,fnom,    iopt,fstopc
+
+      integer   newdate, datchek, dtpr,tmpr, complex,complex0
+
+      external  fstnbr, fstouv, fstfrm, fstecr, fstlir,
+     +          fstlis, fstprm, fstluk, fstinf, fstinl,
+     +          fstsui, fstrwd, fstopc, ccard,  cigaxg,
+     +          cxgaig, fnom,   exfin,  exdb,   xdfopt,
+     +          iopdatm,wkoffit,fixninj,convpr, difdatr,
+     +          newdate
+
+      real(8)   :: MisFlag, Epsilon = 0.01
+      logical   :: MValue=.false.,MValue_READ=.false.,MValue_IS_OFF=.false.
+
+      real,           save :: misf=9.96921e+36  ! a very large float
+      integer,        save :: misi=Z'80000000'  ! largest negative 32 bit integer
+      integer,        save :: misui=Z'FFFFFFFF' ! largest 32 bit unsigned integer
+      real    *8,     save :: misd=9.96921e+36  ! very large double
+      integer *2,     save :: misa=Z'8000'      ! largest negative 16 bit integer
+      integer *2,     save :: misus=Z'FFFF'     ! largest 16 bit unsigned integer
+      integer *1,     save :: misb=Z'80'        ! largest negative 8 bit integer
+      integer *1,     save :: misub=Z'FF'       ! largest  8 bit unsigned integer
+
+      integer, external :: GET_MISSING_VALUE_FLAGS,MISSING_VALUE_USED
+
+      character nomprg*256
+      common   /PROGNAM/ nomprg
+      external  qqqdoc
+
+***   *****
+***   *****
+
+***    Variables necessaires a la partie ccrn...
+
+      character*4   type,     type0, nom,      NEWL, hnewl
+
+      integer       ikind,    time,  lev, ilg, ilat, ihem, pack,
+     +              jbuf(taille_entete), time0,      ilg0, ilat0, ipak
+
+      
+      integer,      dimension(:), allocatable :: ibuf
+
+      real          pr
+      integer       len,len0,  nwds,nwds0, head, maxw, 
+     +                   zero, lenlab, lenlab8
+
+#     include      "machtype.cdk"
+
+      character(4), external :: gethic
+      integer,      external :: getsiz,clrlmt
+      logical,      external :: is_off,is_on,setio64
+      external      getbuf2,getlab,recget,recup2,lvcode,lvdcode,puthic
+     +              pltinfo,dimgt2,putfld2,putlab,lblchk,macspe
+
+***   *****
+***   *****
+
+***    Table de type de compaction par unite I/O et autres 
+***    Variables de type environment (definies avec getenvc).
+
+      integer       io,efin,debut,ier
+      logical       message,debug,dexit,set_dexit,exist,oldip1
+      character*512 evalue,diagext,avertis,unit5,tmpdirn
+      character*20  vrbose,xitval,echojcl,pkval,oldip1v
+      character*20  uzbigt,bigtmp,tmpdir,debugm,misval
+      character*4   pktyp(0:99),pktp0,pktp1
+
+      common       /ZZPKTYP/ pktyp
+      common       /DEXIT/   dexit,set_dexit,diagext
+      common       /ZZVERBO/ message
+      common       /ZZDEBUG/ debug
+      common       /IODIRE/  unit5
+      COMMON       /ZZ98IP1/ oldip1
+
+      external      getenvc,quit,qqexit
+
+***   *****
+***   *****
+
+***    Numeros d'E/S, etc...
+
+      data iu1 / 1 /, time0 / -1 /, 
+     +     iu2 / 2 /, nwds  / -1 /,
+     +     iu3 / 3 /, indx  / -1 /
+
+
+***   *******
+***    Parametres d'appel:
+
+      data cles(1) / 'RPN.'   /,def1(1)/ ' '      /,def2(1)/ 'TAPE1'  /,
+     +     cles(2) / 'CCRN.'  /,def1(2)/ ' '      /,def2(2)/ 'TAPE2'  /,
+     +     cles(3) / 'ES'     /,def1(3)/ 'ES'     /,def2(3)/ 'HU'     /,
+     +     cles(4) / 'DATE'   /,def1(4)/ '-1'     /,def2(4)/ 'JOUR'   /,
+     +     cles(5) / 'DELT'   /,def1(5)/ '-1'     /,def2(5)/ 'HEURE'  /,
+     +     cles(6) / 'INFO'   /,def1(6)/ 'ERRORS' /,def2(6)/ 'INFORM' /,
+     +     cles(7) / 'TIME'   /,def1(7)/ 'NON'    /,def2(7)/ 'OUI'    /,
+     +     cles(8) / 'SQI'    /,def1(8)/ 'RND'    /,def2(8)/ 'SQI'    /,
+     +     cles(9) / 'GRTYP'  /,def1(9)/ ' '      /,def2(9)/ ' '      /,
+     +     cles(10)/ 'LASLON' /,def1(10)/'NON'    /,def2(10)/'OUI'    /
+      data cles(11)/ 'NOBOX'  /,def1(11)/'NON'    /,def2(11)/'OUI'    /,
+     +     cles(12)/ 'TRI'    /,def1(12)/'NON'    /,def2(12)/'OUI'    /,
+     +     cles(13)/ 'MBHR'   /,def1(13)/'NON'    /,def2(13)/'OUI'    /,
+     +     cles(14)/ 'TYPVAR' /,def1(14)/'P'      /,def2(14)/'O'      /,
+     +     cles(15)/ 'HELP'   /,def1(15)/'NON'    /,def2(15)/'OUI'    /,
+     +     cles(16)/ 'SIGMA'  /,def1(16)/'NON'    /,def2(16)/'OUI'    /,
+     +     cles(17)/ 'XG1'    /,def1(17)/'-1.'    /,def2(17)/'-1.'    /,
+     +     cles(18)/ 'XG2'    /,def1(18)/'-1.'    /,def2(18)/'-1.'    /,
+     +     cles(19)/ 'XG3'    /,def1(19)/'-1.'    /,def2(19)/'-1.'    /,
+     +     cles(20)/ 'XG4'    /,def1(20)/'-1.'    /,def2(20)/'-1.'    /
+      data cles(21)/ 'ETIKET' /,def1(21)/'-1'     /,def2(21)/' '      /,
+     +     cles(22)/ 'BISECT' /,def1(22)/'NON'    /,def2(22)/'OUI'    /,
+     +     cles(23)/ 'IPKTYP' /,def1(23)/' '      /,def2(23)/' '      /,
+     +     cles(24)/ 'OPKTYP' /,def1(24)/' '      /,def2(24)/' '      /,
+     +     cles(25)/ 'LABEL'  /,def1(25)/'NON'    /,def2(25)/'OUI'    /,
+     +     cles(26)/ 'KEEP'   /,def1(26)/'RPN'    /,def2(26)/'CCC'    /,
+     +     cles(27)/ 'LNSPPA' /,def1(27)/'NON'    /,def2(27)/'OUI'    /,
+     +     cles(28)/ 'NEWNAM' /,def1(28)/'OUI'    /,def2(28)/'NON'    /,
+     +     cles(29)/ 'STAMP'  /,def1(29)/'OUI'    /,def2(29)/'NON'    /,
+     +     cles(30)/ 'IP3DAT' /,def1(30)/'NON'    /,def2(30)/'OUI'    /
+      data cles(31)/ 'LEV1MB' /,def1(31)/'NON'    /,def2(31)/'OUI'    /,
+     +     cles(32)/ 'LEVTYP' /,def1(32)/'-1'     /,def2(32)/'-1'     /,
+     +     cles(33)/ 'SIECLE' /,def1(33)/'-1'     /,def2(33)/'-1'     /,
+     +     cles(34)/ 'PASCAL' /,def1(34)/'NON'    /,def2(34)/'OUI'    /,
+     +     cles(35)/ 'PMSLMB' /,def1(35)/'NON'    /,def2(35)/'OUI'    /,
+     +     cles(36)/ 'DATYP'  /,def1(36)/'-1'     /,def2(36)/'-1'     /,
+     +     cles(37)/ 'IP1CON' /,def1(37)/'OUI'    /,def2(37)/'NON'    /,
+     +     cles(38)/ 'MVALUE' /,def1(38)/' '      /,def2(38)/'OUI'    /,
+     +     cles(39)/ '-.'     /,def1(39)/' '      /,def2(39)/' '      /
+
+      data dateo0     /  0  /
+      data vkind0     / -1  /
+      data idatyp     / -1  /
+      data levtyp     / -1  /
+      data siecle     / -1  /
+      data blanc,NEWL / ' ','NEWL' /
+      data avertis    / 'pas encore donne' /
+
+      data rpn,ccrn,mbhr,info,timdat,lev1mb,pascal / 7*.false. /,
+     +     box,  lasl, tri,        holacar,rewrit  / 5*.false. /,
+     +     infom,infog,slab,char,cmpl,data,bisect  / 7*.false. /,
+     +     Faux, pmslmb,sqi,sigma,lnsppa,ip3dat    / 6*.false. /,
+     +     Vrai, ip1conv, keep1                    / 3*.true.  /
+
+      data neq1 / 'X' /
+
+***    Initialiser les pointeurs de tri.
+
+      data   ind11,ind21,ind31 / 3*1 /,
+     +       ind12,ind22,ind32 / 3*2 /
+
+*----------------------------------------------------------------------
+      diagext =    'DIAGNOSTIC_EXIT'
+      echojcl =   'ECHO_COMMAND_LINE'
+      pkval   = 'DEFAULT_PACKING_TYPE'
+      uzbigt  =    'USE_BIG_TMPDIR'
+      misval  =     'MISSING_VALUE' 
+      bigtmp  =      'BIG_TMPDIR'
+      tmpdir  =        'TMPDIR'
+      xitval  =        'XITVAL'
+      vrbose  =        'INFORM'
+      debugm  =       'DEBUG_MODE'
+      oldip1v =   'USE_OLD_STYLE_IP1'
+      unit5   = ' '
+
+      message = Faux
+      debug   = Faux
+
+***    First, check for a non-empty DIAGNOSTIC_EXIT file.
+
+          dexit = Faux
+      set_dexit = Faux
+
+***    The name of this file could also be specified
+***    with the DIAGNOSTIC_EXIT environment variable.
+
+      call getenvc( diagext,evalue )
+
+      If (evalue.ne.' ')                                       Then
+          diagext   = evalue
+          set_dexit = Vrai
+      End If
+
+      Inquire( file=diagext,err=050,iostat=io,exist=exist )
+
+      if (exist)                                               then
+
+***        The file exists.
+
+          open( unit=99, file=diagext, err=050,iostat=io,
+     +                   status='old', access='sequential',
+     +                                 form='formatted' )
+
+***        Any abort code will be written to this file
+***        rather than generating a physical abort code.
+
+          dexit = Vrai
+
+***        Try reading the file's first line to see if it is
+***        empty or not. if it is not empty, quit immediatly.
+
+          read(99,'(a256)',end=050,iostat=io) evalue
+          close ( 99 )
+
+          if (evalue.ne.' ') call qqexit( 0 )
+
+      end if
+
+***    Aller chercher quelques constantes specifiques.
+
+  050 call macspe( head,zero )
+
+      call setrabt( '&NON' )
+      BITSMOT = MAXBITS*( mod( machine,2 )+1 )
+
+***    Verifier si le mode "OLDIP1" est actif ou non.
+
+      call getenvc( oldip1v,evalue )
+      oldip1 = is_on( evalue )
+
+      if (.not.oldip1) call convpr( ip1, pr, vkind, 0 )
+
+***    Aller chercher les noms des deux fichiers d'E/S et
+***    traiter les differents parametres d'entrees.
+
+      ipos = -1
+      call ccard( cles,def2,def1,NBRCLE,ipos )
+
+      esnam = def1(3) ; call low2up( esnam,esnam )
+
+      if (def1(5).ne.'-1'    )                                 then
+          if (def1(5).eq.'HEURE')                              then
+              deeti = 3600
+          else
+              read(def1(5),10) deeti
+          end if
+      else
+          deeti = -1
+      end if
+
+      if (def1(6).eq.'DEBUGS') def1(6) = 'DEBUG'
+
+      if (def1(6).eq.'DEBUG' ) iopt = xdfopt( 'MSGLVL','TRIVIAL ', 0 ) 
+      if (def1(6).eq.'INFORM') iopt = xdfopt( 'MSGLVL','INFORM  ', 0 ) 
+      if (def1(6).eq.'WARNIN') iopt = xdfopt( 'MSGLVL','WARNING ', 0 ) 
+      if (def1(6).eq.'ERRORS') iopt = xdfopt( 'MSGLVL','ERROR   ', 0 ) 
+      if (def1(6).eq.'FATALE') iopt = xdfopt( 'MSGLVL','ERRFATAL', 0 ) 
+      if (def1(6).eq.'SYSTEM') iopt = xdfopt( 'MSGLVL','SYSTEM  ', 0 ) 
+      if (def1(6).eq.'CATAST') iopt = xdfopt( 'MSGLVL','SYSTEM  ', 0 ) 
+                               iopt = fstopc( 'MSGLVL', def1(6)  , 0 )
+
+      call getenvc( vrbose,evalue )
+      if (is_on( evalue ) .or.
+     +    def1(6).eq.'INFORM' )   message = Vrai     
+
+      call getenvc( debugm,evalue )
+      if (is_on( evalue ) .or.
+     +    def1(6).eq.'DEBUGS' )   debug   = Vrai
+      if (debug)                  message = Vrai
+
+      if (is_on (  def1(7)  ))    timdat  = Vrai
+      if (def1(8).eq.'SQI'   )    sqi     = Vrai 
+
+      write(grtyp,1) def1(9)
+
+      if (is_on (  def1(10) ))    lasl    = Vrai
+      if (is_off(  def1(11) ))    box     = Vrai
+      if (is_on (  def1(12) ))    tri     = Vrai
+      if (is_on (  def1(13) ))    mbhr    = Vrai
+
+      write(typvar,2) def1(14)
+
+      if (is_on (  def1(16) ))    sigma   = Vrai
+
+      read(def1(17),101) xg1
+      read(def1(18),101) xg2
+      read(def1(19),101) xg3
+      read(def1(20),101) xg4
+
+      if (xg1   .ne. -1. .or. 
+     +    xg2   .ne. -1. .or.
+     +    xg3   .ne. -1. .or.
+     +    xg4   .ne. -1. .or.
+     +    grtyp .ne. ' ' )                                     then
+
+                                  infog   = Vrai
+
+          call cxgaig( grtyp, ig1,ig2,ig3,ig4,
+     +                        xg1,xg2,xg3,xg4 )
+      end if
+
+      if (def1(21).ne.'-1')                                    then
+          read(def1(21),12) etiket
+      else
+          etiket = 'CCRN SEQ'
+      end if
+
+      if (is_on ( def1(22) ))     bisect  = Vrai
+
+      if (bisect)                                              then
+          call Accept_LeapYear()
+      else
+          call Ignore_LeapYear()
+      end if
+
+***    Determiner le type de compaction CCC. Commencer par
+***    specifier un PKTYP inconnu (i.e. '****').
+
+      if (     def1(23).eq.'PK92')                             then
+               pktp0    =  '    '
+      else if (def1(23).eq.'PK84')                             then
+               pktp0    =  'PK84'
+      else
+               pktp0    =  '****'
+      end if
+
+      if (     def1(24).eq.'PK92')                             then
+               def1(24) =  '    '
+      else if (def1(24).ne.'PK84')                             then
+               def1(24) =  '****'
+      end if
+
+***    Conversion d'ETIKET en LABEL ?
+
+      if (is_on( def1(25) )) slab = Vrai
+
+***    Quel fichier est la source par defaut.
+
+      if (def1(26).eq.'CCC') keep1 = Faux
+
+***    Correction pour mauvais traitement de LNSP.
+
+      if (is_on( def1(27) )) lnsppa = Vrai
+
+***    Conversion des nom et unites.
+
+      newnam = def1(28) ; call low2up( newnam,newnam )
+      
+      if (is_on ( def1(28) )) newnam = 'ALL'
+      if (is_off( def1(28) )) newnam = 'NONE'
+
+      if (.not. (newnam == 'ALL'  .or.
+     +           newnam == 'DYN'  .or.
+     +           newnam == 'PHY'  .or.
+     +           newnam == 'NONE' )  )                         then
+
+          write(6,6019) trim( def1(29) )
+          if (box) nil = exfin( 'Convert','Erreur 19','NON' )
+          call quit( 'Convert',19 )
+
+      end if
+
+***    Conversion des nom et unites.
+
+      if (is_on( def1(30) )) ip3dat = Vrai
+
+***    Conversion des nom et unites.
+
+      if (is_on( def1(31) )) lev1mb = Vrai
+
+***    A-t'on specifie le type de la coordonnee verticale ?
+
+      if (def1(32).ne.'-1') read(def1(32),10) levtyp
+
+      if (levtyp.eq.1) sigma  = Vrai
+      if (levtyp.eq.7) pascal = Vrai
+
+      if (sigma) levtyp = 1
+
+***    A-t'on specifie un siecle ?
+
+      if (def1(33).ne.'-1') read(def1(33),10) siecle
+
+***    La coordonnee verticale du fichier CCC est en pascal ?
+
+      if (is_on( def1(34) )) pascal = Vrai
+
+      if (pascal .and. sigma)                                  then
+          write(6,6018)
+          if (box) nil = exfin( 'Convert','Erreur 18','NON' )
+          call quit( 'Convert',18 )
+      end if
+
+      if (pascal) levtyp = 2
+
+***    Conversion d'unites pour MSLP/PN ?
+
+      if (is_on( def1(35) )) pmslmb = Vrai
+
+***    Forcer le type des donnees (DATYP) pour RPN/CMC ?
+
+      if (def1(36).ne.'-1') read(def1(36),10) idatyp
+
+***    Conversion de format pour IP1 ?
+
+      if (is_off( def1(37) )) ip1conv = Faux
+      if (.not.ip1conv .and. levtyp == -1) levtyp = 999
+
+      if (oldip1 .and. .not.ip1conv) then
+          write(6,6023)
+          if (box) nil = exfin( 'Convert','Erreur 23','NON' )
+          call quit( 'Convert',23 )
+      end if
+
+***    Traitement des valeurs manquantes ?
+
+      MisFlag = misd ! Valeur par defaut
+      call getenvc( misval,EVALUE )
+
+      if (EVALUE /= ' ')                                       then
+          MValue = Vrai
+      else if (def1(38) /= ' ')                                then
+          MValue = Vrai
+          EVALUE = def1(38)
+      end if
+
+      if (is_off( EVALUE )) MValue_IS_OFF = Vrai
+      if (MValue_IS_OFF)    MValue        = Faux
+
+      if (MValue .and. .not.is_on( EVALUE )) Mvalue_READ = Vrai
+
+      IF (MValue .and. MValue_READ)
+     +    read( EVALUE,'(BN,E20.0)') MisFlag
+
+***    Definir pktyp pour toutes les unites I/O.
+
+      do  i=1,99
+          pktyp(i) = pktp0
+      end do
+
+***    1) Check for "DEFAULT_PACKING_TYPE" environment variable. 
+
+      call getenvc( pkval,pktp1 )
+      call low2up(  pktp1,pktp1 )
+
+***    2) Check for the "-OPKTYP" ccard key value. The default 
+***       packing is set by primarily determined by this value 
+***       and, secondarily, by the previous variable.
+***    3) Define pktyp(0), which will hold the default.
+
+      if (     pktp1.eq.'PK92')                                then
+               pktp1 =  '    '
+      else if (pktp1.ne.'PK84')                                then
+               pktp1 =  '****'
+      end if
+
+      if (     def1(24).eq.'    ' 
+     +    .or. def1(24).eq.'PK84')                             then
+                                  pktyp(0) =  def1(24)
+      else if (pktp1 .eq.'    ' 
+     +    .or. pktp1 .eq.'PK84')                               then
+                                  pktyp(0) =  pktp1
+      else
+          if (machine.eq.1)       pktyp(0) = '    '
+          if (machine.eq.2)       pktyp(0) = 'PK84'
+      end if
+
+***    Commencer le traitement.
+
+      if (box) idatm = exdb ('Convert', 'Rev 4.40', 'NON')
+
+      if (is_on( def1(15) ).or.
+     +   (def1(1).eq.blanc .and. def1(2).eq.blanc))            then
+          nomprg = 'convert.ptn'
+          call qqqdoc( )
+          call qqexit( 0 )
+      end if
+
+      lenn1 = index( def1(1) // ' ' , ' ' ) - 1
+      lenn2 = index( def1(2) // ' ' , ' ' ) - 1
+
+      write(6,6100) def1(1)(1:lenn1), def1(2)(1:lenn2)
+
+***    Which tmpdir directory should we use? unless
+***    it is explicitely disallowed, always try first
+***    to use big_tmpdir. otherwise, try for tmpdir.
+
+      call getenvc( uzbigt,evalue )
+
+      if (is_off( evalue ))                                    then
+          call getenvc( tmpdir,evalue )
+      else if(is_on( evalue ))                                 then
+          call getenvc( bigtmp,evalue )
+      else
+          call getenvc( bigtmp,evalue )
+          if (evalue.eq.' ')
+     +    call getenvc( tmpdir,evalue )
+      end if
+
+      tmpdirn = evalue
+
+***    tmpdirn has to be defined.
+
+      if (tmpdirn.eq.' ')                                      then
+          if (info) write(6,6015)
+          if (box) nil = exfin( 'Convert','Erreur 1','NON' )
+          call quit( 'Convert',15 )
+      end if
+
+***    Associer des noms de fichier aux unites d'E/S. Utiliser la
+***    fonction wkoffit pour verifier/determiner le type de fichiers
+***    d'entrees/sorties. Au moins un d'entres eux doit exister au
+***    depart.
+
+      ftyp1 = wkoffit( '+' // def1(1)(1:lenn1) )
+      ftyp2 = wkoffit( '+' // def1(2)(1:lenn2) )
+
+      if (ftyp1.lt.-1 .and. ftyp2.lt.-1)                       then
+
+***        Les  deux fichiers d'entrees/sorties sont soit
+***        vides, soit inexistants.
+
+***        Verifier que le nom du fichier ccrn ne contient
+***        pas de relocalisation de repertoire.
+
+          efin = index( def1(2) , '/' )
+          if (efin.eq.0)                                       then
+
+              efin = index( tmpdirn // ' ' , ' ' )-1
+
+***            Aller voir sur TMPDIR pour le fichier ccrn.
+
+              if (efin.gt.0)                                   then
+                  def1(2) = tmpdirn(1:efin) // '/' // def1(2)
+                  lenn2   = index( def1(2) // ' ' , ' ' ) - 1
+                  ftyp2   = wkoffit( '+' // def1(2)(1:lenn2) )
+              end if
+
+          end if
+
+          if (ftyp2.lt.-1)                                     then
+
+***            Le fichier ccrn n'est pas sur le TMPDIR non plus.
+
+              write(6,6002)
+              if (box) nil = exfin( 'Convert','Erreur 2','NON' )
+              call quit( 'Convert',2 )
+
+          else if (ftyp2.eq.-1)                                then
+
+***            Impossible de reconnaitre ce fichier.
+
+              lenn2 = index( def1(2) // ' ' , ' ' ) - 1
+              write(6,6003) def1(2)(1:lenn2)
+              if (box) nil = exfin( 'Convert','Erreur 3','NON' )
+              call quit( 'Convert',3 )
+
+          else if (ftyp2.eq.4 .or. ftyp2.eq.5)                 then
+
+***            On a trouve un fichier ccrn.
+
+              ccrn   = Vrai
+
+          end if
+
+      else if (ftyp1.eq.-1 .or. ftyp2.eq.-1)                   then
+
+***        Un ou l'autre des fichiers est d'un type inconnu.
+
+          lenn1 = index( def1(1) // ' ' , ' ' ) - 1
+          lenn2 = index( def1(2) // ' ' , ' ' ) - 1
+
+          if (ftyp1.eq.-1) write(6,6003) def1(1)(1:lenn1)
+          if (ftyp2.eq.-1) write(6,6003) def1(2)(1:lenn2)
+
+          if (box) nil = exfin( 'Convert','Erreur 3','NON' )
+          call quit( 'Convert',3 )
+
+      end if
+
+***    On a trouve un fichier standart.
+
+      if (ftyp1.eq.33 .or. ftyp1.eq.34) rpn = Vrai
+      if (ftyp1.eq.1  .or. ftyp1.eq.2)  rpn = Vrai
+
+***    Chercher le fichier CCRN, s'il le faut.
+
+      if (ftyp2.lt.0)                                          then
+
+***        Verifier que le nom du fichier ccrn ne contient
+***        pas de relocalisation de repertoire.
+
+          efin = index( def1(2) , '/' )
+          if (efin.eq.0)                                       then
+
+              efin = index( tmpdirn // ' ' , ' ' )-1
+
+***            Aller voir sur TMPDIR pour le fichier ccrn.
+
+              if (efin.gt.0)                                   then
+
+                  def1(2) = tmpdirn(1:efin) // '/' // def1(2)
+                  lenn2   = index( def1(2) // ' ' , ' ' ) - 1
+                  ftyp2   = wkoffit( '+' // def1(2)(1:lenn2) )
+
+                  if (ftyp2.eq.-1)                             then
+                      write(6,6003) def1(2)(1:lenn2)
+                      if (box) 
+     +                nil = exfin( 'Convert','Erreur 3','NON' )
+                      call quit( 'Convert',3 )
+                  end if
+
+              end if
+
+          end if
+
+      end if
+
+***    On a trouve un fichier CCRN.
+
+      if (ftyp2.eq.4 .or. ftyp2.eq.5) ccrn = Vrai
+
+***    Ouvrir les fichiers rpn et ccrn.
+
+      if (ftyp1.lt.-1)                                         then
+
+***        Ouvrir/creer selon le type de fichier demande.
+
+          if (sqi)                                             then
+              ierr1 = fnom( iu1, '+' // def1(1)(1:lenn1),'STD/SEQ',0 )
+              inbr1 = fstouv( iu1,'SEQ' )
+          else
+              ierr1 = fnom( iu1, '+' // def1(1)(1:lenn1),'STD'    ,0 )
+              inbr1 = fstouv( iu1,'RND' )
+          end if
+
+      else if (ftyp1.eq.1 .or. ftyp1.eq.33)                    then
+
+***        Fichier random.
+
+          ierr1 = fnom( iu1, '+' // def1(1)(1:lenn1),'STD'    ,0 )
+          inbr1 = fstouv( iu1,'RND' )
+
+      else if (ftyp1.eq.2 .or. ftyp1.eq.34)                    then
+
+***        Fichier sequentiel indexe. Notons que l'option TRI
+***        ne doit pas etre selectionne dans ce cas-ci.
+
+          if (tri)                                             then
+              write(6,6012)
+              if (box) nil = exfin( 'Convert','Erreur 12','NON' )
+              call quit( 'Convert',12 )
+          end if
+
+          ierr1 = fnom( iu1, '+' // def1(1)(1:lenn1),'STD/SEQ',0 )
+          inbr1 = fstouv( iu1,'SEQ' )
+          sqi   = Vrai
+
+      else
+
+***        Le fichier RPN n'en est pas un...
+
+          lenn1 = index( def1(1) // ' ' , ' ' ) - 1
+          write(6,6011) ' RPN',def1(1)(1:lenn1)
+          if (box) nil = exfin( 'Convert','Erreur 11','NON' )
+          call quit( 'Convert',11 )
+
+      end if
+
+      if (ftyp2.lt.-2)                                         then
+
+***        Creer le fichier CCRN.
+
+          chaine     = 'NEW'
+
+      else
+
+***        Le fichier CCRN existe.
+
+          chaine     = 'OLD'
+
+          if (ftyp2.eq.4)                                      then
+
+***            Type CCRN (PK92).
+
+              pktyp(iu2) = ' '
+
+          else if (ftyp2.eq.5)                                 then
+
+***            Type CCRN-RPN (PK84).
+
+              pktyp(iu2) = 'PK84'
+
+          else if (ftyp2.eq.-2)                                then
+
+***            Le fichier CCRN est vide.
+
+              pktyp(iu2) = pktyp(0)
+
+          else
+
+***            Le fichier CCRN n'en est pas un...
+
+              lenn2 = index( def1(2) // ' ' , ' ' ) - 1
+              write(6,6011) 'CCRN',def1(2)(1:lenn2)
+              if (box) nil = exfin( 'Convert','Erreur 11','NON' )
+              call quit( 'Convert',11 )
+
+          end if
+
+      end if
+
+      open( iu2, file=def1(2), form='UNFORMATTED', status=chaine )
+
+***    Utiliser les cles logiques keep1, ccrn et
+***    rpn pour decider de la suite du taitement.
+
+      if (rpn .and. ccrn .and. keep1) ccrn = Faux
+      if (ftyp1.lt.0 .and.      sqi) ftyp1 = 34
+      if (ftyp1.lt.0 .and. .not.sqi) ftyp1 = 33
+
+      ok = setio64(.true.)
+
+***    la valeur par defaut de datei depends du type de traitement.
+
+      if (def1(4).ne.'-1'    )                                 then
+          if (def1(4).eq.'JOUR')                               then
+              datei = iopdatm( 'NON' )
+          else
+              if (is_off( def1(29) ))                          then
+                  read(def1(4),   '(i8)') dtpr
+                  read(def1(4),'(8x,i6)') tmpr
+                  datchek = newdate( datei, dtpr,tmpr*100, 3 )
+                  if (datchek.ne.0) datei  = 0
+              else
+                  read(def1(4),10) datei
+              end if
+          end if
+      else if (ccrn)                                           then
+          datei = 10179001
+      else
+          datei = -1
+      end if
+
+      if (datei /= -1) dateo0 = datei
+
+      datchek = newdate( dateo0, dtpr,tmpr, -3 )
+      if (datchek.ne.0) dateo0  = 0
+
+***    Commencer le traitement.
+
+      inconnu = 1
+      nrec    = 0
+
+***********************************************************************
+      if (ccrn)                                                then
+
+***        Premier cas: entrees de type ccrn, sorties rpn.
+
+          write(6,6150)
+
+***        Donner des valeurs de defauts aux descripteurs rpn qui
+***        ne peuvent etre  approximes a partir de l'ensemble des
+***        descripteurs ccrn. Notons que certains de ces descrip-
+***        teurs peuvent etre conserves dans un label ccrn.
+
+          deet    = max( deeti,0 )
+
+          npas    = 0
+          ip2     = 0
+          ip3     = 0
+          extra1  = 0
+          extra2  = 0
+          extra3  = 0
+
+          ip10    = -1
+          ip20    = -1
+
+          if (.not.infog)                                      then
+              ig1 = -1
+              ig2 = -1
+              ig3 = -1
+              ig4 = -1
+          end if
+
+***        Traitement des valeurs manquantes (suite 1).
+
+          if (MValue)                                          then
+
+              if (MValue_READ)                                 then
+                 misf = MisFlag
+                 misd = MisFlag
+              end if
+
+              call set_missing_value_flags(
+     +                 misf, misi, misui, misd,
+     +                 misa, misus, misb, misub )
+
+          end if
+
+          Epsilon = abs( MisFlag ) * Epsilon
+
+***        Demander la memoire de travail.  Lire le prochain
+***        tampon correspondant a un enregistrement non-LABL.
+
+ 0999     maxw = getsiz( iu2, jbuf,len,nwds,pack )
+          if (maxw.eq.0) goto 9000
+
+          len0  = len
+          nwds0 = nwds
+
+          allocate( ibuf(2*len), buffer(nwds+head) )
+
+***        Verifier que le premier champs correspond
+***        bien a un fichier ccrn valide.
+
+ 1000     call getbuf2( -iu2, ibuf,head,ok )
+
+ 1001     write(type,4) ibuf(1)
+          write(nom ,4) ibuf(3)
+          time   =      ibuf(2)
+          lev    =      ibuf(4)
+          ilg    =      ibuf(5)
+          ilat   =      ibuf(6)
+          ihem   =      ibuf(7)
+          pack   =      ibuf(8)
+          ipak   =      iabs(pack)
+
+          if (levtyp == 999)                                   then
+
+***            Niveau en format RPN. Verifier.
+
+              call convpr( lev, pr, levtyp0, -1 )
+
+          end if
+
+          if (siecle.ne.-1) time = time + siecle * ( 1 00 00 00 00 )
+
+          hnewl  = gethic('NEWL',ibuf )
+
+          if (type .eq.'ZONL'   .and.
+     +        hnewl.eq. NEWL)   lev = 0
+
+          if ( (type.ne.'SPEC' .and. type.ne.'FOUR'  .and.
+     +          type.ne.'GRID' .and. type.ne.'ZONL'  .and.
+     +          type.ne.'LABL' .and. type.ne.'COEF'  .and.
+     +          type.ne.'SUBA' .and. type.ne.'CMPL'  .and.
+     +          type.ne.'DATA' .and. type.ne.'CHAR'  .and.
+     +          type.ne.'TIME')
+     +    .or.((nom .le.'    ' .or.  nom .gt.'ZZZZ') .and.
+     +          nom .ne.'>>'   .and. nom .ne.'^^'    .and.
+     +          nom .ne.'HY'   .and. nom .ne.'!!'  )
+     +    .or. (ilg .lt.  1    .or.  ilat.lt.   1  )
+     +    .or. (lev .gt. 1500  .and. levtyp /= 999 ))          then
+              write(6,6004) type,nom,lev,ilg,ilat,pack
+              if (box) nil = exfin( 'Convert','Erreur 4','NON' )
+              call quit( 'Convert',4 )
+          end if
+
+***        Verifier qu'on n'a pas d'informations complementaires
+***        sur un tampon INFO ou un tampon FILE.
+
+          if (type.eq.'LABL')                                  then
+              lenlab = min( ilg*ilat, 32 )
+              call getlab( iu2, chaine, ibuf,lenlab,ok )
+              if (nom.eq.'FILE' .and. message)                 then
+                  lenlab8 = lenlab*8
+                  write(6,6175) chaine(1:lenlab8)
+              else if (nom.eq.'INFO')                          then
+                  if (lenlab == 19)                            then
+                      read(chaine,116) typvar,etiket,grtyp,
+     +                                 ig1,ig2,ig3,ig4,
+     +                                 deet,npas,neq1,ip3,
+     +                                 vkind0,dateo0,ip10,ip20
+                  else
+                      write(6,6020)
+                      if (box)
+     +                nil = exfin( 'Convert','Erreur 20','NON' )
+                      call quit( 'Convert',20 )
+                  end if
+
+                  if (deeti.ge. 0) deet   = deeti
+
+                  info   = Vrai
+                  infog  = Vrai
+              else if (nom.eq.'LABL')                          then
+                  etiket = chaine(5:16)
+              end if
+              goto 1000
+          end if
+
+***        Conserver les valeurs de (type/ilg/ilat).
+
+          type0 = type
+          ilg0  = ilg
+          ilat0 = ilat
+          nwds  = ilg*ilat
+
+***        Conserver le temps initial si ce n'est deja fait.
+
+          if (time0.eq.-1) time0 = time
+ 
+***        Lire tous les champs d'entree et les convertir.
+
+ 1050     call recget( iu2, ' ',-1,' ',-1, ibuf, maxw,ok )
+
+              if (.not.ok)                                     then
+
+***                Est-ce que recget a decele un changement
+***                de taille des enregistrement?
+
+                  if (maxw.eq.0)                               then
+
+***                    Tampon trop petit: des/re-allouer.
+
+                      deallocate( ibuf, buffer )
+                      goto 0999
+
+                  else
+
+***                    Fin du fichier atteint.
+
+                      goto 9000
+
+                  end if
+
+              else
+
+                  nrec = nrec+1
+
+              end if
+
+              write(type,4) ibuf(1)
+              write(nom ,4) ibuf(3)
+              time   =      ibuf(2)
+              lev    =      ibuf(4)
+              ilg    =      ibuf(5)
+              ilat   =      ibuf(6)
+              ihem   =      ibuf(7)
+              pack   =      ibuf(8)
+
+              if (siecle.ne.-1) time = time + siecle * ( 1 00 00 00 00 )
+
+              hnewl  = gethic('NEWL',ibuf )
+
+              if (type .eq.'ZONL'   .and.
+     +            hnewl.eq. NEWL)   lev = 0
+
+***            Verifier le type avant la decompaction.
+
+              if (type.ne.'LABL')                              then
+
+***                Verifier que le type et la dimension des champs
+***                sont toujours les memes.
+
+                  call lblchk( len, nwds,pack,ibuf )
+
+                  if (type.ne.type0 .or. ilg0 .ne.ilg 
+     +                              .or. ilat0.ne.ilat)        then
+
+***                    Est qu'il faut re-allouer de la memoire?
+
+                      if (len0.lt.len .or. nwds0.lt.nwds)      then
+
+                          call precede( iu2,1 )
+                          deallocate( ibuf, buffer )
+
+                          goto 0999
+
+                      end if
+
+                  end if
+
+                  call recup2( buffer,ibuf )
+
+              else
+
+***                lire ce tampon d'information.
+
+                  nrec   = nrec-1
+                  lenlab = min( ilg*ilat,32 )
+
+                  call getlab( 0, chaine, ibuf,lenlab,ok )
+
+                  if (nom.eq.'INFO')                           then
+                      if (lenlab == 19)                        then
+                          read(chaine,116) typvar,etiket,grtyp,
+     +                                     ig1,ig2,ig3,ig4,
+     +                                     deet,npas,neq1,ip3,
+     +                                     vkind0,dateo0,ip10,ip20
+                      else
+                          write(6,6020)
+                          if (box)
+     +                    nil = exfin( 'Convert','Erreur 20','NON' )
+                          call quit( 'Convert',20 )
+                      end if
+                      if (deeti.ge. 0) deet = deeti
+                  else if (nom.eq.'LABL')                      then
+                      etiket = chaine(5:12)
+                  end if
+
+                  goto 1050
+
+              end if
+
+              if (nrec.eq.1 .and. message)
+     +            write(6,6200) type,time,nom,lev,ilg,ilat,ihem,pack
+
+***            Les champs de type fourier-complexe ne sont pas soutenus
+***            mais les champs de coefficients spectraux et les grilles
+***            complexes le sont.
+
+              datyp = 5
+
+              if (type.eq.'SPEC')                              then
+
+                  lrlmt = ihem
+                  Call dimgt2( lsr, la,lr,lm,ktr,lrlmt, 0,-1 )
+                  nwds  = la*2
+                  datyp = 8
+                  spec  = Vrai
+                  cmpl  = Faux
+                  data  = Faux
+                  char  = Faux
+                  times = Faux
+
+              else if (type.eq.'CMPL')                         then
+
+                  spec  = Faux
+                  cmpl  = Vrai
+                  data  = Faux
+                  char  = Faux
+                  times = Faux
+
+                  datyp = 8
+
+              else if (type.eq.'DATA')                         then
+
+                  spec  = Faux
+                  cmpl  = Faux
+                  data  = Vrai
+                  char  = Faux
+                  times = Faux
+
+              else if (type.eq.'CHAR')                         then
+
+                  spec  = Faux
+                  cmpl  = Faux
+                  data  = Faux
+                  char  = Vrai
+                  times = Faux
+
+                  datyp = 3
+
+              else if (type.eq.'TIME')                         then
+
+                  spec  = Faux
+                  cmpl  = Faux
+                  data  = Faux
+                  char  = Faux
+                  times = Vrai
+
+              else if (type.eq.'FOUR')                         then
+
+                  write(6,6005)
+                  if (box) nil = exfin( 'Convert','Erreur 5','NON' )
+                  call quit( 'Convert',5 )
+
+              else
+
+                  if (type.eq.'SUBA')                          then
+                      suba = Vrai
+                  else
+                      suba = Faux
+                  end if
+
+                  datyp = 1
+
+                  spec  = Faux
+                  cmpl  = Faux
+                  char  = Faux
+                  data  = Faux
+                  times = Faux
+
+              end if
+
+                              complex  = 1
+              if (datyp.eq.8) complex  = 2
+
+***   ******** Conversion de (time) vers (dateo/deet/npas), tout en 
+***   ******** compte de valeurs prealables de dateo (dans dateo0)
+***   ******** et de ip2 (dans ip20).
+
+              dateo = dateo0
+
+              if (.not.ip3dat)                                 then
+
+                  call tim2dat( time, dateo,deet,npas,ip2,
+     +                                timdat,bisect, -1 )
+
+                  if (ip20.ne.-1)                              then
+
+                      if (ip2.ne.ip20 .and. message)
+     +                write(6,6500) nom,ip2,ip20
+                      ip2 = ip20
+
+                  end if
+
+              else
+
+***                Time seems to contain a sample
+***                size to be transfered to ip3.
+
+                  ip2  = 0
+                  ip3  = time
+                  npas = 0 
+
+              end if
+
+***   ******** Conversion de (nom) vers (nomvar).
+
+***            Par defaut aucune conversion de noms
+***            et d'unites n'est effectuee.
+
+              nomvar = nom
+
+              if (.not.char .and.
+     +           (newnam == 'ALL' .or. newnam == 'DYN'))       then
+
+***   vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+***   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+***            Conversion des vents horizontaux de m/s a noeuds.
+
+              if (nom.eq.'U')                                  then
+                  nomvar = 'UU'
+                  call ms2not( buffer,nwds,-1,
+     +                         MValue,MisFlag,Epsilon )
+
+              else if (nom.eq.'V')                             then
+                  nomvar = 'VV'
+                  call ms2not( buffer,nwds,-1,
+     +                         MValue,MisFlag,Epsilon )
+
+***            Conversion du geopotential de m**2/s**2 a dam.
+
+              else if (nom.eq.'PHI' .or.
+     +                 nom.eq.'GZ' )                           then
+
+                  nomvar = 'GZ'
+                  call gz2dam( buffer,nwds,-1,
+     +                         MValue,MisFlag,Epsilon )
+
+***            Conversion des temperatures de kelvin a centigrade.
+
+              else if (nom.eq.'TEMP' .or.
+     +                 nom.eq.'ST'   .or.
+     +                 nom.eq.'T'    )                         then
+
+                  nomvar = 'TT'
+                  call kel2cen( buffer,nwds,spec,-1,
+     +                          MValue,MisFlag,Epsilon )
+
+              else if (nom.eq.'VT')                            then
+
+                  nomvar = nom
+                  call kel2cen( buffer,nwds,spec,-1,
+     +                          MValue,MisFlag,Epsilon )
+
+***            Conversion du vent vertical avec un conversion
+***            (optionnelle) d,unites de pascal/s a mb/h.
+
+              else if (nom.eq.'OMEG')                          then
+                  if (mbhr)                                    then
+                      nomvar = 'WW'
+                      call pas2mbh( buffer,nwds,-1,
+     +                              MValue,MisFlag,Epsilon )
+                  else
+                      nomvar = 'WP'
+                  end if
+
+***            Aucune conversion du tourbillon relatif,
+***            ni de la divergence et de meme que pour
+***            les fonctions de courant et de potentiel.
+
+              else if (nom.eq.'VORT')                          then
+                  nomvar = 'QR'
+              else if (nom.eq.'DIV')                           then
+                  nomvar = 'DD'
+
+              else if (nom.eq.'CHI')                           then
+                  nomvar = 'CC'
+              else if (nom.eq.'PSI')                           then
+                  nomvar = 'PP'
+
+***            La variable du modele ccrn est l'ecart du point de
+***            rosee, mais les diagnostiques sont produits pour
+***            l'humidite specifique. Le type de variable est donc
+***            determine par le parametre d'entree es (cle #3).
+
+              else if (nom.eq.'ES')                            then
+                  nomvar = esnam
+              else if (nom.eq.'SHUM')                          then
+                  nomvar = 'HU'
+              else if (nom.eq.'RHUM')                          then
+                  nomvar = 'HR'
+              else if (nom.eq.'TD')                            then
+                  nomvar = 'TD'
+                  call kel2cen( buffer,nwds,spec,-1,
+     +                          MValue,MisFlag,Epsilon )
+
+***            Aucune conversion de la topographie.
+
+              else if (nom.eq.'PHIS')                          then
+                  nomvar = 'MT'
+
+***            Conversion ln(mb) a mb pour la pression de surface.
+
+              else if (nom.eq.'LNSP')                          then
+                  if (spec)                                    then
+                      nomvar = 'LP'
+                  else
+                      nomvar = 'P0'
+                      call lnp2mb( buffer,nwds,lnsppa,-1,
+     +                             MValue,MisFlag,Epsilon )
+                  end if
+
+              else if (nom.eq.'PS')                            then
+                  nomvar = 'P0'
+
+***            Conversion (optionnelle) de pascal a mb
+***            pour la pression au niveau de la mer.
+
+              else if (nom.eq.'PMSL')                          then
+                  nomvar = 'PN'
+                  if (.not.pmslmb)
+     +            call pas2mb( buffer,nwds,-1,
+     +                         MValue,MisFlag,Epsilon )
+
+              end if
+
+***   vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+***   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+              end if
+              if (.not.char .and.
+     +           (newnam == 'ALL' .or. newnam == 'PHY'))       then
+
+***   vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+***   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+***            Aucune conversion des vents a la surface.
+
+              if      (nom.eq.'SFCU')                          then
+                  nomvar = 'US'
+              else if (nom.eq.'SFCV')                          then
+                  nomvar = 'VS'
+
+***            Aucune conversion de la temperature de l'air a la surface.
+
+              else if (nom.eq.'SFCT')                          then
+                  nomvar = 'TS'
+
+***            Aucune conversion des temperatures du sol.
+
+              else if (nom.eq.'TG')                            then
+                  nomvar = 'I0'
+
+***            Aucune conversion de l'eau dans le sol.
+
+              else if (nom.eq.'THLQ')                          then
+                  nomvar = 'I1'
+
+***            Aucune conversion de la glace dans le sol.
+
+              else if (nom.eq.'THIC')                          then
+                  nomvar = 'I2'
+
+***            Aucune conversion pour l'index de croissance (CLASS)
+
+              else if (nom.eq.'TT')                            then
+
+                  nomvar = 'GR'
+
+***            Convertir l'eau precipitable de mm a cm.
+
+              else if (nom.eq.'PWAT')                          then
+                  nomvar = 'PW'
+                  call mm2cm( buffer,nwds,-1,
+     +                        MValue,MisFlag,Epsilon )
+
+***            Convertir les noms de certains des flux radiatifs.
+
+              else if (nom.eq.'FSO')                           then
+                  nomvar = 'IV'
+
+***            Conversion de la precipitation de m/s a kg/(m2*s).
+
+              else if (nom.eq.'PCP')                           then
+                  nomvar = 'RR'
+                  if (.not.spec)
+     +                call ms2koms( buffer,nwds,-1,
+     +                              MValue,MisFlag,Epsilon )
+
+***            Aucune conversion de la fraction de glace.
+
+              else if (nom.eq.'SICN')                          then
+                  nomvar = 'GL'
+
+***            Aucune conversion de la densite de la neige.
+
+              else if (nom.eq.'RHON')                          then
+                  nomvar = 'DN'
+
+***            Aucune conversion de la masse de la neige (equivalent eau).
+
+              else if (nom.eq.'SNO')                           then
+                  nomvar = 'I5'
+
+***            Aucune conversion du masque terre/mer. Il faut savoir 
+***            que le champs MG correspond generalement a des valeurs
+***            continues de (0. a 1.) tandis que GC contient des valeurs 
+***            discretes (-1., 0. et +1.).
+
+              else if (nom.eq.'GC')                            then
+                  nomvar = 'MG'
+
+              end if
+
+***   vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+***   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+              end if
+
+***            Aucune conversion de variables de
+***            description des modeles (DATA).
+
+              if (nom.eq.'DATA') nomvar = 'XX'
+                  
+
+***            Conversion possible des enregistrements
+***            contenant les coordonnees verticales.
+
+              if (nom.eq.'++') 
+     +        call convpp( buffer,nwds,sigma,ftyp1,-1 )
+
+
+***   ******** Conversion de (lev) vers (ip1).
+
+              if (ip10 /= -1)                                  then
+                  ip1 = ip10
+                  goto 1250
+              end if
+
+***           (sauf pour les enregistrments de renvois)
+
+              if (nom == '>>' .or.
+     +            nom == '^^' .or.
+     +            nom == '!!' )                                then
+                  ip1 = lev
+                  goto 1250
+              end if
+
+              if (hnewl.eq.NEWL)                               then
+
+                  ip1 = 32767
+
+              else if (levtyp.ne.-1 .and. levtyp /= 999)       then
+
+                  call lvdcode( pr,lev,1 )
+
+                  if (levtyp.eq.1 .or. levtyp.eq.5)
+     +                        pr = pr/1000.
+                  if (pascal) pr = pr/100.
+
+                  call convpr( ip1, pr, levtyp, +1 )
+
+              else if (levtyp == 999)                          then
+
+                  ip1 = lev
+
+              else if (lev.ne.1)                               then
+
+                  call lvdcode( pr,lev,1 )
+
+                  if (vkind0 .ne. -1 )                         then
+                      vkind = vkind0
+                      sigma = ( vkind .eq. 1 )
+                  else
+                                 vkind = 2
+                      if (sigma) vkind = 1
+                  end if
+                  
+                  if (sigma)  pr    = pr/1000.
+                  if (pascal) pr    = pr/100.
+
+                  call convpr( ip1, pr, vkind, +1 )
+
+              else
+
+                              pr    = 1.0
+                  if (pascal) pr    = 0.01 
+                              vkind = 1
+                  if (lev1mb
+     +           .or. pascal) vkind = 2
+                  
+                  call convpr( ip1, pr, vkind, +1 )
+
+              end if
+
+***   ******** Conversion de (type/ilg/ilat) vers (ni/nj/nk).
+
+ 1250         if (.not.spec .and.
+     +            .not.cmpl .and.
+     +            .not.char)                   then
+
+                  if (lasl) ilg = ilg-1
+
+                  if (neq1.eq.'J')                             then
+                      ni = ilg
+                      nj = 1
+                      nk = ilat
+                  else if (neq1.eq.'I')                        then
+                      ni = 1
+                      nj = ilg
+                      nk = ilat
+                  else
+                      if (type.eq.'ZONL')                      then
+                          ni = 1
+                          nj = ilg
+                          nk = ilat
+                      else
+                          ni = ilg
+                          nj = ilat
+                          nk = 1
+                      end if
+                  end if
+
+                  if (lasl .and. type.eq.'GRID')               then
+                      call laslong( buffer, ilg,ilat, -1 )
+                      ilg = ilg+1
+                  end if
+
+              else if (cmpl)                                   then
+
+***                 Grilles complexes.
+
+                   ni = ilg
+                   nj = ilat
+                   nk = 1
+
+              else if (char)                                   then
+
+***                 Donnees de type caracteres.
+
+                   ni = min( 128, 8*ilg*ilat )
+                   nj = (8*ilg*ilat+127)/128
+                   nk = 1
+
+              else
+
+***                Cas spectral.
+
+                  ni = la
+                  nj = 1
+                  nk = 1
+
+              end if
+
+***   ******** Conversion de (ihem) vers (grtyp/ig1/ig2/ig3/ig4).
+
+***            L'archivage ccrn ne fait aucune distinction entre
+***            une grille  lat-long hemispherique et  une grille 
+***            polaire stereographique.  Convert suppose  qu'une
+***            grille hemispherique  est une grille ps  standard 
+***            cmc centree au pole.
+
+              if (.not. infog)                                 then
+
+                  grtyp = blanc
+
+                  if (spec)                                    then
+
+***                    Cas spectral.
+
+                      grtyp   = '*'
+                      ig1     = lr-1
+                      ig2     = lm-1
+                      ig4     = 0
+
+                      if (ktr.eq.2)                            then
+                          ig3 = 2
+                      else if (ktr.eq.0)                       then
+                          ig3 = 1
+                      end if
+
+                  else if (suba)                               then
+
+***                    Cas de sous-grille.
+
+                      call pltinfo( iu3, grtyp, ig1,ig2,ig3,ig4, 
+     +                                   ilg,ilat, tmpdirn, nrec, -1 )
+
+                  else if (data .or. char)                     then
+
+***                    Cas de donnees brutes.
+
+                      grtyp   = 'X'
+                      ig1     =  0
+                      ig2     =  0
+                      ig3     =  0
+                      ig4     =  0
+
+                  else if (times)                              then
+
+***                    Cas de series temporelles (v2)...
+
+                      ikind = mod( ihem, 10 )
+
+                      if (ikind == 1 .or. ikind == 2)          then
+
+***                        ...de grilles ou de coupes zonales...
+
+                          grtyp = 'G'
+                          ig1   = mod( ihem/10,10 )
+                          ig2   = 0
+                          ig3   =             ihem/100000
+                          ig4   =    ( ihem-( ihem/100000 )*100000 )/100
+
+                          if (ikind == 2) ig3 = 1
+
+***                        Convertir de LATLON a ordinal sur la grille
+
+                          npas= ((ibuf(2)/1000)-1)*ig3+mod(ibuf(2),1000)
+                          ip3 = npas
+
+                      else if (ikind == 3)                     then
+
+***                        ...de donnees spectrales...
+
+                          grtyp = '&'
+                          ig1   =      ihem/10000   -1
+                          ig2   = mod( ihem/100,100)-1
+                          ig3   = mod( ihem/10, 10 )
+                          ig4   = 0
+
+                          if (ig3 == 0)                        then
+                              ig3 = 1
+                          else if (ig3 /= 2)                   then
+                              write(6,6021) ig3
+                              if (box) 
+     +                        nil = exfin( 'Convert','Erreur 21','NON' )
+                              call quit( 'Convert',21 )
+                          end if
+
+                          ip3   = ibuf(2)
+                          
+                      else
+
+                          write(6,6022) ikind
+                          if (box) 
+     +                    nil = exfin( 'Convert','Erreur 22','NON' )
+                          call quit( 'Convert',22 )
+
+                      end if
+
+                  else if (ihem.eq.0 .or. grtyp.eq.'G'
+     +                .or. ihem.gt.2 .or. grtyp.eq.'B'
+     +                               .or. grtyp.eq.'A')        then
+
+***                    Cas lat-long et series temporelles de grilles.
+
+                      ig1   = mod( ihem,10 )
+                      ig2   = 0
+                      ig3   =      ihem/10000
+                      ig4   =    ( ihem-( ihem/10000 )*10000 )/10
+
+                      if (grtyp.eq.blanc)                      then
+                          grtyp = 'G'
+                      else if (
+     +                    ihem.gt.2 .and. 
+     +                   (grtyp.eq.'L' .or.
+     +                    grtyp.eq.'Y' .or.
+     +                    grtyp.eq.'Z'))                       then
+                          write(6,6017) grtyp,ihem
+                          if (box) 
+     +                    nil = exfin( 'Convert','Erreur 17','NON' )
+                          call quit( 'Convert',17 )
+                      end if
+
+                  else
+
+***                    Cas polaire-stereographique.
+
+                      if (ihem.eq.1)                           then
+                          grtyp = 'N'
+                      else if (ihem.eq.2)                      then
+                          grtyp = 'S'
+                      else
+                          write(6,6006) ihem
+                          if (box) 
+     +                    nil = exfin( 'Convert','Erreur 6','NON' )
+                          call quit( 'Convert',6 )
+                      end if
+
+                      if (ig1.ne.-1 .and. ig2.ne.-1 .and.
+     +                    ig3.ne.-1 .and. ig4.ne.-1 )          then
+
+                          call cigaxg( grtyp, xg1,xg2,xg3,xg4,
+     +                                        ig1,ig2,ig3,ig4 )
+
+                      else
+
+***                        Specifier les valeurs de defauts.
+
+                          if (xg1.eq.-1.) xg1 = .5*float( ilg +1 )
+                          if (xg2.eq.-1.) xg2 = .5*float( ilat+1 )
+                          if (xg3.eq.-1.) xg3 =    381000.
+                          if (xg4.eq.-1.) xg4 =    350.
+
+                      end if
+
+***                    S'assurer de l'auto-coherence de ces parametres.
+
+                      call cxgaig( grtyp, ig1,ig2,ig3,ig4,
+     +                                    xg1,xg2,xg3,xg4 )
+
+                  end if
+
+              end if
+
+              if (grtyp.eq.blanc .or. ig1.eq.-1
+     +                           .or. ig2.eq.-1
+     +                           .or. ig3.eq.-1
+     +                           .or. ig4.eq.-1)               then
+                  write(6,6016) type,ihem 
+                  if (box) nil = exfin( 'Convert','Erreur 16','NON' )
+                  call quit( 'Convert',16 )
+              end if
+
+***   ******** Transfert de (pack) vers (npak) ou ce dernier
+***            contient toujours le nombre de bits significatifs.
+
+ 1400         if (pack.gt.0)                                   then
+                  npak = -min( BITSMOT/pack,BITSMOT )
+              else if (pack.lt.0)                              then
+                  npak =  max( pack,-BITSMOT*machine )
+              end if
+
+              if (spec .and. npak.ge.-16) npak = npak-8
+
+              if (datyp.eq.4 )                                 then
+
+***                Trouver les maximum et minimums des champs entiers.
+
+                  imin = buffer(1)
+                  imax = imin
+                  do 1450 i=2,nwds
+                      valeur = buffer(i)
+                      imin   = min( imin, valeur )
+                      imax   = max( imax, valeur )
+ 1450             continue
+
+***                Determiner que le nombre de bits necessaires a ce 
+***                champs est compatible avec la compaction specifiee.
+
+                  range  = 1
+                  valeur = imax-imin+1
+                  do 1500 i=2,30,2
+                      range = range*4
+                      if (range.ge.valeur) goto 1550
+ 1500             continue
+
+ 1550             if (i.ge.32 .or. i+npak.gt.0)
+     +                write(6,6300) valeur,npak
+
+                  npak = -i
+
+              else if (datyp.eq.2)                             then
+
+                  npak = -BITSMOT
+
+              else if (datyp.eq.3)                             then
+
+                  npak = -8
+
+              else if (datyp.eq.8)                             then
+
+                  npak = -32
+
+              else if (npak.eq.-64)                            then
+
+                  datyp = 5
+
+              end if
+
+***            Tenir compte des limitations de ni,nj et nk.
+
+              call fixninj( ni,nj,nk )
+
+***            On peu utiliser un deet plus grand que 32767 dans
+***            la routine tim2dat mais il faut alors le corriger
+***            avant de faire appel a fstecr.
+
+              if (timdat         .and.
+     +            deeti.ge.32768 .and.
+     +            npas .eq.  0   )                             then
+                  deet  =    0
+                  if (avertis.ne.'Avertissement deja donne')   then
+                      avertis =  'Avertissement deja donne'
+                      write(6,6450) deeti
+                  end if
+              end if
+
+***            Les enregistrements ++ sont parfois
+***            differents des autres...
+
+              if (nomvar.eq.'++' .and.
+     +           (ftyp1 .eq. 33  .or. ftyp1.eq.34))            then
+
+                  datyp  =   2
+                  npak   = -32
+                  call intarel( buffer,buffer,ni*nj*nk,-1 )
+              else if (datyp.ne.3 .and.
+     +                 npak .ne.-BITSMOT*machine)              then
+                  if (datyp.ne.8 .and. idatyp.ne. -1
+     +                           .and. idatyp.ne.datyp)        then
+                      datyp = idatyp
+                      if (datyp.eq.2 .or. datyp.eq.4)          then
+                          call intarel( buffer,buffer,ni*nj*nk, -1 )
+                      else
+                          call real2d(  buffer,buffer,ni*nj*nk, -1 )
+                      end if
+                  else
+                      call real2d( buffer,buffer,ni*nj*nk*complex, -1 )
+                  end if
+                  if (npak.eq.-BITSMOT*machine)
+     +            npak = -BITSMOT
+              end if
+
+              if (MValue .and. datyp /= 8) datyp = datyp+64
+
+***   ******** Fin de la conversion.
+
+***           ****************************************
+***            Ecrire le champs en format rpn standard.
+
+              iecr = fstecr( buffer,ibuf,
+     +                       npak, iu1, dateo,deet,npas,
+     +                       ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,
+     +                       etiket,grtyp, ig1,ig2,ig3,ig4,
+     +                       datyp, rewrit )
+
+              if (deeti.ge. 0) deet  = deeti
+
+              ip10 = -1
+              ip20 = -1
+
+***        Verifier que l'operation s'est bien deroulee.
+
+          if (iecr.ge.0)                                       then
+              goto 1050
+          else
+              write(6,6007) iecr
+              if (box) nil = exfin( 'Convert','Erreur 7','NON' )
+              call quit( 'Convert',7 )
+          end if
+
+***********************************************************************
+      else if (rpn)                                            then
+
+***        Second cas:  entrees de type rpn, sorties ccrn. Si 
+***        le fichier ccrn existait deja, il est detruit.  
+
+          rewind iu2
+          write(6,6350)
+
+          if (sqi)                                             then
+
+***            Lire l'information seulement sur le premier champs.
+
+              infon = 0
+ 1801         inf = fstinf( iu1, ni,nj,nk, -1,' ',-1,-1,-1,' ',' ' )
+
+              if (inf.ge.0)                                    then
+ 
+                  infon = infon+1
+
+                  if (infon.gt.MAXRAP)                         then
+                      write(6,6008) inf,MAXRAP
+                      if (box) nil = exfin( 'Convert','Erreur 8','NON' )
+                      call quit( 'Convert',8 )
+                  else
+                      liste(infon)  = inf
+                      findex(infon) = infon
+                  end if
+
+                  iprm  = fstprm( liste(infon),
+     +                    dateo,deet,npas, ni,nj,nk, nbits,datyp,
+     +                    ip1,ip2,ip3, typvar,nomvar,etiket,
+     +                    grtyp,ig1,ig2,ig3,ig4, swa,lng,dltf,ubc,
+     +                    extra1,extra2,extra3 )
+
+                  write( chain3(infon), 24) typvar,etiket,nomvar
+
+                  if (deeti.ge. 0) deet  = deeti
+
+                  if (datei.gt. 0)                             then
+                      call difdatr( dateo,datei,hours )
+                      npas  = nint( hours )
+                      if (deet.gt.0) 
+     +                npas  = nint( hours/deet )
+                      dateo = datei
+                  end if
+
+                  dtyp  (infon) = datyp
+                  delt  (infon) = deet
+                  niveau(infon) = ip1
+                  heure (infon) = ip2
+                  pas   (infon) = npas
+                  bits  (infon) = nbits
+
+***                Decoder 123 200 000 en Format mmjjaahhr: C'est
+***                la valeur limite du vieux format dans NEWDATE.f
+***                Enlever le 'r' s'il le faut dans le DATETIMESTAMP.
+
+                  if (dateo >= 0 .and. dateo < 123 200 000)    then
+                      date(infon) = dateo-mod( dateo,10 )
+                  else
+                      date(infon) = dateo
+                  endif
+
+                  dimr(1,infon) = ni
+                  dimr(2,infon) = nj
+                  dimr(3,infon) = nk
+
+                  gtyp  (infon) = grtyp
+
+                  sample(infon) = ip3
+
+                  grix(1,infon) = ig1
+                  grix(2,infon) = ig2
+                  grix(3,infon) = ig3
+                  grix(4,infon) = ig4
+
+***                Decoder IP1.
+
+                  if (nomvar /= '>>' .and.
+     +                nomvar /= '^^' .and.
+     +                nomvar /= '!!')                          then
+                      call convpr( ip1, press(infon), kind, -1 )
+                  else
+                      press(infon) = mod( ip1,32768 )
+                  end if
+
+***                Extraire l'annee, le mois, le
+***                jour et l'heure correspondante.
+
+                  dates(14) = dateo
+                  call datmgp2( dates )
+
+                  heur = dates(5)
+                  anne = dates(4)
+                  jour = dates(3)
+                  mois = dates(2)
+                  minu =      (dates(6)/100)/60
+                  seco = mod( (dates(6)/100),60 )
+
+                  date8(infon) = ((((anne*cent+mois)*cent+jour)*cent+heur)*cent+minu)*cent+seco
+
+***                Si la ligne de code qui suit est activee,
+***                le programme lira tous les enregistrements.
+***                BD, le 23 mars 1995.
+***               goto 1801
+
+              end if
+
+              rwd = fstrwd( iu1 )
+              inf = fstinf( iu1, ni,nj,nk, -1,' ',-1,-1,-1,' ',' ' )
+
+          else
+
+***           Traitement des valeurs manquantes.
+
+              ! Seulement pour les fichiers SQ98.
+              if (ftyp1 == 33 .or. ftyp1 == 34)                then
+
+                  if (missing_value_used() == 1)               then
+
+                      ier = get_missing_value_flags(
+     +                          misf, misi, misui, misd,
+     +                          misa, misus, misb, misub )
+
+                      if (MValue .and. MValue_READ)            then
+
+                          misf = MisFlag
+                          misd = MisFlag
+                          call set_missing_value_flags(
+     +                             misf, misi, misui, misd, 
+     +                             misa, misus, misb, misub )
+
+                      else if (.not.MValue_IS_OFF)             then
+                          MValue = Vrai ; MisFlag = misd
+                      else
+
+***                        Explicitely turn off the missing value decoder.
+
+                          call set_missing_value_mapping( 11, 1, dummy, 0,0,0 )
+                          call set_missing_value_mapping( 11, 1, dummy, 0,0,1 )
+
+                      end if
+
+                  else if (MValue)                             then
+
+                      if (MValue_READ)                         then
+                         misf = MisFlag
+                         misd = MisFlag
+                      else
+                         MisFlag = misd
+                      end if
+
+                      call set_missing_value_flags(
+     +                         misf, misi, misui, misd,
+     +                         misa, misus, misb, misub )
+
+                  end if
+
+              else if (MValue)                                 then
+
+                  if (MValue_read)                             then
+                      misf = MisFlag
+                      misd = MisFlag
+                  else
+                      MisFlag = misd
+                  end if
+
+              end if
+
+              Epsilon = abs( MisFlag ) * Epsilon
+
+
+***            Lire le directeur. La liste des cles va dans "liste".
+
+              inf = fstinl( iu1, ni,nj,nk, -1,' ',-1,-1,-1,' ',' ',
+     +                           liste,infon,MAXRAP )
+
+              if (inf.lt.0 .or. infon.gt.MAXRAP)               then
+                  write(6,6008) inf,MAXRAP
+                  if (box) nil = exfin( 'Convert','Erreur 8','NON' )
+                  call quit( 'Convert',8 )
+              end if
+
+***            Initialiser findex.
+
+              do  i=1,infon
+                  findex(i) = i
+              end do
+
+              chain3(infon+1) = ' '
+
+***            Lire l'information sur tous les champs. 
+
+              do  1802 i=1,infon
+
+                  iprm  = fstprm( liste(i),
+     +                    dateo,deet,npas, ni,nj,nk, nbits,datyp,
+     +                    ip1,ip2,ip3, typvar,nomvar,etiket, 
+     +                    grtyp,ig1,ig2,ig3,ig4, swa,lng,dltf,ubc, 
+     +                    extra1,extra2,extra3 )
+
+                  if (nomvar         .eq.'++' .and.
+     +                chain3(infon+1).eq.'  ' )                then
+
+***                    Sauver le premier enregistrement '++'.
+
+                      liste(infon+1)  = liste(i)
+                      chain3(infon+1) = '++'
+                      niveau(infon+1) = nk
+
+                  else if (tri
+     +              .and.  nomvar         .eq.'++'
+     +              .and.  niveau(infon+1).ne. nk  )           then
+
+                       write(6,6013) niveau(infon+1),nj
+                       if (box) nil=exfin( 'Convert','Erreur 13','NON' )
+                       call quit( 'Convert',13 )
+                  
+                  end if
+
+                  write( chain3(i), 24) typvar,etiket,nomvar
+
+                  if (deeti.ge. 0) deet  = deeti
+
+                  if (datei.gt. 0)                             then
+                      call difdatr( dateo,datei,hours )
+                      npas  = nint( hours )
+                      if (deet.gt.0) 
+     +                npas  = nint( hours/deet )
+                      dateo = datei
+                  end if
+
+                  dtyp  (i) = datyp
+                  delt  (i) = deet
+                  niveau(i) = ip1
+                  heure (i) = ip2
+                  pas   (i) = npas
+                  bits  (i) = nbits
+
+***                Decoder 123 200 000 en Format mmjjaahhr: C'est
+***                la valeur limite du vieux format dans NEWDATE.f
+***                Enlever le 'r' s'il le faut dans le DATETIMESTAMP.
+
+                  if (dateo >= 0 .and. dateo < 123 200 000)    then
+                      date(i) = dateo-mod( dateo,10 )
+                  else
+                      date(i) = dateo
+                  endif
+
+                  gtyp  (i) = grtyp
+
+                  sample(i) = ip3
+
+                  grix(1,i) = ig1
+                  grix(2,i) = ig2
+                  grix(3,i) = ig3
+                  grix(4,i) = ig4
+
+***                Decoder IP1.
+
+                  if (nomvar /= '>>' .and.
+     +                nomvar /= '^^' .and.
+     +                nomvar /= '!!')                          then
+                      call convpr( ip1, press(i), vkind, -1 )
+                  else
+                      press(i) = mod( ip1,32678 )
+                  end if
+
+***                Extraire l'annee, le mois, le
+***                jour et l'heure correspondante.
+
+                  dates(14) = dateo
+                  call datmgp2( dates )
+
+                  heur = dates(5)
+                  anne = dates(4)
+                  jour = dates(3)
+                  mois = dates(2)
+                  minu =      (dates(6)/100)/60
+                  seco = mod( (dates(6)/100),60 )
+
+                  date8(i) = ((((anne*cent+mois)*cent+jour)*cent+heur)*cent+minu)*cent+seco
+
+                  dimr(1,i) = ni
+                  dimr(2,i) = nj
+                  dimr(3,i) = nk
+
+ 1802         continue
+
+          end if
+
+          if (tri)                                             then
+
+***            Trier cette information. Commencer selon DATEO.
+
+              call csortl( date8(1),findex,infon )
+
+***            Passer au niveau suivant ... 
+
+ 1900         valnum8 = date8(findex(ind11))
+
+                  do  i1=ind12,infon
+                      if (date8(findex(i1)).ne.valnum8) goto 1902
+                  end do
+
+***                I1 contient le debut du prochain groupe DATEO.
+***                Trier la section courante, ... selon NPAS.
+
+ 1902             if (i1-ind12.gt.0)                           then
+
+                      call csorte( pas,findex(ind11),i1-ind11 )
+
+***                    Passer au niveau suivant ...
+
+                      ind21  = ind11
+                      ind22  = ind21+1
+ 1920                 valnum = pas(findex(ind21))
+
+                      do  i2=ind22,i1-1
+                          if (pas(findex(i2)).ne.valnum) goto 1922
+                      end do
+
+***                    I2 contient le debut du prochain groupe NPAS.
+***                    Trier la section courante, ... selon chain3
+***                    (i.e. selon TYPVAR/ETIKET/NOMVAR).
+
+ 1922                 if (i2-ind22.gt.0)                       then
+ 
+                          call csortc( chain3,findex(ind21),i2-ind21 )
+
+***                        Passer au niveau suivant ...
+
+                          ind31  = ind31
+                          ind32  = ind31+1
+ 1940                     exempl = chain3(findex(ind31))
+
+                          do  i3=ind32,i2-1
+                              if (chain3(findex(i3)).ne.exempl) 
+     +                            goto 1942
+                          end do
+
+***                        I3 contient le debut du prochain groupe
+***                        TYPVAR/ETIKET/NOMVAR ...
+***                        Trier la section courante, ... selon la
+***                        valeur decodee de IP1.
+
+ 1942                     if (i3-ind32.gt.0)
+     +                        call csortr(press,findex(ind31),i3-ind31)
+
+                          ind31 = i3
+                          ind32 = ind31+1
+
+***                        Passer au prochain bloc TYPVAR/ETIKET/NOMVAR.
+
+                          if (ind31.lt.i2) goto 1940
+
+                      end if
+
+                      ind21 = i2
+                      ind22 = ind21+1
+
+***                    Passer au prochain bloc NPAS.
+
+                      if (ind21.lt.i1) goto 1920
+
+                  end if
+
+                  ind11 = i1
+                  ind12 = ind11+1
+
+***                Passer au prochain bloc de DATEO.
+
+              if (ind11.lt.infon) goto 1900
+
+          end if
+
+***        Restaurer "Etiket and Co." a leur valeur initiale.
+
+          debut = 0
+
+***        Eleminer les enregistrements '++' qui pourrait se trouver
+***        au debut du fichier (par exemple, suite a un tri).
+
+ 1950     nrec  = debut
+          debut = debut+1
+
+          read( chain3(findex(debut)), 24) typvar,etiket,nomvar
+
+          if (nomvar.eq.'++') goto 1950
+
+          datyp = dtyp  (findex(debut))
+          deet  = delt  (findex(debut))
+          ip1   = niveau(findex(debut))
+          ip2   = heure (findex(debut)) 
+          npas  = pas   (findex(debut))
+          nbits = bits  (findex(debut))
+          dateo = date  (findex(debut))
+
+          ni    = dimr(1,findex(debut))
+          nj    = dimr(2,findex(debut))
+          nk    = dimr(3,findex(debut))
+
+          grtyp = gtyp  (findex(debut))
+
+          ip3   = sample(findex(debut))
+
+          ig1   = grix(1,findex(debut))
+          ig2   = grix(2,findex(debut))
+          ig3   = grix(3,findex(debut))
+          ig4   = grix(4,findex(debut))
+
+          inf   = liste(findex(debut))
+
+          if (nomvar /= '>>' .and.
+     +        nomvar /= '^^' .and.
+     +        nomvar /= '!!' )                                 then
+              call convpr( ip1, pr, vkind, -1 )
+          else
+              pr = mod( ip1,32768 )
+          end if
+
+***        Si l'etiket est autre chose que 'CCRN SEQ',le nom du fichier
+***        rpn est conserve dans un label ccrn.
+
+          if (etiket.ne.'CCRN SEQ' .and. .not.slab)            then
+              chaine = def1(1)
+              call putlab( iu2, chaine,jbuf,10, Vrai,Faux )
+          end if
+
+***        Verifier que l'on a bien des donnees complexes,
+***        reelles, entieres ou caracteres.
+
+          if (IAND( datyp,64  ) > 0) datyp = datyp - 64  ! Valeurs manquantes
+          if (IAND( datyp,128 ) > 0) datyp = datyp - 128 ! Compression turbo
+
+          if (datyp.lt.0 .or.
+     +       (datyp.gt.6 .and. datyp.ne.8))                    then
+              write(6,6009) datyp
+              if (box) nil = exfin( 'Convert','Erreur 9','NON' )
+              call quit( 'Convert',9 )
+          end if
+
+***        Sauver les dimensions des enregistrements...
+
+ 2000     ni0  = ni
+          nj0  = nj
+          nk0  = nk
+
+                          complex  = 1
+          if (datyp.eq.8) complex  = 2
+                          complex0 = complex
+
+          nwds = ni*nj*nk*complex0
+          maxw = nwds+6
+          
+***        Considerer l'espace necessaire a l'option LASLON.
+
+          if (lasl) maxw = max( (ni+1)* nj   * nk * complex   ,
+     +                           ni   *(nj+1)* nk * complex   ) + 6 
+
+          len  = maxw+head
+
+***        Est-ce qu'on traite des champs spectraux, caracteres
+***        complexes ou des donnees arbitraires ?
+
+          if (grtyp.eq.'*')                                    then
+              spec = Vrai
+              cmpl = Faux
+              char = Faux
+              data = Faux
+          else if (grtyp.eq.'X' .and.
+     +             datyp.eq. 3 )                               then
+              spec = Faux
+              cmpl = Faux
+              char = Vrai
+              data = Faux
+          else if (datyp.eq. 8 )                               then
+              spec = Faux
+              cmpl = Vrai
+              char = Faux
+              data = Faux
+          else if (grtyp.eq.'X' .or. 
+     +             grtyp.eq.'!')                               then
+              spec = Faux
+              cmpl = Faux
+              char = Faux
+              data = Vrai
+          else
+              spec = Faux
+              cmpl = Faux
+              char = Faux
+              data = Faux
+          end if
+
+          if (char)                                            then
+              nwds = (ni*nj+7)/8
+              maxw = nwds+6
+          end if
+
+***        Sauver aussi les parametres temporels (dateo/deet/npas)
+***        et l'etiket (puisque les labels y sont souvent sauves).
+
+          dateo0 = dateo
+          deet0  = deet
+          etikt0 = etiket
+          grtyp0 = grtyp
+          npas0  = npas
+          vkind0 = vkind
+
+          if (ni.eq.1)                                         then
+              neq1 = 'I'
+          else if (nj.eq.1)                                    then
+              neq1 = 'J'
+          else if (nk.eq.1)                                    then
+              neq1 = 'K'
+          else
+              neq1 = 'X'
+          end if
+
+***        Demander la memoire de travail.
+
+          if (indx.eq.-1)                                      then
+              allocate( ibuf(2*len),buffer(maxw) )
+              indx  = 0
+          end if
+
+***        Certains parametres sont sauves sur un tampon
+***        d'information special (nom='INFO').
+
+          if (etiket.ne.'CCRN SEQ' .and. nomvar.ne.'++')       then
+              if (slab)                                        then
+                  write(chaine,17)  etiket
+                  call putlab( iu2, chaine,ibuf,10,
+     +                              Faux , Faux )
+              else
+                  write(chaine,16)  typvar,etiket,grtyp,
+     +                              ig1,ig2,ig3,ig4,
+     +                              deet,npas,neq1,ip3,
+     +                              vkind,dateo,ip1,ip2
+                  call putlab( iu2, chaine,ibuf,19,
+     +                              Faux , Vrai )
+              end if
+          end if
+
+***        Lire tous les enregistrements sequentiellement (si tri
+***        est Faux) ou selon l'ordre du tri (si tri est Vrai).
+
+ 2001     iluk  = fstluk( buffer, inf, ni,nj,nk )
+
+              if (iluk.ge.0)                                   then
+                  nrec = nrec+1
+              else
+                  write(6,6010) iluk
+                  if (box) nil = exfin( 'Convert','Erreur10','NON' )
+                  call quit( 'Convert',10 )
+              end if
+
+              if (datyp.eq.2 .or. datyp.eq.4)                  then
+                  call intarel( buffer,buffer,ni*nj*nk,+1 )
+              else if (datyp.ne.3)                             then
+                  if (nbits.ne. BITSMOT*machine)              then
+                      call real2d( buffer,buffer,ni*nj*nk*complex, +1 )
+                  end if
+              end if
+
+***            Creation du tampon d'information ccrn et 
+***            changements d'unites si necessaire.
+
+***   ******** Conversion de (typvar/dateo/deet/npas) vers (time).
+
+              call tim2dat( time, dateo,deet,npas,ip2,
+     +                            timdat,bisect, +1 )
+
+***   ******** Conversion de (nomvar) vers (nom).
+
+***            Par defaut aucune conversion de noms
+***            et d'unites n'est effectuee.
+
+              nom = nomvar
+
+              if (.not.char .and.
+     +           (newnam == 'ALL' .or. newnam == 'DYN'))       then
+
+***   vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+***   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+***            Conversion des vents horizontaux de noeuds a m/s. 
+
+              if (nomvar.eq.'UU')                              then
+                  nom = 'U'
+                  call ms2not( buffer,nwds,+1,
+     +                         MValue,MisFlag,Epsilon )
+
+              else if (nomvar.eq.'VV')                         then
+                  nom = 'V'
+                  call ms2not( buffer,nwds,+1,
+     +                         MValue,MisFlag,Epsilon )
+
+***            Conversion du geopotential de dam a m**2/s**2.
+
+              else if (nomvar.eq.'GZ')                         then
+                  nom = 'PHI'
+                  call gz2dam( buffer,nwds,+1,
+     +                         MValue,MisFlag,Epsilon )
+
+***            Conversion des temperatures de centigrade a kelvin.
+
+              else if (nomvar.eq.'TT')                         then
+
+                  call kel2cen( buffer,nwds,spec,+1,
+     +                          MValue,MisFlag,Epsilon )
+
+                  if (ip1 /= 12000    .and.
+     +                ip1 /= 26314400 .and.
+     +                ip1 /= 93423264 )                        then
+                      nom = 'TEMP'
+                  else
+                      nom = 'ST'
+                  end if
+
+              else if (nomvar.eq.'VT')                         then
+
+                  nom = nomvar
+                  call kel2cen( buffer,nwds,spec,+1,
+     +                          MValue,MisFlag,Epsilon )
+
+***            Conversion du vent vertical avec un conversion
+***            (optionnelle) d'unites de mb/h a pascal/s.
+
+              else if (nomvar.eq.'WW' .or. nomvar.eq.'WP')     then
+                  nom = 'OMEG'
+                  if (nomvar.eq.'WW' .and. mbhr)
+     +                call pas2mbh( buffer,nwds,+1,
+     +                              MValue,MisFlag,Epsilon )
+
+***            Aucune conversion du tourbillon et de la divergence,
+***            de  meme que pour les fonctions de  courant et de po-
+***            tentiel. On ne fait meme pas la distinctions entre le 
+***            tourbillon absolu et le tourbillon relatif... 
+
+              else if (nomvar.eq.'QQ' .or.
+     +            nomvar.eq.'QP' .or.
+     +            nomvar.eq.'QR' )                             then
+                  nom = 'VORT'
+
+              else if (nomvar.eq.'DD' .or.
+     +            nomvar.eq.'DP' )                             then
+                  nom = 'DIV'
+
+              else if (nomvar.eq.'CC' )                        then
+                  nom = 'CHI'
+
+              else if (nomvar.eq.'PP')                         then
+                  nom = 'PSI'
+
+***            La variable du modele ccrn est l'ecart du point de
+***            rosee, mais les diagnostiques sont produits pour
+***            l'humidite specifique. Aucune conversion...
+
+              else if (nomvar.eq.'ES')                         then
+                  nom = 'ES'
+              else if (nomvar == 'HU' .or. nomvar == 'SHUM')   then
+                  if (esnam == 'ALL'  .or.
+     +                esnam == 'HU'   .or.
+     +                esnam == 'SHUM')                         then
+                      nom = 'ES'
+                  else
+                      nom = 'SHUM'
+                  end if
+              else if (nomvar == 'HR' .or. nomvar == 'RHUM')   then
+                  if (esnam == 'ALL'  .or.
+     +                esnam == 'HR'   .or.
+     +                esnam == 'RHUM')                         then
+                      nom = 'ES'
+                  else
+                      nom = 'RHUM'
+                  end if
+
+              else if (nomvar.eq.'TD')                         then
+                  nom = 'TD'
+                  call kel2cen( buffer,nwds,spec,+1,
+     +                          MValue,MisFlag,Epsilon )
+
+***            Aucune conversion de la topographie MT mais
+***            on doit convertir ME de m a m**2/s**2.
+
+              else if (nomvar.eq.'MT')                         then
+                  nom = 'PHIS'
+
+              else if (nomvar.eq.'ME')                         then
+                  nom = 'PHIS'
+                  call gz2m( buffer,nwds,+1,
+     +                       MValue,MisFlag,Epsilon )
+
+***            Conversion mb a ln(mb) pour la pression de surface.
+***            Conversion de mb a pascal si lnsppa est Vrai.
+
+              else if (nomvar.eq.'P0')                         then
+                  if (spec)                                    then
+                      nom = 'PS'
+                  else
+                      nom = 'LNSP'
+                      call lnp2mb( buffer,nwds,lnsppa,+1,
+     +                             MValue,MisFlag,Epsilon )
+                  end if
+
+              else if (nomvar.eq.'LP')                         then
+                  nom = 'LNSP'
+
+***            Conversion (optionnelle) de mb a pascal
+***            pour la pression au niveau de la mer.
+
+              else if (nomvar.eq.'PN')                         then
+                  nom = 'PMSL'
+                  if (.not.pmslmb)
+     +                call pas2mb( buffer,nwds,+1,
+     +                             MValue,MisFlag,Epsilon )
+
+              end if
+
+***   vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+***   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+              end if
+              if (.not.char .and.
+     +           (newnam == 'ALL' .or. newnam == 'PHY'))       then
+
+***   vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+***   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+***            Aucune conversion des vents a la surface.
+
+              if      (nomvar.eq.'US')                         then
+                  nom = 'SFCU'
+              else if (nomvar.eq.'VS')                         then
+                  nom = 'SFCV'
+
+***            Aucune conversion de temperature de l'air a la surface.
+
+              else if (nomvar.eq.'TS')                         then
+                  nom = 'SFCT'
+
+***            Aucune conversion des temperatures du sol.
+
+              else if (nomvar.eq.'I0')                         then
+                  nom = 'TG'
+
+***            Aucune conversion de l'eau dans le sol.
+
+              else if (nomvar.eq.'I1')                         then
+                  nom = 'THLQ'
+
+***            Aucune conversion de la glace dans le sol.
+
+              else if (nomvar.eq.'I2')                         then
+                  nom = 'THIC'
+
+***            Aucune conversion pour l'index de croissance (CLASS)
+
+              else if (nomvar.eq.'GR')                         then
+
+                  nom = 'TT'
+
+***            Convertir les noms de certains des flux radiatifs.
+
+              else if (nomvar.eq.'IV')                         then
+                  nom = 'FSO'
+
+***            Convertir l'eau precipitable de cm a mm.
+
+              else if (nomvar.eq.'PW')                         then
+                  nom = 'PWAT'
+                  call mm2cm( buffer,nwds,+1,
+     +                        MValue,MisFlag,Epsilon )
+
+***            Conversion de la precipitation de kg/(m*s) a m/s.
+
+              else if (nomvar.eq.'RR')                         then
+                  nom = 'PCP'
+                  if (.not.spec) 
+     +                call ms2koms( buffer,nwds,+1,
+     +                              MValue,MisFlag,Epsilon )
+
+***            Aucune conversion de la fraction de glace.
+
+              else if (nomvar.eq.'GL')                         then
+                  nom = 'SICN'
+
+***            Aucune conversion de la densite de la neige.
+
+              else if (nomvar.eq.'DN')                         then
+                  nom = 'RHON'
+
+***            Aucune conversion de la masse de la neige (equivalent eau).
+
+              else if (nomvar.eq.'I5')                         then
+                  nom = 'SNO'
+
+***            Aucune conversion du masque terre/mer. Il faut savoir 
+***            que le champs MG correspond generalement a des valeurs
+***            continues de (0. a 1.) tandis que GC contient des valeurs 
+***            discretes (-1., 0. et +1.).
+
+              else if (nomvar.eq.'MG')                         then
+                  nom = 'GC'
+
+              end if
+
+***   vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+***   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+              end if
+
+***            Aucune conversion de variables de
+***            description des modeles (DATA).
+
+              if (nomvar.eq.'XX') nom = 'DATA'
+                 
+
+***            Conversion possible des enregistrements
+***            contenant les coordonnees verticales.
+
+              if (nomvar.eq.'++') 
+     +        call convpp( buffer,nwds,sigma,ftyp1,+1 )
+
+***   ******** Conversion de (ip1) vers (lev).
+
+              if (nomvar == '>>' .or.
+     +            nomvar == '^^' .or.
+     +            nomvar == '!!' )                             then
+                  lev = mod( ip1,32768 )
+                  goto 2250
+              else if (.not.ip1conv) then
+                  call convpr( ip1, pr, vkind, -2 ) ! Ces deux appels forcent le
+                  call convpr( ip1, pr, vkind, +2 ) ! codage de type NEWSTYLE=T
+                  lev = ip1
+                  goto 2250
+              end if
+
+***            La pression est conservee telle quelle, les
+***            niveaux 'sigma' sont multiplies par 1000 et
+***            le hauteurs sont en centaines de metres.
+
+              call puthic( ' ','NEWL',ibuf )
+
+              if      (ip1.eq.32767)                           then
+
+***                Valeur utilisee pour coder NEWL.
+
+                  if (.not.tri) call puthic( NEWL,'NEWL',ibuf )
+
+                  lev =  0
+*                 ===    =
+
+              else if (ip1 == 12000    .or. 
+     +                 ip1 == 26314400 .or.
+     +                 ip1 == 93423264 )                       then
+
+***               Traiter ip1 pour une valeur decodee de 1.0
+***             (mode hybride ou bien sigma NEWSTYLE/OLDSTYLE)
+
+                  lev =  1
+*                 ===    =
+
+              else if (ip1.gt.12000 .and. ip1.le.32000)        then
+
+                  lev = (ip1-12000)/20
+*                 ===   ==============
+
+              else
+
+                  if (vkind.eq.3)                              then
+                      lev = anint( pr )
+                  else if (vkind.eq.0 .or. vkind.eq.4)         then
+                      lev = pr/20
+                  else
+                      if (vkind.eq.2) pr = pr/1000.
+                      if (pascal)     pr = pr*100.
+                      call  lvcode( lev,pr,1 )
+                  end if
+
+              end if
+
+***   ******** Conversion de (ni/nj/nk) vers (type/ilg/ilat).
+
+ 2250         if (.not.(spec .or. cmpl .or. data .or. char))   then
+
+                  if (nj.eq.1)                                 then
+                      type = 'ZONL'
+                      neq1 = 'J'
+                      ilg  = ni
+                      ilat = nk
+                  else if (ni.eq.1)                            then
+                      type = 'ZONL'
+                      neq1 = 'I'
+                      ilg  = nj
+                      ilat = nk
+                  else if (nk.eq.1)                            then
+                      type = 'GRID'
+                      neq1 = 'K'
+                      ilg  = ni
+                      ilat = nj
+                  else
+                      type = 'GRID'
+                      neq1 = 'X'
+                      ilg  = ni
+                      ilat = nj*nk
+                  end if
+
+                  if (lasl .and. type.eq.'GRID')               then
+                      call laslong( buffer, ilg,ilat, +1 )
+                      ilg = ilg+1
+                  end if
+
+***                Tenir compte des series temporelles de grilles.
+***                IBUF(2) doit alors contenir npas et non pas la date.
+
+                  if (type   .eq.'ZONL' .and.
+     +                ig3*ig4.ne. 0     )                      then
+                      time    =   npas
+                      if (ig3.ne. 1     .and.
+     +                    ig4.ne. 1     )
+     +                    type    = 'GRID'
+                  end if
+
+              else if (cmpl)                                   then
+
+***            Grilles complexes.
+
+                  type = 'CMPL'
+                  ilg  = ni
+                  ilat = nj
+
+              else if (data)                                   then
+
+***            Donnees brutes.
+
+                  type = 'DATA'
+                  ilg  = ni
+                  ilat = nj
+
+              else if (char)                                   then
+
+***            Donnees caracteres, qui seront sauvees
+***            en mode 64 bits. D'ou la division par 8.
+
+                  type = 'CHAR'
+                  ilg  = (ni+7)/8
+                  ilat =  nj*nk
+
+              else
+
+***            Cas spectral.
+
+                  type = 'SPEC'
+                  ilg  =  ni
+                  ilat =  1
+
+              end if
+
+***   ******** Conversion de (grtyp/ig1/ig2/ig3/ig4) vers (ihem).
+
+***            L'archivage ccrn ne fait aucune distinction entre
+***            une grille  lat-long hemispherique et  une grille 
+***            polaire stereographique.  Cette information est
+***            perdue lors de la transformation. Le tampon INFO
+***            doit etre cree pour remedier a cette situation.
+
+              if (grtyp.eq.'A' .or.
+     +            grtyp.eq.'B' .or.
+     +            grtyp.eq.'G')                                then
+
+***                Cas lat-long. Notons que l'inclusion de ig3 et ig4
+***                assure ici le support des series temporelles de ce
+***                type de grilles.
+
+
+                  ihem = (ig3*1000+ig4)*10+ig1
+                  if (ig2.ne.0) call roword( buffer,
+     +                                       ibuf(head+1),ilg,ilat )
+
+              else if (grtyp.eq.'L' )                          then
+
+***                Grille partielle.
+
+                  type = 'SUBA'
+                  ihem =  1
+
+                  call pltinfo( iu3, grtyp, ig1,ig2,ig3,ig4, 
+     +                               ilg,ilat, tmpdirn, nrec, +1 )
+  
+              else if (grtyp.eq.'X' .or.
+     +                 grtyp.eq.'!')                           then
+
+***                Grille inconnue (ou grille Lambert)
+
+                  ihem = 0
+  
+              else if (spec)                                   then
+
+***                Grille spectrale. Calcul de lrlmt.
+
+                  if (ig3.eq.2)                                then
+                      ktr = 2
+                  else if (ig3.eq.1)                           then
+                      ktr = 0
+                  end if
+
+                  ihem = clrlmt( ig1+1,ig2+1,ktr,Vrai )
+
+              else
+
+***                Cas polaire-stereographique.
+
+                  if (grtyp.eq.'N')                            then
+                      ihem = 1
+                  else if (grtyp.eq.'S')                       then
+                      ihem = 2
+                  end if
+
+              end if
+
+***   ******** Transfert de (nbits) vers (pack).
+
+              if (spec) nbits = min( nbits-8, MAXBITS )
+              if (char) nbits = 64
+
+              if (nbits.lt.MAXBITS)                            then
+                  nbits =  MAXBITS/(MAXBITS/nbits)
+              else if (nbits.lt.BITSMOT*machine)               then
+                  nbits =  MAXBITS
+              else
+                  nbits =  BITSMOT*machine
+              end if
+
+              pack = -nbits
+
+
+***   ********* Fin de la conversion.
+
+***           **************************************
+***            Transfert des descripteurs vers ibuf.
+
+              read(type,4) ibuf(1)
+              read(nom ,4) ibuf(3)
+              ibuf(2) = time
+              ibuf(4) = lev
+              ibuf(5) = ilg
+              ibuf(6) = ilat
+              ibuf(7) = ihem
+              ibuf(8) = pack
+
+              if (tri            .and.
+     +            type.eq.'ZONL' .and. 
+     +            ilat.gt.  1    .and.
+     +            chain3(infon+1).eq.'++')                     then
+                  if (nrec.eq. debut)                          then
+                      call puthic('NEWL','NEWL',ibuf )
+                  else if (nom.eq.'++')                        then
+                      goto 2450
+                  end if
+              end if
+
+***            Ecriture de l'enregistrement courant sur iu2.
+
+              call putfld2( iu2, buffer,ibuf,maxw )
+
+              if (tri            .and.
+     +            nrec.eq. debut .and. 
+     +            type.eq.'ZONL' .and.
+     +            ilat.gt.  1    .and.
+     +            chain3(infon+1).eq.'++')                     then
+  
+***                Et maintenant, sauver le premier enregistrement '++'.
+
+                  inf  = liste(infon+1)
+                  iluk = fstluk( buffer, inf, ni,nj,nk )
+                  iprm = fstprm( inf, dateo,deet,npas, ni,nj,nk,
+     +                                    nbits,datyp, ip1,ip2,ip3,
+     +                                    typvar,nomvar,etiket,
+     +                                    grtyp,ig1,ig2,ig3,ig4,
+     +                                    swa,lng,dltf,
+     +                                    ubc,extra1,extra2,extra3 )
+
+                  read(nomvar,4) ibuf(3)
+                  ibuf(4) =  1
+                  ibuf(5) =  1
+                  ibuf(6) =  nk
+                  ibuf(8) = -32
+
+                  if (datyp.eq.2)                              then
+                      call intarel( buffer,buffer,ni*nj*nk,+1 )
+                  else if (nbits.ne. BITSMOT*machine)          then
+                      call real2d( buffer,buffer,ni*nj*nk,+1 )
+                  end if
+
+                  call puthic(' ','NEWL',ibuf )
+                  call convpp( buffer,ni*nj*nk,sigma,ftyp1,+1 )
+
+                  call putfld2( iu2, buffer,ibuf,maxw )
+
+              end if
+
+***        Aller chercher l'information du prochain champs, tout
+***        en verifiant que celui-ci existe bien...
+
+ 2450     if (nrec+1.le.infon .or. sqi)                        then
+
+              if (sqi)                                         then
+                  inf = fstinf( iu1, ni,nj,nk, -1,' ',-1,-1,-1,' ',' ' )
+              else
+                  inf = liste(findex(nrec+1))
+              end if
+
+
+              if (inf.ge.0)                                    then
+
+                  iprm = fstprm( inf, dateo,deet,npas, ni,nj,nk, 
+     +                                nbits,datyp, ip1,ip2,ip3, 
+     +                                typvar,nomvar,etiket, 
+     +                                grtyp,ig1,ig2,ig3,ig4, 
+     +                                swa,lng,dltf,
+     +                                ubc,extra1,extra2,extra3 )
+
+                  if (nomvar /= '>>' .and.
+     +                nomvar /= '^^' .and.
+     +                nomvar /= '!!')                          then
+                      call convpr( ip1, pr, vkind, -1 )
+                  else
+                      pr = mod( ip1,32768 )
+                  end if
+
+                  if (deeti.ge. 0) deet  = deeti
+
+                  if (datei.gt. 0)                             then
+                      call difdatr( dateo,datei,hours )
+                      npas  = nint( hours )
+                      if (deet.gt.0) 
+     +                npas  = nint( hours/deet )
+                      dateo = datei
+                  end if
+
+                                  complex = 1
+                  if (datyp.eq.8) complex = 2
+
+***                A-t-on toujours les memes dimensions ?
+
+                  if (ni      .ne. ni0 .or.
+     +                nj      .ne. nj0 .or.
+     +                nk      .ne. nk0 .or.
+     +                complex .ne. complex0)                   then
+                      if (ni*nj*nk*complex .gt. nwds)          then
+                          deallocate( ibuf, buffer )
+                          indx = -1
+                      end if
+                      goto 2000
+                  end if
+
+***                Les autres parametres INFO sont-ils 
+***                toujours les memes ?
+
+                  if ((dateo  >= 0           .and.
+     +                 dateo0 <  123 200 000 .and. dateo0 /= (dateo-mod( dateo,10 )))
+     +           .or. (dateo  <  0           .and. dateo0 /=  dateo )
+     +           .or.  deet0 .ne. deet
+     +           .or.  etikt0.ne. etiket
+     +           .or.  grtyp0.ne. grtyp
+     +           .or.  npas0 .ne. npas
+     +           .or.  vkind0.ne. vkind  )                     then
+
+***                    Re-ecrire un nouveau tampon INFO.
+
+                      if (etiket.ne.'CCRN SEQ' .and.
+     +                    nomvar.ne.'++')                      then
+                          if (slab)                            then
+                              write(chaine,17)  etiket
+                              call putlab( iu2, chaine, ibuf,10,
+     +                                          Faux , Faux )
+                          else
+                              write(chaine,16)  typvar,etiket,grtyp,
+     +                                          ig1,ig2,ig3,ig4,
+     +                                          deet,npas,neq1,ip3,
+     +                                          vkind,dateo,ip1,ip2
+                              call putlab( iu2, chaine, ibuf,19,
+     +                                          Faux , Vrai )
+                          end if
+                      end if
+
+***                    Conserver les nouveaux parametres.
+***                    Enlever le 'r' s'il le faut dans le DATETIMESTAMP.
+
+                      if (dateo  >= 0 .and.
+     +                    dateo0 <  123 200 000)               then
+                          dateo0 =  dateo-mod( dateo,10 )
+                      else
+                          dateo0  = dateo
+                      end if
+                      deet0  = deet
+                      etikt0 = etiket
+                      grtyp0 = grtyp 
+                      npas0  = npas
+                      vkind0 = vkind
+
+                  end if
+
+                  goto 2001
+
+              end if
+
+          end if
+
+      end if
+
+*-----------------------------------------------------------------------
+***    On fait le menage en commencant par la memoire...
+
+ 9000 continue
+      if (indx.ne.-1) deallocate( ibuf, buffer )
+
+***    ... et en terminant par les fichiers.
+
+      ifrm = fstfrm (iu1)
+      close (iu2)
+
+      write(6,6000) nrec
+      if (box) nil = exfin( 'Convert','*Reussite*','NON' )
+      call qqexit( 0 )
+
+*-----------------------------------------------------------------------
+    1 format(a1)
+    2 format(a2)
+    4 format(a4)
+   12 format(a12)    
+   10 format(BN,i10)
+   16 format('TYP '   , a2, 2x,a12,
+     +       ' GR '   , a1,
+     +       '  IG1 ' , i4,
+     +       '  IG2 ' , i4,
+     +       ' IG3'   , i6,
+     +       ' IG4'   , i6,
+     +       '  DT'   , i6,
+     +       ' #'     , i8,
+     +       ' N'     , a1,'=1',
+     +       '  IP3 ' , i4,
+     +       ' VK '   , i1,
+     +       ' DAT '  , i12,
+     +       '  IP12 ',2i11)
+   17 format(4x,A12)
+   24 format(a2,a16,a4)
+  101 format(e10.0)
+  116 format(4x,a2,2x,a12,4x,a1,2(6x,i4),3(4x,i6),
+     +       2x,i8,2x,a1,8x,i4,4x,i1,5x,i12,7x,2i11)
+
+ 6000 format(/'   Conversion de ',i5,' champs effectuee.'/)
+ 6100 format(/'   Fichier CMC/RPN : ',a,
+     +       /'   Fichier CCCma   : ',a)
+ 6150 format(/'   *** Conversion CCCma ===>> CMC/RPN ***'/)
+ 6175 format(/'   Le nom original du fichier etait... '/3x,a/)
+ 6200 format(/'   Premier champs lu,'/
+     +        '   Type,time,nom,lev,ilg,ilat,ihem,pack = ',
+     +            a4,1x,i12,1x,a4,1x,5i6/)
+ 6250 format(/'   Champs no. ',i5,', NOMVAR =',
+     +            a4,', aucune conversion.'/)
+ 6300 format(/'   Probleme probable de compaction, range/npak=',2i12/)
+ 6350 format(/'   *** Conversion CMC/RPN ===>> CCCma ***'/)
+ 6400 format(/'   Champs no. ',i5,', NOM =  ',
+     +            a4,', aucune conversion.'/)
+ 6450 format(/'   *** Deet =',i6,', remis a zero avant fstecr...'/)
+ 6500 format(/'   *** Pour variable ',A,', IP2 passe de ',
+     +            I6,' a ',i6,', provenant de LABEL/INFO ***'/)
+ 6550 format(/'   Valeurs manquantes detectees en entre ...'/)
+
+ 6001 format(/'   Deux noms de fichiers sont requis a l''entree...'/)
+ 6002 format(/'   Un des fichiers d''E/S doit exister au depart...'/)
+ 6003 format(/'   Ce fichier est de type inconnu...'/3x,a/)
+ 6004 format(/'   Enregistrement CCCma non reconnu... '/
+     +        '   Type,nom,lev,ilg,ilat,pack = ',a4,1x,a4,4i6/)
+ 6005 format(/'   Champs fourier-complexes non supportes...'/)
+ 6006 format(/'   Type de grille non supportee, IHEM = ',i8/)
+ 6007 format(/'   Erreur (fstecr)',i5,' durant ecriture.'/)
+ 6008 format(/'   Erreur (fstinl)',i5,', ou bien trop de champs ',
+     +            '(infon=MAXRAP=',i5,')'/)
+ 6009 format(/'   Ce type de donnees est non supporte, DATYP =',i3/)
+ 6010 format(/'   Erreur ',i5,' durant lecture (fstluk).'/)
+ 6011 format(/"   Ce fichier ",a4," n'en est pas un..."/3x,a/)
+ 6012 format(/"   L'option TRI est indisponible pour un fichier SQI."/)
+ 6013 format(/"   Tri de 2 sections '++' de tailles differentes:",2I5/)
+ 6015 format(/"   TMPDIR ou BIG_TMPDIR non definis."/)
+ 6016 format(/'   Specifications de grille STD manquant,'/
+     +        '   Input CCCma type =',A4,' et ihem= ',I9/)
+ 6017 format(/'   Series temporelles de grilles ',A,' non supportees,'/
+     +        '   IHEM = ',I8/)
+ 6018 format(/'   Choisir un seul des arguments SIGMA ou PASCAL'/)
+ 6019 format(/'   Mauvaise valeur pour le parametre NEWNAM ',A/)
+ 6020 format(/'   Label de type INFO incompatible.'/)
+ 6021 format(/'   Le T de LRLMT =',I2,' est non supporte.'/)
+ 6022 format(/'   Series temporelles non supportees, IKIND =',I2/)
+ 6023 format(/'   Options incompatibles: IP1CONV=F et OLD_STYLE_IP1=T'/)
+      end
+
+      Subroutine convpp (buffer,nwds,sigma,rpntyp,sens)
+
+***    Auteur: B.Dugas - RPN, le 3 juin 1998
+
+***    Objet(convpp):
+*         - Convertir les enregistrements ++.
+
+***    Arguments:
+*         in/out - buffer -  coordonnees verticales codees.
+*         in     - nwds   -  dimension de buffer,
+*         in     - sigma  -  les coordonnes sont en sigma.
+*         in     - rpntyp -  type du fichier RPN.
+*         in     - sens   -  vers RPN si egal a -1,
+*                            vers CCC sinon.
+
+      implicit none
+
+      logical  sigma
+      integer  nwds, rpntyp, sens, i
+      real*8   buffer(nwds),pr8
+      integer  ip1,kind
+      real     pr
+*----------------------------------------------------------------------
+
+      do  i=1,nwds
+          pr8 = buffer(i)
+          if (sens.eq.-1)                                      then
+              pr   = 10**( pr8-3.0 )
+              kind = 2
+              if (sigma) kind = 1
+              if (kind.eq.2) pr = pr*1000.
+              call convpr( ip1, pr, kind, +1 )
+              if (rpntyp.eq.1 .or.
+     +            rpntyp.eq.2 )                                then
+                  buffer(i) = max( dble( ip1 ),1.d-10 )
+                  buffer(i) = log10( buffer(i) )
+              else if (rpntyp.eq.33 .or.
+     +                 rpntyp.eq.34 )                          then
+                  buffer(i) = ip1
+              end if
+          else
+              if (rpntyp.eq.1 .or.
+     +            rpntyp.eq.2 )                                then
+                  ip1 = nint( 10**( pr8 ) )
+              else if (rpntyp.eq.33 .or.
+     +                 rpntyp.eq.34 )                          then
+                  ip1 = nint( pr8 )
+              end if
+              call convpr( ip1, pr, kind, -1 )
+              if (kind.eq.1) pr = pr*1000.
+              if (pr.ne.0.0)                                   then
+                  pr = log10( pr )
+              else
+                  pr = -10.0
+              end if
+              buffer(i) = pr
+          end if
+      end do
+
+      return
+      end
+
+      Subroutine entosno (buffer,nwds,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 9 juillet 1992
+
+***    Objet(entosno):
+*         - Convertir l'enneigement de m a kg/m**2.
+
+***    Arguments:
+*         in/out - buffer -  champs de neige au sol,
+*         in     - nwds   -  dimension de buffer,
+*         in     - sens   -  vers m       si egal a -1,
+*                            vers kg/m**2 sinon.
+
+      implicit none
+
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( 1 metre de neige ==> 100 kg/m**2 ) = 10**2
+ 
+                      cfact = 1.e+2
+      if (sens.eq.-1) cfact = 1./cfact
+
+      do 100 i=1,nwds
+          if (.not.MValue .or. 
+     +       (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +    buffer(i) = max( buffer(i)*cfact, 0D0 )
+  100 continue
+
+      return
+      end
+
+      Subroutine gz2dam (buffer,nwds,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 13 septembre 1990
+
+***    Objet(gz2dam):
+*        - Convertir le geopotentiel de dam a m**2/s**2.
+
+***    Arguments:
+*        in/out - buffer -  champs du geopotentiel,
+*        in     - nwds   -  dimension de buffer,
+*        in     - sens   -  vers dam si egal a -1,
+*                           vers gz  sinon.
+
+      implicit none
+
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( dam ==> m ) * g = 10 * 9.80665
+ 
+                      cfact = 98.0665
+      if (sens.eq.-1) cfact = 1./cfact
+
+      do 100 i=1,nwds
+          if (.not.MValue .or. 
+     +       (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +    buffer(i) = buffer(i)*cfact
+  100 continue
+
+      return
+      end
+
+      Subroutine gz2m (buffer,nwds,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 18 novembre 2008
+
+***    Objet(gz2m):
+*        - Convertir une hauteur en geopotentiel.
+
+***    Arguments:
+*        in/out - buffer -  champs de hauteur ou de geopotentiel,
+*        in     - nwds   -  dimension de buffer,
+*        in     - sens   -  vers m   si egal a -1,
+*                           vers gz  sinon.
+
+      implicit none
+
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = g = 9.80665
+ 
+                      cfact = 9.80665
+      if (sens == -1) cfact = 1./cfact
+
+      do  i=1,nwds
+           if (.not.MValue .or. 
+     +        (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +     buffer(i) = buffer(i)*cfact
+      end do
+
+      return
+      end
+
+      Subroutine intarel (buffer1,rbuffer2,nwds,sens)
+
+***    Auteur: B.Dugas - RPN, le 02 octobre 1990
+
+***    Objet(intarel):
+*         - Conversion de reel a entier.
+
+***    Arguments:
+*         in/out  - buffer1 -  champs d'E/S reel,
+*         out/in  - buffer2 -  champs d'E/S entier,
+*         in      - nwds    -  dimension des tampons,
+*         in      - sens    -  vers entier si egal a -1,
+*                              vers reel   sinon.
+
+***    Notez que buffer1 et buffer2 peuvent etre equivalences.
+
+      implicit none
+
+      integer  nwds, sens
+      real*8   buffer1(*),rbuffer2(*)
+
+      integer  buffer2,i
+      pointer (ibuf2,buffer2(*))
+*----------------------------------------------------------------------
+
+      ibuf2 = loc( rbuffer2(1) )
+
+      if (sens.eq.-1)                                          then
+          do 100 i=1,nwds
+              buffer2(i) = nint(buffer1(i))
+  100     continue
+      else
+          do 200 i=nwds,1,-1
+              buffer1(i) = buffer2(i)
+  200     continue
+      end if
+
+      return
+      end
+
+      Subroutine kel2cen (buffer,nwds,spec,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 13 septembre 1990
+
+***    Modif:  B.Dugas, le 07 mai 1992 ...
+***              ...    Tenir compte des donnees spectrales.
+
+***    Objet(kel2cen):
+*         - Convertir la temperature de centigrade a kelvin.
+
+***    Arguments:
+*         in/out - buffer -  champs du temperature,
+*         in     - nwds   -  dimension de buffer,
+*         in     - spec   -  drapeau indiquant la presence 
+*                            d'un champs spectral.
+*         in     - sens   -  vers centigrade si egal a -1,
+*                            vers kelvin     sinon.
+
+      implicit none
+
+      logical  spec
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( centigrade ==> kelvin ) = +273.15
+
+                      cfact = 273.15
+      if (sens.eq.-1) cfact = -cfact
+      if (spec)       cfact = cfact*sqrt(2.d0)
+
+      if (.not.spec)                                           then
+          do 100 i=1,nwds
+              if (.not.MValue .or. 
+     +           (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +        buffer(i) = buffer(i)+cfact
+  100     continue
+      else
+              if (.not.MValue .or. 
+     +           (MValue .and. abs( buffer(1)-MisFlag ) > Epsilon))
+     +        buffer(1) = buffer(1)+cfact
+      end if
+
+      return
+      end
+
+      Subroutine laslong (buffer,ilg,ilat,sens)
+
+***    Auteur: B.Dugas - RPN, le 16 avril 1991
+
+***    Objet(laslong):
+*         - Ajouter/Enlever une longitude.
+
+***    Arguments:
+*         in/out - buffer -  grille de donnees,
+*         in     - ilg    -  premiere dimension de buffer,
+*         in     - ilat   -  seconde dimension de buffer,
+*         in     - sens   -  vers ilg   (Enlever) si egal a -1,
+*                            vers ilg+1 (Ajouter) sinon.
+
+      implicit none
+
+      integer  ilg,ilat, sens, i,j, ijin,ijout
+      real*8   buffer(1)
+*----------------------------------------------------------------------
+
+      if (sens.ne.-1)                                          then
+
+          do 100 j=ilat-1,0,-1
+              ijin  = j* ilg
+              ijout = j*(ilg+1)
+              buffer(ijout+ilg+1) = buffer(ijin+1)
+              do 100 i=ilg,1,-1
+                  buffer(ijout+i) = buffer(ijin+i)
+  100     continue
+
+      else
+
+          do 200 j=0,ilat-1
+              ijin  = j*(ilg+1)
+              ijout = j* ilg
+              do 200 i=1,ilg
+                  buffer(ijout+i) = buffer(ijin+i)
+  200     continue
+
+      end if
+
+      return
+      end
+
+      Subroutine lnp2mb (buffer,nwds,lnsppa,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 13 septembre 1990
+
+***    Objet(lnp2mb):
+*         - Convertir la { pression:mb } en ln{ pression:pascal }.
+
+***    Arguments:
+*         in/out - buffer -  champs de pression,
+*         in     - nwds   -  dimension de buffer,
+*         in     - lnsppa -  cle logique controlant la conversion
+*                            d'unites de pascal de/vers mb
+*         in     - sens   -  vers mb         si egal a -1,
+*                            vers ln(pascal) sinon.
+
+      implicit none
+
+      logical  lnsppa
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( millibar ==> pascal ) = 100.
+ 
+                  cfact = 1.
+      if (lnsppa) cfact = 100.
+
+      if (sens.eq.-1)                                          then
+
+          cfact = 1./cfact
+          do 100 i=1,nwds
+              if (.not.MValue .or. 
+     +           (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +        buffer(i) = exp(buffer(i))*cfact
+  100     continue
+
+      else
+
+          do 200 i=1,nwds
+              if (.not.MValue .or. 
+     +           (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +        buffer(i) = log(buffer(i)*cfact)
+  200     continue
+
+      end if
+
+      return
+      end
+
+      Subroutine mm2cm (buffer,nwds,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 13 juin 1996
+
+***    Objet(mm2cm):
+*         - Convertir buffer de centimetres a minimetres.
+
+***    Arguments:
+*         in/out - buffer -  champs de pression,
+*         in     - nwds   -  dimension de buffer,
+*         in     - sens   -  vers cm   si egal a -1,
+*                            vers mm   sinon.
+
+      implicit none
+
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( cm ==> mm ) = 10.
+ 
+      cfact = 10. ; if (sens.eq.-1) cfact = 1./cfact
+
+      do 100 i=1,nwds
+          if (.not.MValue .or. 
+     +       (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +    buffer(i) = buffer(i)*cfact
+  100 continue
+
+      return
+      end
+
+      Subroutine ms2koms (buffer,nwds,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 13 septembre 1990
+
+***    Objet(ms2koms):
+*         - Convertir les taux de precipitation de m/s a kg/m**2/s.
+
+***    Arguments:
+*         in/out - buffer -  champs de precipitation,
+*         in     - nwds   -  dimension de buffer,
+*         in     - sens   -  vers m/s       si egal a -1,
+*                            vers kg/m**2/s sinon.
+
+      implicit none
+
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( 1 metre de pluie ==> 1000 kg/m**2 ) = 10**3
+ 
+                      cfact = 1.e+3
+      if (sens.eq.-1) cfact = 1./cfact
+
+      do 100 i=1,nwds
+          if (.not.MValue .or. 
+     +       (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +    buffer(i) = max( buffer(i)*cfact, 0D0 )
+  100 continue
+
+      return
+      end
+
+      Subroutine ms2not (buffer,nwds,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 13 septembre 1990
+
+***    Objet(ms2not):
+*         - Convertir le vent horizontal de noeuds a m/s.
+
+***    Arguments:
+*         in/out - buffer -  champs de vent (u ou v),
+*         in     - nwds   -  dimension de buffer,
+*         in     - sens   -  vers noeuds si egal a -1,
+*                            vers m/s    sinon.
+
+      implicit none
+
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( mille nautique ==> metre ) / ( heure ==> sec ) 
+***          =        1.852 10**3           /      3600 
+ 
+                      cfact = 0.514444
+      if (sens.eq.-1) cfact = 1./cfact
+
+      do 100 i=1,nwds
+          if (.not.MValue .or. 
+     +       (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +    buffer(i) = buffer(i)*cfact
+  100 continue
+
+      return
+      end
+
+      Subroutine pas2mb (buffer,nwds,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 29 mai 1992
+
+***    Objet(pas2mb):
+*         - convertir la pression de millibar a pascal.
+
+***    Arguments:
+*         in/out - buffer -  champs de pression,
+*         in     - nwds   -  dimension de buffer,
+*         in     - sens   -  vers mb     si egal a -1,
+*                            vers pascal sinon.
+
+      implicit none
+
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( millibar ==> pascal )
+***          =           100.
+ 
+                      cfact = 100.
+      if (sens.eq.-1) cfact = 1./cfact
+
+      do 100 i=1,nwds
+          if (.not.MValue .or. 
+     +       (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +    buffer(i) = buffer(i)*cfact
+  100 continue
+
+      return
+      end
+
+      Subroutine pas2mbh (buffer,nwds,sens,MValue,MisFlag,Epsilon)
+
+***    Auteur: B.Dugas - RPN, le 13 septembre 1990
+
+***    Objet(pas2mbh):
+*         - convertir le vent vertical de millibar/heure a pascal/s.
+
+***    Arguments:
+*         in/out - buffer -  champs de vent omega,
+*         in     - nwds   -  dimension de buffer,
+*         in     - sens   -  vers mb/heure si egal a -1,
+*                            vers pascal/s sinon.
+
+      implicit none
+
+      integer  nwds, sens, i
+      real*8   buffer(nwds), cfact
+
+      logical  MValue
+      real*8   MisFlag,Epsilon
+*----------------------------------------------------------------------
+
+***    cfact = ( millibar ==> pascal ) / ( heure ==> sec ) 
+***          =           100.          /      3600 
+ 
+                      cfact = .27777e-1
+      if (sens.eq.-1) cfact = 1./cfact
+
+      do 100 i=1,nwds
+          if (.not.MValue .or.
+     +       (MValue .and. abs( buffer(i)-MisFlag ) > Epsilon))
+     +    buffer(i) = buffer(i)*cfact
+  100 continue
+
+      return
+      end
+
+      Subroutine real2d (buf4,buf8,nwds,sens)
+
+***    Auteur: B.Dugas - RPN, le 3 juin 1998
+
+***    Objet(real2d):
+*         - Transferer buf (real) de/vers buf8 (real*8)
+*           buf et buf8 peuvent etre equivalences.
+
+***    Arguments:
+*         in/out - buf    -  champs declare real,
+*         in/out - buf8   -  champs declare real*8,
+*         in     - nwds   -  dimension de buf et buf8,
+*         in     - sens   -  vers buf si egal a -1,
+*                            vers buf8 sinon.
+
+      implicit none
+
+      integer  nwds, sens
+      real*8   buf8(*),buf4(*)
+
+      integer  i
+      real     buf
+      pointer (ibuf,buf(*))
+*----------------------------------------------------------------------
+
+      ibuf = loc( buf4(1) )
+
+      if (sens.eq.-1)                                          then
+          do  i=1,nwds
+              buf(i) = buf8(i)
+          end do
+      else
+          do  i=nwds,1,-1
+              buf8(i) = buf(i)
+          end do
+      end if
+
+      return
+      end
+
+      Subroutine tim2dat (time,date,deet,npas,ip2,timdat,bisect,sens)
+
+***    Auteur: B.Dugas - RPN, le 13 septembre 1990
+
+***    Modifie, le 10 decembre 1993: 1) Puisque NPAS peu maintenant
+***                                etre plus grand que 2**15, tajust
+***                                n'est plus requis. NPAS est sauve
+***                                de preference a IP2.
+***                                2) Inverser le comportement de la
+***                                conversion RPN ==> CCRN avec la
+***                                cle -TIME (TIMDAT).
+***    Modifie, le 26 mai 1992:    1) Ajouter la possibilite de sauver
+***                                datev plutot que dateo/npas/deet
+***                                2) Ajouter le parametres bisect.
+***    Modifie, le 12 mai 1992:    Info n'est plus un parametre et 
+***                                un appel a tajust est ajoute.
+***    Modifie, le 5 fevrier 1991: Un IP2 plus grand que 2**15 n'est
+***                                permis dans le mode "timestep".
+***    Modifie, le 24 decembre 1991: 1) deet peut contenir un "DATE 
+***                                TIME STAMP CMC" a l'entree.
+***                                2) deet peut contenir le pas de
+***                                temps du cote CCRN.
+
+***    Objet(tim2dat):
+*         - Convertir l'heure de (mm/jj/aa/hh/r) a (aa/mm/jj/hh),
+*           ou  mm est le code du mois,    jj est le code du jour,
+*               aa est le code de l'annee, hh est le code heure et
+*                r est le code run. 
+
+***    Ces donnees correspondent a une run fantome (i.e. run 1).
+
+***    Arguments:
+*         in/out - time   -  la date de validite en format ccrn,
+*         in/out - date   -  la date d'analyse initiale en format rpn,
+*                            ou la date de validite selon timdat
+*         in/out - deet   -  longueur du pas de temps en seconde,
+*         in/out - npas   -  numero du pas de temps,
+*         in/out - ip2    -  heure de validite,
+*         in     - timdat -  a) si sens est egal a -1 ...
+*                            est-ce qu'on sauve dateo/npas/deet ou
+*                            seulement datev
+*                            b) si sens est egal a +1 ...
+*                            est-ce que npas contient l'information 
+*                            temporelle,
+*         in     - bisect -  doit-on considerer les annees bisectiles
+*         in     - sens   -  vers DATIMSTAMP CMC/RPN  si egal a -1,
+*                            vers aaaammjjhh   sinon.
+
+      implicit none
+
+      real*8   heures
+      integer  sens, dat1,dat2,dat3,time,
+     +         date,deet,npas,ip2, valeur,valeur0,
+     +         heurev,heureo,dtm,nil,ier
+      logical  timdat,bisect
+
+      logical  ok
+      integer  newdate,newtim,exfin,heure
+      external newdate,newtim,exfin, quit
+
+      heure(npas, deet) = NINT( ( npas * (DBLE( deet )/ 60 ) ) / 60 )
+*----------------------------------------------------------------------
+
+      If (sens == -1)                                          then
+
+          ier = newdate( time, dat2,dat3, -3 )
+
+          If (ier == 0)                                        then
+
+***            time contient la date de validite (format STAMP).
+
+              If (date*deet.ne.0)                              then
+                 
+***                date contient deja la date d'origine et
+***                deet contient la taille du pas de temps.
+
+                  call difdatr( time,date, heures )
+
+***                Determiner npas et ip2.
+
+                  ip2    = heures
+                  npas   = nint( heures * ( 3.6d3 / deet ) )
+
+              Else
+
+***                trouver la date d'origine si possible
+
+                  heures = npas*dble( deet )/3.6d3
+
+                  If (npas*deet /= 0)                          then
+                      call incdatr( date,time,-heures )
+                  else
+                      date = time
+                  end if
+
+                  ip2  = heures
+
+              End If
+
+          Else If (deet.ne.0 .and. timdat)                     then
+
+              npas   = time
+              heures = npas*dble( deet )/3.6d3
+
+              call incdatr( dat1,date,heures )
+
+***           ***
+              date = dat1
+              npas = 0
+              ip2  = 0
+***           ****
+
+          Else
+
+***           *****
+              If (date.eq.0) 
+     +        date    = 010179001
+              npas    = time
+              ip2     = heure( npas, deet )
+***           *****
+
+          End If
+
+      else
+
+          if (.not.timdat)                                     then
+
+***           ****
+              time    = npas
+***           ****
+
+          else
+
+***            time = date+heures (datev en format STAMP).
+
+              heures = npas*dble( deet )/3.6d3
+              call incdatr( time,date,heures )
+              
+          end if
+
+      end if
+
+      return
+
+*----------------------------------------------------------------------
+ 6014 format(/'   Probleme de conversion de date dans TIM2DAT -',
+     +          ' date,npas,deet=',3I10/)
+
+      end
+
+      Subroutine trouvn (nomvar,n,inconnu,ok)
+
+***    Auteur: B.Dugas - RPN, le 02 octobre 1990
+
+***    Objet(trouvn):
+*         - Chercher un nomvar dans la liste n.
+
+***    Arguments:
+*         in     - nomvar  -  nomvar a chercher.
+*         in     - n       -  liste des nomvar's.
+*         in     - inconnu -  dimension de la liste + 1.
+*         in/out - ok      -  .true.  si nomvar existe dans n
+*                             .false. sinon.
+
+      implicit none
+
+      integer     i,inconnu
+      character*4 nomvar, n(inconnu)
+      logical     ok
+*----------------------------------------------------------------------
+
+      ok = .true.
+
+      do 100 i=1,inconnu-1
+          if (nomvar.eq.n(i)) return
+  100 continue
+
+      ok = .false.
+
+      return
+      end
+      Subroutine pltinfo( nf, grtyp, ig1,ig2,ig3,ig4, 
+     +                        ilg,ilat, tmpdir, nr,sens )
+
+      Implicit  none
+
+*      Declaration des parametres.
+
+      Integer   nf,nr, ig1,ig2,ig3,ig4, ilg,ilat,sens
+      Character grtyp, tmpdir*512
+
+*      Declarations des variables locales.
+
+      Logical   ex,message
+      Character lname*256,status*3
+      Integer   io,nhem,noutyp,nfinfo,lentmp,
+     +          ly,ip,jp,nbad
+
+      Real      dlat1,dlon1,dlat2,dlon2,dgrw,d60,
+     +          xlat1,xlon1,xlat2,xlon2
+
+      common   /ZZVERBO/ message
+
+      Save      nfinfo, xlat1,xlon1,xlat2,xlon2, ex
+
+      Data      nfinfo / -1 /, ex / .false. /
+
+      External  cigaxg,cxgaig,pscal
+
+*-----------------------------------------------------------------------
+*      Premier enonce executable.
+
+      if (sens.eq.-1)                                          then
+
+***        Initialize the IGx parametres.
+
+          grtyp = ' '
+          ig1   = -1
+          ig2   = -1
+          ig3   = -1
+          ig4   = -1
+
+      else if (sens.eq.+1 .and. grtyp.eq.'L')                  then
+
+***        Calculate the pltinfo parametres.
+
+          call cigaxg( grtyp, xlat1,xlon1,xlat2,xlon2,
+     +                        ig1,  ig2,  ig3,  ig4 )
+
+          xlat2  = xlat1+(ilat-1)*xlat2
+          xlon2  = xlon1+(ilg -1)*xlon2
+          noutyp = 0
+          nhem   = 1
+
+          if (xlon1.ge.180.)  xlon1 = xlon1-360.
+          if (xlon2.ge.180.)  xlon2 = xlon2-360.
+
+          dgrw = xlon1+.5*(xlon2-xlon1) 
+          if (xlon2.gt.xlon1) dgrw  = dgrw +360.
+          if (dgrw.ge.180.)   dgrw  = dgrw -360. 
+
+      end if
+
+      if (nfinfo.eq.-1)                                        then
+
+***                     Search for file 'pltinfo'.
+
+                       inquire( file='pltinfo',
+     +                          err=999,iostat=io, exist=ex )
+
+          if (.not.ex)                                         then
+
+***                     No pltinfo in current directory.
+***                     Check for $tmpdir/pltinfo.
+
+                       lentmp = index( tmpdir // ' ' , ' ' ) - 1
+
+                       if (lentmp.eq.0) lentmp = 513
+                       if (7+lentmp.gt.513) return
+
+              if (lentmp.ne.1)                                 then
+
+***                     Build new name from tmpdir and name. Check
+***                     for file existence in "tmpdir" directory.
+
+                       lname = tmpdir(1:lentmp) // '/' // 'pltinfo'
+                       inquire( file=lname,
+     +                          err=999,iostat=io, exist=ex )
+
+                  if (.not.ex .and. sens.eq.-1)                then
+
+                       if (message) write(6,6100)
+                       return
+
+                  end if
+
+              else if (sens.eq.-1)                             then
+
+                       if (message) write(6,6100)
+                       return
+
+              end if
+            
+          else
+
+***                     Use 'pltinfo' in current directory.
+
+                       lname = 'pltinfo'
+
+          end if
+
+          if (.not.ex .and. sens.eq.+1)                        then
+
+                       status = 'new'
+                       open( unit=nf,  file=lname,
+     +                                 err=999,iostat=io,
+     +                                 status=status,
+     +                                 access='sequential',
+     +                                 form='unformatted' )
+
+                       write( nf ) xlat1,xlon1,xlat2,xlon2,
+     +                             dgrw,nhem,noutyp
+
+          else
+
+                       status = 'old'
+                       open( unit=nf,  file=lname,
+     +                                 err=999,iostat=io,
+     +                                 status=status,
+     +                                 access='sequential',
+     +                                 form='unformatted' )
+
+
+          end if
+
+          nfinfo = nf
+
+          lentmp = index( lname // ' ' , ' ' ) - 1
+          if (message) write(6,6300) status,lname(1:lentmp)
+
+      end if
+
+***    Verifier que nf et nfinfo sont identiques.
+
+      if (nf.eq.nfinfo)                                        then
+
+***        Lire l'unite nf.
+
+          if (ex )                                             then
+
+              rewind nf
+              read(nf,end=999) dlat1,dlon1,dlat2,dlon2,dgrw,nhem,noutyp
+
+          end if
+
+          if (noutyp.ne.0 .and. sens.eq.-1)                    then
+
+***            Grille PS.
+
+              if (nhem.eq. 1 ) grtyp = 'N'
+              if (nhem.eq. 2 ) grtyp = 'S'
+
+              if (dgrw.lt.0.0) dgrw = dgrw+360.
+
+              call pscal( ly,ip,jp,d60,ilg,dgrw,dlat1,dlon1, 
+     +                    dlat2,dlon2,nhem,0,nbad ) 
+
+              call cxgaig( grtyp, ig1,      ig2,  ig3, ig4, 
+     +                      float(ip),float(jp),  d60, dgrw )
+
+          else if (sens.eq.-1)                                then
+
+***            Decoder les IGx a partir de pltinfo.
+
+              grtyp =  'L'
+                                dlon2 =  dlon2-dlon1
+              if (dlon2.lt.0.0) dlon2 =  dlon2+360.
+                                dlon2 =  dlon2       /float(ilg-1)
+                                dlat2 = (dlat2-dlat1)/float(ilat-1)
+
+              call cxgaig( grtyp, ig1,  ig2,  ig3,  ig4, 
+     +                            dlat1,dlon1,dlat2,dlon2 )
+
+          else if (sens.eq.+1 .and. grtyp.eq.'L')             then
+
+***            Verifier que l'information de pltinfo est pertinente.
+
+              if (xlat1.ne.dlat1 .or.
+     +            xlat2.ne.dlat2 .or.
+     +            xlon1.ne.dlon1 .or.
+     +            xlon2.ne.dlon2  )                           then
+
+                  if (message)
+     +            write(6,6200) dlat1,dlon1,dlat2,dlon2,
+     +                          xlat1,xlon1,xlat2,xlon2
+
+                  rewind nf
+                  write( nf )   xlat1,xlon1,xlat2,xlon2,
+     +                          dgrw,nhem,noutyp
+
+                  ex = .true.
+
+              end if
+
+          end if
+
+      end if
+
+  999 return
+
+*-----------------------------------------------------------------------
+ 6100 format(' Could not find file pltinfo.')
+ 6200 format(' Fichier pltinfo mis a jour. Les anciens/nouveaux',
+     +       ' DLAT1,DLON1,DLAT2,DLON2 sont ...'/(4E15.7))
+ 6300 format(' Using ',A,' pltinfo file...'//A)
+
+      end
+#     endif

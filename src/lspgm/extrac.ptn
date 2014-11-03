@@ -1,0 +1,984 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      extrac  XIN XOUT INPUT OUTPUT [-dlon1 VAL0 -dlon2 VAL1 \ 
+*                                     -dlat1 VAL2 -dlat2 VAL3 \ 
+*                                     -kind  VAL4 [VAL5] -nintyp VAL6 \ 
+*                                     -lv1 VAL7 -lv2 VAL8 ]
+*
+*
+*     DESCRIPTION...
+*      extrac  - ZEROES OUT ALL OF A GRID EXCEPT WINDOW(S) DEFINED IN INPUT
+*
+*
+*     AUTHOR  - B.Dugas, 09 SEPTEMBRE 1985.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/extrac.ptn,v 4.23 2014/09/25 20:20:47 dugas Exp $
+*
+*
+*     PURPOSE - EXTRACTS CERTAIN PARTS OF AN ARRAY IN XIN, COMPLEX OR REAL,
+*               AND THEN PUTS THE RESULT IN  XOUT = MASK * XIN, WHERE
+*
+*                            !  1 IF (I1 <= I <= I2) AND (J1 <=J <= J2)
+*                MASK(I,J) =<
+*                            !  0 EVERYWHERE ELSE.
+*                        -
+*               PLEASE REFER TO THE INPUT PARAMETERS SECTION BELOW.
+*
+*     NOTES   - 1) IF  KIND IS  SPEC, FOUR OR CMPL THEN I1 AND I2 DENOTE 
+*                  THE BEGINNING AND END OF THE RETAINED COMPLEX VECTOR.
+*               2) IF KIND IS GRID (GLOBAL OR HEMISPHERIC) THEN THE DATA
+*                  IS ASSUMED TO BE ORDERED FROM SOUTH TO NORTH. THIS IS
+*                  CHECKED AND ACCOUNTED FOR IN RPN/CMC STANDARD FILES.
+*               3) ALSO, AT LEAST ONE  AND UP TO  99 SETS OF I1, I2, J1 
+*                  ANS J2 ARE READ IN FROM INPUT.
+*               4) INPUT CARDS BETWEEN 20 AND 99 MAY GET IGNORED,(DEPEN-
+*                  DING ON THE TYPE AND  RANGE  OF  VALUES  SPECIFIED).
+*                  INPUT IS ALWAYS READ UNTIL *EOF* IS REACHED.
+*               5) BLANK INPUT LINES ARE IGNORED.
+*
+*
+*     INPUT FILE...
+*      XIN  = ANY CCC-STANDARD FILE
+*
+*     OUTPUT FILE...
+*      XOUT = MASKED VERSION OF XIN AS DESCRIBED ABOVE.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      I1      = VECTOR CONTAINING THE FIRST COORDINATES (OR THE LONGITUDINAL
+*     (dlon1)    DEGREE, IF IFLG.NE.0) OF  THE LOWER LEFT-HAND CORNER  OF THE
+*                BOXES WE WISH TO RETAIN FROM THE ORIGINAL DATA.
+*      I2      = VECTOR CONTAINING THE FIRST COORDINATES (OR THE LONGITUDINAL
+*     (dlon2)    DEGREE, IF IFLG.NE.0) OF THE HIGHER RIGHT-HAND CORNER OF THE
+*                BOXES WE WISH TO RETAIN FROM THE ORIGINAL DATA.
+*      J1      = VECTOR CONTAINING THE SECOND COORDINATES (OR THE LATITUDINAL
+*     (dlat1)    DEGREE, IF IFLG.NE.0) OF  THE LOWER LEFT-HAND CORNER  OF THE
+*                BOXES WE WISH TO RETAIN FROM THE ORIGINAL DATA.
+*      J2      = VECTOR CONTAINING THE SECOND COORDINATES (OR THE LATITUDINAL
+*     (dlat2)    DEGREE, IF IFLG.NE.0) OF THE HIGHER RIGHT-HAND CORNER OF THE
+*                BOXES WE WISH TO RETAIN FROM THE ORIGINAL DATA.
+*               (J2 >= J1).
+*      IFLG    = USED TO IDENTIFY THE VALUES SUPPLIED IN I1, I2, J1 AND J2 AS
+*     (kind(1))  INDICES (IFLG.EQ.0) OR AS DEGREES (IFLG.NE.0)
+*      NTYP    = USED TO DETERMINE THE TYPE OF GRID (IGNORED  IF  IFLG.EQ.0
+*     (nintyp)   ZERO DEFAULTS TO A GAUSSIAN GRID  AND  ANYTHING  ELSE  TO
+*                LAT-LONG GRID. ALLWAYS IGNORED WITH RPN/CMC STANDARD FILES.
+*      LV1     = UPPER VERTICAL LEVEL RETAINED.
+*      LV2     = LOWER VERTICAL LEVEL RETAINED.
+*                IN COMMAND-LINE MODE, LV1 AND LV2 MAY ALSO BE THE REAL
+*                DECODED LEVEL VALUES. IN THAT CASE, THE KIND(2) PARAMETER
+*                *** ABSOLUTELY HAS TO BE SPECIFIED ***.
+*      KIND(2) = VERTICAL LEVEL TYPE. ONLY USE THIS WITH IN RPN STD FILES
+*                  AND WHEN LV1 AND LV2 CONTAIN DECODED VALUES. FURTHERMORE,
+*                  THIS PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*                  THE CURRENTLY SUPPORTED VALUES ARE:
+*                  'HAUTEUR'   , heights (m) with respect to sea level
+*                  'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                  'ETA'       , first version of the GEM ETA coordinate
+*                  'PRESSION'  , pressure (mb)
+*                  'ARBITRAIRE', arbitrary level (no units apply)
+*                  'HAUTEURS'  , heights (M) with respect to the surface
+*                  'HYBRIDE'   , hybrid GEM coordinate
+*                  'THETA'     , potential temperature coordinate
+*                  'GALCHEN'   , GalChen generalized coordinate
+*
+*
+*      NOTES 1) IFLG MUST BE ZERO FOR ALL THE FIELDS WHOSE KIND IS
+*               DIFFERENT FROM GRID (I.E. I1, I2, J1 AND J2 MAY HAVE
+*               DEGREE VALUES ONLY FOR GRID FIELDS, OTHERWISE THEY
+*               MUST CONTAIN INDICES VALUES)
+*               IF IFLG.NE.0 THEN
+*                  I1 , I2 VALUES (-359,360)
+*                  J1 , J2 VALUES (- 90, 90) WITH J2 >= J1
+*            2) IF THE COMMAND LINE ARGUMENTS ARE USED, ONLY ONE SET OF
+*               BOX COORDINATES CAN BE PASSED TO THE PROGRAM, BUT THESE
+*               CAN THEN BE IN FLOATING POINT FORMAT.
+*            3) LV1,LV2,IFLG AND NTYP ARE ONLY READ ONCE, ON THE FIRST CARD
+*            4) IF BOTH LV1 AND LV2 ARE ZERO, THEY DEFAULT TO THE FIRST
+*               AND LAST LEVELS, RESPECTIVELY. IF ONLY ONE OF THEM IS ZERO,
+*               IT IS SET TO THE VALUE OF THE OTHER.
+*            5) WHEN IFLG=0 AND I1 AND I2 ARE ZERO, ALL LONGITUDES ARE KEPT.
+*               THE SAME GOES FOR THE LATITUDES IF J1=J2=0..
+*
+*      READ( 5,5010 ) I1(N+1),I2(N+1),J1(N+1),J2(N+1),IFLG,NTYP,LV1,LV2
+*5010  FORMAT(10X,6I5)
+*
+*
+*     EXAMPLE OF INPUT CARD(S)...
+*
+* EXTRAC     11   41    1  101
+*           -10   40  -90   10    1    1
+*           271  361   31  161    0
+*           270  360  -60   70    1    1
+*             0   45   80   89    1    1
+*             1   46  171  180
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...      
+*       0 NO PROBLEMS
+*       1 ILLEGAL REQUEST FOR DEGREE-MODE INPUT DIRECTIVE
+*       2 INCONSISTENT USE OF NTYP
+*       3 NO VALID INPUT DIRECTIVES FOUND
+*       4 MORE THAN ONE SIZE IN XIN
+*       5 PREMATURE EOF IN XIN
+*       6 INCONSISTENT VALUES IN INPUT PARAMETERS
+*       7 MORE THAN ONE KIND OF INPUT LEVEL REQUESTED
+*       8 PROBLEM WITH MEMORY ALLOCATIONS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM extrac
+*    +               (XIN,       XOUT,       INPUT,       OUTPUT,
+*    +          TAPE1=XIN, TAPE2=XOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -----------------------------------------------------------
+
+*     $Log: extrac.ptn,v $
+*     Revision 4.23  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.22  2013/10/17 11:22:54  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.21  2010/10/23 16:49:17  dugas
+*     Allocate plutot que HPALLOC.
+*
+*     Revision 4.20  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.19  2007/12/20 21:06:37  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.18  2005/02/23 19:29:30  dugas
+*     Ajouter un traitement de valeurs par defauts des Ix et Jy.
+*
+*     Revision 4.17  2005/01/17 19:44:53  dugas
+*     Correction: Initialize I1,I2,J1,J2 when IFLG=0 in command-line mode.
+*
+*     Revision 4.16  2004/11/12 17:56:21  dugas
+*     Ajouter le support des donnees sur grilles de type L.
+*
+*     Revision 4.15  2004/04/30 16:13:53  dugas
+*     Ajouter le support des grilles de type Z
+*
+*     Revision 4.14  2004/01/30 17:59:56  dugas
+*     Les arguments i1,i2,j1 et j2 de la ligne de commande sont maintenant reels
+*
+*     Revision 4.13  1999/06/21 18:41:35  armnrbd
+*     Modifier le format de sortie 6025.
+*
+*     Revision 4.12  1998/07/03 02:26:23  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.11  1998/05/06  16:17:57  armnrbd
+*     Corriger la definition de PL1 et PL2.
+*
+*     Revision 4.10  1998/02/18  16:45:51  armnrbd
+*     Verifier les niveaux input avec CHKLVLC.
+*
+*     Revision 4.9  1997/09/26  17:38:51  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.8  1997/04/21  18:51:26  armnrbd
+*     Corriger le calcul de DLON et DLAT a 32 bits de precision.
+*
+*     Revision 4.7  1996/11/26  20:15:04  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.6  1996/11/12  19:35:19  armnrbd
+*     Corriger le mode input en degre pour donnes de type ZONL.
+*
+*     Revision 4.5  1996/06/28  20:50:50  armnrbd
+*     Suite de la derniere correction.
+*
+*     Revision 4.4  1996/06/27  19:43:49  armnrbd
+*     Ajouter une verification au cas ou LV1 ou LV2 sont egaux a 1.
+*
+*     Revision 4.3  1996/05/10  18:26:46  armnrbd
+*     Ajouter les cles LV1 et LV2.
+*     Corriger une erreur lorsque IFLG est different de zero.
+*
+*     Revision 4.2  1996/02/12  17:31:12  armnrbd
+*     Ignorer les lignes d'I/O vides.
+*
+*     Revision 4.1  1995/10/26  18:16:29  armnrbd
+*     Implanter le support de RPBLOC.
+*     Utiliser HPALLOC plutot que MEMOIR.
+*
+*     Revision 4.0  1994/11/17  14:19:58  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:00:50  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:55:56  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/16  10:56:40  armnrbd
+*     Passer de GETSIZ a GETSIZ2.
+*     
+*     Revision 1.3  92/11/08  20:30:12  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/17  11:29:23  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/10  14:46:03  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:41  armnrbd
+*     Initial revision
+*     
+*     JUL 25/91 - B.DUGAS.   (VERSION CY920/IRIX F77)
+*     OCT 26/88 - F.MAJAESS. (ALLOW SPECIFYING DEGREES AS WELL AS INDICE
+*                             IN THE INPUT CARD)
+*     SEP 09/85 - B.DUGAS.
+
+*-----------------------------------------------------------------------
+
+      IMPLICIT     none
+
+      INTEGER, PARAMETER :: MAXLEV = 999 , MAXJ = latitude_maximale , MAXA = 99
+
+      CHARACTER*4  TYPE,PKTYP,GRTYP*1
+      CHARACTER*10 LIGNE*80,CKIND,ALV1,ALV2
+      REAL*8       WOSSL(MAXJ),RAD(MAXJ),
+     +             SL(MAXJ),CL(MAXJ),WL(MAXJ)
+      LOGICAL      ROTATE,ALLEV,ERROR,ZONL
+      LOGICAL      OK,SPEC,DEGCNV,LATLON
+      REAL         XMEM,DLAT1,XLAT0,
+     +             DLON1,DLON2,DLAT2,DLON,DLAT,API,XLON0,
+     +             ARADEG,PL1,PL2,PR(MAXLEV),OFFLAT,HOLD,
+     +             RI1(MAXA),RI2(MAXA),RJ1(MAXA),RJ2(MAXA)
+      INTEGER      JBUF(taille_entete),JPAK,MAXW,LEN,NWDS,
+     +             I1(MAXA),I2(MAXA),J1(MAXA),J2(MAXA),IO,
+     +             NLT,KHEM,KIND,I,J,K,L,KI1,KI2,KJ1,KJ2,IER,
+     +             IFLG,N,NCONV,NTYP,NLTH,NR,IJ1,IJ2,NFF,LV2,
+     +             LEV(MAXLEV),NLEV,NLEVG,IGL,ILG,NLG,LV1,
+     +             GTYP,IG1,IG2,IG3,IG4,PERIOD,VKIND,
+     +             VKIND0,VKIND1,VKIND2,VK
+
+      integer,     dimension(:),allocatable :: IBUF
+      real,        dimension(:),allocatable :: ALON,ALAT,G,MASK
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      INTEGER      GETSIZ2,ISRCHFGE
+      EXTERNAL     GETSIZ2,ISRCHFGE
+
+      LOGICAL      RPBLOC
+      CHARACTER*4  GETYP,GETHIC
+      INTEGER      GETHIGH,GETKIND
+      EXTERNAL     RPBLOC,JCLPNT,CMPLBL,GETLIGN,
+     +             XIT,GAUSSG,TRIGL,GETSET2,PUTSET2,
+     +             GETYP,GETHIC,GETHIGH,CIGAXG,
+     +             GETKIND,SETKIND,CONVPR
+
+      DATA         SPEC,ZONL,ROTATE / 3*.FALSE. /
+      DATA         GRTYP / ' ' /, IG2 / 0 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/extrac.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF=4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      CALL SETRABT( '&NON' )
+
+      NR=0
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      WRITE(6,6000)
+
+      ALV1  = ' '
+      ALV2  = ' '
+      CKIND = ' '
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          N        = 0
+
+          RI1(N+1) = 0
+          RI2(N+1) = 0
+          RJ1(N+1) = 0
+          RJ2(N+1) = 0
+
+          IFLG     = 0
+          NCONV    = 0
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) ALV1 = LIGNE
+
+          OK = RPBLOC('LV2',LIGNE)
+          IF (OK) ALV2 = LIGNE
+
+          OK = RPBLOC('DLAT1',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=100,END=100,IOSTAT=IO) RJ1(N+1)
+
+          OK = RPBLOC('DLAT2',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=100,END=100,IOSTAT=IO) RJ2(N+1)
+
+          OK = RPBLOC('DLON1',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=100,END=100,IOSTAT=IO) RI1(N+1)
+
+          OK = RPBLOC('DLON2',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=100,END=100,IOSTAT=IO) RI2(N+1)
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=100,END=100,IOSTAT=IO) IFLG
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) CKIND = LIGNE
+
+          IF (GRTYP.EQ.' ')                                    THEN
+              NTYP = 0
+              OK = RPBLOC('NINTYP',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=100,END=100,IOSTAT=IO) NTYP
+          END IF
+
+          WRITE(6,6101) RI1(N+1),RI2(N+1),RJ1(N+1),RJ2(N+1),IFLG,NTYP
+
+          I1(N+1) = RI1(N+1)
+          I2(N+1) = RI2(N+1)
+          J1(N+1) = RJ1(N+1)
+          J2(N+1) = RJ2(N+1)
+
+          N = N+1
+
+      ELSE
+
+***        READ I1, I2, J1, J2 AND IFLG FROM CARD.
+
+          NCONV = 0
+          N     =-1
+  050     N     = N+1
+          IF (N.GE.MAXA)                                       THEN
+              CALL BURNF
+              GOTO 100
+          ENDIF
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+          IF (.NOT.OK) GOTO 100
+
+***        IGNORE ANY BLANK/NULL INPUT LINES.
+
+          IF (LIGNE.EQ.' ')                                    THEN
+              N = N-1
+              GOTO 050
+          END IF
+
+***        USE THE CORRECT FORMAT TO READ NEXT COORDINATE SET.
+
+          IF (N.EQ.0)                                          THEN
+              READ( LIGNE,  5010, ERR=100,END=100 )
+     +              I1(N+1),I2(N+1),J1(N+1),J2(N+1),IFLG,GTYP,ALV1,ALV2
+              IF (GRTYP.EQ.' ') NTYP = GTYP
+              WRITE(6,6100) I1(N+1),I2(N+1),J1(N+1),J2(N+1),IFLG,NTYP
+          ELSE
+              READ( LIGNE,  5010, ERR=100,END=100 )
+     +                      I1(N+1),I2(N+1),J1(N+1),J2(N+1)
+              WRITE(6,6100) I1(N+1),I2(N+1),J1(N+1),J2(N+1)
+          END IF
+
+          RI1(N+1) = I1(N+1)
+          RI2(N+1) = I2(N+1)
+          RJ1(N+1) = J1(N+1)
+          RJ2(N+1) = J2(N+1)
+
+          GOTO 050
+
+      END IF
+
+***    THERE MUST BE AT LEAST ONE VALID SET.
+
+  100 IF (N.EQ.0) CALL                             XIT(' Extrac ',-3 )
+
+***    GET FIELD KIND(S) AND GRID DIMENSIONS. ASSIGN NECESSARY MEMORY.
+
+  150 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.LE.0) GOTO 900
+
+      VKIND0 = GETKIND( )
+      VKIND  = VKIND0
+
+      IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+          CALL SETKIND( CKIND )
+          VKIND = GETKIND( )
+      END IF
+
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'SPEC' .OR.
+     +    TYPE.EQ.'FOUR' .OR.
+     +    TYPE.EQ.'CMPL' )                                     THEN
+          SPEC = .TRUE.
+          ILG  =  JBUF(5)*2
+          NLT  =  1
+      ELSE IF (TYPE.EQ.'ZONL')                                 THEN
+          ZONL = .TRUE.
+          ILG  =  1
+          NLT  =  JBUF(5)
+      ELSE IF (TYPE == 'DATA' .OR.
+     +         TYPE == 'CHAR' .OR.
+     +         TYPE == 'LABL')                                 THEN
+
+***        TRY TO BYPASS INITIAL DATA.
+
+          CALL SUIVANT( 1, JBUF, ERROR,OK )
+          IF (.NOT.OK .OR. ERROR) GOTO 900
+          goto 150
+
+      ELSE
+          ILG  =  JBUF(5)
+          NLT  =  JBUF(6)
+      END IF
+
+      NLG   = ILG
+      KHEM  = JBUF(7)
+
+      ALLOCATE( ALON(NLG),ALAT(NLT),MASK(NWDS),
+     +          G(NWDS*NLEV), IBUF(LEN), STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT(' Extrac ',-8 )
+
+      IF (NR.NE.0) GOTO 500
+
+      IF (PKTYP(1:2).EQ.'SQ')                                  THEN
+
+          GRTYP = GETHIC( 'GRTYP',JBUF )
+          IG1   = GETHIGH('IG1'  ,JBUF )
+          IG2   = GETHIGH('IG2'  ,JBUF )
+          IG3   = GETHIGH('IG3'  ,JBUF )
+          IG4   = GETHIGH('IG4'  ,JBUF )
+
+          IF (GRTYP.EQ.'L')                                    THEN
+
+              NTYP = -2
+
+          ELSE IF (GRTYP.EQ.'Z')                               THEN
+
+              NTYP = -1
+
+          ELSE IF (GRTYP.EQ.'G')                               THEN
+
+              NTYP =  0
+
+          ELSE IF (GRTYP.EQ.'B')                               THEN
+
+              NTYP =  1
+
+          ELSE IF (GRTYP.EQ.'A')                               THEN
+
+              NTYP =  2
+
+          END IF
+
+      END IF
+
+***    SET UP FOR POSSIBLE CONVERSION FROM DEGREES TO INDICES.
+
+      DEGCNV = ( GRTYP.EQ.'Z' )  .OR. ( GRTYP.EQ.'L' )
+     +  .OR.   ( (TYPE.EQ.'GRID' .OR.   TYPE.EQ.'ZONL')
+     +  .AND.    (KHEM.GE. 0)    .AND. (KHEM.LE. 2) )
+
+      IF (DEGCNV .AND. NTYP.GE.0)                              THEN
+          IF (.NOT.ZONL)                                       THEN
+              IF (NTYP.NE.1)                                   THEN
+                  DLON = 360./FLOAT( ILG-MOD(ILG,2) )
+              ELSE
+                  DLON = 360./FLOAT( ILG-1 )
+              END IF
+              DLON = 1.D-4*NINT( 1.D4*DLON )
+              DO  I=1,ILG
+                  ALON(I) = FLOAT( I-1 )*DLON
+              END DO
+          ELSE
+              ALON(1) = 0.0
+              DLON    = 0.0
+          END IF
+      END IF
+
+      IF (IFLG.NE.0)                                           THEN
+
+***        CHECK THAT WE ARE ABLE TO CONVERT.
+
+          IF (.NOT.DEGCNV) CALL                    XIT(' Extrac ',-1 )
+
+          K = 0
+
+          IFLG_NE_0 : DO  L=1,N
+
+              K = K+1
+
+***            CONVERT TO GRID INDICES.
+
+              IF (NCONV.EQ.0)                                  THEN
+
+***                INITIAL SETUP.
+
+                  IF (GRTYP.NE.' ' .AND.
+     +                GRTYP.NE.'L' .AND.
+     +                GRTYP.NE.'Z' .AND.
+     +                GRTYP.NE.'G' .AND.
+     +                GRTYP.NE.'A' .AND.
+     +                GRTYP.NE.'B' )                           THEN
+
+                      WRITE(6,6001) GRTYP
+                      CALL                         XIT(' Extrac ',-1 )
+
+                  ELSE IF (NTYP.EQ.-2)                         THEN
+
+***                    L-GRID INPUT. RETREIVE THE
+***                    LONGITUDE AND LATITUDE INFO.
+
+                      CALL CIGAXG( GRTYP, XLAT0,XLON0,DLAT,DLON,
+     +                                    IG1,  IG2,  IG3, IG4 )
+
+                      ALAT(1) = XLAT0
+                      DO  J=2,NLT
+                          ALAT(J) = ALAT(J-1)+DLAT
+                      END DO
+
+                      ALON(1) = XLON0
+                      DO  I=2,ILG
+                          ALON(I) = ALON(I-1)+DLON
+                      END DO
+
+                  ELSE IF (NTYP.EQ.-1)                         THEN
+
+***                    Z-GRID INPUT. RETREIVE THE
+***                    LONGITUDE AND LATITUDE INFO.
+
+                      CALL GETZREF( 1, '>>',ALON )
+                      CALL GETZREF( 1, '^^',ALAT )
+
+                  ELSE IF (NTYP.GT.0)                          THEN
+
+***                    A OR B GRID.
+
+                      LATLON      =.TRUE.
+
+                      IF (NTYP.EQ.1)                           THEN
+                          IF (KHEM.EQ.0)                       THEN
+                              DLAT    = 180./FLOAT( NLT-1 )
+                          ELSE
+                              DLAT    =  90./FLOAT( NLT-1 )
+                          END IF
+                      ELSE IF (NTYP.EQ.2)                      THEN
+                          IF (KHEM.EQ.0)                       THEN
+                              DLAT    = 180./FLOAT( NLT )
+                          ELSE
+                              DLAT    =  90./FLOAT( NLT )
+                          END IF
+                      END IF
+
+                      DLAT        = 1.E-3*ANINT( 1.E3*DLAT )
+
+                      IF (NTYP.EQ.1)                           THEN
+                          IF (KHEM.EQ.1)                       THEN
+                              OFFLAT  =  0.0
+                          ELSE
+                              OFFLAT  =-90.0
+                          END IF
+                      ELSE IF (NTYP.EQ.2)                      THEN
+                          IF (KHEM.EQ.1)                       THEN
+                              OFFLAT  =     +0.5*DLAT
+                          ELSE
+                              OFFLAT  =-90.0+0.5*DLAT
+                          END IF
+                      END IF
+
+                      DO  J=1,NLT
+                          ALAT(J) = OFFLAT+FLOAT( J-1 )*DLAT
+                      END DO
+
+                  ELSE IF (NTYP.EQ.0)                          THEN
+
+***                    GAUSSIAN GRID.
+
+                      LATLON=.FALSE.
+
+                      IF (KHEM.EQ.0)                           THEN
+                          NLTH    = NLT/2
+                      ELSE
+                          NLTH    = NLT
+                      END IF
+
+                      CALL GAUSSG( NLTH,SL,WL,CL,RAD,WOSSL )
+                      CALL TRIGL ( NLTH,SL,WL,CL,RAD,WOSSL )
+
+                      API         = 4.0*ATAN(1.0)
+                      ARADEG      = 180./API
+
+                      IF (KHEM.EQ.1)                           THEN
+                          DO  J=1,NLT
+                              ALAT(J) = RAD(NLT+J)*ARADEG
+                          END DO
+                      ELSE
+                          DO  J=1,NLT
+                              ALAT(J) = RAD(J)*ARADEG
+                          END DO
+                      END IF
+
+                  END IF
+
+***                ACCOUNT FOR REVERSED G- OR B-GRID LATITUDE ORDER.
+
+                  IF (IG2  .EQ. 1   .AND.
+     +               (GRTYP.EQ.'G'  .OR.
+     +                GRTYP.EQ.'A'  .OR.
+     +                GRTYP.EQ.'B')) ROTATE = .TRUE.
+
+              END IF
+
+              IF (( (NTYP.GT.0) .AND. (.NOT.LATLON) ).OR.
+     +            ( (NTYP.EQ.0) .AND. (     LATLON) )   )
+     +            CALL                             XIT(' Extrac ',-2 )
+
+              IF (RI1(K).LT.0.) RI1(K) = RI1(K)+360.
+
+              KI1   = 0
+              DLON1 = RI1(K)
+              IF (DLON1.LE.ALON( 1 )) KI1 = 1
+              IF (DLON1.GE.ALON(ILG)) KI1 = ILG
+
+              IF (KI1.EQ.0)                                    THEN
+                  KI1 = MIN0( ISRCHFGE(ILG,ALON,1,DLON1)-1,ILG )
+                  IF (ALON(KI1+1)-DLON1 .LT. DLON1-ALON(KI1)) 
+     +            KI1 = KI1+1
+              END IF
+
+              IF (RI2(K).LT.0.) RI2(K) = RI2(K)+360.
+
+              KI2   = 0
+              DLON2 = RI2(K)
+              IF (DLON2.LE.ALON( 1 )) KI2 = 1
+              IF (DLON2.GE.ALON(ILG)) KI2 = ILG
+
+              IF (KI2.EQ.0)                                    THEN
+                  KI2 = MIN0( ISRCHFGE(ILG,ALON,1,DLON2)-1,ILG )
+                  IF (ALON(KI2+1)-DLON2 .LT. DLON2-ALON(KI2)) 
+     +            KI2 = KI2+1
+              END IF
+
+              KJ1   = 0
+              DLAT1 = RJ1(K)
+              IF (DLAT1.LE.ALAT( 1 )) KJ1 = 1
+              IF (DLAT1.GE.ALAT(NLT)) KJ1 = NLT
+
+              IF (KJ1.EQ.0)                                    THEN
+                  KJ1 = MIN0( ISRCHFGE(NLT,ALAT,1,DLAT1)-1,NLT )
+                  IF (ALAT(KJ1+1)-DLAT1 .LT. DLAT1-ALAT(KJ1)) 
+     +            KJ1 = KJ1+1
+              END IF
+
+              KJ2   = 0
+              DLAT2 = RJ2(K)
+              IF (DLAT2.LT.DLAT1) KJ2=KJ1
+
+              IF (KJ2.EQ.0)                                    THEN
+                  IF (DLAT2.LE.ALAT( 1 )) KJ2 = 1
+                  IF (DLAT2.GE.ALAT(NLT)) KJ2 = NLT
+              END IF
+
+              IF (KJ2.EQ.0)                                    THEN
+                  KJ2 = MIN0( ISRCHFGE(NLT,ALAT,1,DLAT2)-1,NLT )
+                  IF (ALAT(KJ2+1)-DLAT2 .LT. DLAT2-ALAT(KJ2)) 
+     +            KJ2 = KJ2+1
+              END IF
+
+              IFLG = 0
+              IF (KI1.GT.KI2)                                  THEN
+                  I1(K) = KI1
+                  I2(K) = ILG
+                  J1(K) = KJ1
+                  J2(K) = KJ2
+                  WRITE(6,6100) I1(K),I2(K),J1(K),J2(K),IFLG,NTYP
+                  NCONV = NCONV+1
+                  KI1   = 1
+                  K     = K+1
+                  IF (K.GE.MAXA)                               THEN
+                      WRITE(6,6300)
+                      N = K-1
+                      GOTO 200
+                  END IF
+              END IF
+
+              I1(K)     = KI1
+              I2(K)     = KI2
+              J1(K)     = KJ1
+              J2(K)     = KJ2
+              WRITE(6,6100) I1(K),I2(K),J1(K),J2(K),IFLG,NTYP
+              NCONV     = NCONV+1
+
+          End Do IFLG_NE_0
+
+***        SAVE THE FINAL NUMBER OF SETS CONVERTED.
+
+          N = K
+
+      ELSE
+
+***       CHECK FOR MINIMUM SIZES. AGAIN, TRY TO BYPASS INITIAL DATA.
+
+         DO  L=1,N
+             IF (J1(L) > NLT .OR. I1(L) > NLG)                 THEN
+                 CALL SUIVANT( 1, JBUF, ERROR,OK )
+                 IF (.NOT.OK .OR. ERROR) GOTO 900
+                 DEALLOCATE( ALON,ALAT,MASK,G,IBUF, STAT=IER )
+                 IF (IER /= 0) CALL                XIT(' Extrac ',-8 )
+                 GOTO 150
+             END IF
+         END DO
+
+      END IF
+
+  200 IF (N.EQ.0) CALL                             XIT(' Extrac ',-3 )
+
+***    CHECK DEFAULT BOX IN THE VERTICAL.
+
+      VKIND1 = VKIND
+
+      IF (ALV1.NE.' ')                                         THEN
+          PERIOD = INDEX( ALV1, '.' )
+          IF (PERIOD.EQ.0.AND. CKIND.EQ.' ')                   THEN
+              READ(ALV1,'(BN,I10)'  ,ERR=250,IOSTAT=IO) LV1
+              CALL  CONVPR( LV1, PL1, VKIND1, -2 )
+          ELSE
+              READ(ALV1,'(BN,E10.0)',ERR=250,IOSTAT=IO) PL1
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL CONVPR( LV1, PL1, VKIND,  +2 )
+              ELSE
+                  CALL LVCODE( LV1, PL1/1000.,1 ) 
+              ENDIF
+          END IF
+      END IF
+
+      VKIND2 = VKIND1
+
+      IF (ALV2.NE.' ')                                         THEN
+          PERIOD = INDEX( ALV2, '.' )
+          IF (PERIOD.EQ.0.AND. CKIND.EQ.' ')                   THEN
+              READ(ALV2,'(BN,I10)'  ,ERR=250,IOSTAT=IO) LV2
+              CALL  CONVPR( LV2, PL2, VKIND1, -2 )
+          ELSE
+              READ(ALV2,'(BN,E10.0)',ERR=250,IOSTAT=IO) PL2
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL CONVPR( LV2, PL2, VKIND, +2 )
+              ELSE
+                  CALL LVCODE( LV2, PL2/1000.,1 ) 
+              ENDIF
+              VKIND2 = VKIND
+          END IF
+      END IF
+
+      IF (VKIND1.NE.VKIND2) CALL                  XIT(' Extrac ',-7 )
+
+      IF (ALV1.EQ.' ' .AND. ALV2.EQ.' ')                       THEN
+
+          ALLEV =.TRUE.
+
+      ELSE
+
+          ALLEV =.FALSE.
+
+          IF (ALV1.EQ.' ')                                     THEN
+              LV1 = LV2
+              PL1 = PL2
+          ELSE IF (ALV2.EQ.' ')                                THEN
+              LV2 = LV1
+              PL2 = PL1
+          END IF
+
+          CALL GET_IP1_STRING( LV1,ALV1 )
+          CALL GET_IP1_STRING( LV2,ALV2 )
+
+          WRITE(6,6200) ALV1,ALV2
+
+***        ENSURE THAT PL1 IS LESS OR EQUAL THAN PL2.
+
+          IF (PL1.GT.PL2)                                    THEN
+              HOLD = PL1
+              PL1  = PL2
+              PL2  = HOLD
+          END IF
+
+      END IF
+
+***    ADJUST I1, I2, J1 AND J2 IF NECESSARY.
+
+      DO  L=1,N
+
+***        ACCOUNT FOR Ix, Jy DEFAULTS.
+
+          IF (I1(L).EQ.0 .AND. I2(L).EQ.0)                     THEN
+              I1(L) = 1
+              I2(L) = ILG
+          END IF
+
+          IF (J1(L).EQ.0 .AND. J2(L).EQ.0)                     THEN
+              J1(L) = 1
+              J2(L) = NLT
+          END IF
+
+***        ACCOUNT FOR COMPLEX SPECTRAL INDICIES.
+
+          IF (SPEC)                                            THEN
+              I1(L) = I1(L)*2-1
+              I2(L) = I2(L)*2
+          END IF
+
+          I1(L) = MIN0( MAX0(  1   ,I1(L) ), ILG  )
+          I2(L) = MAX0( MIN0( I2(L), ILG  ),I1(L) )
+          IF (SPEC) 
+     +    I2(L) = MAX0( I2(L),I1(L)+1 )
+          J1(L) = MIN0( MAX0(  1   ,J1(L) ), NLT  )
+          J2(L) = MAX0( MIN0( J2(L), NLT  ),J1(L) )
+
+      END DO
+
+***    SET MASK ARRAY.
+
+      DO  K=1,NWDS
+          MASK(K) = 0.0
+      END DO
+ 
+      DO   L=1,N
+          DO  J=J1(L),J2(L)
+              IF (ROTATE)                                      THEN
+                  IJ1 = (NLT-J+1)*ILG + I1(L)
+              ELSE
+                  IJ1 = (    J-1)*ILG + I1(L)
+              END IF
+              IJ2 =  IJ1 + (I2(L) - I1(L))
+              DO  I=IJ1,IJ2
+                  MASK(I) = 1.0
+              END DO
+          END DO
+      END DO
+
+  250 CALL PRTLAB( JBUF )
+
+***    READ THE NEXT GRID FROM FILE XIN.
+
+  500 CALL GETSET2( 1, G,LEV,NLEVG, IBUF,MAXW,OK )
+ 
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.NE.0)                                   THEN
+                  CALL PRTLAB( IBUF )
+                  WRITE(6,6150) NR
+              END IF
+
+              DEALLOCATE( ALON,ALAT,MASK,G,IBUF, STAT=IER )
+              IF (IER /= 0) CALL                   XIT(' Extrac ',-8 )
+
+              IF (MAXW.EQ.0) GOTO 150
+
+              CALL                                 XIT(' Extrac ', 0 )
+
+          END IF
+ 
+***        VERIFY DIMENSIONS.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK)
+          IF (.NOT.OK .OR. NLEV.LT.NLEVG) CALL     XIT(' Extrac ',-4 )
+     +          
+
+***        DECODE VERTICAL LEVELS.
+
+          IF (.NOT.ALLEV)                                      THEN
+
+              KIND = GETKIND( )
+
+              IF (KIND.NE.VKIND) GOTO 500
+
+              DO  L=1,NLEVG
+                  CALL CONVPR( LEV(L),PR(L), VK, -1 )
+              END DO
+
+          END IF
+
+***        DO IT.
+
+          IGL = 1
+          DO 600 L=1,NLEVG
+
+                                                    XMEM = 1.
+              IF (.NOT.ALLEV   .AND.
+     +           (PR(L).LT.PL1 .OR.  PR(L).GT.PL2)) XMEM = 0.
+
+              DO K=1,NWDS
+                  G(IGL)=G(IGL)*MASK(K)*XMEM
+                    IGL =  IGL +1
+              END DO
+
+  600     CONTINUE
+ 
+*         * SAVE ON FILE XOUT.
+ 
+          CALL PUTSET2( 2, G, LEV,NLEVG, IBUF,MAXW )
+
+      NR = NR+NLEVG
+      GOTO 500
+ 
+***    PREMATURE E.O.F. ON UNIT 1.
+ 
+  900 CALL PRTLAB( JBUF )
+      CALL                                         XIT(' Extrac ',-5 )
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+   10 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,8I5)
+
+ 6000 FORMAT('0 EXTRAC',8X,'I1',8X,'I2',8X,'J1',8X,'J2',6X,'IFLG',
+     1                                                  6X,'NTYP :')
+ 6001 FORMAT(' Grid type not supported =',A)
+ 6100 FORMAT(8X,6(1X,I9))
+ 6101 FORMAT(8X,4(1X,F9.3),2(1X,I9))
+ 6150 FORMAT('0 Extrac read',I6,' records.')
+ 6200 FORMAT(/8X,'From Plv1 = ',A,' to Plv2 = ',A)
+ 6300 FORMAT('0 EXTRAC: TOO MANY ARRAY SPECIFICATION')
+
+      END
+#     endif

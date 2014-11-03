@@ -1,0 +1,278 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      signag  GRID INPUT OUTPUT [ -kind VAL1 ]
+*
+*
+*     DESCRIPTION...
+*      signag - PRODUCES A GRID OF (-1,0,1) FROM (-,0,+) INPUT CARDS
+*
+*
+*     AUTHOR  - R.Laprise, DEC 06/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/signag.ptn,v 4.6 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     PURPOSE - READ INPUT RECORDS CONTAINING A TABLE OF "-", "0" OR "+" AND
+*               GENERATE STANDART CCRN FILES WITH CORRESPONDING FLOATING POINT
+*               VALUES. MAXIMUM ARRAY SIZE IS 100000 WORDS.
+*
+*
+*     OUTPUT FILE...
+*      GRID = STANDART CCRN FILE IMAGE OF THE INPUT RECORDS.
+*             CONTAINS -1.0, 0.0 OR 1.0 .
+*
+*
+*     INPUT PARAMETERS...
+*
+*      IBUF = STANDART CCRN 8 WORD LABEL
+*      CG   = SIGN INFO READ AND LATER TRANSLATED BY PROGRAM. IT IS READ ONE
+*             LATITUDE CIRCLE AT A TIME, EAST TO WEST AND FROM NORTH TO SOUTH.
+*             IF THERE ARE TO BE ILG LONGITUDES IN THE RESULTING CCC FILE,
+*             THERE SHOULD BE ILG-1 CHARACTERS/INPUT LINE. THE 0 LONGITUDE
+*             VALUE IS THEN USED FOR THE 360 LONGITUDE VALUE.
+*
+*      KIND = VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
+*             FILES AND THEN LV1 AND LV2 ARE ASSUMED TO CONTAIN DECODED
+*             VALUES. FURTHERMORE, THIS PARAMETRE CAN ONLY BE SPECIFIED
+*             IN COMMAND-LINE MODE. THE CURRENTLY SUPPORTED VALUES ARE:
+*             'HAUTEUR'   , heights (m) with respect to sea level
+*             'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*             'ETA'       , first version of the GEM ETA coordinate
+*             'PRESSION'  , pressure (mb)
+*             'ARBITRAIRE', arbitrary level (no units apply)
+*             'HAUTEURS'  , heights (M) with respect to the surface
+*             'HYBRIDE'   , hybrid GEM coordinate
+*             'THETA'     , potential temperature coordinate
+*             'GALCHEN'   , GalChen generalized coordinate
+*
+*
+*      READ( 5,5001 ) IBUF
+*5000  FORMAT(6X,A4,I10,6X,A4,5I10)
+*
+*
+*     EXAMPLE OF INPUT LINES...
+*
+*     GRID      3000      MASK      1000       129        64         0       -32
+*
+*        01234567890123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7         8
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ARRAY TO LARGE
+*       2 PREMATURE EOF ON INPUT
+*       3 PREMATURE EOF ON GRID
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM SIGNAG
+*     PROGRAM SIGNAG (GRID,       INPUT,       OUTPUT,
+*    1          TAPE1=GRID, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ------------------------------------------------
+
+*     $Log: signag.ptn,v $
+*     Revision 4.6  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.3  2000/04/10 16:06:24  armnrbd
+*     Corriger un bloc CPP: manquait un endif.
+*
+*     Revision 4.2  2000/03/20 21:31:28  armnrbd
+*     Utiliser l'allocation F90 pour les champs de type caracteres.
+*
+*     Revision 4.1  1998/05/21 20:20:53  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:21:32  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:52  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  92/04/07  13:49:20  armnrbd
+*     Initial revision
+*     
+
+*     DEC 06/83 - R.LAPRISE
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+
+      LOGICAL     OK 
+      REAL        PR
+      CHARACTER*10 ATIM,ALEV,CKIND,LIGNE*80
+      INTEGER     IER,NR,NFF,VKIND,IO,MAXW,
+     +            ILG1,ILG,ILAT,I,J,JJ,JR,
+     +            JBUF(HEAD),LEN,NWDS,JPAK
+
+      REAL,       DIMENSION(:), ALLOCATABLE :: G
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      CHARACTER,  DIMENSION(:), ALLOCATABLE :: CG
+
+      LOGICAL     RPBLOC
+      CHARACTER   PKTYP*2,GETYP*4
+      INTEGER     GETKIND,      GETSIZ
+      EXTERNAL    GETKIND,GETYP,GETSIZ,SETKIND
+      EXTERNAL    JCLPNT,RPBLOC,GETLIGN,XIT,PUTFLD2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/signag.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+      PKTYP = GETYP( 0 )
+      CKIND = ' '
+      VKIND =  2
+
+      IF (RPBLOC( ' ',ALEV ))                                  THEN
+
+          OK = RPBLOC('KIND',ALEV)
+          IF (OK) CKIND = ALEV
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          ENDIF
+
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) GOTO 903
+
+      ALLOCATE( IBUF(LEN),G(MAXW),CG(1:MAXW/4) )
+
+***    READ-IN 8 WORD LABEL CARD.
+
+  100 CALL GETLIGN( 5, LIGNE,80,OK )
+
+          IF (.NOT.OK .OR. LIGNE.EQ.' ')                       THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5000,ERR=900,END=900,IOSTAT=IO )
+     +        IBUF(1),ATIM,IBUF(3),ALEV,(IBUF(I),I=5,8)
+          END IF
+
+          IBUF(2) = 1979010100
+          IBUF(4) = 0
+
+          IF (ATIM.NE.' ') READ(ATIM,10,ERR=900,IOSTAT=IO) IBUF(2)
+
+          IF (ALEV.NE.' ')                                     THEN
+              IF (INDEX( ALEV, '.' ).EQ.0 .AND. CKIND.EQ.' ')  THEN
+                  READ( LIGNE,10,ERR=900,IOSTAT=IO ) IBUF(4)
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( IBUF(4), PR, VKIND, -2 )
+                      CALL CONVPR( IBUF(4), PR, VKIND, +2 )
+                  END IF
+              ELSE
+                  READ(ALEV,11,ERR=900,IOSTAT=IO) PR
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( IBUF(4), PR, VKIND,  +2 )
+                  ELSE
+                      CALL LVCODE( IBUF(4), PR/1000.,1 )
+                  END IF
+              END IF
+          END IF
+                      
+          CALL PRTLAB( IBUF )
+
+          ILG1 = IBUF(5)
+          ILAT = IBUF(6)
+          ILG  = ILG1-1
+
+          IF (ILG1*ILAT .GT. MAXW) CALL            XIT(' Signag ',-1 )
+
+***        READ-IN DATA (+,0,-).
+
+          DO 200 J=1,ILAT
+              JR = (J-1)*ILG1+1
+              CALL GETLIGN( 5, CG(JR),ILG,OK )
+              IF (.NOT.OK) GOTO 902
+              CG(JR+ILG) = CG(JR)
+  200     CONTINUE
+
+***        REVERSE LATITUDES AND CONVERT CODE TO FLOATING POINT.
+
+          DO 300 J=1,ILAT
+              JJ = (ILAT-J)*ILG1
+              JR = (  J -1)*ILG1
+              DO 300 I=1,ILG1
+                  IF (CG(JR+I).EQ.'+')                         THEN
+                      G(I+JJ) = +1.0
+                  ELSE IF (CG(JR+I).EQ.'0')                    THEN
+                      G(I+JJ) =  0.0
+                  ELSE IF (CG(JR+I).EQ.'-')                    THEN
+                      G(I+JJ) = -1.0
+                  END IF
+  300     CONTINUE
+
+***        WRITE-OUT FIELD.
+
+          CALL PUTFLD2( 1, G, IBUF,MAXW )
+          NR = NR+1 
+
+      GOTO 100
+
+  900 WRITE(6,6000) NR 
+      CALL                                         XIT(' Signag ', 0 )
+
+***    E.O.F. ON INPUT.
+
+  902 CALL                                         XIT(' Signag ',-2 )
+
+***   E.O.F. ON UNIT #1.
+
+  903 CALL                                         XIT(' Signag ',-3 )
+*-----------------------------------------------------------------------
+
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+
+ 5000 FORMAT(6X,A4,A10,6X,A4,A10,4I10)
+ 6000 FORMAT('0Signag converted ',I4,' templates.')
+
+      END
+#     endif

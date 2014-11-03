@@ -1,0 +1,533 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      fit  SERIES [POLYNOM] INPUT OUTPUT [-a VAL1 -b VAL2 -kind VAL3]
+*
+*
+*     AUTHOR - B.Dugas, SEP 13/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fit.ptn,v 4.9 2014/09/25 19:25:09 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      TIME SERIES POLYNOMIAL REGRESSION FIT, DISPLAY & STATISTICAL TESTING
+*
+*
+*     PURPOSE - FIT DOES A SERIES OF POLYNOMIAL REGRESION AND STATISTICAL
+*               TESTING THEREOF. SEE (BENNETT & FRANKLIN, 1962, JOHN WILEY
+*               PUB., P. 244, 255-257) FOR EXACT REFERENCE ON THE METHOD.
+*               IT ALSO PLOTS THE RESULTS.
+*
+*     NOTES 1 ) THE PLOTTED VALUES HAVE THE MEAN OF THE INPUT RECORD
+*               REMOVED FROM THEM. BUT THIS REMOVED VALUE CAN ALSO
+*               BE WRITTEN TO OUTPUT AND IT IS RE-INCLUDED WHEN THE
+*               POLYNOM OUTPUT FILE IS REQUESTED.
+*           2 ) THE (OPTIONALY) PRINTED TEST STATISTICS FOLLOW A
+*               T-DISTRIBUTION WITH N-K-1 DEGREES OF FREEDOM. THEY
+*               INDICATE WETHER THE CORRESPONDING COEFFICIENT IS
+*               SIGNIFICANTLY DIFFERENT FROM ZERO.
+*           3 ) THE MAXIMUM NUMBER OF POINTS THAT WILL BE PLOTTED IS 500.
+*
+*
+*     INPUT FILE...
+*      SERIES = A SET OF VALID TIME SERIES (NO CHECKING IS DONE FOR THIS)
+*
+*     (OPTIONAL) OUTPUT FILE...
+*      POLYNOM = THE CORRESPONDING SET OF FITTED TIME SERIES
+* 
+*
+*     PARAMETERS...
+*
+*      K (a) = THE MAXIMUM DEGREE OF THE POLYNOMIAL FIT TO THE DATA. THIS
+*              IS DEFAULTED TO 2. THIS NUMBER IS SMALLER OR EQUAL TO 5.
+*
+*      N (b) = THE NUMBER OF BUNCHED POINTS TO BE USED IN THE ANALYSIS AND
+*              DISPLAY. THE DEFAULT VALUE OF N IS THE ACTUAL LENGTH OF ONE
+*              DATA RECORD.
+*
+*      KIND  = CONTROLS AMOUNT OF INFORMATION TO BE WRITTEN TO STDOUT:
+*              0 = MINIMUM, 1 = BASIC STATISTICS, 2 = EVERYTHING.
+*              THE DEFAULT IS 1 WHEN POLYNOM IS SPECIFIED
+*              AND 2 WHEN IT IS NOT.
+*
+*      READ(5,'(10X,3I5)') K,N,KIND
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* FIT         3  365    2
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 BADLY SPECIFIED N AND/OR K
+*       2 TIME SERIES SHORTER THAN N
+*       3 ERROR READING INPUT PARAMETERS
+*       4 PREMATURE EOF ON SERIES
+*       5 MORE THAN ONE SIZE IN SERIES
+*       6 BADLY SPECIFIED KIND
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM FIT 
+*     PROGRAM FIT (SERIES,       INPUT,       OUTPUT,
+*    1       TAPE1=SERIES, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     -----------------------------------------------
+
+*     $Log: fit.ptn,v $
+*     Revision 4.9  2014/09/25 19:25:09  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG et ajouter l'option FIT3D au module FIT.
+*
+*     Revision 4.8  2014/02/12 22:20:05  dugas
+*     Ne plus faire d'appel a SPLO.
+*
+*     Revision 4.7  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.6  2012/08/29 15:48:25  dugas
+*     Ajouter certaines declarations 'a la' F90.
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 22:03:26  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.3  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.2  1998/05/06 17:17:58  armnrbd
+*     Ajouter l'option KIND.
+*     Ajouter de la dox decrivant le test statitique.
+*     Faire certains calculs en REAL*8.
+*
+*     Revision 4.1  1997/09/26  17:38:52  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1995/07/06  02:48:11  armnrbd
+*     Initial version.
+*
+*
+***    HISTORIQUES DES MODIFICATIONS:
+
+*     JUL 22/92 - E. CHAN  (REPLACE UNFORMATTED I/O WITH I/O ROUTINES)
+*     JAN 29/92 - E. CHAN  (CONVERT HOLLERITH LITERALS TO ASCII)                
+*     SEP 13/85 - B.DUGAS.                                                      
+*
+*-------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXLEV = 999
+
+      LOGICAL     OK,ERR
+      REAL        UN,R(4)
+      CHARACTER*5 LIGNE*80,CK,CN,CKIND,VERBE*8
+      REAL*8      C1,C2,C3,C4,C5,C6,C7,C8,XNT,
+     +            DR(6),A(6),T(6),Z0,Z1,Z2,Z3,
+     +            Z4,Z5,S,D,F0,Y2,XI,XNW
+      INTEGER     JBUF(HEAD),NF,IO,LEN,NR,N0,HEAD2,
+     +            NWDS,JPAK,MAXW,I,J,K,L,N,NW,NT,IER,
+     +            IX,KIND,LEV(MAXLEV),KBUF(HEAD),
+     +            IL,IS,NLEV,STEPS,TIME
+
+      INTEGER,    DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:),   ALLOCATABLE :: F,X,DX
+      REAL*8,     DIMENSION(:,:), ALLOCATABLE :: P
+
+      INTEGER,    EXTERNAL :: GETSIZ2
+      LOGICAL,    EXTERNAL :: RPBLOC
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,
+     +            GETFLD2,PUTFLD2,XIT,CMPLBL,GETVERB
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/fit.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      CALL GETVERB( VERBE )
+      CALL LOW2UP( VERBE,VERBE )
+
+      CALL SETRABT( '&NON' )
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          CK    = ' '
+          CN    = ' '
+          CKIND = ' '
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) CK = LIGNE
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) CN = LIGNE
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) CKIND = LIGNE
+
+      ELSE
+
+***        READ INPUT PARAMETERS K, N.
+  
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, '(10X,3A5)', ERR=900,END=900,IOSTAT=IO)
+     +                                  CK,CN,CKIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+      UN = 1.0
+      NR = 0
+  
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.LE.0) GOTO 901
+
+      IF (NR.EQ.0)                                             THEN
+
+          IF (VERBE == 'FIT3D')                                THEN
+
+***            FIND HOW MANY 3D STEPS ARE TO BE FOUND IN FILE SERIES.
+
+              TIME = JBUF(2) ; STEPS = 1
+
+  051         CALL suivant( 1, KBUF,ERR,OK )
+
+                  IF (.NOT.OK ) GOTO 052
+                  IF (     ERR) GOTO 901
+
+                  CALL CMPLBL( 0,JBUF, 0,KBUF, OK )
+                  IF (.NOT.OK) CALL                XIT('  FIT3D ',-5 )
+ 
+                  IF (KBUF(2) == TIME)                         THEN
+                      GOTO 051
+                  ELSE IF (KBUF(4) == LEV(1))                  THEN
+                      TIME = KBUF(2)
+                      STEPS = STEPS + 1
+                  END IF
+
+              GOTO 051
+
+          ELSE
+
+              STEPS = JBUF(5)*JBUF(6)
+
+          END IF
+
+***        CHECK FOR DEFAULT VALUES.
+***        THE DEFAULT VALUE OF N IS LENGTH OF THE FIRST DATA RECORD.
+
+ 052      IF (CK   .EQ.' ')               CK    = '3' 
+          IF (CKIND.EQ.' ' .AND. NF.EQ.1) CKIND = '2'
+          IF (CKIND.EQ.' ' .AND. NF.EQ.2) CKIND = '1'
+          IF (CN   .EQ.' ') WRITE(CN,'(I5)') STEPS
+
+          READ(CN   ,'(BN,I5)',ERR=900,END=900,IOSTAT=IO) N
+          READ(CK   ,'(BN,I5)',ERR=900,END=900,IOSTAT=IO) K
+          READ(CKIND,'(BN,I5)',ERR=900,END=900,IOSTAT=IO) KIND
+
+          IF (KIND.LT.0 .OR.KIND.GT.2)                         THEN
+              WRITE(6,'("0 Kind =",I5," is illegal.")') KIND
+              CALL                                 XIT( VERBE ,-6 )
+          END IF
+
+          WRITE(6,'("0 Values of K, N are ",I5,1X,I5)') K,N 
+
+          IF (N   .LT. 4 .OR. K .LT. 1 .OR. 
+     +        N-K .LT. 2 .OR. K .GT. 5 )
+     +        CALL                                 XIT( VERBE ,-1 )
+
+          IF (N > STEPS) CALL                      XIT( VERBE ,-2 )
+
+          ALLOCATE( X(2*STEPS),DX(STEPS),P(6,STEPS) )
+
+***        CALCULATE THE P(J,I), I=1,N AND J=0,K WHEN
+***        
+***                                     (N**2-K**2)
+***          P(K+1,Z) = P(K,Z) - K**2*---------------*P(K-1,Z) . 
+***                                    4*(4*K**2 -1) 
+  
+          C1 = DBLE(N*N-1)/12.0
+          C2 = DBLE(3*N*N-7)/20.0
+          C3 = DBLE(9*N*N-81)/140.0
+          C4 = C2+C3
+          C5 = C3*C1
+          C6 = DBLE(4*N*N-64)/63.0 
+          C7 = C4+C6
+          C8 = C5+C6*C2 
+          DO  I=1,N
+              XI     = DBLE(2*I-N-1)/2.
+              Z0     = UN 
+              Z1     = Z0 * XI
+              Z2     = Z1 * XI
+              Z3     = Z2 * XI
+              Z4     = Z3 * XI
+              Z5     = Z4 * XI
+              P(1,I) = UN 
+              P(2,I) = Z1 
+              P(3,I) = Z2 - C1
+              P(4,I) = Z3 - Z1 * C2 
+              P(5,I) = Z4 - Z2 * C4 + C5
+              P(6,I) = Z5 - Z3 * C7 + Z1 * C8 
+          END DO
+  
+***        GET VARIANCE OF THE PI'S. 
+  
+          DR(1) = N
+          DO  L=2,K+1
+              DR(L) = 0.0 
+              DO  I=1,N
+                  DR(L) = DR(L)+P(L,I)*P(L,I) 
+              END DO
+          END DO
+  
+      END IF
+
+      IF (VERBE == 'FIT3D')                                    THEN
+          ALLOCATE( IBUF(LEN),F(STEPS*NWDS) )
+      ELSE
+          ALLOCATE( IBUF(LEN),F(STEPS) )
+          NWDS = 1
+      END IF
+
+***    GET DATA. 
+
+      L = 0
+  
+  100 IF (VERBE == 'FIT3D')                                    THEN
+
+          IF (L < NLEV)                                        THEN
+
+              L = L +1
+              CALL precede( 1, -1 )
+
+              DO  I=1,STEPS
+                  IL = (I-1)*NWDS+1
+
+                  CALL GETFLD2( 1, F(IL), ' ',-1,' ',LEV(L),
+     +                             IBUF,MAXW,OK )
+
+                  IF (.NOT.OK) CALL                XIT('  FIT3D ',-4 )
+
+***                CHECK SIZE.
+
+                  CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+                  IF (.NOT.OK) CALL                XIT('  FIT3D ',-5 )
+
+              END DO
+
+          ELSE
+
+              WRITE(6,'("0 Fit3D processed",I5,"records.")') NR 
+              CALL                                 XIT('  FIT3D ', 0 ) 
+
+          END IF
+
+      ELSE
+
+          CALL GETFLD2( 1, F, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( IBUF,F )
+              IF (MAXW.EQ.0) GOTO 050
+              WRITE(6,'("0 Fit processed",I5,"records.")') NR 
+              CALL                                 XIT('   Fit  ', 0 ) 
+          ENDIF 
+
+***        CHECK SIZE.
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+          IF (.NOT.OK) CALL                        XIT('   Fit  ',-5 )
+
+      END IF
+
+      DO  IS=1,NWDS
+
+***        REMOVE MEAN.
+  
+          F0 = 0.0
+          IL = IS
+          DO  I=1,STEPS 
+              F0 = F0 +F(IL) 
+              IL = IL +NWDS
+          END DO
+          F0 = F0/DBLE(STEPS) 
+ 
+          IL  = IS
+          DO  I=1,STEPS 
+              F(I) = F(IL)-F0
+              IL   =   IL +NWDS
+          END DO
+  
+***        BUNCH DATA INTO N AVERAGES. 
+  
+          NW  = STEPS/N
+          XNW = DBLE(NW) 
+          DO  I=1,N
+              N0   = (I-1)*NW 
+              XNT  = 0.0
+              DO  J=1,NW
+                  XNT = XNT+F(J+N0)
+              END DO
+              X(I) = XNT/XNW 
+          END DO
+  
+***        GET THE EXPANSION COEFFICIENTS. 
+  
+          DO  L=1,K+1
+              A(L) = 0.0
+              DO  I=1,N
+                  A(L) = A(L) + X(I)*P(L,I) 
+              END DO
+              A(L) = A(L)/DR(L) 
+          END DO
+  
+***        EVALUATE S. 
+  
+          Y2 = 0.0
+          DO  I=1,N
+              Y2 = Y2 + X(I)*DBLE( X(I) )
+          END DO
+  
+          IF (Y2.EQ.0.0)                                       THEN
+              NR = NR + 1 
+              WRITE(6,'("1 Record no ",I5," is null.")') NR 
+              GOTO 100
+          ENDIF 
+  
+          S = Y2
+          DO  L=1,K+1
+              S = S - A(L)*A(L)*DR(L) 
+          END DO
+          S = SQRT( S/FLOAT(N-K-1) )
+  
+***        EVALUATE TEST STATISTIC.
+  
+          T(1) = 0.0
+          DO  L=2,K+1
+              T(L) = A(L)*SQRT( DR(L) )/S 
+          END DO
+  
+***        WRITE OUT RESULTS.
+
+          NR = NR + 1 
+
+          IF (NF.EQ.1 .OR. KIND.GE.1)                          THEN
+          WRITE(6,'("1 For record ",I5)') NR
+          WRITE(6,'("0 Bunched X "/(6(I5,E15.6)))') (I,X(I),I=1,N)
+          WRITE(6,'("0      Coefficients and test statistic values"/
+     +             ("0",I5.1,2D15.5))') (I-1,A(I),T(I),I=1,K+1) 
+          WRITE(6,'("0 Standart deviation is   ",D15.5)') S 
+          WRITE(6,'("0 Mean of input record is ",D15.5)') F0
+          END IF
+
+***        THE MAXIMUM NUMBER OF PLOTTED POINT IS 500 AND
+***        THE OUTPUT TIME SERIES WILL ALWAYS HAVE N POINTS.
+
+          IF (NF.EQ.2)                                         THEN
+              D  = 1. 
+              NT = N
+          ELSE
+              D  = (FLOAT(N)-1.)/499. 
+              NT = 500
+          ENDIF 
+  
+***        BUILD THE FITTED TIME SERIES.
+
+          DX(1) = 1.
+          DO  I=1,NT-1 
+              DX(I+1)   = DX(I)+D 
+              IX        = INT( DX(I+1) )
+              X(I+1)    = X(IX) 
+              XNT       = A(1)
+              DO  L=2,K+1
+                  XNT   = XNT + A(L)*P(L,IX)
+              END DO
+              X(I+NT+1) = XNT
+          END DO
+  
+          XNT = A(1) 
+          DO  L=2,K+1
+              XNT = XNT + A(L)*P(L,1) 
+          END DO
+          X(NT+1) = XNT
+      
+          IF (KIND.GE.2 .AND. NT.LE.500)                       THEN
+
+***            DISPLAY THE NT FITTED POINTS.
+
+              R(1) = 1. 
+              R(2) = DX(NT) 
+              R(3) = 0. 
+              R(4) = 0. 
+
+ !            CALL SPLO( DX, X, NT, NT, 2, 1,
+ !   1         'INPUT FIELD (MINUS MEAN) AND APPROXIMATION TO IT.',49,
+ !   2         'POSITION IN SERIES',18, 
+ !   3         'INPUT AND APPROXIMATION',23,
+ !   4         R, 'IA',1,IER) 
+
+          END IF
+
+          IF (NF.EQ.2)                                         THEN
+
+***            WRITE THE FITTED TIME SERIES TO FILE POLYNOM.
+
+              DO  I=1,N
+                  X(N+I) = X(N+I)+F0
+              END DO
+
+              IBUF(5) = N
+              CALL PUTFLD2( 2, X(N+1), IBUF,MAXW )
+
+          END IF
+
+      END DO
+      GOTO 100
+
+*---------------------------------------------------------------------
+***    PREMATURE EOF ON INPUT. 
+  
+  900 CALL                                         XIT( VERBE ,-3 )
+  
+***    PREMATURE EOF ON UNIT 1.
+  
+  901 CALL                                         XIT( VERBE ,-4 )
+  
+*---------------------------------------------------------------------
+
+      END 
+#     endif

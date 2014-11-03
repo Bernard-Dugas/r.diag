@@ -1,0 +1,501 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 400000
+#     endif
+#     if !defined (ligne_maximale)
+#         define   ligne_maximale 512
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      binach  BIN CHAR OUTPUT [ -def [VAL1] ]
+*
+*
+*     AUTHORS - R.Laprise, S.J.Lambert, B.Dugas, DEC 6/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/binach.ptn,v 4.17 2014/09/25 20:20:45 dugas Exp $
+*      
+*
+*     PURPOSE...
+*      CONVERT A  STANDARD CCRN  FILE FROM BINARY  TO CHARACTER FORM.
+*
+*
+*     DESCRIPTION...
+*      THE CHAR CHARACTER FILE SHOULD BE DECLARED OF BLOCKED FIXED 
+*      LENGTH RECORDS OF LENGTH 80 FOR PORTABILITY.  binach CAN ACCOUNT
+*      FOR THE PACKING DENSITY BY EMULATING THE ACTUAL PACKING PROCESS
+*      AND THIS IS THE DEFAULT WORKING MODE. IT WILL THEN STOP THE
+*      PROCESS BEFORE THE DATA COMPRESSION INTO FULL WORDS IS DONE
+*      SO THAT IF THE DATA WAS PACKED, THE OUTPUT IS HEXADECIMAL.
+*      UNPACKED DATA ARE WRITTEN WITH A '(1P5E15.6,5X)' FIXED FORMAT.
+*      NEGATIVE PACKING DENSITIES ARE SUPPORTED.
+*
+*      NOTES: 1) THE FIST LINE OF EACH RECORD WILL CONTAIN A
+*                STANDARD 8-WORD CCRN HEADER AND WRITTEN WITH
+*                A '(1X,A4,I10,1X,A4,5I10)' FORMAT.
+*             2) THE -def PARAMETRE KEY SELECTS THE OLDER NON-PACKING
+*                OPERATING MODE, WHERE DATA IS ALWAYS WRITTEN AS IF IT WERE
+*                UNPACKED. THE PROGRAM IS THEN SAID TO BE RUNNING IN (BACWARD)
+*                COMPATIBILITY MODE.
+*             3) THE OUTPUT FORMAT CAN ALSO BE CHANGED BY SUPPLYING
+*                AN ALTERNATE VALUE WITH THE -def PARAMETRE KEY, AS IN
+*                             -def '(1P6E15.6,5X)'
+*                WHERE THE SINGLE QUOTES ARE NOT OPTIONAL FERATURES.
+*                
+*
+*     INPUT FILE...
+*      BIN  = ANY CCC FORMAT FILE
+*
+*     OUTPUT FILE...
+*      CHAR = UPPER-CASE CHARACTER VERSION OF THE SAME FILE
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 FILE BIN SEEMS EMPTY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM binach
+ 
+*     $Log: binach.ptn,v $
+*     Revision 4.17  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.16  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.15  2008/04/25 21:34:02  dugas
+*     Corriger l'usage des macros pour r.gppf.
+*
+*     Revision 4.14  2008/01/16 03:24:03  dugas
+*     Corriger l'ecriture de BUF(1:8).
+*
+*     Revision 4.13  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.12  2006/01/04 17:43:46  dugas
+*     La valeur du macro grille_maximale passe de 200000 a 400000
+*
+*     Revision 4.11  2005/07/28 17:45:29  dugas
+*     Modifier le code pour enlever les messages d'avertissement de F90.
+*
+*     Revision 4.10  2005/07/28 15:45:44  dugas
+*     Modifier la documentation automatique.
+*
+*     Revision 4.9  2005/07/05 18:43:35  dugas
+*     Faire un appel a FLUSH sur fichier CHAR a la fin (RS6000).
+*
+*     Revision 4.8  2005/03/07 18:00:45  dugas
+*     Corriger pour enregistrements a valeur constante (XINTE=0).
+*
+*     Revision 4.7  2004/11/12 16:29:12  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.6  2003/05/23 20:10:34  dugas
+*     Ajouter le support de donnees a 64 bits
+*
+*     Revision 4.5  2002/02/02 01:05:17  dugas
+*     Remplacer ISMIN/ISMAX par DISMIN/DISMAX
+*
+*     Revision 4.4  1999/04/08 22:05:15  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.3  1998/12/01 19:06:07  armnrbd
+*     Agrandir le format FORM1.
+*
+*     Revision 4.2  1998/08/28  18:03:43  armnrbd
+*     Ajouter un mode de compatibilite arriere (CCCma).
+*
+*     Revision 4.1  1997/09/04  19:37:01  armnrbd
+*     Ajouter support des fichiers SQI.
+*     Corriger le traitement de NBW dans les cas 64-bits.
+*
+*     Revision 4.0  1994/11/17  14:19:19  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:34  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.8  93/01/07  16:08:07  armnrbd
+*     Corriger l'offset retourne par ISMIN,ISMAX dans le cas spectral.
+*     
+*     Revision 1.7  92/11/14  18:11:45  armnrbd
+*     Tenir compte de PK92 (NBITS>=32).
+*     
+*     Revision 1.6  92/11/06  14:34:36  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.5  92/03/17  10:27:16  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.4  92/03/09  15:12:37  armnrbd
+*     Modification a la procedure de documentation.
+*     
+*     Revision 1.3  92/03/06  22:27:54  armnrbd
+*     Correction a la documentation automatique.
+*     
+*     Revision 1.2  92/03/06  22:12:38  armnrbd
+*     Implanter documentation automatique.
+*     
+*     Revision 1.1  92/03/04  20:56:16  armnrbd
+*     Ajouter compresssions negatives et hexadecimales.
+*     
+*     Revision 1.0  92/02/24  14:41:33  armnrbd
+*     Initial revision
+*     
+*     * MODIFIED FEBUARY 25/92 BY B.DUGAS ...
+*     * ... NEGATIVE PACKING DENSITIES ARE NOW SUPPORTED.
+*     * MODIFIED AUG. 23/91 BY B.DUGAS ...
+*     * ... PORT TO (CY920/IRIX F77) 32 BIT VERSION.
+*     * MODIFIED APRIL 13/88 BY B.DUGAS ...
+*     * ... CHANGE OUTPUT FORMAT: TAKE INTO ACCOUNT PACKING DENSITY BY
+*     *     EMULATING THE ACTUAL PACKING PROCESS. STOP THE PROCESS BE-
+*     *     FORE THE DATA COMPRESSION INTO FULL WORDS  IS DONE. IF THE
+*     *     DATA  WAS PACKED, THE OUTPUT IS HEXADECIMAL. UNPACKED DATA
+*     *     ARE TREATED AS BEFORE.
+
+*-----------------------------------------------------------------------
+      IMPLICIT      none
+
+      INTEGER       MAXW
+      PARAMETER   ( MAXW = grille_maximale )
+      INTEGER       MAXLIGNE
+      PARAMETER   ( MAXLIGNE = ligne_maximale )
+
+      REAL          ZERO
+      LOGICAL       OK,SPEC,DEF
+      CHARACTER*7   FORM2,FORMC
+      CHARACTER*30  TYPE*4,FORM1,VALEUR,LABL*4
+      CHARACTER     LABELI*ligne_maximale , LABEL*ligne_maximale 
+      REAL*8        XMIN,XMAX, RANGE,XINTE, VALUE
+      INTEGER       APACK,PACK,PMAX, HEAD, NFL,NBW, I,L,
+     +              NRECS,NWDS,NC,NW,NB,DISMIN,DISMAX,
+     +              LEN,LENW,LAC,LEN1,LEN2
+ 
+      INTEGER,      DIMENSION(:), ALLOCATABLE :: BUF,NF
+      REAL*8,       DIMENSION(:), ALLOCATABLE :: F
+ 
+      CHARACTER     NOMPRG*512
+      COMMON       /PROGNAM/ NOMPRG
+
+#     include      "machtype.cdk"
+
+      LOGICAL       RPBLOC
+      EXTERNAL      RPBLOC
+
+      LOGICAL       SETIO64
+      CHARACTER*4   GETYP,GETPARC*128,PKTYP
+      EXTERNAL      GETYP,GETPARC,DISMIN,DISMAX,XIT
+      EXTERNAL      MACSPE,JCLPNT,RECGET,RECUP2,SETIO64
+
+      DATA          LABL / 'LABL' /
+*=======================================================================
+ 
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/binach.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+      ALLOCATE( BUF(2*(HEAD+MAXW)),F(MAXW),NF(MAXW) )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFL = 3
+      CALL JCLPNT( NFL, 1,-2, 6 )
+ 
+      PKTYP = GETYP( 1 )
+
+      IF (MACHINE.EQ.2)                                         THEN
+          IF (PKTYP     .EQ.'    ') NBW = 64
+          IF (PKTYP     .EQ.'PK84' .OR.
+     +        PKTYP(1:2).EQ.'SQ'  ) NBW = 32
+      ELSE IF (MACHINE.EQ.1)                                    THEN
+          NBW = 64
+      END IF
+
+      DEF   = .FALSE.
+      FORM1 = '(1P5E15.6)'
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          DEF = RPBLOC('DEFAUT',VALEUR)
+
+          IF (DEF)                                             THEN
+              WRITE(6,6100)
+              IF (VALEUR.NE.' ') FORM1 = VALEUR
+          END IF
+
+      END IF
+
+      NRECS  =  0
+      LABELI = ' '
+ 
+***    READ IN BINARY RECORD.
+ 
+  100 CALL RECGET( 1 , ' ',-1,' ',-1, BUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE (6,6000) NRECS
+              IF (NRECS.EQ.0) CALL XIT ('BINACH', -1 )
+              CALL                 XIT ('BINACH',  0 )
+          END IF
+ 
+          WRITE (TYPE,4) BUF(1)
+          NWDS = BUF(5)*BUF(6)
+ 
+          IF (PKTYP(1:2).EQ.'SQ')                              THEN
+
+***            RETREIVE THE CURRENT RECORD'S LABEL.
+
+              LABEL = GETPARC( 'ETIKET' )
+
+              IF (LABELI.NE.LABEL)                             THEN
+
+                  LABELI  = LABEL
+
+***                TRANSFER IT IF NEED BE. LEN MARKS THE POSITION
+***                OF THE FIRST TWO CONSECUTIVE BLANK CHARACTERS.
+
+                  LEN  = MAX( 1,
+     +                   MIN( INDEX( LABEL // '  ' , '  ' ) - 1,ligne_maximale ) )
+                  LENW = (LEN-1)/8+1
+
+                  WRITE (2,6023) LABL,0,LABL,0,LENW,1,1,1,LABEL(1:LEN)
+
+              END IF
+                  
+          END IF
+
+***        CHECK THE TYPE OF DATA.
+ 
+          IF (TYPE.NE.'LABL' .AND. TYPE.NE.'CHAR')             THEN
+ 
+              CALL RECUP2( F,BUF )
+
+***            WAS THE DATA PACKED?
+ 
+  200         PACK = BUF(8)
+ 
+              IF (TYPE.EQ.'SPEC' .OR.
+     +            TYPE.EQ.'FOUR' )                             THEN
+                  NWDS = NWDS*2
+                  SPEC = .TRUE.
+              ELSE
+                  IF (TYPE.EQ.'CMPL' )
+     +            NWDS = NWDS*2
+                  SPEC = .FALSE.
+              END IF
+ 
+              IF (.NOT.DEF     .AND.
+     +            PACK.NE.  0  .AND.
+     +            PACK.NE.  1  .AND.
+     +            PACK.GT.-NBW .AND. TYPE.NE.'FOUR')           THEN
+ 
+***                YES. PROCEED TO PARTIALLY REPACK IT.
+ 
+                  IF (PACK.LT.0)                               THEN
+                      APACK =  -PACK
+                  ELSE
+                      APACK =  NBW/PACK
+                  END IF
+
+                  IF (MACHINE.EQ.  2 .AND.
+     +                PKTYP  .EQ.'  '.AND.
+     +                APACK  .EQ. 32     )                     THEN
+                      BUF(8) = 1
+                      GOTO 200
+                  END IF
+
+                  WRITE(2,6030) BUF(1:8)
+ 
+                  NC   = MAX( 1, (APACK-1)/4+1 )
+
+                  NW   = 80/NC
+                  NB   = 80-NW*NC
+                  PMAX = 2**APACK-1
+ 
+                  IF (.NOT.SPEC)                               THEN
+ 
+***                    DETERMINE THE RANGE AND MINIMUM VALUE OF
+***                    THE (NON-SPECTRAL) DATA.
+ 
+                      XMIN = F(DISMIN(NWDS,F,1))
+                      XMAX = F(DISMAX(NWDS,F,1))
+ 
+                      RANGE = XMAX-XMIN
+                      XINTE = RANGE/DBLE( PMAX )
+ 
+***                    SAVE THESE ON UNIT 2.
+ 
+                      WRITE(2,2040) RANGE, XMIN
+ 
+                      IF (XINTE.NE.0.)                         THEN
+                          DO I=1,NWDS
+                              VALUE = (F(I)-XMIN)/XINTE
+                              NF(I) = MIN( PMAX, MAX(0,INT(VALUE)))
+                          END DO
+                      ELSE
+                          DO I=1,NWDS
+                              NF(I) = 0
+                          END DO
+                      END IF
+ 
+***                    BUILD THE OUTPUT FORMAT.
+ 
+                      IF (NB.NE.0)                             THEN
+                          WRITE(FORM1,2001) NW,NC,NB
+                          WRITE(2,FORM1) (NF(I),I=1,NWDS)
+                      ELSE
+                          WRITE(FORM2,2002) NW,NC
+                          WRITE(2,FORM2) (NF(I),I=1,NWDS)
+                      END IF
+ 
+                  ELSE
+ 
+***                    SPECTRAL DATA ARE TREATED A BIT DIFFERENTLY...
+***                    ... THE MEAN IS NOT PACKED. DETERMINE THE RANGE
+***                    AND MINIMUM VALUE OF THE DATA.
+ 
+                      XMIN = F(DISMIN(NWDS-1,F(2),1)+1)
+                      XMAX = F(DISMAX(NWDS-1,F(2),1)+1)
+ 
+                      RANGE = XMAX-XMIN
+                      XINTE = RANGE/DBLE( PMAX )
+ 
+***                    SAVE THESE ON UNIT 2.
+ 
+                      WRITE(2,2050) F(1), RANGE, XMIN
+ 
+                      IF (XINTE.NE.0.)                         THEN
+                          DO I=2,NWDS
+                              VALUE = (F(I)-XMIN)/XINTE
+                              NF(I) = MIN( PMAX, MAX(0,INT(VALUE)))
+                          END DO
+                      ELSE
+                          DO I=2,NWDS
+                              NF(I) = 0
+                          END DO
+                      END IF
+ 
+***                    BUILD THE OUTPUT FORMAT.
+ 
+                      IF (NB.NE.0)                             THEN
+                          WRITE(FORM1,2001) NW,NC,NB
+                          WRITE(2,FORM1) (NF(I),I=2,NWDS)
+                      ELSE
+                          WRITE(FORM2,2002) NW,NC
+                          WRITE(2,FORM2) (NF(I),I=2,NWDS)
+                      END IF
+ 
+                  END IF
+ 
+              ELSE
+ 
+***                EITHER THE DATA WAS NOT PACKED OR IT CONSISTED
+***                OF SPATIAL FOURIER SERIES. WRITE OUT CHARACTER
+***                RECORD.  THIS CASE IS  CONSISTENT WITH THE OLD
+***                BINACH.
+
+                  IF (PACK.LT.0) PACK = MAX( 1,NBW/ABS( PACK ) )
+ 
+                           BUF(8) = 1
+                  IF (DEF) BUF(8) = PACK
+
+                  WRITE (2,6010)  BUF(1:8)
+                  WRITE (2,FORM1) (F(I),I=1,NWDS)
+ 
+              END IF
+ 
+          ELSE IF (TYPE.EQ.'LABL')                             THEN
+ 
+***            TRANSFER THE LABEL.
+ 
+              IF (MACHINE.EQ.1)                                THEN
+                  WRITE (2,6021) BUF(1:8),(BUF(I+HEAD),I=1,NWDS)
+              ELSE IF (MACHINE.EQ.2)                           THEN
+                  WRITE (2,6022) BUF(1:8),(BUF(I+HEAD),I=1,NWDS*2)
+              END IF
+ 
+          ELSE IF (TYPE.EQ.'CHAR')                             THEN
+ 
+              CALL RECUP2( NF,BUF )
+
+***            TRANSFER THE CHARACTER RECORD.
+ 
+              IF      (BUF(8).EQ.-64)                          THEN
+                  LAC  = NWDS*MACHINE
+                  LEN1 = MIN( BUF(5)*8, MAXLIGNE )
+                  IF (INTSIZE*MACHINE.EQ.1)                    THEN
+                      LEN2 = LEN1 / 8
+                      WRITE(FORMC,"('(',I3,'A8)')") LEN2
+                  ELSE
+                      LEN2 = MIN( 2*BUF(5), MAXLIGNE/4 )
+                      WRITE(FORMC,"('(',I3,'A4)')") LEN2
+                  END IF
+              ELSE IF (BUF(8).EQ.-32)                          THEN
+                  LAC  = NWDS
+                  LEN1 = MIN( BUF(5)*4, MAXLIGNE )
+                  LEN2 = LEN1 / 4
+                  WRITE(FORMC,"('(',I3,'A4)')") BUF(5)
+              END IF
+
+              WRITE(2,6010) BUF(1:8)
+
+              DO I=1,LAC,LEN2
+                  WRITE(LABEL,FORMC)
+     +          ( NF(L), L=I,MIN( LAC,I+LEN2-1 ) )
+                  WRITE(2,'(A)') LABEL(1:LEN1)
+              END DO
+ 
+          END IF
+#         if defined (AIX)
+          CALL FLUSH( 2 )
+#         endif
+          NRECS = NRECS+1
+ 
+      GOTO 100
+ 
+*-----------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 2001 FORMAT('(',I2.2,'Z',I1,',',I2.2,'X)')
+ 2002 FORMAT('(',I2.2,'Z',I1,')')
+ 2040 FORMAT(' RANGE=',1PE20.12,' MIN=',1PE20.12,8X)
+ 2050 FORMAT(' MEAN=',1PE20.12,' RANGE=',1PE20.12,' MIN=',1PE20.12,2X)
+ 6000 FORMAT('0Binach converted ',I5,' records.')
+ 6010 FORMAT(1X,A4,I10,1X,A4,5I10)
+ 6021 FORMAT(1X,A4,I10,1X,A4,5I10,10X/050A8)
+ 6022 FORMAT(1X,A4,I10,1X,A4,5I10,10X/100A4)
+ 6023 FORMAT(1X,A4,I10,1X,A4,5I10,10X/A)
+ 6030 FORMAT(1X,A4,I10,1X,A4,5I10,10X)
+ 6100 FORMAT ('0Binach is running in compatibility mode')
+
+      END
+#     endif

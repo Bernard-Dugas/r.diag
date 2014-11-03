@@ -1,0 +1,229 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zonmod  ZONIN ZONOUT OUTPUT
+*
+*
+*     AUTEUR - B.Dugas, FEV 19/91.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zonmod.ptn,v 4.7 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      ZonMod convertit un fichier du format zonal a niveau
+*      simple au format multi-niveaux. Les tampon LABL sont
+*      preserves durant l'operation.
+*
+*
+*     FICHIER I/O...
+*      ZONIN  = GRILLES ZONALES (UN NIVEAU/ENREGISTREMENT)
+*      ZONOUT = GRILLES ZONALES (MULTI-NIVEAU/ENREGISTREMENT)
+*
+*
+*     CONDITIONS DE SORTIE...
+*       0 PAS DE PROBLEMES
+*       1 PROBLEMS READING ZONIN
+*       2 MORE THAN ONE SIZE FOR ARRAYS (VERTICAL)
+*       3 MORE THAN ONE SIZE FOR ARRAYS (HORIZONTAL)
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zonmod
+*    +              (      ZONIN,       ZONOUT,       OUTPUT,
+*    +               TAPE1=ZONIN, TAPE2=ZONOUT, TAPE6=OUTPUT)
+
+*     $Log: zonmod.ptn,v $
+*     Revision 4.7  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1998/11/30 17:05:12  armnrbd
+*     Remplacer MEMOIR par HPALLOC.
+*
+*     Revision 4.2  1998/07/03  02:26:49  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:34  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:22:58  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:37  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/23  13:50:55  13:50:55  armnrbd (Bernard Dugas)
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/05/06  10:33:37  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:06  armnrbd
+*     Initial revision
+*     
+***    19 FEVRIER 1991 - B.Dugas, RPN.
+
+*--------------------------------------------------------------------
+      IMPLICIT    none
+
+      Integer     MAXLEV
+      Parameter ( MAXLEV = 999 )
+
+      Logical     ok
+      Real        zero
+      Character*4 kind,nom,NULL
+      Integer     i,head,jbuf(taille_entete),lev(MAXLEV),nlev0,
+     +            nlev,ilat,nf,nrec,nset,nwds,maxw,len,jpak,ier
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: Z
+
+      Integer     getsiz2
+      External    macspe, jclpnt, getsiz2, precede,
+     +            setlab, recget, recput,  getzx2,  putzx2
+
+      Character   nomprg*256
+      Common     /prognam/ nomprg
+
+      Data        NULL / 'NULL' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zonmod.ptn,v $'
+
+*----------------------------------------------------------------------
+***    Aller chercher quelques constantes specifiques.
+
+      Call macspe( head,zero )
+      Call setrabt( '&NON' )
+
+***    Acceder les fichiers d'e/s.
+
+      nf = 3
+      Call jclpnt( nf, 1,2, 6 )
+
+      nset = 0
+      nrec = 0
+
+***    Demander la memoire necessaire au traitement. 
+***    On se fie a la taille du premier jeu complet.
+
+  050 maxw = getsiz2( 1, jbuf,len,nwds,jpak, lev,nlev0 )
+
+      If (maxw.eq.0 .or. nlev0.le.0
+     +              .or. nlev0.gt.MAXLEV)  Call    xit(' Zonmod ',-1 )
+
+      ilat = jbuf(5)
+      nwds = nwds*(nlev0+1)
+
+      ALLOCATE( IBUF(LEN),Z(NWDS) )
+
+***    Re-Initialiser jbuf.
+
+      Call setlab( jbuf, NULL,0,NULL,0,0,0,0,0 )
+
+***    Lire les enregistrements uns a uns jusqu'a la fin du fichier.
+
+  100 Call recget( 1, ' ',-1,' ',-1, ibuf,maxw,ok )
+
+          If (.not.ok)                                         Then
+              If (maxw.eq.0)                                   Then
+                  DEALLOCATE( IBUF,Z )
+                  GoTo 050
+              End If
+              Call prtlab2('  Record out: ',jbuf )
+              Write(6,6000) nset 
+              If (nset.eq.0) Call                  xit(' Modzon ',-101 )
+              Call                                 xit(' Modzon ', 0 )
+          End If
+
+***        Verifier le type d'informations.
+
+          Write(kind,4) ibuf(1)
+          Write(nom, 4) ibuf(3)
+
+          If (kind.ne.'ZONL')                                  Then
+
+***            Ceci n'est pas un champs zonal. Ne rien faire.
+
+              call recput( 2,ibuf )
+              nrec = nrec+1
+
+          Else
+
+              If (ibuf(6).eq.nlev0  .or.
+     +            nom    .eq.'++'    )                         Then
+
+***                Le travail a deja ete fait. Ne rien faire.
+
+                  call recput( 2,ibuf )
+                  nrec = nrec+1
+
+              Else
+
+                  Call precede( 1,1 )
+
+                  Call getzx2( 1, z,ilat,lev,nlev, 
+     +                            ibuf,maxw,ok )
+
+                  If (     .not. ok           .or.  
+     +                nlev .gt.  nlev0 )                       Then
+                      Call                         xit(' Zonmod ',-2 )
+                  Else if (ibuf(5).ne.ilat .or.
+     +                     ibuf(6).ne.1     )                  Then
+                      Call                         xit(' Zonmod ',-3 )
+                  End If
+
+                  If (nset.eq.0) Call prtlab2('  Record  in: ',ibuf )
+
+                  ibuf(6) = nlev
+                  Call putzx2( 2, z,lev, ibuf,maxw )
+
+***                Conserver le dernier tampon ecrit.
+
+                  Do  i=1,8
+                      jbuf(i) = ibuf(i)
+                  End Do
+
+                  nset = nset+1
+
+              End If
+
+          End If
+
+      GoTo 100
+*--------------------------------------------------------------------
+
+    4 FORMAT(A4)
+
+ 6000 FORMAT('0 Zonmod transformed ',I3,' sets of zonal records.')
+
+      End
+#     endif

@@ -1,0 +1,728 @@
+#     if defined (NEW_INTERP)
+#        define  ll2rgd EZ_LL2RGD
+#        define  qqqglat EZ_GLAT,
+#        define  roots   ,lroots
+#        define  calglat CALL EZ_GLAT( lroots,groots,ILATH,IG1 )
+#     else
+#        define  ll2rgd LL2RGD
+#        define  qqqglat QQQGLAT,
+#        define  roots
+#        define  calglat CALL QQQGLAT( ILATH,IG1 )
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      slice  IN SLOUT INPUT OUTPUT [ -a VAL1 -kind VAL2 -n VAL3
+*                     -dlon1 VAL4 -dlat1 VAL5 -dlon2 VAL6 -dlat2 VAL7 ]
+*
+*
+*     DESCRIPTION...
+*      slice   - SELECTS A COLUMN OR ROW FROM EACH FIELD IN A FILE.
+*
+*
+*     AUTHOR   - J.D.Henderson, MAR 30/82.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/slice.ptn,v 4.15 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     PURPOSE  - SELECTS ONE COLUMN OR ROW FROM EACH FIELD IN FILE IN AND
+*                PUTS THE RESULTS ON FILE SLOUT.
+*     NOTES    - 1) IF FILE IN CONTAINS MULTI-LEVEL GRID SETS THEN SLOUT
+*                   FILE WILL CONTAIN ZONAL OR MERIDIONAL CROSS-SECTIONS.
+*                2) SUPERLABELS ARE RETAINED IF PRESENT IN FILE IN.
+*                3) INPUT ZONAL TYPE OF ARRAYS ARE NOT PERMITTED.
+*
+*
+*     INPUT FILE...
+*      IN = SERIES OF MULTI-LEVEL REAL OR COMPLEX GRID SETS
+*
+*     OUTPUT FILE...
+*      SLOUT = CROSS-SECTIONS
+*
+*
+*     INPUT PARAMETERS...
+*
+*      ICR (a)    = COLUMN OR ROW TO BE SELECTED (DEFAULTS TO 1)
+*      KCR (kind) = (0,1,2) TO SELECT (COLUMN,ROW,OTHER)
+*
+*     IF ABS(KCR)=2, ICR IS IGNORED AND THE FOLLOWING PARAMETERS ARE USED:
+*
+*      N           = EVEN NUMBER OF EQUALLY SPACED POINTS
+*                    IN THE SLICE (HAS TO BE MORE THAN 2)
+*      DLON1,DLAT1 = BEGINNING LONGITUDE/LATITUDE PAIR
+*      DLON2,DLAT2 = ENDING LONGITUDE/LATITUDE PAIR
+*
+*      THE SLICE FOLLOWS A LINE IN LAT/LONG SPACE AND PROCEEDING EASTWARD,
+*      INTERPOLATES FROM (DLON1,DLAT1) TO (DLON2,DLAT2). IF KCR IS NEGATIVE,
+*      LINEAR INTERPOLATION IS DONE, OTHERWISE CUBIC IS USED.
+*
+*      READ(5,5010) ICR,KCR,N,DLON1,DLAT1,DLON2,DLAT2
+*5010  FORMAT(10X,3I5,4E10.0)
+*
+*
+*EXAMPLE OF INPUT CARD...
+*
+* SLICE      25    1    0       0.0       0.0       0.0       0.0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 FOUND COMPLEX DATA TYPE OR ZONAL DATA
+*       2 UNABLE TO RETRIEVE FIRST SET
+*       3 MORE THAN ONE SIZE FOR ARRAY SETS IN FILE IN
+*       4 UNKNOW PROCESSING OPTIONS SPECIFIED IN KCR
+*       5 ERROR READING INPUT PARAMETERS
+*       6 PREMATURE EOF ON FILE IN
+*       7 ILLEGAL PARAMETER SET WITH KCR=2
+*       8 ILLEGAL COMPLEX GRID WITH KCR=2
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM SLICE
+*     PROGRAM SLICE (IN,       SLOUT,       INPUT,       OUTPUT,
+*    1         TAPE1=IN, TAPE2=SLOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ----------------------------------------------------------
+
+*     $Log: slice.ptn,v $
+*     Revision 4.15  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.14  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.13  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.12  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.11  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.10  2002/04/22 15:14:54  dugas
+*     Corriger le macro interne calglat en mode NEW_INTERP.
+*     Utiliser PUTZREF pour sauver les enregistrements crochets.
+*
+*     Revision 4.9  2001/11/05 13:55:57  armnrbd
+*     Ajouter du code de compilation conditonnelle tenant compte
+*      de la nouvelle interface des interpolateurs EZxxx.
+*
+*     Revision 4.8  2001/03/17 21:47:04  armnrbd
+*     Remplacer GETPARC/GETXGI/PUTPARI par GETHIX/GETHIGH/PUTHIGH.
+*
+*     Revision 4.7  1998/10/15 15:03:49  armnrbd
+*     Ajouter uin appel a QQQGLAT pour initialiser
+*     l'interpolation des grilles gaussiennes.
+*
+*     Revision 4.6  1998/09/24  13:48:48  armnrbd
+*     Utiliser les appels EZ_ pour certaines interpolations.
+*
+*     Revision 4.5  1998/07/03  02:26:36  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1998/02/17  21:26:43  armnrbd
+*     Ajouter un mode de coupes transversaves.
+*
+*     Revision 4.3  1997/12/10  18:11:47  armnrbd
+*     Utiliser GETLAB/PUTLAB pour le traitement des "LABL".
+*
+*     Revision 4.2  1997/09/26  17:39:16  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1996/11/12  19:44:04  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.0  1994/11/17  14:21:34  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/01/08  22:23:24  armnrbd
+*     Corriger un bogue dans l'appel a HPDEALLC.
+*     
+*     Revision 3.0  93/10/13  13:56:53  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/10  21:42:46  21:42:46  armnrbd (Bernard Dugas)
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/03/26  15:18:15  armnrbd
+*     Premier jeu de correction.
+*     
+*     Revision 1.0  92/03/23  15:29:44  armnrbd
+*     Initial revision
+ 
+*     MAR 23/92 - B.Dugas, RPN: DISALLOW COMPLEX DATA TYPES.
+*     JUL 24/85 - F.ZWIERS, B.DUGAS.
+*     MAR 30/82 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+ 
+      INTEGER     YG1,YG2,YG3
+      CHARACTER   LIGNE*256,GRTYP,IGRTYP
+      CHARACTER*4 TYPE,NOM,PKTYP,CROCHET,
+     +            CHAPEAU,DATA,SUBA,ZONL
+      LOGICAL     OK,RPBLOC,CMPL,HYPER,INFORM,CUBIC
+      INTEGER     HEAD,JBUF(taille_entete),LEV(MAXLEV),NHEM,
+     +            IER,ZST,GST,NF,NSETS,ICR,KCR,LEN,NWDS,JPAK,
+     +            ILATH,LENLAB,LENO,NLEV,NROWS,LR,NLEVG,I,J,L,
+     +            LG,LZ,IO,PNTS,I1,I2,IG1,IG2,IG3,IG4,IBUF,MAXW
+      REAL        DLON1,DLAT1,DLON2,DLAT2,X,Y,LON,LAT,DX,DY,XG1,
+     +            XG2,XG3,XG4,ZERO,GG,ZM,CG,CZ,DLON,DLAT,
+     +            IXG1,IXG2,IXG3,IXG4,groots,lroots
+
+      POINTER   ( IB,IBUF(8) )
+
+      POINTER   ( IG,GG(1) )
+      POINTER   ( IG,CG(2,1) )
+      POINTER   ( IZ,ZM(1) )
+      POINTER   ( IZ,CZ(2,1) )
+
+      POINTER   ( IX,X(1) )
+      POINTER   ( IY,Y(1) )
+      POINTER   ( LO,LON(1) )
+      POINTER   ( LA,LAT(1) )
+
+      CHARACTER*4 GETHIC,GETYP
+      INTEGER     GETHIGH,GETSIZ2
+      EXTERNAL    GETSIZ2,HPALLOC,HPDEALLC,MACSPE,
+     +            JCLPNT,GETLIGN,BURNF,XIT,GETSET2,PUTSET2,
+     +            GETLAB,PUTLAB,EZ_RGSCINT,RPBLOC,GETYP,
+     +            GETHIC,GETHIGH,LLFXY,EZ_RGOPTC,PUTHIC,
+     +            PUTHIGH,PUTPARI,CXGAIG,CIGAXG,PUTZREF
+      EXTERNAL    qqqglat ll2rgd
+
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        ZONL / 'ZONL' /, SUBA / 'SUBA' /, CROCHET / '>>' /,
+     +            DATA / 'DATA' /,                  CHAPEAU / '^^' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/slice.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+      NSETS = 0
+ 
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ICR   = 0
+          KCR   = 0
+
+          PNTS  = 0
+          DLAT1 = 0.0
+          DLAT2 = 0.0
+          DLON1 = 0.0
+          DLON2 = 0.0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=905,ERR=905,IOSTAT=IO) ICR
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=905,ERR=905,IOSTAT=IO) KCR
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=905,ERR=905,IOSTAT=IO) PNTS
+
+          OK = RPBLOC('DLAT1',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=905,ERR=905,IOSTAT=IO) DLAT1
+
+          OK = RPBLOC('DLAT2',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=905,ERR=905,IOSTAT=IO) DLAT2
+
+          OK = RPBLOC('DLON1',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=905,ERR=905,IOSTAT=IO) DLON1
+
+          OK = RPBLOC('DLON2',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=905,ERR=905,IOSTAT=IO) DLON2
+
+      ELSE
+
+***        READ CONTROL CARD.
+***        ICR = COLUMN OR ROW TO BE SELECTED.
+***        KCR = (0,1,2) TO SELECT (COL,ROW,OTHER).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 905
+          ELSE
+              READ( LIGNE, 5010, ERR=905,END=905,IOSTAT=IO) 
+     +                           ICR,KCR, PNTS,DLON1,DLAT1,DLON2,DLAT2
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    CHECK PARAMETERS.
+
+      CUBIC = (KCR.GE.0)
+      KCR   = ABS( KCR )
+      PNTS  = PNTS+MOD( PNTS,2 )
+
+      IF (KCR.NE.2)                                            THEN
+
+          IF (ICR.EQ.0) ICR = 1 
+          WRITE(6,6005) ICR,KCR
+
+      ELSE
+
+***        SETUP FOR THE "OTHER" OPTION.
+
+          WRITE(6,6007) PNTS,DLON1,DLAT1,DLON2,DLAT2
+
+***        CHECK LAT/LON BOUNDS.
+
+          IF ((DLON1.EQ.DLON2 .AND.
+     +         DLAT1.EQ.DLAT2).OR.
+     +         DLAT1.LT. -90. .OR. DLAT1.GT. +90. .OR.
+     +         DLAT2.LT. -90. .OR. DLAT2.GT. +90. .OR.
+     +         DLON1.LT.-360. .OR. DLON1.GT.+360. .OR.
+     +         DLON2.LT.-360. .OR. DLON2.GT.+360. .OR.
+     +         PNTS .LT.  2  ) CALL                XIT('  Slice ',-7 )
+
+          IF (DLON1.LT.-180.) DLON1 = DLON1+360.
+          IF (DLON2.LT.-180.) DLON2 = DLON2+360.
+          IF (DLON1.GT.+180.) DLON1 = DLON1-360.
+          IF (DLON2.GT.+180.) DLON2 = DLON2-360.
+
+          IF (DLON1.GT.DLON2) DLON2 = DLON2+360.
+
+          CALL HPALLOC( IX, PNTS*4, IER,0 )
+          IY = LOC( X(PNTS+1) )
+          LA = LOC( Y(PNTS+1) )
+          LO = LOC( LAT(PNTS+1) )
+
+          LON( 1  ) = DLON1
+          LAT( 1  ) = DLAT1
+          LON(PNTS) = DLON2
+          LAT(PNTS) = DLAT2
+
+          DLON = (DLON2-DLON1)/(PNTS-1)
+          DLAT = (DLAT2-DLAT1)/(PNTS-1)
+
+          DO  I=2,PNTS-1
+              LON(I) = LON(I-1)+DLON
+              LAT(I) = LAT(I-1)+DLAT
+          END DO
+
+      END IF
+
+***    SETUP INTERPOLATION TYPE.
+
+      IF (     CUBIC) CALL EZ_RGOPTC('INTERP', 'CUBIQUE', .TRUE. )
+      IF (.NOT.CUBIC) CALL EZ_RGOPTC('INTERP', 'LINEAIR', .TRUE. )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.EQ.0) GOTO 906
+
+      NROWS = JBUF(6)
+      LR    = JBUF(5)
+      LENO  = MAX( NROWS,LR,PNTS )*NLEV
+      LEN   = MAX( LEN,LENO+HEAD )
+      MAXW  = LEN-HEAD
+      NHEM  = JBUF(7)
+
+      WRITE(TYPE,4) JBUF(1)
+
+      IF (TYPE.EQ.'FOUR' .OR.
+     +    TYPE.EQ.'SPEC' .OR.
+     +   (TYPE.EQ.'SUBA' .AND. PKTYP.NE.'SQ') .OR.
+     +    TYPE.EQ. ZONL ) CALL                     XIT('  Slice ',-1 )
+
+      CALL HPALLOC( IG, MAX( MAXW,NWDS*NLEV )+LENO+LEN , IER,0 )
+      IZ = LOC( GG(MAX( MAXW,NWDS*NLEV )+1) ) 
+      IB = LOC( ZM(LENO     +1) )
+
+      IF (NSETS.EQ.0 .AND. KCR.EQ.2)                            THEN
+
+***        CONTINUE THE GEOGRAPHY SETUP FOR THE "OTHER" CASE.
+
+          IF (PKTYP.EQ.'SQ')                                    THEN
+
+***            RETRIEVE CURRENT GRID DESCRIPTORS.
+
+              GRTYP = GETHIC ('GRTYP',JBUF )
+              IG1   = GETHIGH('IG1'  ,JBUF )
+              IG2   = GETHIGH('IG2'  ,JBUF )
+              IG3   = GETHIGH('IG3'  ,JBUF )
+              IG4   = GETHIGH('IG4'  ,JBUF )
+
+              CALL CIGAXG( GRTYP, XG1,XG2,XG3,XG4, IG1,IG2,IG3,IG4 )
+
+***            SAVE THEM FOR LATER USE.
+
+              IGRTYP = GRTYP
+              IXG1   = XG1
+              IXG2   = XG2
+              IXG3   = XG3
+              IXG4   = XG4
+
+              IF (GRTYP.NE.'Z' .AND. GRTYP.NE.'Y')              THEN
+
+                  IF (GRTYP.EQ.'G')                             THEN
+
+***                    INITIALIZE GAUSSIAN LATITUDES
+***                   (FOR THE INTERPOLATION PACKAGE).
+
+                                    ILATH = NROWS/2
+                      IF (IG1.NE.0) ILATH = NROWS
+                      calglat
+
+                  END IF
+
+***                FIND FIRST AND LAST POINTS ON THE SLICE.
+
+                  CALL ll2rgd( X(1),Y(1), LAT(1),LON(1),
+     +                         1, LR,NROWS,
+     +                         GRTYP, IG1,IG2,IG3,IG4, .TRUE. roots )
+
+                  CALL ll2rgd( X(PNTS),Y(PNTS), LAT(PNTS),LON(PNTS),
+     +                         1, LR,NROWS, 
+     +                         GRTYP, IG1,IG2,IG3,IG4, .TRUE. roots )
+
+***                DETERMINE ALL OTHER POINTS FROM THESE TWO.
+
+                  DX = (X(PNTS)-X(1))/(PNTS-1)
+                  DY = (Y(PNTS)-Y(1))/(PNTS-1)
+
+                  DO  I=2,PNTS-1
+                      X(I) = X(I-1)+DX
+                      Y(I) = Y(I-1)+DY
+                  END DO
+
+***                FIND THE CORRESPONDING LAT-LON COORDINATES.
+
+                  IF (GRTYP.EQ.'N' .OR. GRTYP.EQ.'S')          THEN
+                      DO  I=2,PNTS-1
+                          CALL LLFXY( LAT(I),LON(I),
+     +                                X(I)-XG1,Y(I)-XG2,
+     +                                XG3,XG4, NHEM )
+                      END DO
+                  END IF
+
+              ELSE
+
+***                THIS OPTION IS NO YET AVAILABLE.
+
+                  WRITE(6,6100)
+                  CALL                             XIT('  Slice ',-100 )
+
+              END IF
+
+          END IF
+
+***        FORCE LAT-LON PRECISION TO 0.01 DEGREES.
+
+          DO  I=1,PNTS
+              LAT(I) = FLOAT( NINT( LAT(I)*100. ) )/100.
+              LON(I) = FLOAT( NINT( LON(I)*100. ) )/100.
+              IF (LON(I).LT.-180.) LON(I) = LON(I)+360.
+              IF (LON(I).GT.+180.) LON(I) = LON(I)-360.
+          END DO
+
+      END IF
+
+***    READ THE NEXT RECORD FROM  THE FILE. STOP AT EOF.
+ 
+  100 CALL GETSET2( 1, GG,LEV,NLEVG, IBUF,MAXW,OK )
+ 
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL                             HPDEALLC( IG,IER,0 )
+                  GOTO 050
+              END IF
+
+              IF (NSETS.NE.  0 .AND.
+     +            PKTYP.EQ.'SQ'.AND.
+     +            KCR  .EQ.  2 )                               THEN
+
+***                SAVE LAT-LON REFERENCE VECTORS.
+
+                  CALL CXGAIG('L', IG1,IG2,IG3,IG4,
+     +                             0. ,0. ,1. ,1. )
+
+                  CALL PUTZREF( LON,LAT, 'Y',
+     +                         'L', IG1,IG2,IG3,IG4,
+     +                          YG1,YG2,YG3, PNTS,1 )
+
+              END IF
+
+              WRITE(6,6030) NSETS
+              IF (NSETS.EQ.0) CALL                 XIT('  Slice ',-2 )
+              CALL                                 XIT('  Slice ', 0 )
+
+          END IF
+
+***        COPY SUPERLABELS TO THE OUTPUT FILE,
+***        BUT REMOVE ALL CHARACTER RECORDS.
+
+          WRITE(TYPE,4) IBUF(1)
+          WRITE(NOM ,4) IBUF(3)
+
+                              CMPL = .FALSE.
+          IF (TYPE.EQ.'CMPL') CMPL = .TRUE.
+
+          IF (CMPL .AND.KCR.EQ.2) CALL             XIT('  Slice ',-8 )
+
+          IF (TYPE.EQ.'LABL')                                  THEN
+              LENLAB = IBUF(5)
+              HYPER  = (NOM.EQ.'FILE')
+              INFORM = (NOM.EQ.'INFO')
+              CALL GETLAB( 0, LIGNE, IBUF,LENLAB, OK ) 
+              CALL PUTLAB( 2, LIGNE, IBUF,LENLAB, HYPER,INFORM )
+              GOTO 100
+          ELSE IF (TYPE.EQ.'CHAR')                             THEN
+              GOTO 100
+          ENDIF
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.LT.NLEVG)                      THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Slice ',-3 )
+          END IF
+
+          IF (NSETS.EQ.0)                                      THEN
+              CALL WRITLEV( LEV,NLEVG, IBUF )
+              CALL PRTLAB( IBUF )
+          END IF
+
+          IF (KCR.EQ.0)                                        THEN
+
+***            GET ONE COLUMN OF THE FIELD (KCR=0).
+
+              DO 150 L=0,NLEVG-1
+                  LG = L*NWDS + ICR
+                  LZ = L*NROWS+ 1
+                  IF (CMPL)                                    THEN
+                      DO  J=0,NROWS-1
+                          CZ(1,LZ+J) = CG(1,LG+LR*J)
+                          CZ(2,LZ+J) = CG(2,LG+LR*J)
+                      END DO
+                  ELSE
+                      DO  J=0,NROWS-1
+                          ZM(LZ+J) = GG(LG+LR*J)
+                      END DO
+                  END IF
+  150         CONTINUE
+ 
+          ELSE IF (KCR.EQ.1)                                   THEN
+
+***            GET ONE ROW OF THE FIELD (KCR=1).
+ 
+              DO 200 L=0,NLEVG-1
+                  LG = L*NWDS+LR*(ICR-1)
+                  LZ =        LR* L
+                  IF (CMPL)                                    THEN
+                      DO  I=1,LR
+                          CZ(1,LZ+I) = CG(1,LG+I)
+                          CZ(2,LZ+I) = CG(2,LG+I)
+                      END DO
+                  ELSE
+                      DO  I=1,LR
+                          ZM(LZ+I) = GG(LG+I)
+                      END DO
+                  END IF
+  200         CONTINUE
+ 
+          ELSE IF (KCR.EQ.2)                                   THEN
+
+***            THE "OTHER" SLICE OPTION.
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+***                RETRIEVE CURRENT GRID DESCRIPTION.
+
+                  GRTYP = GETHIC ('GRTYP',IBUF )
+                  IG1   = GETHIGH('IG1'  ,IBUF )
+                  IG2   = GETHIGH('IG2'  ,IBUF )
+                  IG3   = GETHIGH('IG3'  ,IBUF )
+                  IG4   = GETHIGH('IG4'  ,IBUF )
+
+                  CALL CIGAXG( GRTYP, XG1,XG2,XG3,XG4, IG1,IG2,IG3,IG4 )
+
+***                CHECK FOR GRID CONSISTENCY (AGAIN).
+
+                  IF ( GRTYP.NE.IGRTYP .OR.
+     +                 XG1  .NE. IXG1  .OR.
+     +                 XG2  .NE. IXG2  .OR.
+     +                 XG3  .NE. IXG3  .OR.
+     +                 XG4  .NE. IXG4 )                        THEN
+                       CALL PRTLAB( IBUF )
+                       CALL                        XIT('  Slice ',-3 )
+                  END IF
+
+              ELSE
+
+***                ARRAYS ARE ASSUMED TO BE GAUSSIAN OR LAT/LONG GRIDS.
+
+                  IF (MOD( NROWS,2 ).EQ.0) GRTYP = 'G'
+                  IF (MOD( NROWS,2 ).EQ.1) GRTYP = 'B'
+
+                  IG1   =  0
+                  IG2   =  0
+                  IG3   =  0
+                  IG4   =  0
+
+              END IF
+
+                                LG = LR
+              IF (GRTYP.EQ.'G') LG = LR-MOD( LR,2 )
+
+              IF (LG.NE.LR)                                    THEN
+
+***                REMOVE EXTRA GRENWHICH LONGITUDE.
+
+                  I1 = 0
+                  I2 = 0
+                  DO  J=1,NROWS*NLEVG
+                      DO  I=1,LG
+                          I1 = I1+1
+                          I2 = I2+1
+                          GG(I2) = GG(I1)
+                      END DO
+                      I1 = I1+1
+                  END DO
+              END IF
+
+***            INTERPOLATE ONE LEVEL AT A TIME.
+
+              DO  L=1,NLEVG
+                  ZST = (L-1)*PNTS+1
+                  GST = (L-1)*LG*NROWS+1
+                  CALL EZ_RGSCINT( ZM(ZST), PNTS,1,  LAT,LON, 
+     +                             GG(GST), LG,NROWS,
+     +                             GRTYP, IG1,IG2,IG3,IG4, .TRUE.)
+              END DO
+
+          ELSE
+
+              CALL                                 XIT('  Slice ',-4 )
+
+          END IF
+ 
+***        SAVE THE SLICE VECTORS ON FILE 2.
+ 
+          IF (KCR.NE.2)                                        THEN
+
+              READ(ZONL,0004) IBUF(1)
+
+              IF (KCR.EQ.0) IBUF(5) = IBUF(6)
+
+              IF (.NOT.CMPL .AND. NLEVG.NE.1 )                 THEN
+                  IBUF(4) = 1
+                  IBUF(6) = NLEVG
+              ELSE
+                  IBUF(6) = 1
+              END IF
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  IF (KCR.EQ.0)                                THEN
+                      CALL PUTPARI('NI',PNTS )
+                      CALL PUTPARI('NJ', 1   )
+                  ELSE IF (KCR.EQ.1)                           THEN
+                      CALL PUTPARI('NI', 1   )
+                      CALL PUTPARI('NJ',PNTS )
+                  END IF
+              END IF
+
+          ELSE
+
+              READ(DATA,0004) IBUF(1)
+
+              IBUF(5) = PNTS
+              IBUF(6) = 1
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+***                FORCE CORRESPONDING OUTPUT GRID TO TYPE Y.
+
+                  YG1 = MOD( 2048-PNTS, 4096 )
+                  YG2 = MOD( 2048+PNTS, 4096 )
+                  YG3 = MOD( PNTS, 1024 )
+
+                  CALL PUTHIC ('Y' ,'GRTYP',IBUF )
+                  CALL PUTHIGH( YG1,'IG1'  ,IBUF )
+                  CALL PUTHIGH( YG2,'IG2'  ,IBUF )
+                  CALL PUTHIGH( YG3,'IG3'  ,IBUF )
+                  CALL PUTHIGH( 0  ,'IG4'  ,IBUF )
+
+              END IF
+
+          END IF
+
+          IBUF(8) = -32
+
+          CALL PUTSET2( 2, ZM, LEV,NLEVG, IBUF,MAXW )
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+      NSETS = NSETS+1
+      GOTO 100
+ 
+***    E.O.F. ON INPUT.
+ 
+  905 CALL                                         XIT('  Slice ',-5 )
+  906 CALL                                         XIT('  Slice ',-6 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,3I5,4E10.0)
+
+ 6005 FORMAT('0Icr,kcr =',2I5)
+ 6007 FORMAT(' Slice will write ',I5,' points from (',F7.2,',',F7.2,
+     +       ') to (',F7.2,',',F7.2,')')
+ 6030 FORMAT('0',I5,' sets read.')
+
+ 6100 FORMAT(' Z-grid types are not yet supported.')
+
+      END
+#     endif

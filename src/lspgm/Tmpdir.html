@@ -1,0 +1,298 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+
+  <title>Commandes de gestion de fichiers associ&eacute;es &agrave; R.DIAG</title>
+</head>
+
+
+<body>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><b><big><big>Gestion des fichiers&nbsp;temporaires associ&eacute;s
+&agrave; R.DIAG</big></big><br>
+
+<br>
+
+<br>
+
+</b><b><big>NOMS</big><br>
+
+<br>
+
+</b>r.accessf,<br>
+
+r.catf<br>
+
+r.delf,<br>
+
+r.effacef, - Cet ensemble&nbsp;de commandes permets &agrave; l'usager de
+g&eacute;rer </big><big style="font-family: Helvetica,Arial,sans-serif;">ses fichiers</big><br>
+<big style="font-family: Helvetica,Arial,sans-serif;">
+r.getf, &nbsp; &nbsp; &nbsp;&nbsp; &nbsp;locaux/temporaires, y
+compris ceux contenus dans son <b>$BIG_TMPDIR</b><br>
+
+r.localf,<br>
+
+r.savef<br>
+
+<b><br>
+
+<br>
+
+<big>SYNOPSIS</big><br>
+
+<br>
+
+</b>r.accessf -dn lfn0 [ -pdn pfn ] [ -own dpath ] [ -na ]<br>
+
+r.catf fichier_entree fichier_sortie [ -na ] [ -d ]<br>
+
+r.effacef [ -dn lfn ] [ -pdn pfn ] [ -own [ dpath ] ] [ -na ] [ -f ]<br>
+
+r.getf -dn lfn0 [ -pdn pfn ] [ -own dpath ] [ -na ]<br>
+
+r.savef -dn lfn0 [ -pdn pfn ] [ -own dpath ] [ -na ] [ -f ]<br>
+
+r.delf [ -dn lfn0 lfn1 lfn2 ... ] [ -na ] [ -f ]<br>
+
+r.localf [ lfn0 lfn1 lfn2 ... ]<br>
+
+<b><br>
+
+<br>
+
+<big>DESCRIPTIONS</big><br>
+
+<br>
+
+</b><span style="font-weight: bold;">r.accessf</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>d&eacute;pose dans le
+r&eacute;pertoire <b>$BIG_TMPDIR</b> un lien
+symbolique &agrave; un fichier<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">r.catf</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>d&eacute;place un
+fichier en utilisant <b>mv</b>, si le param&egrave;tre
+<span style="font-weight: bold;">-d</span> est sp&eacute;cifi&eacute; (i.e. mode d&eacute;truit), et <b>cat</b>
+autrement.<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">r.delf</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>efface un ou plusieurs
+fichiers dans le r&eacute;pertoire <b>$BIG_TMPDIR</b>. Si le seul
+param&egrave;tres est le&nbsp;<span style="font-weight: bold;">-f</span> (force) tous les fichiers pourront
+&ecirc;tre effac&eacute;s<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">r.effacef</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>efface un fichier<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">r.getf</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>d&eacute;pose dans le
+r&eacute;pertoire <b>$BIG_TMPDIR</b> une copie d'un
+fichier<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">r.localf</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>effectue un <span style="font-weight: bold;">ls</span> sur le
+r&eacute;pertoire temporaire<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">r.savef</span></big><big style="font-family: Helvetica,Arial,sans-serif;"><span style="font-weight: bold;"></span></big><big style="font-family: Helvetica,Arial,sans-serif;"><span style="font-weight: bold;"></span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>d&eacute;place un
+fichier du r&eacute;pertoire <b>$BIG_TMPDIR</b> vers
+un r&eacute;pertoire permanent. Dans le cas d'un lien symbolique,
+une copie du fichier li&eacute; est cr&eacute;&eacute; dans
+le r&eacute;pertoire cible. Le fichier local ne l'est plus apr&egrave;s
+ex&eacute;cution de la commande<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+Le r&eacute;pertoire <b>$BIG_TMPDIR</b>
+&eacute;tant cr&eacute;&eacute;/d&eacute;truit &agrave; chaque
+connection/d&eacute;-connection, il s'agit d'un m&eacute;chanisme efficace
+de simulation des fichiers locaux, tels qu'on les rencontrait sur les
+plateformes utilisant les syst&egrave;mes d'exploitation NOS (CDC) ou COS (CRAY). <br>
+
+<br>
+
+<br>
+
+<b><big>ARGUMENTS</big><br>
+
+<br>
+
+lfn0, lfn1, lfn2</b> ... <br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>noms de fichiers locaux
+(r&eacute;sidants sur le <b>$BIG_TMPDIR</b>)<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">
+-dn</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>nom du fichier local. Il
+peut y en avoir plusieurs dans le cas d'un R.LOCALF ou d'un R.DELF<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">
+-pdn</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>nom du fichier permanent
+(sans pr&eacute;fixe de r&eacute;pertoire). La valeur par
+d&eacute;faut est le nom du fichier local<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">
+-own</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>r&eacute;pertoire de
+r&eacute;sidence du fichier permanent. La valeur par
+d&eacute;faut est le r&eacute;pertoire courant<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br style="font-weight: bold;">
+
+<span style="font-weight: bold;">
+-f</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>permets de forcer
+l'op&eacute;ration courante. Si l'op&eacute;ration se
+d&eacute;roule &agrave; partir d'un terminal interactif (par
+opposition &agrave; une proc&eacute;dure en
+diff&eacute;r&eacute;), l'usager se verra tout de
+m&ecirc;me demander de confirmer l'op&eacute;ration<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><br>
+
+<span style="font-weight: bold;">
+-na</span><br>
+
+</big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>ne jamais
+g&eacute;n&eacute;rer de code d'erreur<br>
+
+</big></div>
+
+<big style="font-family: Helvetica,Arial,sans-serif;"><big><br>
+
+<br>
+
+<span style="font-weight: bold;">EXEMPLES</span></big><b><br>
+
+<br>
+
+</b></big>
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>r.accessf -dn mon_fichier
+-pdn donn&eacute;es<br>
+
+r.localf mon_fichier<br>
+
+cd ..<br>
+
+r.savef -dn mon_fichier -f<br>
+
+</big></div>
+
+<div style="margin-left: 40px; font-family: Helvetica,Arial,sans-serif;"><big>r.localf "mon_fich*"</big><br>
+
+</div>
+
+<br>
+
+<br style="font-family: Helvetica,Arial,sans-serif;">
+
+<big><big style="font-family: Helvetica,Arial,sans-serif;"><b>NOTES</b></big></big><br style="font-family: Helvetica,Arial,sans-serif;">
+
+<ul>
+
+  <big>
+  </big><li style="font-family: Helvetica,Arial,sans-serif;"><big>La combinaison de <span style="font-weight: bold;">r.accessf</span> et <span style="font-weight: bold;">r.savef</span> pourrait
+cr&eacute;er des copies multiples du m&ecirc;me fichier, <span style="font-weight: bold;">r.savef</span> &eacute;tant incapable de distinguer un lien symbolique
+d'un fichier ordinaire.</big></li>
+
+  <big style="font-family: Helvetica,Arial,sans-serif;">
+  </big><li style="font-family: Helvetica,Arial,sans-serif;"><big>Comme dans l'exemple pr&eacute;c&eacute;dent, les listes avec caract&egrave;res "wild-card" <span style="font-weight: bold;">DOIVENT</span> &ecirc;tre
+pr&eacute;sent&eacute;es &agrave; l'int&eacute;rieur de
+guillemets pour <span style="font-weight: bold;">r.delf</span> et <span style="font-weight: bold;">r.localf</span>. Les autres commandes <span style="font-weight: bold;">NE DOIVENT PAS</span>
+recevoir ce genre d'arguments.</big></li>
+
+  <big style="font-family: Helvetica,Arial,sans-serif;">
+  </big><li style="font-family: Helvetica,Arial,sans-serif;"><big>Aucune de ces commandes ne s'ex&eacute;cute si le fichier
+correspondant &agrave; la variable <b>$DIAGNOSTIC_EXIT</b>
+(ou bien le fichier du m&ecirc;me nom) existe et contient de
+l'information. Ce comportement est requis par les scripts contenues
+sous <b>$ARMNLIB</b>/scripts/Ljdiag.<br>
+
+    </big></li>
+
+  <big style="font-family: Helvetica,Arial,sans-serif;">
+  </big>
+</ul>
+
+<br style="font-family: Helvetica,Arial,sans-serif;">
+
+<br style="font-family: Helvetica,Arial,sans-serif;">
+
+<big><big><b style="font-family: Helvetica,Arial,sans-serif;">AUTEUR</b></big></big><br style="font-family: Helvetica,Arial,sans-serif;">
+
+<big><span style="font-family: Helvetica,Arial,sans-serif;">
+Bernard Dugas - mars 1992</span><br style="font-family: Helvetica,Arial,sans-serif;">
+
+<span style="font-family: Helvetica,Arial,sans-serif;">
+Deniere revision - BD, octobre 2006</span></big>
+</body>
+</html>

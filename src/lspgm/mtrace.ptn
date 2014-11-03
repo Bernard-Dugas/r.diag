@@ -1,0 +1,287 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      mtrace  MAT TRACE [DIAGCOL] OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, OCTOBRE 14/88.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/mtrace.ptn,v 4.11 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      MTRACE EFFECTUE LE CALCUL DE LA TRACE D'UNE MATRICE CARREE 
+*      ENTREPOSEE EN MODE COLONNE. LE RESULTAT EST AFFICHE ET UNE
+*      NOUVELLE MATRICE CARREE AVEC CETTE VALEUR SUR LA DIAGONALE
+*      EST ECRITE SUR TRACE. UN DERNIER FICHIER NE CONTENANT QUE
+*      LES ELEMENTS DE LA DIAGNONALE PEUT EGALEMENT ETRE SAUVE.
+*      CE DERNIER FICHIER A ALORS LE FORMAT D'UNE COLONNE DU
+*      FICHIER MAT
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST SET IN FILE A
+*       2 NO ENOUGH RECORDS IN FILE MAT
+*       3 UNABLE TO READ A COLUMN FROM A
+*       4 MORE THAN ONE SIZE IN FILE
+*       5 NOT ENOUGH ALLOCATABLE MEMORY
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM mtrace 
+*    1               ( MAT,       TRACE,      OUTPUT, 
+*    2           TAPE1=MAT, TAPE2=TRACE, TAPE6=OUTPUT) 
+
+*     $Log: mtrace.ptn,v $
+*     Revision 4.11  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.10  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2006/04/26 22:43:56  dugas
+*     Utiliser NPAS pour determiner la taille de fichiers RPN/CMC.
+*
+*     Revision 4.6  2004/11/12 16:39:15  dugas
+*     Modifier l'appel a GETFLD2 lorsque NV=1.
+*
+*     Revision 4.5  2003/05/23 21:13:05  dugas
+*     Ajouter le support de IO64B
+*
+*     Revision 4.4  2000/04/07 20:50:59  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.3  1998/07/03 02:26:34  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/05/21  20:20:52  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.1  1996/01/26  21:37:53  armnrbd
+*     Ajouter la sortie du fichier DIAGCOL.
+*
+*     Revision 4.0  1994/11/17  14:21:14  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/04/14  20:56:35  armnrbd
+*     Version a plusieurs niveaux et/ou variables.
+*     
+*     Revision 3.0  93/10/13  13:56:36  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/04  09:14:20  armnrbd
+*     Initial revision
+*      
+***   Premiere version: OCT 14/88 - B. DUGAS. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXVAR = 256
+      INTEGER,    PARAMETER :: MAXLEV = 999
+
+      REAL*8      TRACE
+      LOGICAL     OK,ERROR,DIAGCOL
+      CHARACTER*4 TYPE,VARIAB(MAXVAR),PKTYP*2
+      INTEGER     I,J,NF,NWDS,IER,JBUF(taille_entete),
+     +            JPAK,LEN,MAXW,LEV(MAXLEV),NLEV,
+     +            NVAR,NV,TIME,COL,MSTEP(MAXVAR),
+     +            NPAS,NPAS0
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,DATE,STEP
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: MAT,DCOL
+
+      LOGICAL,    EXTERNAL :: SETIO64
+      INTEGER,    EXTERNAL :: GETSIZ3,GETHIGH
+      CHARACTER,  EXTERNAL :: GETYP*4
+      EXTERNAL    JCLPNT,GETMSET,XIT,
+     +            CMPLBL,GETFLD2,PUTFLD2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        DIAGCOL / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/mtrace.ptn,v $'
+
+*---------------------------------------------------------------------
+      NF = 4
+      CALL JCLPNT( NF, 1,2,3, 6 )
+ 
+      PKTYP = GETYP( 1 )
+      OK = SETIO64(.TRUE.)
+
+***    EST-CE QUE LE NOM DU FICHIER DIAG EST
+***    PRESENT SUR LA LIGNE DE COMMANDE.
+
+      IF (NF.EQ.3) DIAGCOL = .TRUE.
+
+***    DETERMINER LA TAILLE DES COLONNES DE MAT.
+
+      MAXW = GETSIZ3( 1, JBUF, LEN,NWDS,JPAK, .TRUE.,
+     +                   LEV,NLEV, VARIAB,NVAR, MAXVAR )
+
+      IF (MAXW .LE. 0) CALL                        XIT(' Mtrace ',-1 )
+
+      WRITE(6,6100) ; CALL PRTLAB( JBUF )
+
+      NV = NLEV*NVAR
+
+***    LIRE TOUS LES ENREGISTREMENTS DE A POUR VERIFIER
+***    QUE LE PROBLEME MATRICIEL EST BIEN POSE.
+ 
+      NPAS0 = -1
+      NPAS  = -1
+      TIME  = -1
+      COL   =  0 
+  050 CALL SUIVANT( 1, JBUF, ERROR,OK )
+          IF (.NOT.OK) GOTO 100
+          IF (ERROR)   GOTO 999
+          IF (PKTYP == 'SQ') NPAS0 = GETHIGH('NPAS',JBUF )
+          IF (TIME /= JBUF(2) .OR. NPAS /= NPAS0)              THEN
+              TIME = JBUF(2)
+              NPAS = NPAS0
+              COL  = COL+1
+              STEP(COL) = NPAS
+              DATE(COL) = TIME
+          END IF
+      GOTO 050 
+ 
+  100 IF (COL.EQ.0) GOTO 999
+      CALL PRECEDE( 1,-1 )
+ 
+      WRITE(TYPE,4) JBUF(1) 
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      IF (NV*NWDS.NE.COL)                                      THEN
+          WRITE(6,6002) NV,NWDS,COL
+          CALL                                     XIT(' Mtrace ',-2 )
+      END IF
+
+***    ALLOUER LA MEMOIRE DE TRAVAIL.
+
+      ALLOCATE( IBUF(2*LEN) )
+
+      IF (DIAGCOL)                                             THEN
+          ALLOCATE( DCOL(COL),MAT(COL),DATE(COL),STEP(COL), STAT=IER )
+      ELSE
+          ALLOCATE(           MAT(COL),DATE(COL),STEP(COL), STAT=IER )
+      END IF
+
+      IF (IER.NE.0) CALL                           XIT(' Mtrace ',-5 )
+
+***    LECTURE DE TOUTES LES DONNEES (NV*NWDS COLONNES).
+ 
+      TRACE = 0.0 
+      DO   J=1,COL 
+ 
+***        LIRE LA J-IEME COLONNE DE A.
+
+          IF (NV.NE.1)                                          THEN
+              CALL GETMSET( 1, MAT, LEV,NLEV, MSTEP,.TRUE.,
+     +                         VARIAB,NVAR, IBUF,MAXW,OK )
+          ELSE
+              CALL GETFLD2( 1, MAT, ' ',-1,VARIAB,-1, IBUF,MAXW,OK )
+          END IF
+ 
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6003) J 
+              CALL                                 XIT(' Mtrace ',-3 ) 
+          END IF
+
+***        S'ASSURER DE LA CONSISTANCE DES DIMENSIONS DE A.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6004) ; CALL PRTLAB2(' First IBUF : ',JBUF )
+                              CALL PRTLAB2(' Last  IBUF : ',IBUF )
+              CALL                                 XIT(' Mtrace ',-4 )
+          END IF
+
+          IF (DIAGCOL)
+     +    DCOL(J) =       MAT(J)
+          TRACE   = TRACE+MAT(J)
+
+      END DO
+
+***    ON ECRIT LE RESULTAT SUR STDOUT ...
+ 
+      WRITE(6,6000) NV*NWDS, TRACE 
+
+      MAT(1:COL) = 0.0
+
+***    ... ET ON SAUVE LA MATRICE TRACE.
+
+      DO  J=1,COL
+
+          MAT(J)  = TRACE ; IBUF(2) = DATE(J)
+
+          IF (PKTYP == 'SQ') CALL PUTHIGH( STEP(J),'NPAS',IBUF )
+
+          IF (NV.NE.1)                                          THEN
+              CALL PUTMSET( 2, MAT, LEV,NLEV, VARIAB,NVAR, IBUF,MAXW )
+          ELSE
+              CALL PUTFLD2( 2, MAT, IBUF,MAXW )
+          END IF
+          
+          MAT(J) = 0.0
+
+      END DO
+
+***    (OPTIONELLEMENT) SAUVER LA DIAGONALE.
+
+      IBUF(2) = 0
+      IF (DIAGCOL) CALL PUTFLD2( 3, DCOL, IBUF,MAXW )
+
+***    FIN NORMALE. 
+ 
+      CALL                                         XIT(' Mtrace ', 0 ) 
+ 
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT#1. 
+ 
+  999 CALL                                         XIT(' Mtrace ',-5 ) 
+*-----------------------------------------------------------------------
+
+    4 FORMAT(A4) 
+
+ 6000 FORMAT(/' The trace of the order ',I6,' matrix is ',D14.8) 
+ 6002 FORMAT(/' In file A, NVAR*NLEV,NWDS,COL = ',3I6)
+ 6003 FORMAT(/' Error reading MAT after ',I6,'record(s).') 
+ 6004 FORMAT(/' More than one size in file. ')
+
+ 6100 FORMAT(/' First record set in A:')
+
+      END 
+#     endif

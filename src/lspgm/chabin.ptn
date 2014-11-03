@@ -1,0 +1,443 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 400000
+#     endif
+#     if !defined (ligne_maximale)
+#         define   ligne_maximale 512
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      chabin  CHAR BIN OUTPUT [ -def [VAL1] ]
+*
+*
+*     AUTHORS - R.Laprise, S.J.Lambert, B.Dugas, JUN 23/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/chabin.ptn,v 4.14 2014/09/25 20:20:46 dugas Exp $
+*      
+*
+*     PURPOSE...
+*      CONVERT A STANDARD CCRN FILE FROM CHARACTER TO BINARY FORM.
+*
+*
+*     DESCRIPTION...
+*      THE CHAR CHARACTER FILE SHOULD HAVE BE OF BLOCKED FIXED 
+*      LENGTH RECORDS OF LENGTH 80 FOR PORTABILITY.  chabin CAN ACCOUNT
+*      FOR THE PACKING DENSITY BY EMULATING THE ACTUAL UNPACKING PROCESS
+*      AND THIS IS THE DEFAULT WORKING MODE. IT WILL THEN START THE PROCESS
+*      AFTER THE DATA TRANSFER INTO FULL WORDS IS DONE, SO THAT IF THE DATA
+*      WAS PACKED, THE INPUT IS HEXADECIMAL. UNPACKED DATA ARE READ WITH A
+*      '(1P5E15.6,5X)' FIXED FORMAT. NEGATIVE PACKING DENSITIES ARE ALSO
+*      SUPPORTED.
+*
+*      NOTES: 1) THE FIST LINE OF EACH RECORD HAS TO CONTAIN A
+*                STANDARD 8-WORD CCRN HEADER AND IS READ WITH
+*                A '(1X,A4,I10,1X,A4,5I10)' FORMAT.
+*             2) THE -def PARAMETRE KEY SELECTS THE OLDER NON-PACKING
+*                OPERATING MODE, WHERE DATA IS ALWAYS READ AS IF IT WERE
+*                UNPACKED. THE PROGRAM IS THEN SAID TO BE RUNNING IN (BACWARD)
+*                COMPATIBILITY MODE.
+*             3) THE INPUT FORMAT CAN ALSO BE CHANGED BY SUPPLYING
+*                AN ALTERNATE VALUE WITH THE -def PARAMETRE KEY, AS IN
+*                             -def '(1P6E15.6,5X)'
+*                WHERE THE SINGLE QUOTES ARE NOT OPTIONAL FEATURES.
+*                
+*
+*     INPUT FILE...
+*      CHAR = UPPER-CASE CHARACTER VERSION OF A CCC FORMAT FILE
+*
+*     OUTPUT FILE...
+*      BIN  = THE BINARY VERSION OF THE SAME FILE
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 RECORD SIZE TOO LARGE
+*       2 FILE CHAR SEEMS EMPTY (ERROR WHILE READING FIRST LINE)
+*       3 ERROR WHILE READING NUMERICAL DATA
+*       4 ERROR WHILE READING LABEL DATA
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM chabin
+*    +              (      CHAR,       BIN,       OUTPUT,
+*    +               TAPE1=CHAR, TAPE2=BIN, TAPE6=OUTPUT) 
+
+*     $Log: chabin.ptn,v $
+*     Revision 4.14  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2008/01/16 03:24:36  dugas
+*     Corriger la lecture de BUF(1:8).
+*
+*     Revision 4.11  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.10  2006/01/04 17:43:46  dugas
+*     La valeur du macro grille_maximale passe de 200000 a 400000
+*
+*     Revision 4.9  2005/07/28 15:45:44  dugas
+*     Modifier la documentation automatique.
+*
+*     Revision 4.8  2004/11/12 16:29:12  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.7  2003/05/23 20:10:34  dugas
+*     Ajouter le support de donnees a 64 bits
+*
+*     Revision 4.6  2002/01/14 15:47:49  dugas
+*     Modifier le code de lecture de fin de fichier a l'enonce
+*      numero 100 afin d'eliminer un message d'erreur superflu.
+*
+*     Revision 4.5  1999/04/08 22:04:50  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.4  1998/11/27 15:53:14  armnrbd
+*     Augmenter la taille de FORM1, qui peut etre lu en argument.
+*
+*     Revision 4.3  1998/08/28  18:03:43  armnrbd
+*     Ajouter un mode de compatibilite arriere (CCCma).
+*
+*     Revision 4.2  1997/09/04  19:37:01  armnrbd
+*     Ajouter support des fichiers SQI.
+*     Corriger le traitement de NBW dans les cas 64-bits.
+*
+*     Revision 4.1  1996/06/14  18:54:59  armnrbd
+*     Ajouter un commentaire sur le format du label de huit mots.
+*
+*     Revision 4.0  1994/11/17  14:19:24  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:36  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/14  18:11:06  armnrbd
+*     Tenir compte de PK92 (NBITS>=32).
+*     
+*     Revision 1.3  92/11/06  17:32:44  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/18  10:33:22  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.1  92/03/04  20:56:21  armnrbd
+*     Ajouter compresssions negatives.
+*     
+*     Revision 1.0  92/02/24  14:41:34  armnrbd
+*     Initial revision
+*     
+
+***    JUN 23/83 - R.LAPRISE, S.J.LAMBERT. 
+
+***    HISTORIQUES DES MODIFICATIONS:
+***    10 OCTOBRE 1990 - B.DUGAS, RPN : VERSION CY920 32BIT.
+***    23 AOUT    1991 - B.DUGAS, RPN : MIN BUF(5)=HEAD.
+***    25 FEVRIER 1992 - B.DUGAS, RPN : ADAPTE DE CHABIN (UPDTCRA) 
+***    ... CHANGE OUTPUT FORMAT: TAKE INTO ACCOUNT PACKING DENSITY BY
+***        EMULATING THE ACTUAL PACKING PROCESS.  THE  PROCESS STARTS
+***        JUST AFTER THE DATA DE-COMPRESSION INTO FULL WORDS IS DONE.
+***        IF THE DATA WAS PACKED, THE INPUT IS HEXADECIMAL. UNPACKED
+***        DATA ARE TREATED AS BEFORE.
+***    ... NEGATIVE PACKING DENSITIES ARE NOW SUPPORTED.
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXW
+      PARAMETER  ( MAXW = grille_maximale )
+      INTEGER      MAXC
+      INTEGER      MAXLIGNE
+      PARAMETER  ( MAXLIGNE = ligne_maximale )
+
+      REAL         ZERO
+      LOGICAL      OK,SPEC,DEF
+      CHARACTER    TYPE*4,SUPC*ligne_maximale
+      INTEGER      SUP(ligne_maximale)
+      CHARACTER*30 FORM1,VALEUR,FORM2*6,FORMC*7
+      REAL*8       XINTE,RANGE,XMIN
+      INTEGER      APACK,PACK,PMAX, NWDS,NBW,BLANK,
+     +             I,L,IO,NB,NC,NW,NRECS,HEAD,NFF,
+     +             LEN1,LEN2,LAC
+
+      EQUIVALENCE ( SUP(1),SUPC )
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: BUF,NF
+      REAL*8,      DIMENSION(:), ALLOCATABLE :: F
+
+#     include     "machtype.cdk"
+
+      CHARACTER*4  GETYP,PKTYP
+      EXTERNAL     GETYP
+
+      LOGICAL      RPBLOC,SETIO64
+      EXTERNAL     RPBLOC,SETIO64
+
+      EXTERNAL     MACSPE,JCLPNT,XIT,PUTFLD2,HPALLOC,PUTPARC
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         BLANK / Z'20202020' /
+*=======================================================================
+ 
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/chabin.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+      ALLOCATE( BUF(2*(HEAD+MAXW)),F(MAXW),NF(MAXW) )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3
+      CALL JCLPNT( NFF, -1,2, 6 )
+
+      PKTYP = GETYP( 0 )
+
+      IF (MACHINE.EQ.2)                                        THEN
+          IF (PKTYP     .EQ.'    ') NBW = 64
+          IF (PKTYP     .EQ.'PK84' .OR.
+     +        PKTYP(1:2).EQ.'SQ'  ) NBW = 32
+      ELSE IF (MACHINE.EQ.1)                                   THEN
+          NBW = 64
+      END IF
+
+      DEF   = .FALSE.
+      FORM1 = '(1P5E15.6)'
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          DEF = RPBLOC('DEFAUT',VALEUR)
+
+          IF (DEF)                                             THEN
+              WRITE(6,6100)
+              IF (VALEUR.NE.' ') FORM1 = VALEUR
+          END IF
+
+      END IF
+
+***    FIRST READ IN LABEL TO FIND NATURE OF FIELD.
+  
+      NRECS = 0 
+
+  100 READ(1,1000,ERR=901,END=902,IOSTAT=IO) BUF(1:8)
+
+          IF (BUF(5).LT.1) BUF(5) = 1
+          IF (BUF(6).LT.1) BUF(6) = 1
+
+          WRITE(TYPE,4) BUF(1)
+          NWDS = BUF(5)*BUF(6)
+          PACK = BUF(8)
+
+          IF (TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR')              THEN
+              SPEC = .TRUE.
+              NWDS = NWDS*2
+          ELSE
+              IF (TYPE.EQ.'CMPL' )
+     +        NWDS = NWDS*2
+              SPEC = .FALSE.
+          END IF
+ 
+          IF (NWDS.GT.MAXW) CALL                   XIT(' CHABIN ',-1 )
+ 
+          IF (TYPE.NE.'LABL' .AND. TYPE.NE.'CHAR')             THEN
+  
+***            CASE WHERE FIELD CONTAINS DATA.
+ 
+              IF (DEF          .OR.
+     +            PACK.EQ.  0  .OR.
+     +            PACK.EQ.  1  .OR.
+     +            PACK.LE.-NBW .OR. TYPE.EQ.'FOUR')            THEN
+ 
+***                THIS PART IS CONSISTENT WITH THE OLD CHABIN.
+ 
+                  READ(1,FORM1,END=903) (F(I), I=1,NWDS)
+ 
+              ELSE
+ 
+***                THE DATA IS IN PACKED HEXADECIMAL FORMAT.
+ 
+                  IF (PACK.LT.0)                               THEN
+                      APACK =  -PACK
+                  ELSE
+                      APACK =  NBW/PACK
+                  END IF
+
+                  NC   = MAX( 1, (APACK-1)/4+1 )
+
+                  NW   = 80/NC
+                  NB   = 80-NW*NC
+                  PMAX = 2**APACK-1
+ 
+                  IF (SPEC)                                    THEN
+ 
+***                    PACKED SPECTRAL DATA...
+ 
+                      READ(1,1050) F(1), RANGE, XMIN
+ 
+                      XINTE = RANGE/DBLE( PMAX )
+ 
+***                    BUILD THE INPUT FORMAT.
+ 
+                      IF (NB.NE.0)                             THEN
+                          WRITE(FORM1,1001) NW,NC,NB
+                          READ(1,FORM1) (NF(I),I=2,NWDS)
+                      ELSE
+                          WRITE(FORM2,1002) NW,NC
+                          READ(1,FORM2) (NF(I),I=2,NWDS)
+                      END IF
+ 
+                      DO 150 I=2,NWDS
+                          F(I) = XMIN+DBLE( NF(I) )*XINTE
+  150                 CONTINUE
+ 
+                  ELSE
+ 
+***                    ANY OTHER KIND OF PACKED DATA.
+ 
+                      READ(1,1040) RANGE, XMIN
+ 
+                      XINTE = RANGE/DBLE( PMAX )
+ 
+***                    BUILD THE INPUT FORMAT.
+ 
+                      IF (NB.NE.0)                             THEN
+                          WRITE(FORM1,1001) NW,NC,NB
+                          READ(1,FORM1) (NF(I),I=1,NWDS)
+                      ELSE
+                          WRITE(FORM2,1002) NW,NC
+                          READ(1,FORM2) (NF(I),I=1,NWDS)
+                      END IF
+ 
+                      DO 200 I=1,NWDS
+                          F(I) = XMIN+DBLE( NF(I) )*XINTE
+  200                 CONTINUE
+ 
+                  END IF
+
+              END IF
+
+              CALL PUTFLD2( 2, F, BUF,MAXW )
+
+          ELSE IF (TYPE.EQ.'LABL')                             THEN
+  
+***            CASE WHERE FIELD CONTAINS A SUPERLABEL (TEXT).
+  
+              SUPC = ' '
+
+              IF (MACHINE.EQ.1)                                THEN
+                  MAXC = ligne_maximale/8
+                  READ(1,1021,ERR=904,END=904,IOSTAT=IO) 
+     +                (SUP(I),I=1,MIN( NWDS*MACHINE,MAXC ))
+              ELSE IF (MACHINE.EQ.2)                           THEN
+                  MAXC = ligne_maximale/4
+                  READ(1,1022,ERR=904,END=904,IOSTAT=IO) 
+     +                (SUP(I),I=1,MIN( NWDS*MACHINE,MAXC ))
+              END IF
+
+              IF (PKTYP(1:2).EQ.'SQ')                          THEN
+                  CALL PUTPARC( 'ETIKET',SUPC )
+              ELSE
+                  BUF(5) = MAX(NWDS,HEAD)
+                  CALL  PUTLAB( 2, SUP, BUF,NWDS, .FALSE.,.FALSE.)
+              END IF
+
+          ELSE IF (TYPE.EQ.'CHAR')                             THEN
+  
+***            CASE WHERE FIELD CONTAINS A MULTI-LINE CHARACTER RECORD.
+  
+              IF      (BUF(8).EQ.-64)                          THEN
+                  LAC  = NWDS*MACHINE
+                  LEN1 = MIN( BUF(5)*8, MAXLIGNE )
+                  IF (INTSIZE*MACHINE.EQ.1)                    THEN
+                      LEN2 = LEN1 / 8
+                      WRITE(FORMC,"('(',I3,'A8)')") LEN2
+                  ELSE
+                      LEN2 = MIN( 2*BUF(5), MAXLIGNE/4 )
+                      WRITE(FORMC,"('(',I3,'A4)')") LEN2
+                  END IF
+              ELSE IF (BUF(8).EQ.-32)                          THEN
+                  LAC  = NWDS
+                  LEN1 = MIN( BUF(5)*4, MAXLIGNE )
+                  LEN2 = LEN1 / 4
+                  WRITE(FORMC,"('(',I3,'A4)')") BUF(5)
+              END IF
+
+              DO I=1,LAC,LEN2
+                  READ(1,'(A)',ERR=904,END=904,IOSTAT=IO) SUPC(1:LEN1) 
+                  READ(SUPC,FORMC)
+     +          ( NF(L), L=I,MIN( LAC,I+LEN2-1 ) )
+              END DO
+ 
+              CALL PUTFLD2( 2, NF, BUF,MAXW )
+
+          END IF
+
+          NRECS = NRECS+1 
+
+      GOTO 100 
+  
+***    E.O.F. ON FILE CHAR.
+  
+  901 IF (IO.NE.-1 .AND. IO.NE.0) WRITE(6,6001) IO
+      IF (NRECS.EQ.0) CALL                         XIT(' Chabin ',-2 )
+
+  902 WRITE(6,6000) NRECS 
+      CALL                                         XIT(' Chabin ', 0 )
+
+***    E.O.F WHILE READING DATA.
+
+  903 WRITE(6,6001) IO
+      CALL                                         XIT(' Chabin ',-3 ) 
+  
+***    E.O.F WHILE READING LABEL DATA.
+    
+  904 WRITE(6,6001) IO
+      CALL                                         XIT(' Chabin ',-4 ) 
+  
+*-----------------------------------------------------------------------
+    4 FORMAT (A4)
+
+ 1000 FORMAT (BZ,1X,A4,I10,1X,A4,5I10)
+ 1001 FORMAT('(',I2.2,'Z',I1,',',I2.2,'X)')
+ 1002 FORMAT('(',I2.2,'Z',I1,')')
+ 1021 FORMAT (050A8) 
+ 1022 FORMAT (100A4) 
+ 1040 FORMAT(7X,1PE20.12,5X,1PE20.12,8X)
+ 1050 FORMAT(6X,1PE20.12,7X,1PE20.12,5X,1PE20.12,2X)
+ 6000 FORMAT ('0Chabin converted ',I5,' records.') 
+ 6001 FORMAT ('0Chabin found I/O error ',I3,' on unit 1.')
+ 6100 FORMAT ('0Chabin is running in compatibility mode')
+
+      END 
+#     endif

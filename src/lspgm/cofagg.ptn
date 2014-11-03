@@ -1,0 +1,527 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if !defined (nombre_de_taches)
+#         define   nombre_de_taches 1
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     cofagg  SPFILE GGFILE INPUT OUTPUT [ -lon  VAL1  -lat VAL2 
+*                                          -kuv [VAL3] -npg VAL4
+*                                          -kind VAL5 ]
+*
+*
+*     DESCRIPTION...
+*     cofagg  - CONVERTS SPECTRAL FILE TO GAUSSIAN GRIDS
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 06/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/cofagg.ptn,v 4.12 2014/09/25 20:20:46 dugas Exp $
+*
+*
+*     PURPOSE - READS A FILE OF SPECTRAL COEFFICIENTS (SPFILE), CONVERTS
+*               THEM TO GAUSSIAN GRIDS,  AND WRITES  THEM ON FILE GGFILE
+*               WITH PACKING DENSITY NPG. NOTE THAT ALL SPECTRAL FIELDS
+*               IN SPFILE MUST BE THE SAME SIZE.
+*
+*
+*     INPUT FILE...
+*      SPFILE = INPUT FILE OF SPECTRAL COEFFICIENTS
+*
+*     OUTPUT FILE...
+*      GGFILE = OUTPUT FILE OF GAUSSIAN GRIDS
+*
+*
+*     INPUT PARAMETERS...
+*
+*      LON   = NUMBER OF GRID POINTS IN GAUSSIAN LATITUDE CIRCLE
+*              (MUST BE EVEN, POWERS OF 2,3,5,7 ARE OK)
+*      LAT   = NUMBER OF GAUSSIAN LATITUDES IN THE OUTPUT ARRAYS
+*      KUV   = 0 FOR NORMAL ANALYSIS (PRIMARY DEFAULT)
+*            = 1 TO CONVERT MODEL WINDS TO REAL WINDS (SECONDARY DEFAULT)
+*      NPG   = GRID PACKING DENSITY (0 DEFAULTS TO CURRENT)
+*      KIND    DETERMINES THE PROCESSING OPTION IN THE FOLLOWING WAY
+*            = 0 ==> GLOBAL COEFFICIENTS INPUT, GLOBAL OUTPUT GRIDS
+*            < 0 ==> ANTI-SYMMETRIC COEFFICIENTS, HEMISPHERIC OUTPUT
+*            > 0 ==> SYMMETRIC COEFFICIENTS,        "     "      "  
+*              ABS(KIND) = 1 ==> NH OUTPUT GRIDS
+*                          2 ==> SH OUTPUT GRIDS
+*
+*      READ( 5,5010 ) ILG,ILAT,KUV,NPKGG,KIND
+*5010  FORMAT(10X,5I5)
+*
+*     COMMENTS CONCERNING THE USAGE OF KUV...
+*
+*      THIS PARAMETER IS ONLY RELEVANT FOR VECTOR COMPONENTS AND SHOULD
+*      NEVER BE USED FOR SCALAR FIELDS. SPECTRAL PROJECTIONS OF VECTOR
+*      COMPONENTS CAN ONLY BE CARRIED ON SO-CALLED MODEL COMPONENTS,
+*      WHICH ARE ASSUMED THE BE THE REAL WINDS MULTIPLIED BY
+*
+*                  COS( LAT )/( EARTH RADIUS ).
+*
+*      THE MODEL WINDS ARE THUS CONTINUOUS AT THE POLES AND CAN THEN
+*      BE CORRECTLY PROJECTED. THE NORMAL MODE OF OPERATION ASSUMES
+*      THE PRESENCE OF SO-CALLED MODEL WINDS AND DOES NO CONVERSIONS.
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* COFAGG     64   32    0    4    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ILAT NOT EVEN FOR A GLOBAL CALCULATION
+*       2 PROBLEM WITH INPUT PARAMETRES OR UNKNOW TRUNCATION TYPE
+*       3 INTERNAL SPECTRAL REPRESENTATION ERROR
+*       4 ERROR READING SPFILE. CHANGING SIZE
+*       5 ERROR ABORT READING INPUT
+*       6 PREMATURE EOF ON SPFILE
+*       7 REQUESTED OUTPUT GRID IS TOO SMALL
+*       8 UNABLE TO ALLOCATE WORKING MEMORY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM cofagg 
+*    +               (SPFILE,       GGFILE,       INPUT,       OUTPUT,
+*    +          TAPE1=SPFILE, TAPE2=GGFILE, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ----------------------------------------------------------------
+
+*     $Log: cofagg.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:46  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2013/12/11 22:12:23  dugas
+*     Enlever la declaration redondante de GETYP.
+*
+*     Revision 4.10  2013/10/16 20:40:42  bernard
+*      - Declarations 'a la' F90
+*      - Utiliser les macros latitude_maximale et lm_maximal pour definir MAXJ et MAXM, respectivement
+*      - Tous les calculs se font en mode 64 bits, de meme que l'I/O
+*      - Gestion des allocationa de memoire avec ALLOCATE plutot que HPALLOC/DEHPALLC
+*      - Ne plus faire d'appel a MACSPE
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2001/02/09 03:44:16  armnrbd
+*     Definir la grille de sortie avec PUTHIGH/PUTHIC.
+*
+*     Revision 4.6  2000/03/07 21:40:49  armnrbd
+*     Ajouter des commentaires sur l'usage du parametre "-kuv".
+*
+*     Revision 4.5  1998/07/03 02:26:21  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1997/09/26  18:36:02  armnrbd
+*     Deuxieme phase de la generalisation de taille_entete.
+*
+*     Revision 4.3  1997/09/26  17:38:45  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1996/01/30  23:48:06  armnrbd
+*     Empecher le calcul si la grille de sortie est trop petite.
+*
+*     Revision 4.1  1995/02/20  19:54:27  armnrbd
+*     ILG1=ILG pour les fichiers de type SQI.
+*
+*     Revision 4.0  94/11/17  14:19:28  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.1  94/08/09  15:06:09  armnrbd
+*     Re-activer les modes de travail hemispheriques.
+*     
+*     Revision 3.0  93/10/13  13:55:38  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.6  93/08/04  11:42:46  11:42:46  armnrbd (Bernard Dugas)
+*     Utiliser CLRLMT dans les calculs de lrlmt.
+*     Utiliser l'option d'allocation Real*8 de HPALLOC.
+*     
+*     Revision 1.5  93/03/09  10:24:43  armnrbd
+*     Separer SP et GG dans le champs GG. Modifier MEMCOFG.
+*     
+*     Revision 1.4  92/12/21  15:33:37  armnrbd
+*     Utiliser FFTINI2 (SFFT au niveau FACTOR5a).
+*     Implanter defaut primaire/secondaire pour KUV.
+*     
+*     Revision 1.3  92/12/17  21:27:32  armnrbd
+*     Utiliser RPBLOC pour passer les parametres.
+*     Utiliser les symmetries hemispheriques dans les transformees de legendre.
+*     
+*     Revision 1.2  92/03/17  10:27:23  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/09  15:43:46  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:35  armnrbd
+*     Initial revision
+*     
+
+*     JAN 17/91 - B.DUGAS  (CALL TO GETLIGN ADDED)
+*     NOV 16/90 - B.DUGAS  (VERSION CY920/IRIX F77)
+*     MAI 12/89 - B.DUGAS  (CORRIGER LA VALEUR DU SCALAIRE IASIZE)
+*     NOV 25/88 - B.DUGAS  (CAS HEMISPHERIQUES SYMMETRIQUES/ANTI-SYMM,
+*                           UTLISER "CALL MEMORY" ET ENLEVER LA LIMITE
+*                           DE DIMENSION SPECTRALE T42 ...).
+*     AUG 13/85 - B.DUGAS  (AUGMENTER DIM SPECTRALE POUR T42).
+*     NOV 06/81 - J.D.HENDERSON.
+
+*--------------------------------------------------------------------------
+      IMPLICIT      none
+
+      INTEGER, PARAMETER :: HEAD = taille_entete
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXM = lm_maximal , MAXNP = 64
+
+      LOGICAL       OK
+      CHARACTER     LIGNE*80,VALEUR*10,NAME*4,PKTYP*2
+      INTEGER       MAXLEV,NR,ILEV,NSP,NGG,I,J,L,IO
+      INTEGER       IB(HEAD,MAXNP),IFAC(20),LSR(2,MAXM),IER
+      INTEGER       JBUF(HEAD),JPAK,NP,NFF,NPKGG,MAXLR
+      INTEGER       ILG1,ILH,ILATH,LGG,LA,LA2,LA3,LR,LM,LRLMT,KTR
+      INTEGER       MAXW,NWDS,LENSPE,LENGRD, ILG,ILAT,KUV,KIND
+      REAL(8)       CL(MAXJ),RAD(MAXJ),WOSSL(MAXJ),SL(MAXJ),WL(MAXJ)
+      REAL(8)       DALP,DP
+
+      INTEGER,      DIMENSION(:),ALLOCATABLE :: IBUF
+      REAL(8),      DIMENSION(:),ALLOCATABLE :: AP,CT,WRK,TRIG,WG,WZ
+      REAL(8),      DIMENSION(:),ALLOCATABLE :: WS,P,CA,ALP,EPSI
+
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+C$    INTEGER       mpserv,Bidon
+C$    EXTERNAL      mpserv
+
+      CHARACTER(4), EXTERNAL :: GETYP
+      INTEGER,      EXTERNAL :: CLRLMT
+      LOGICAL,      EXTERNAL :: RPBLOC,SETIO64
+      EXTERNAL      JCLPNT,GETLIGN,BURNF,XIT
+      EXTERNAL      LGTST,GETFLD2,COFG,LWBW,PUTFLD2
+      EXTERNAL      GETBUF2,DIMGT2,LBLCHK,SETLAB,FFTINI2
+      EXTERNAL      PUTHIGH,PUTHIC
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/cofagg.ptn,v $'
+
+*-------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+                   NFF  = 4
+      CALL JCLPNT (NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+*-------------------------------------------------------------------
+***    READ GLOBAL GAUSSIAN GRID SIZE (ILG,ILAT) WHERE ILG MUST BE
+***    MADE OF  POWERS OF THE FIRST 16 PRIME NUMBERS.  THE  ACTUAL
+***    GRID PRODUCED HAS SIZE (ILG+1,ILAT). KUV = 1 CONVERTS MODEL
+***    WINDS TO REAL WINDS  AND NPKGG  IS THE OUTPUT GRID  PACKING 
+***    DENSITY. ILAT **HAS** TO BE EVEN.
+
+      IF (RPBLOC( ' ',VALEUR ))                                    THEN
+
+          ILG   = 0
+          ILAT  = 0
+          KUV   = 0
+          NPKGG = 0
+          KIND  = 0
+
+          OK = RPBLOC('LON',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=900,IOSTAT=IO) ILG
+          OK = RPBLOC('LAT',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=900,IOSTAT=IO) ILAT
+          OK = RPBLOC('KUV', VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=900,IOSTAT=IO) KUV
+          OK = RPBLOC('NPG', VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=900,IOSTAT=IO) NPKGG
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=900,IOSTAT=IO) KIND
+
+      ELSE
+
+          CALL GETLIGN( 5, LIGNE,80, OK )
+
+          IF (.NOT.OK)                                             THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010, ERR=900,END=901,IOSTAT=IO ) 
+     +                           ILG,ILAT,KUV,NPKGG,KIND
+              CALL BURNF
+          END IF  
+
+      END IF
+
+      ILG1  = ILG+1 
+      IF (PKTYP.EQ.'SQ') 
+     +ILG1 = ILG
+      IF (MOD( ILG1,2 ).EQ.0)
+     +ILG  = ILG1
+
+      ILH   = ILG/2+1
+      LGG   = ILG1*ILAT
+      ILATH = ILAT/2
+  
+      IF (KUV  .EQ.1) WRITE(6,6100)
+      IF (KIND .GT.0) WRITE(6,6110)
+      IF (KIND .LT.0) WRITE(6,6120)
+      IF (KIND .NE.0) ILATH =ILAT
+  
+      IF ( MOD(ILAT,2).NE.0 .AND. KIND.EQ.0 )                  THEN
+          WRITE(6,6001) ILAT
+          CALL                                     XIT(' Cofagg ',-1 )
+      END IF
+  
+***    READ THE FIRST INFORMATION FIELD TO GET THE SIZE (LA)
+***    OF THE SPECTRAL INPUT ARRAYS.
+  
+      CALL GETBUF2( -1, JBUF,HEAD,OK )
+      CALL PRTLAB( JBUF )
+      IF (.NOT.OK) GOTO 902
+
+      LRLMT = JBUF(7)
+      CALL DIMGT2( LSR, LA,LR,LM,KTR,LRLMT, 0,-1 )  
+      LA    = JBUF(5)
+
+      IF (NPKGG.EQ.0) NPKGG = JBUF(8)
+
+***    PROBLEM WITH INPUT PARAMETRES: EITHER WE DO NOT HAVE 
+***    RHOMBOIDAL OR TRIANGULAR TRUNCATIONS, OR THE ILAT,ILG
+***    VALUES DO NOT MAKE SENSE.
+  
+      IF ((KTR .NE.0    .AND. KTR .NE.2) .OR.
+     +    (ILAT.GT.MAXJ .OR.  ILAT.LE.0) .OR.
+     +     ILG .LE.0                        )                  THEN
+          WRITE(6,6002) ILG,ILAT,KTR
+          CALL                                     XIT(' Cofagg ',-2 )
+      END IF
+
+***    DETERMINE NECESSARY JBUF SIZE.
+
+      CALL LBLCHK (LENSPE, NWDS,JPAK,JBUF)
+      CALL SETLAB (JBUF,'GRID',-1,' ',-1,ILG1,ILAT,IABS(KIND),NPKGG) 
+      CALL LBLCHK (LENGRD, NWDS,NPKGG,JBUF)
+
+      MAXW = MAX( LENSPE,LENGRD )-HEAD
+  
+      IF (ILG.LT.3*(LM-1)+1) WRITE(6,6140)
+      IF (KTR.EQ.0) MAXLR = LR+LM-2
+      IF (KTR.EQ.2) MAXLR = LR   -1
+      IF (ILG .LT.2*(LM-1)+1 .OR.
+     +    ILAT.LT.(MAXLR+1)  )                                 THEN
+          WRITE(6,6007) 
+          CALL                                     XIT(' Cofagg ',-7 )
+      END IF
+  
+*---------------------------------------------------------------------
+***    CHECK THE NUMBER OF PARALLEL THREADS AVAILABLE.
+ 
+                   NP    =  1
+C$                 NP    =  nombre_de_taches
+C$                 NP    = mpserv( 'THREADS', NP   )
+C$    IF (NP.EQ.1) Bidon = mpserv( 'DESTROY',Bidon )
+ 
+***    ASK FOR MEMORY. BUT FIRST, CHECK SPECTRAL DIMENSIONS.
+
+      CALL DIMGT2( LSR, LA2,LR,LM,KTR,LRLMT, KIND,-1 )
+      CALL DIMGT2( LSR, LA3,LR,LM,KTR,LRLMT,  0,  -1 )
+
+      IF (LA2.NE.LA)                                           THEN
+          WRITE(6,6003) LA2,LA
+          CALL                                     XIT(' Cofagg ',-3 )
+      END IF
+
+      WRITE(6,6160) LA,LR,LM,KTR,LRLMT
+  
+***    ALLOCATE MEMORY.
+
+      allocate( AP  (  ILH *2 * ILAT      ),
+     +          ALP (( LA3    + LM   ) *NP),
+     +          CA  (  LA3                ),
+     +          CT  (  ILG *2          *NP),
+     +          EPSI(( LA3    + LM   ) *NP),
+     +          P   (  LA     * ILATH     ),
+     +          TRIG(  ILG    * 6         ),
+     +          WG  (  LGG             *NP),
+     +          WRK (  ILG *2          *NP),
+     +          WS  (( LA  *2 )        *NP),
+     +          IBUF(  MAXW   + HEAD      ), STAT=IER )
+          
+      IF (IER /= 0) CALL                          XIT(' Cofagg ',-8 )
+
+*-------------------------------------------------------------------
+***    FIRST TIME ONLY, SET CONSTANTS FOR SPECTRAL TO GRID
+***    TRANSFORMATIONS. 
+  
+      CALL FFTini2( TRIG,IFAC,ILG, IER ) 
+
+      CALL LGTST( ILAT,LRLMT, SL,WL, CA,P,DP, CL,RAD,WOSSL,
+     +            ALP,DALP,EPSI, LSR,LA,LM, .TRUE.,.FALSE., KIND,NP )
+  
+      MAXLEV = NP
+
+      WRITE(6,6170) LR,LM,ILG1,ILAT,MAXLEV
+  
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+***    READ AS MANY SPECTRAL FIELDS AS POSSIBLE (2*LA REAL WORDS EACH).
+  
+      NR   = 0
+  100 ILEV = 0
+  
+          NSP = 1
+          DO 200 L=1,MAXLEV
+  
+              CALL GETFLD2( 1, WS(NSP), 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+  
+              IF (.NOT.OK)                                     THEN
+                  IF (ILEV.EQ.0) GOTO 450
+                  GOTO 250
+              END IF
+  
+              IF (IBUF(5).NE.LA .OR. 
+     +           (IBUF(7).NE.CLRLMT(LR,LM,KTR,.TRUE.).AND.
+     +            IBUF(7).NE.CLRLMT(LR,LM,KTR,.FALSE.)))       THEN
+                  CALL                             XIT(' Cofagg ',-4 )
+              END IF
+  
+              DO I=1,HEAD
+                  IB(I,L)=IBUF(I)
+              END DO
+  
+              ILEV = ILEV+1
+              NSP  = NSP+2*LA 
+  
+  200     CONTINUE
+  
+***        CONVERT ILEV SPECTRAL FIELDS TO GAUSSIAN GRIDS. 
+***        NORMAL SPEC FIELDS ARE (LR,LM) BUT WINDS ARE (LRW,LM).
+
+  250     DO 300 L=1,ILEV
+              NSP = (L-1)*LA*2+1
+              NGG = (L-1)*LGG +1
+              CALL COFG( WS(NSP),WG(NGG), AP,P,KIND,
+     +                   ILG1,ILAT,LA,ILH, NP,LM,ILG, 
+     +                   CT,LSR,IFAC,WRK,TRIG )
+  300     CONTINUE
+
+          IF (KUV.EQ.1) CALL LWBW( WG, ILG1,ILAT,ILEV, CL, -1 )
+
+*-------------------------------------------------------------------
+***        WRITE ALL THE GRIDS ONTO FILE 2.
+  
+          NGG = 1
+          DO 400 L=1,ILEV
+
+              DO  I=9,HEAD
+                  IBUF(I) = IB(I,L)
+              END DO
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL PUTHIC( 'G'       ,'GRTYP',IBUF )
+                  CALL PUTHIGH( ABS(KIND), 'IG1' ,IBUF )
+                  CALL PUTHIGH( 0        , 'IG2' ,IBUF )
+                  CALL PUTHIGH( 0        , 'IG3' ,IBUF )
+                  CALL PUTHIGH( 0        , 'IG4' ,IBUF )
+              END IF
+
+              WRITE(NAME,'(A4)') IB(3,L)
+              CALL SETLAB( IBUF, 'GRID',IB(2,L),NAME,IB(4,L),
+     +                            ILG1,ILAT,IABS(KIND),NPKGG ) 
+              CALL PUTFLD2( 2, WG(NGG), IBUF,MAXW )
+
+              IF (NR.EQ.0) CALL PRTLAB( IBUF )
+  
+              NGG = NGG+LGG
+              NR  = NR+1
+  
+  400     CONTINUE
+  
+***        STOP IF ALL SPECTRAL FIELDS HAVE BEEN CONVERTED TO GRIDS. 
+***        OTHERWISE GO BACK FOR THE NEXT SET.
+  
+  450     IF (.NOT.OK)                                         THEN
+              WRITE(6,6000) NR
+              CALL                                 XIT(' Cofagg ', 0 )
+          END IF
+  
+      GOTO 100
+  
+*---------------------------------------------------------------------
+***    E.O.F. OR ERROR ON UNIT 5.
+
+  900 IF (IO.NE.0)
+     +    WRITE(6,6180) IO
+
+  901 IF (IO.EQ.0)
+     +    WRITE(6,6005) 
+
+      CALL                                         XIT(' Cofagg ',-5 )
+  
+***    E.O.F. ON UNIT 1.
+  
+  902 WRITE(6,6006) 
+      CALL                                         XIT(' Cofagg ',-6 )
+  
+*===================================================================
+ 5010 FORMAT(10X,5I5)
+
+ 6000 FORMAT('0',I6,' Records converted.')
+
+ 6001 FORMAT(' Illegal uneven number of latitudes in global mode,',
+     +       ' ILAT =',I5)
+ 6002 FORMAT(' Problem with input parametres: ILG/ILAT =',2I6,' or'/
+     +       ' Unknown truncation type:            KTR =', I6)
+ 6003 FORMAT(' Descripancy between spectral array sizes calculated'/
+     +       ' from LRLMT(IBUF-7) and found in IBUF-5,',2I6/
+     +       ' Possible processing option error (i.e. WRONG KIND)...')
+ 6005 FORMAT(' Empty input record.')
+ 6006 FORMAT(' Empty data file.')
+ 6007 FORMAT(' Output grid too small to prevent linear aliasing.')
+
+ 6100 FORMAT('0 Include Wind conversion'/)
+ 6110 FORMAT(' Symmetric hemispheric processing requested.')
+ 6120 FORMAT(' Anti-Symmetric hemispheric processing requested.')
+ 6140 FORMAT(' Possible quadratic aliasing in longitude.')
+ 6150 FORMAT(' Possible quadratic aliasing in latitude.')
+ 6160 FORMAT('0LA,LR,LM,KTR,LRLMT=',4I8,I10)
+ 6170 FORMAT('0SPEC=',2I5,'  GRID=',2I5,'  MAXLEV=',I5)
+ 6180 FORMAT(' Cofagg reports I/O error number ',I4,' on unit 5.')
+  
+      END 
+#     endif

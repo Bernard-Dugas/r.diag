@@ -1,0 +1,497 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      plagalc   GALCFLD PLFLD PHI PHIS INPUT OUTPUT \
+*                [ -n VAL1 -t1 VA2 -kind VAL3 -a VAL4 -b VAL5 -c VAL6 -def ]
+*
+*
+*     DESCRIPTION...
+*      plagalc - INTERPOLATES GAL-CHEN LEVEL GRIDS FROM PRESS. LEVELS FOR RCM
+*
+*
+*     AUTHOR  - M.GIGUERE
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/plagalc.ptn,v 4.12 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     PURPOSE - CONVERTS A PRESSURE LEVEL GAUSSIAN GRID DATASET OF INITIAL
+*               MODEL VARIABLES (TEMP,U,V OR ES) TO A GAL-CHEN LEVEL
+*
+*
+*     INPUT FILES...
+*      PLFLD  = INPUT FIELD ON PRESSURE LEVELS. (T,U,V OR ES)
+*      PHI    = GEOPOTENTIAL HEIGHT (VARIABLE NAME: 'PHI'  OU 'GZ')
+*      PHIS   = OROGRAPHY (FOR RCM) (VARIABLE NAME: 'PHIS' OU 'MT')
+*
+*     OUTPUT FILE...
+*      GALCFLD= INTERPOLATED DATASET ON GALC-CHEN LEVELS.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NPSL   (n)    = NUMBER OF REQUESTED PSEUDO-SIGMA LEVELS, (DEF=5, MAX 999).
+*                      IF NTHL IS NEGATIVE, EACH -NTHL LEVTH VALUES ARE READ WITH
+*                      A I10 FORMAT OR AN E10.0 IF ITS VALUE CONTAINS A DECIMAL
+*                      POINT.
+*      TMOYEN (t1)   = MEAN TEMPERATURE (USED FOR TRANSFORM PRESS. TO P-SIGMA LEVELS)
+*      HTOIT  (a)    = HEIGHT(M) AT THE LID OF MODEL.
+*      RLUP   (b)    = LAPSE RATE USED TO EXTRAPOLATE UPWARDS.
+*      RLDN   (c)    = LAPSE RATE USED TO EXTRAPOLATE DOWNWARDS.
+*      COORD  (kind) = 'GALC' OR BLANK, FOR GALC-CHEN VERTICAL COORDINATES.
+*
+*      PSIG          = PSEUDO-SIGMA  LEVELS (MB). THE DEFAULTS ARE
+*                      AS SPECIFIED IN THE EXAMPLE BELOW.
+*
+*      Notes: 1) The first input line is NOT read if any command-line
+*                parameters are passed.
+*             2) Furthermore, the second line will not be read either
+*                if the "-def" defaults processing mode is requested.
+*
+*      READ( 5,5010) NPSL,TMOYEN,RLUP,RLDN,COORD,HTOIT
+*      IF (NPSL.GT.0)
+*      READ( 5,5020 ) (PSIG(I),I=1,NPSL)
+*      IF (NPSL.LT.0)
+*      READ( 5,5030 ) (PSIG(I),I=1,-NPSL)
+*5010  FORMAT(10X,I5,3E10.0,1X,A4,E10.0)
+*5020  FORMAT(16E5.0)
+*5030  FORMAT(8E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+* PLAGALC.    5      220.        0.        0. GALC    40000.
+*.100 .300 .500 .850 1.00
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ILLEGAL COORD VALUE
+*       2 NPSL LARGER THAN ALLOWED
+*       3 LSIG IS NOT MONOTONICALLY INCREASING
+*       4 NOT ENOUGH *OR* TOO MANY LEVEL *OR* NOT THE
+*         SAME NUMBER OF VERTICAL LEVELS IN PLFLD AND PHI
+*       5 PLFLD,PHI AND PHIS NOT THE SAME HORIZONTAL SIZE
+*       6 UNABLE TO READ PHIS
+*       7 FOUND HEIGHT OF LSIG LEVELS TO BE HIGHER THAN HTOIT
+*       8 UNABLE TO READ FIRST SET OF PLFLD
+*       9 MORE THAN ONE SIZE IN PLFLD
+*      10 UNABLE TO READ A SET OF PHI
+*      11 MORE THAN ONE SIZE IN PHI
+*      12 PROBLEMS READING FIRST DIRECTIVE CARD
+*      13 PROBLEMS READING SECOND DIRECTIVE CARD
+*      14 PSIG DOES NOT CONTAIN GAL-CHEN DATA
+*      15 UNABLE TO ALLOCATE WORKING MEMORY
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM plagalc 
+*     PROGRAM PLAGALC (GALCFLD  ,PLFLD  ,PHI   ,PHIS  ,INPUT ,  OUTPUT)
+*    1           TAPE1=GALCFLD, TAPE2=PLFLD , TAPE3=PHI ,TAPE4= PHIS,  
+*    2           TAPE5=INPUT,   TAPE6=OUTPUT)
+*     ----------------------------------------------------------------
+*     $Log: plagalc.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2010/02/15 22:45:54  dugas
+*     - Utiliser PRTLAB pour les message informatifs.
+*     - Allocations dynamiques avec ALLOCATE.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:06:37  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2004/11/26 16:00:40  dugas
+*     Modifier le traitement des noms de variables.
+*     Mettre a jour la documentation automatique.
+*
+*     Revision 4.7  1998/10/20 18:22:17  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.6  1998/07/03  02:26:34  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1998/05/21  20:20:52  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.4  1997/09/26  17:39:12  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1997/05/30  18:04:36  armnrbd
+*     Conversions de noms/unites seulement pour fichiers SQ89.
+*
+*     Revision 4.2  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.1  1996/09/19  15:07:05  armnrbd
+*     Premiere version fonctionnelle.
+*
+*     Revision 4.0  1995/11/10  18:04:16  armnrbd
+*     Version initiale.
+*
+
+*     MAR 02/95 - M.GIGUERE (de  E CHAN (DECODE LEVELS IN 8-WORD LABEL),
+*                           CORRECTION DES DIMENSIONS VARIABLES
+*                           ET CORRECTION FORMAT 5020 (16I5)
+*     AUG 08/94 - M.GIGUERE (COSMETIQUES ET FORMAT DE LECTURE COMME GSAPL
+*                            5020  FORMAT (16F5.0))
+*     APR 19/94 - M.GIGUERE (CORRECTION BUG AVEC PSIG, LECTURE REEL,
+*                            DECLARE INTEGER)
+*     MAR 17/94 - M.GIGUERE (COSMETIQUE)
+*     JAN 21/94 - M.GIGUERE.
+
+*---------------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+* 
+      CHARACTER*10 CLSIG(MAXLEV)
+      LOGICAL     OK,OK1,OK2,MONOTON,DEF,BIGF
+      CHARACTER   COORD*4,LIGNE*80,CPHIS,CPHI
+      INTEGER     KBUF(HEAD),LBUF(HEAD),MBUF(HEAD),
+     +            LEN,LEN1,LEN2,LEN3,I,K,L,MAXW,MAXW1,VKIND,
+     +            MAXW2,MAXW3,LEV(MAXLEV),NSL,NSL2,NPSL,IO,
+     +            NSETS,LSIG(MAXLEV),NFIL,KPAK,LPAK,MPAK,LK,
+     +            LIM1,LIM2,NST,NAME,NPACK,NWDS,IER,TOP,BOT,INC
+      REAL        WK1(MAXLEV),WK2(MAXLEV),PSIG(MAXLEV),HTOIT,
+     +            GRAV,RGAS,RCSTE,GALCV,FACT,TMOYEN,RLUP,RLDN
+
+      REAL,       DIMENSION(:), ALLOCATABLE :: GALCFLD,PHI,ZGALC,
+     +                                         PLFLD,PHIS
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        DEF / .FALSE. /
+
+      DATA      ( CLSIG(L), L=1,5 )
+     +                              /
+     +            '0.100','0.300','0.500','0.850','1.000'
+     +                              /
+
+      LOGICAL     RPBLOC
+      CHARACTER*4 GETYP,PKTYP*2
+      INTEGER     GETSIZ,GETSIZ2
+      EXTERNAL    DEFCPHY,JCLPNT,GETLIGN,BURNF,CONVPR,WRITLEV,
+     +            GETSIZ,GETSIZ2,GETFLD2,CMPLBL,GETSET2,PLAGC,
+     +            PUTSET2,XIT,GETYP,RPBLOC,MONVERT
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/plagalc.ptn,v $'
+
+*---------------------------------------------------------------------- 
+      NSETS = 0
+
+***    DEFINITION DES CONSTANTES ET PARAMETRES PHYSIQUES.
+
+      CALL DEFCPHY( GRAV,RGAS )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFIL = 6
+      CALL JCLPNT( NFIL, 1,2,3,4, 5,6 )
+  
+      PKTYP = GETYP( 1 )
+      BIGF  =.FALSE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          NPSL   = 5
+          TMOYEN = 220.
+          RLUP   = 0.0
+          RLDN   = 0.0
+          COORD  ='GALC'
+          HTOIT  = 40000.
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) COORD = LIGNE
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) NPSL
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=901,ERR=901,IOSTAT=IO) TMOYEN
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=901,ERR=901,IOSTAT=IO) HTOIT
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=901,ERR=901,IOSTAT=IO) RLUP
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=901,ERR=901,IOSTAT=IO) RLDN
+
+          DEF = RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        READ THE FIRST CONTROL CARD.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010, ERR=901,END=901,IOSTAT=IO )
+     +                     NPSL,TMOYEN,RLUP,RLDN,COORD,HTOIT
+          END IF
+
+      END IF
+
+      IF (NPSL.LT.0)                                           THEN
+          NPSL = -NPSL
+          BIGF =.TRUE.
+      END IF
+
+      IF (COORD.EQ.'    ') COORD = 'GALC'
+      IF (COORD.NE.'GALC') CALL                    XIT(' Plagalc',-1 )
+      IF (NPSL .GT.MAXLEV) CALL                    XIT(' Plagalc',-2 )
+
+      IF (.NOT.(DEF.AND.(NPSL.EQ.5)))                          THEN
+
+***        READ THE OUTPUT VERTICAL LEVEL CONTROL CARD(S).
+
+          IF (BIGF)                                            THEN
+              DO  K=1,(NPSL-1)/8+1
+                  CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 902
+                  ELSE
+                      LIM1 = 8*(K-1)+1
+                      LIM2 = MIN( NPSL, 8*K )
+                      READ( LIGNE, 5030,END=902,ERR=902,IOSTAT=IO) 
+     +                                  (CLSIG(L),L=LIM1,LIM2)
+                  END IF  
+              END DO
+          ELSE
+              DO  K=1,(NPSL-1)/16+1
+                  CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 902
+                  ELSE
+                      LIM1 = 16*(K-1)+1
+                      LIM2 = MIN( NPSL, 16*K )
+                      READ( LIGNE, 5020,END=902,ERR=902,IOSTAT=IO) 
+     +                                  (CLSIG(L),L=LIM1,LIM2)
+                  END IF  
+              END DO
+          END IF
+
+          CALL BURNF
+
+      END IF
+
+      WRITE(6,6010) TMOYEN,RLUP,RLDN,COORD,HTOIT
+
+***    CHECK LSIG CODING.
+
+      DO  K=1,NPSL
+          IF (INDEX( CLSIG(K),'.' ).EQ.0)                      THEN
+              READ( CLSIG(K),10, ERR=902,END=902,IOSTAT=IO ) LSIG(K)
+              CALL CONVPR( LSIG(K), PSIG(K), VKIND, -2 )
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  IF (VKIND.NE.21) CALL            XIT(' Plagalc', -14)
+                  CALL CONVPR( LSIG(K), PSIG(K), VKIND, +2 )
+              ELSE IF (VKIND.EQ.2)                             THEN
+                  PSIG(K) = PSIG(K) * 0.001
+              END IF
+          ELSE
+             READ( CLSIG(K),11, ERR=902,END=902,IOSTAT=IO ) PSIG(K)
+             IF (PKTYP.EQ.'SQ')                                THEN
+                 VKIND = 21
+                 CALL CONVPR( LSIG(K), PSIG(K), VKIND, +2 )
+             ELSE
+                 CALL LVCODE( LSIG(K), PSIG(K) , 1 ) 
+             END IF
+          END IF
+      END DO
+
+      CALL WRITLEV( PSIG,NPSL,'GALC' )
+
+***     CHECK THAT PSIG IS MONOTONIC FROM THE TOP DOWN.
+
+      CALL MONVERT( PSIG,NPSL, TOP,BOT,INC, MONOTON )
+
+      IF (.NOT.MONOTON .OR. TOP.NE.1) CALL         XIT(' Plagalc',-3 )
+
+***    DETERMINE THE SIZE OF THE PROBLEM AND ALLOCATE MEMORY.
+
+      MAXW1 = GETSIZ2( 2, KBUF,LEN1,NWDS,KPAK, LEV,NSL  )
+      MAXW2 = GETSIZ2( 3, LBUF,LEN2,NWDS,LPAK, LEV,NSL2 )
+      MAXW3 = GETSIZ2( 4, MBUF,LEN3,NWDS,MPAK  )
+
+      IF (NSL.LT.1       .OR.
+     +    NSL.NE.NSL2    .OR.
+     +    NSL.GT.MAXLEV) CALL                      XIT(' Plagalc',-4 )
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK1 )
+      CALL CMPLBL( 0,KBUF, 0,MBUF, OK2 )
+
+      OK = (OK1.AND.OK2)
+      IF (.NOT.OK) CALL                            XIT(' Plagalc',-5 )
+
+      LEN  = MAX( LEN1, LEN2, LEN3  )
+      MAXW = MAX( MAXW1,MAXW2,MAXW3 )
+
+      ALLOCATE( GALCFLD(NPSL*NWDS),
+     +            ZGALC(NPSL*NWDS),
+     +            PLFLD(NSL *NWDS),
+     +              PHI(NSL *NWDS), IBUF(LEN),
+     +             PHIS(     NWDS), STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT(' Plagalc',-15)
+
+      WRITE(CPHI, 0004) LBUF(3)
+      WRITE(CPHIS,0004) MBUF(3)
+
+      IF (CPHI .NE.'GZ' .AND. CPHI .NE.'PHI' )
+     +    CALL                                     XIT(' Plagalc',-6 )
+      IF (CPHIS.NE.'MT' .AND. CPHIS.NE.'PHIS')
+     +    CALL                                     XIT(' Plagalc',-8 )
+
+***    LECTURE PHIS ET CREATION DE ZGALC (HAUTEUR DES NIVEAUX PSIG)
+
+      CALL GETFLD2( 4, PHIS, 'GRID'//'SUBA',-1,CPHIS,-1, IBUF,MAXW,OK )
+
+      call prtlab( IBUF )
+
+      IF (.NOT.OK) CALL                            XIT(' Plagalc',-6 )
+
+      RCSTE = -1.*RGAS*TMOYEN/GRAV
+
+      WRITE (6,7000)
+      DO 100 K=1,NPSL
+
+***       GALCV EST LA VALEUR GAL-CHEN DU NIVEAU
+
+         GALCV = RCSTE*ALOG( PSIG(K) )
+         LK    = (K-1)*NWDS
+
+         DO  L=1,NWDS
+             ZGALC(LK+L) = PHIS(L)/GRAV+(1.-PHIS(L)/(GRAV*HTOIT))*GALCV
+         END DO
+
+***       TEST SUR ZGALC
+
+         DO  L=1,NWDS
+             IF (ZGALC(LK+L).GE.HTOIT) CALL        XIT(' Plagalc',-7 )
+         END DO
+
+         WRITE (6,7001) HTOIT,TMOYEN,PSIG(K),GALCV
+  100 CONTINUE
+
+***    BOUCLE TEMPORELLE...
+***    LECTURE DU CHAMP A INTERPOLER VERTICALEMENT
+
+  200 CALL GETSET2( 2, PLFLD, LEV,NSL, IBUF,MAXW,OK ) 
+
+          IF (NSETS.EQ.0) call prtlab( IBUF )
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6030) NSETS 
+              IF (NSETS.EQ.0)                                  THEN
+                  CALL                             XIT(' Plagalc',-8 )
+              ELSE
+                  CALL                             XIT(' Plagalc', 0 ) 
+              END IF 
+          END IF
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Plagalc',-9 )
+
+          NST   = IBUF(2)
+          NAME  = IBUF(3)
+          NPACK = IBUF(8)   
+
+***        LECTURE DE PHI
+
+          CALL GETSET2( 3, PHI, LEV,NSL, IBUF,MAXW,OK ) 
+
+          IF (NSETS.EQ.0) call prtlab( IBUF )
+
+          IF (.NOT.OK) CALL                        XIT(' Plagalc',-10 )
+          CALL CMPLBL( 0,IBUF, 0,LBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Plagalc',-11 )
+
+***        ACCOUNT FOR GEOPOTENIAL IN DECAMETRES.
+
+          IF (CPHI.EQ.'GZ')                                    THEN
+              FACT = 98.0665
+              DO  L=1,NWDS*NSL
+                  PHI(L) = PHI(L)*FACT
+              END DO
+          END IF
+
+***        INTERPOLATION VERTICALE
+
+          CALL PLAGC( GALCFLD,PLFLD,PHI,ZGALC,WK1,WK2,NWDS,MAXLEV,
+     +                NPSL,NWDS,NSL,NPSL,RLUP,RLDN,GRAV )
+
+***        CHANGE IP1 CODING TO GAL-CHEN FOR STANDARD FILES.
+
+          IF (PKTYP.EQ.'SQ') CALL SETKIND('GALCHEN')
+
+***        ECRITURE DU CHAMP INTERPOLE
+
+          IBUF(3) = NAME
+          IBUF(8) = NPACK 
+
+          CALL PUTSET2( 1, GALCFLD, LSIG,NPSL, IBUF,MAXW ) 
+
+          IF (NSETS.EQ.0) call prtlab( IBUF )
+
+      NSETS=NSETS+1 
+      GOTO 200
+
+***    SECTION ERREURS LECTURE
+
+ 901  CALL                                         XIT(' Plagalc',-13 )
+ 902  CALL                                         XIT(' Plagalc',-14 )
+*-----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,I5,3E10.0,1X,A4,E10.0)
+ 5020 FORMAT(16A5)
+ 5030 FORMAT(8A10)
+
+ 6010 FORMAT('TMOYEN = ',F10.3,', RLUP,RLDN = ',2E12.3,', ICOORD=',1X,A4,
+     1       ', HTOIT (M)=',F10.3) 
+ 6030 FORMAT('0 PLAGALC INTERPOLATED',I5,' SETS OF ',A4)
+ 7000 FORMAT(2X,' HTOIT ',2X,' TMOYEN',2X,'P-SIGMA',2X,'GAL-CHEN')
+ 7001 FORMAT(1X,F8.2,1X,F8.3,1X,F8.6,2x,F8.2)
+
+      END 
+#     endif

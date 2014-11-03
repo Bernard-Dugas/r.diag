@@ -1,0 +1,402 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxdlat  ZXIN ZXOUT INPUT OUTPUT [-lrt VAL1 -kind VAL2]
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV  7/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxdlat.ptn,v 4.8 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES IN ZXOUT THE LATITUDE DERIVATIVE OF CROSS-SECTIONS
+*               IN ZXIN USING A LEGENDRE POLYNOMIALS EXPANSION. THE RESULT
+*               IS OF THE FORM: (1/COS(LAT)) D FUNCTION / D LAT.
+
+*
+*     NOTE    - MAX LATITUDES/LEVELS IS 999.
+*
+*
+*     INPUT FILE...
+*      ZXIN  = CROSS-SECTIONS
+*
+*     OUTPUT FILE...
+*      ZXOUT = LAT DERIVATIVES
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NLP (lrt) = NUMBER OF LEGENDRE POLYNOMIALS TO USE IN THE EXPANSION.
+*                  (MAXIMUM OF 999)
+*      KIND      IS ONLY USED WITH HEMISPHERIC INPUT DATA, AS FOLLOWS:
+*                = +1, IF THE DATA IS SYMMETRIC (THE DEFAULT) OR
+*                  -1, IF THE DATA IS ANTI-SYMMETRIC.
+*
+*      READ( 5,5010 ) NLP,KIND
+*5010  FORMAT(10X,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*   ZXDLAT   26
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH LEGENDRE POLYNOMIALS
+*       2 TOO MANY OR NOT ENOUGH LEVELS IN ZXIN
+*       3 FOUND DATA TYPE NOT ZONAL IN ZXIN
+*       4 ABORT ERROR READING ZXIN
+*       5 TOO MANY LATITUDES IN ARRAY
+*       6 MORE THAN ONE SIZE FOR ARRAYS IN ZXIN
+*       7 ABORT ERROR READIND INPUT
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zxdlat
+*     PROGRAM ZXDLAT (ZXIN,       ZXOUT,       INPUT,       OUTPUT,
+*    1          TAPE1=ZXIN, TAPE2=ZXOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: zxdlat.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2013/10/17 11:28:51  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1999/08/25 17:29:17  armnrbd
+*     Utiliser HPALLOC pour l'allocation dynamique de meoire.
+*     Activer le mode hemispherique de fonctionnement.
+*
+*     Revision 4.2  1998/07/03 02:26:50  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:35  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:23:01  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.4  94/09/06  12:23:48  armnrbd
+*     Remplacer la division par COS(lat) par une division par COS(lat)**2
+*     
+*     Revision 3.3  94/08/31  19:12:08  19:12:08  armnrbd (Bernard Dugas)
+*     Premier jeux de modifs pour mode hemispherique.
+*     Ce mode est toujours incomplet.
+*     
+*     Revision 3.2  94/02/18  14:35:09  armnrbd
+*     Implanter le support de la routine RPBLOC.
+*     Modifier la documentation automatique.
+*     
+*     Revision 3.1  93/10/22  15:26:30  armnrbd
+*     Correction d'un Bogue dans l'allocation de EPSI.
+*     Utiliser HPALLOC plutot que MEMOIR.
+*     
+*     Revision 3.0  93/10/13  13:57:39  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/19  15:15:34  15:15:34  armnrbd (Bernard Dugas)
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/03/16  13:52:32  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/03/04  21:05:49  armnrbd
+*     Initial revision
+*     
+
+*     MAY 14/83 - R.LAPRISE.
+*     NOV  7/80 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXLP = 999 , MAXLEV = 999
+
+      REAL        ZERO,HOLD
+      LOGICAL     OK,NEW,RPBLOC
+      CHARACTER   KIND*4, LIGNE*80
+      REAL*8      F(MAXJ),G(MAXJ),RAD(MAXJ),
+     +            SL(MAXJ),CL(MAXJ),WL(MAXJ),WOSSL(MAXJ)
+      INTEGER     LEV(MAXLEV),NFF, MAXW,NWDS,LEN,HEAD,IER,
+     +            J,L,NR,NLEV,NLAT,NLAT0,ILATH,
+     +            NHEM,NHEM0,JBUF(taille_entete),JPAK,
+     +            BASE,IO,NLP,SYM,NLATG
+
+
+      REAL,       DIMENSION(:), ALLOCATABLE :: XA
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: ALP,DALP,EPSI
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2
+
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,XIT,
+     +            GETZX2,GAUSSG,TRIGL2,ALPN2,ALPND2,
+     +            GALP,LPAG,PUTSET2,RPBLOC
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxdlat.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      NEW  = .TRUE.
+      NR   =  0
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NLP = 0
+          SYM = 1
+
+          OK = RPBLOC('LRT',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,I5)',ERR=901,IOSTAT=IO ) NLP
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,'(BN,I5)',ERR=901,IOSTAT=IO ) SYM
+
+      ELSE
+
+***        READ THE NUMBER OF LEGENDRE COMPONENTS.
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010, ERR=901,END=901,IOSTAT=IO ) NLP,SYM
+              CALL BURNF
+          END IF  
+
+      END IF
+
+      IF (SYM.EQ.0) SYM = 1
+      SYM = SYM/IABS( SYM )
+
+      IF (NLP.LT.1 .OR. NLP.GT.MAXLP)                          THEN
+          WRITE(6,6001) NLP,MAXLP
+          CALL                                     XIT(' Zxdlat ',-1 )
+      END IF
+
+      WRITE(6,6100) NLP
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***    DYNAMICALLY REQUEST WORKING SPACE.
+
+  100 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW.EQ.0 .OR. NLEV.LE.0
+     +              .OR. NLEV.GT.MAXLEV)                      THEN
+          WRITE(6,6002)  NLEV,MAXLEV
+          CALL                                     XIT(' Zxdlat ',-2 )
+      END IF
+
+      WRITE(KIND,4) JBUF(1)
+
+      IF (KIND.NE.'ZONL')                                      THEN
+          WRITE(6,6003) KIND
+          CALL                                     XIT(' Zxdlat ',-3 )
+      END IF
+
+      NLAT0 = JBUF(5) 
+      NHEM0 = JBUF(7) 
+      NWDS  = NLAT0*NLEV
+
+***    ASK FOR WORKING MEMORY.
+
+      ALLOCATE( IBUF(LEN),XA(NWDS) )
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***    GET ONE SET AT A TIME.
+
+  200 CALL GETZX2( 1, XA, NLAT,LEV,NLEV, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF,XA )
+              NEW = .TRUE.
+              IF (MAXW.EQ.0) GOTO 100
+
+              WRITE(6,6110) NR
+              IF (NR.EQ.0) CALL                    XIT(' Zxdlat ',-4 )
+              CALL                                 XIT(' Zxdlat ', 0 )
+
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+          NHEM = IBUF(7)
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          IF (NEW            .OR. 
+     +        NHEM0.NE.NHEM  .OR.
+     +        NLAT0.NE.NLAT  )                                 THEN
+
+***            FIRST TIME ONLY... GAUSSG COMPUTES GAUSSIAN LATITUDES,
+***            COSINES, ETC.(NORTH HEMISPHERE, N TO S). TRIGL CONVERTS
+***            THESE VECTORS TO GLOBAL (S TO N).
+
+              NEW   = .FALSE.
+
+              NLAT0 = NLAT
+              NHEM0 = NHEM
+
+              IF (NHEM.NE.0)                                   THEN
+                  IF (SYM.EQ.+1) WRITE(6,6130) 'symmetric'
+                  IF (SYM.EQ.-1) WRITE(6,6130) 'anti-symmetric'
+              END IF
+
+                             ILATH = NLAT/2
+              IF (NHEM.NE.0) ILATH = NLAT
+                             NLATG = ILATH*2
+
+              IF (NLATG.GT.MAXJ) CALL              XIT(' Zxdlat ',-5 )
+
+              IF (NR.NE.0)                                     THEN
+
+***                DE-ALLOCATE PREVIOUSLY ALLOCATED
+***                LEGENDRE POLYNOMIAL MEMORY.
+
+                  DEALLOCATE( ALP,DALP,EPSI )
+
+              END IF
+
+              ALLOCATE( ALP(NLP*NLATG),
+     +                 DALP(NLP*NLATG),
+     +                 EPSI(NLP) )
+
+              CALL GAUSSG( ILATH,SL,WL,CL,RAD,WOSSL )
+              CALL  TRIGL( ILATH,SL,WL,CL,RAD,WOSSL )
+
+***            ALPN2 COMPUTES LEGENDRE POLYNOMIALS FOR EACH LATITUDE.
+***            ALPND2 COMPUTES THEIR DERIVATIVES. THE NUMBER OF
+***            COMPONENTS IS NLP.
+
+              CALL ALPN2(       ALP,NLP,NLATG,SL,EPSI )
+              CALL ALPND2( DALP,ALP,NLP,NLATG,   EPSI )
+
+          END IF
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+***        FOR EACH LEVEL, COMPUTE COS(LAT)*DG/DLAT
+
+          IF (IBUF(5).NE.NLAT) CALL                XIT(' Zxdlat ',-6 )
+
+          DO 300 L=1,NLEV
+
+              BASE = (L-1)*NLAT
+
+              IF (NHEM.EQ.0)                                   THEN
+                  DO  J=1,NLATG
+                      F(J) = XA(BASE+J)
+                  END DO
+              ELSE IF (NHEM.EQ.1)                              THEN
+                  DO  J=1,ILATH
+                      F(ILATH+J  ) =     XA(BASE+J)
+                      F(ILATH-J+1) = SYM*XA(BASE+J)
+                  END DO
+              ELSE IF (NHEM.EQ.2)                              THEN
+                  DO  J=1,ILATH
+                      F(      J  ) =     XA(BASE+J)
+                      F(NLATG-J+1) = SYM*XA(BASE+J)
+                  END DO
+              END IF
+
+              CALL GALP( G,NLP,   F,WL,NLATG,ALP )
+              CALL LPAG( F,NLATG, G,NLP, DALP )
+
+***            TO GET THE TRUE DERIVATIVE, DIVIDE BY COS(LAT)**2.
+
+              DO  J=1,NLAT
+                  XA(BASE+J) = F(J)/(CL(J)*CL(J))
+              END DO
+
+              IF (NHEM.EQ.1)                                   THEN
+                  DO  J=1,(NLAT-1)/2+1
+                      HOLD              = XA(BASE+     J  )
+                      XA(BASE+     J  ) = XA(BASE+NLAT-J+1)
+                      XA(BASE+NLAT-J+1) = HOLD
+                  END DO
+              END IF
+
+  300     CONTINUE
+
+***        PUT THE RESULT ON FILE ZXOUT.
+
+          CALL PUTSET2( 2, XA,LEV,NLEV, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+NLEV
+      GOTO 200
+
+***    E.O.F. ON INPUT.
+
+  901 CALL                                         XIT(' Zxdlat ',-7 )
+
+*--------------------------------------------------------------------- 
+    4 FORMAT(A4)
+
+ 5010 FORMAT(10X,2I5)
+
+ 6001 FORMAT(' Too many or not enough polynomials, NLP/MAXLP=',2I6)
+ 6002 FORMAT(' Too many or not enough levels, NLEV/MAXLEV=',2I6)
+ 6003 FORMAT(' First file should be typed ZONL, found ',A4)
+ 6007 FORMAT(' Found HEM=',I10,'. Hemispheric mode unavailable...')
+
+ 6100 FORMAT(' Zxdlat leg. coeff.=',I6)
+ 6110 FORMAT(1X,I6,' records read.')
+ 6130 FORMAT(' Data is hemispheric and is assumed to be ',A,
+     +       ' at the equator.')
+
+      END
+#     endif

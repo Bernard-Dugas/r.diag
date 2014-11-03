@@ -1,0 +1,835 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zondev   GGIN ZMIN GGDEV OUTPUT
+*      zonvdev  UG ZU VG ZV UGDEV VGDEV OUTPUT
+*
+*
+*     DESCRIPTION...
+*      zondev  - COMPUTES ZONAL DEVIATIONS OF A GRID SET 
+*      zonvdev - COMPUTES ZONAL DEVIATIONS OF A SET OF WINDS
+* 
+*
+*     AUTHOR  - J.D.Henderson, NOV 5/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zondev.ptn,v 4.14 2014/09/25 20:20:57 dugas Exp $
+*
+* 
+*     PURPOSE - COMPUTES A SET OF LAT-LON GRIDS CONTAINING DEVIATIONS
+*               FROM THE PRECOMPUTED ZONAL MEANS AND SAVES THEM ON FILE
+*               GGDEV. THE MAXIMUM NUMBER OF LEVELS IS 999. 
+*
+*     NOTES: 1) zonvdev ACCOUNTS FOR WIND ROTATIONS AS REQUIRED. IF NO
+*               SUCH OPERATION IS CALLED FOR, zondev CAN BE USED INSTEAD.
+*               IN PRACTICE, ROTATIONS ARE ONLY DONE FOR GEM Z-TYPE GRIDS.
+*            2) FURTHERMORE, IF ggvecz HAS ALLREADY BEEN APPLIED TO THE
+*               VECTOR COMPONENTS, zonvdev SHOULD **NOT** BE USED, AS
+*               THE RESULT WILL BE IN ERROR. PLEASE USE zondev IN
+*               THOSE CIRCUMSTANCES.
+* 
+*
+*     INPUT FILES (zondev)...
+*      GGIN  = MULTI-LEVEL SET OF LAT-LON GRIDS. 
+*      ZMIN  = "CORRESPONDING" SERIES OF ZONAL MEAN CROSS-SECTIONS. 
+*
+*     INPUT FILES (zonvdev)...
+*      UG    = MULTI-LEVEL SET OF U LAT-LON GRIDS. 
+*      ZU    = "CORRESPONDING" SERIES OF ZONAL MEAN CROSS-SECTIONS. 
+*      VG    = MULTI-LEVEL SET OF V LAT-LON GRIDS. 
+*      ZV    = "CORRESPONDING" SERIES OF ZONAL MEAN CROSS-SECTIONS. 
+*
+*     Note that in the current context, "CORRESPONDING" means that
+*     GGIN and ZMIN records with the same ordinal have the same time
+*     information, the same variable names, vertical level as well
+*     as the same number of latitudes. The same holds for the
+*     (UG,VG) and (ZU,ZV) pairs of wind components.
+* 
+*     MISSING VALUE TREATMENT IS SUPPORTED VIA EITHER THE "MISSING_VALUE"
+*     ENVIRONMENT VARIABLE OR THE "-mvalue" COMMAND-LINE ARGUMENT. PLEASE
+*     SEE THE R.DIAG WEB DOCUMENTAION FOR MORE DETAILS.
+*
+*
+*     OUTPUT FILE (zondev)... 
+*      GGDEV = LAT-LON GRIDS OF DEVIATIONS FROM THE ZONAL MEANS. 
+*
+*     OUTPUT FILE (zonvdev)... 
+*      UGDEV = LAT-LON GRIDS OF U DEVIATIONS FROM THE ZONAL MEANS. 
+*      VGDEV = LAT-LON GRIDS OF V DEVIATIONS FROM THE ZONAL MEANS. 
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEM WITH INPUT FILES
+*       2 FOUND A MIXTURE OF REAL AND COMPLEX FILES
+*       3 FOUND UNSUPPORTED DATA TYPE IN FILE GGIN,UG OR VG
+*       4 FOUND UNSUPPORTED DATA TYPE IN FILE ZMIN,ZU OR ZV
+*       5 PREMATURE EOF ON FILE GGIN,UG OR VG
+*       6 MORE THAN ONE SIZE IN FILE GGIN, UG OR VG
+*       7 MISSING RECORD OR MORE THAN ONE SIZE IN FILE ZMIN,ZU OR ZV
+*       8 OPERATING/INPUT MODE MISMATCH
+*       9 (GGIN,UG,VG) AND (ZMIN,ZU,ZV) DIMENSION MISMATCH
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zondev
+*    +       (      GGIN,       ZMIN,       GGDEV,       OUTPUT,
+*    +        TAPE1=GGIN, TAPE2=ZMIN, TAPE3=GGDEV, TAPE6=OUTPUT )
+
+*     $Log: zondev.ptn,v $
+*     Revision 4.14  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.13  2014/01/09 19:32:01  dugas
+*     Faire un UP2LOW sur le resultat de l'appel a GETVERB.
+*
+*     Revision 4.12  2013/11/28 22:24:34  dugas
+*     Faire des appels a MISPAR apres chaque lecture.
+*
+*     Revision 4.11  2010/03/09 23:10:10  dugas
+*     Utiliser PDATE et PRTLABL2 pour les message informatifs.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2006/07/04 17:53:21  dugas
+*     Ajouter le support des donnees manquantes par le biais soit
+*      du parametre "-mvalue valeur [epsilon]", soit de la variable
+*      d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*      nombre reel denotant une valeur manquante et "epsilon" est
+*      le facteur de precision utilise dans les comparaisons. La
+*      valeur par defaut de epsilon est 1%. La seconde methode a
+*      preseance sur la premiere.
+*
+*     Revision 4.7  2005/07/28 19:41:54  dugas
+*     Corriger le traitement du niveau de compaction a la sortie.
+*
+*     Revision 4.6  2005/04/14 18:33:26  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.5  2004/11/12 18:15:27  dugas
+*     - Augmenter la taille maximale des grilles.
+*     - Ajouter le point d'entree ZONVDEV.
+*     - Ajouter le support des donnees sur grilles de type L et Z.
+*
+*     Revision 4.4  2003/12/10 22:42:32  dugas
+*     Corriger la documentation automatique
+*
+*     Revision 4.3  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.2  1998/07/03 02:26:49  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:34  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:22:56  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:37  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/26  21:31:56  armnrbd
+*     Changement cosmetiques (petit).
+*     
+*     Revision 1.1  92/03/31  14:01:36  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:05  armnrbd
+*     Initial revision
+*     
+
+***    FEV 12/91 - B.DUGAS, RPN. (UTILISER NOUVEAU GETZX2)
+***    DEC 06/90 - B.DUGAS, RPN. (VERSION CY920/IRIX F77)
+***    MAY 14/84 - R.LAPRISE.
+***    NOV  5/80 - J.D.HENDERSON 
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      HEAD
+      PARAMETER  ( HEAD = taille_entete )
+      INTEGER      MAXI
+      PARAMETER  ( MAXI = longitude_maximale )
+      INTEGER      MAXJ
+      PARAMETER  ( MAXJ = latitude_maximale )
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+
+      LOGICAL      OK,OK2,WINDS,MVALUE,
+     +             IN1MISS,IN2MISS
+      REAL         ALON(MAXI),ALAT(MAXJ)
+      CHARACTER*4  KIND1,KIND2,PKTYP,NOM,NOM2
+      CHARACTER    GRTYP,ZTYP,verbe*8,CTIME*20
+      REAL*8       ZM,F,CZ,C,ZAVG,ZR,ZI, UG,VG,C1,
+     +             GU,GV, UZ,VZ, ZU,ZV, WEIGHT,C2,
+     +             THETA,COST,SINT,FMISS,EPSIL
+      INTEGER      KBUF(HEAD),LBUF(HEAD),
+     +             MBUF(HEAD),NBUF(HEAD),
+     +             LEV(MAXLEV),NLEV,NLEV0,NLEVZ,NF,NR,
+     +             MAXW,MAXW1,MAXW2,LEN,LEN1,LEN2,IER,
+     +             NWDS,NWDSZ,ILG,ILG1,ILAT,MEM2,MEM3,
+     +             MEM4,I,J,L,NIO,NZM,TIME,NAME,CMPL,
+     +             IBUF,JBUF, RANK, IG1,IG2,IG3,IG4,
+     +             ZIG1,ZIG2,ZIG3,ZIG4, ZNI,ZNJ,NIN,
+     +             NLIN,NLOUT,NBIN,NLEV2, PAK,PAKZ,
+     +             PAK2,PAKZ2
+
+      POINTER    ( IB,  IBUF(8) ),( JB,  JBUF(8) )
+      POINTER    ( PF,     F(1) ),( PF,    UG(1) )
+      POINTER    ( PF,   C(2,1) ),( PV,    VG(1) )
+      POINTER    ( PZ,    ZM(1) ),( PZ,    ZU(1) )
+      POINTER    ( PZ,  CZ(2,1) ),( PZV,   ZV(1) )
+      POINTER    ( PR,  RANK(1) ),( PCT, COST(1) )
+      POINTER    ( PW,WEIGHT(1) ),( PST, SINT(1) )
+      POINTER    ( PT, THETA(1) )
+
+      LOGICAL      SETIO64
+      EXTERNAL     SETIO64
+
+      CHARACTER*4  GETYP,GETHIC
+      EXTERNAL     GETYP,GETHIC
+
+      INTEGER      GETSIZ2,GETHIGH
+      EXTERNAL     GETSIZ2,GETHIGH
+
+      EXTERNAL     MACSPE,JCLPNT,GETLIGN,BURNF,
+     +             GETSET2,GETZX2,PUTSET2,SETLAB,
+     +             PRECEDE,HPALLOC,HPDEALLC,XIT,
+     +             D_ZONGINI,PUTHIGH,CMPLBL,
+     +             GETZREF,GETZDES,GETVERB,
+     +             MISPAR
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         GRTYP  /  'G' /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zondev.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 7
+      CALL JCLPNT( NF, 1,2,3,4,8,9, 6 )
+
+***    WHAT OPERATING MODE: STANDARD OR WINDS ?
+
+      CALL GETVERB( verbe ) ; CALL up2low( VERBE,VERBE )
+
+                              WINDS = .FALSE.
+      IF (verbe.EQ.'zonvdev') WINDS = .TRUE.
+
+      IF ((     WINDS .AND. NF.NE.6) .OR.
+     +    (.NOT.WINDS .AND. NF.NE.3) ) CALL        XIT( verbe, -8 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    DETERMINE THE GRID SIZE.
+
+  050 MAXW2 = GETSIZ2( 2, LBUF,LEN2,NWDSZ,PAKZ,LEV,NLEVZ )
+      MAXW1 = GETSIZ2( 1, KBUF,LEN1,NWDS, PAK, LEV,NLEV )
+
+      IF (MAXW1.LE.  0    .OR.
+     +    MAXW2.LE.  0    .OR.
+     +    NLEV .NE.NLEVZ  .OR.
+     +    NLEV .GT.MAXLEV )                                    THEN
+          WRITE(6,6001) MAXW1,NLEV,MAXW2,NLEVZ
+          CALL                                     XIT( verbe ,-1 )
+      END IF
+
+      LEN  = MAX( LEN1, LEN2  )
+
+      WRITE(KIND1,4) KBUF(1)
+      WRITE(KIND2,4) LBUF(1)
+
+***    CHECK FOR TYPE CONSISTENCY.
+
+      IF ((KIND1.EQ.'CMPL' .AND. KIND2.NE.'CMPL') .OR.
+     +    (KIND2.EQ.'CMPL' .AND. KIND1.NE.'CMPL') )            THEN
+          WRITE(6,6002) KIND1,KIND2
+          CALL                                     XIT( verbe ,-2 )
+      END IF
+
+      IF (KIND1.NE.'CMPL' .AND.
+     +    KIND1.NE.'GRID' .AND.
+     +    KIND1.NE.'SUBA' )                                    THEN
+          WRITE(6,6003) KIND1
+          CALL                                     XIT( verbe ,-3 )
+      END IF
+      IF ((KIND2.NE.'ZONL' .AND. KIND2.NE.'CMPL') .OR.
+     +    (KIND1.EQ.'SUBA' .AND. KIND2.EQ.'CMPL'))             THEN
+          WRITE(6,6004) KIND2
+          CALL                                     XIT( verbe ,-4 )
+      END IF
+
+                           CMPL = 1
+      IF (KIND1.EQ.'CMPL') CMPL = 2
+
+      IF (WINDS)                                               THEN
+
+***        CHECK THE SECOND WIND COMPONENT.
+
+          MAXW2 = GETSIZ2( 4, NBUF,LEN2,NWDSZ,PAKZ2,LEV,NLEVZ )
+          MAXW1 = GETSIZ2( 3, MBUF,LEN1,NWDS, PAK2, LEV,NLEV2 )
+
+          CALL CMPLBL( 0,MBUF, 0,KBUF, OK )
+          CALL CMPLBL( 0,NBUF, 0,LBUF, OK2 )
+
+          OK = (OK.OR.OK2)
+
+          IF (.NOT. OK        .OR.
+     +        MAXW1.LE.  0    .OR.
+     +        MAXW2.LE.  0    .OR.
+     +        NLEV2.NE.NLEVZ  .OR.
+     +        NLEV2.NE.NLEV   .OR.
+     +        NLEV2.GT.MAXLEV )                                    THEN
+              WRITE(6,6001) MAXW1,NLEV2,MAXW2,NLEVZ
+              CALL                                 XIT( verbe ,-1 )
+          END IF
+
+          PAK  = MIN( PAK ,PAK2  )
+          PAKZ = MIN( PAKZ,PAKZ2 )
+
+      END IF
+
+      PAK  = MIN( PAK,PAKZ )
+
+      ILG1 = KBUF(5) 
+      ILAT = KBUF(6)
+      NWDS = ILG1*ILAT
+
+      NBIN = LBUF(5)
+
+      LEN  = MAX( LEN, CMPL*(ILAT+1)*NLEV+HEAD+2 )
+      MAXW = LEN-HEAD
+
+***    ASK FOR WORKING MEMORY.
+
+      MEM2 = MAX( MAXW, NWDS            *NLEV*CMPL )
+      MEM3 = MAX( MAXW, MAX( ILAT,NBIN )*NLEV*CMPL )
+      MEM4 = NWDS
+
+      IF (WINDS)                                               THEN
+
+***        ALLOCATE WIND-MODE WORK ARRAYS.
+
+          CALL HPALLOC( PF, 2*(LEN+MEM2+MEM3)+5*MEM4,IER,8 ) ! UG
+          PV  = LOC(     UG(MEM2+1) ) ! VG
+          PZ  = LOC(     VG(MEM2+1) ) ! ZU
+          PZV = LOC(     ZU(MEM3+1) ) ! ZV
+          PT  = LOC(     ZV(MEM3+1) ) ! THETA
+          PCT = LOC(  THETA(MEM4+1) ) ! COST
+          PST = LOC(   COST(MEM4+1) ) ! SINT
+          PW  = LOC(   SINT(MEM4+1) ) ! WEIGHT
+          PR  = LOC( WEIGHT(MEM4+1) ) ! RANK
+          IB  = LOC(   RANK(MEM4+1) ) ! IBUF
+          JB  = LOC(   IBUF(LEN +1) ) ! JBUF
+
+      ELSE
+
+***        NOTE THAT ( F , C ) AS WELL AS ( ZM , CM ) ARE
+***        EQUIVALENCED BY THEIR POINTER DEFENITIONS.
+
+          CALL HPALLOC( PF, LEN+MEM2+MEM3+3*MEM4,IER,8 ) ! F OR C
+          PZ = LOC(      F(MEM2+1) ) ! ZM OR CZ
+          PT = LOC(     ZM(MEM3+1) ) ! THETA
+          PW = LOC(  THETA(MEM4+1) ) ! WEIGHT
+          PR = LOC( WEIGHT(MEM4+1) ) ! RANK
+          IB = LOC(   RANK(MEM4+1) ) ! IBUF
+
+      END IF
+
+      IF (PKTYP.EQ.'SQ') GRTYP = GETHIC( 'GRTYP',KBUF )
+
+***    POSSIBLY ACCOUNT FOR THE DIFFERENT GRID TYPES.
+
+      IF (GRTYP.EQ.'Z')                                        THEN
+
+          IG1 = GETHIGH( 'IG1',KBUF )
+          IG2 = GETHIGH( 'IG2',KBUF )
+          IG3 = GETHIGH( 'IG3',KBUF )
+          IG4 = GETHIGH( 'IG4',KBUF )
+
+***        RETRIEVE THE X- AND Y-DIRECTIONAL GEM GRID INFO.
+
+          CALL GETZREF( 1, '>>',ALON )
+          CALL GETZREF( 1, '^^',ALAT )
+
+***        RETRIEVE ASSOCIATED ROTATION AND POLE INFO.
+
+          CALL GETZDES( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, ZNI,ZNJ )
+
+***        DEFINE RANK,WEIGHT AND THETA.
+
+          IF (NBIN.EQ.0) NBIN = MIN( ILAT,ILG1 )
+             
+          CALL D_ZONGINI( RANK,WEIGHT,THETA,
+     +                    NBIN,ILG1,ILAT,ALON,ALAT,
+     +                    ZTYP,ZIG1,ZIG2,ZIG3,ZIG4 )
+
+***        PRE-CALCULATE SIN AND COS THETA.
+
+          IF (WINDS)                                           THEN
+               DO  L=1,NWDS
+                   COST(L) = COS( THETA(L) )
+                   SINT(L) = SIN( THETA(L) )
+              END DO
+          END IF
+
+      ELSE IF (GRTYP.EQ.'N' .OR. GRTYP.EQ.'S')                 THEN
+
+***        POLAR-STEREOGRAPHIC ARRAYS ARE NOT SUPPORTED.
+
+          WRITE(6,6003) GRTYP
+          CALL                                     XIT( verbe ,-3 )
+
+      ELSE
+
+***        CHECK ILAT CORRESPONDENCE IN GGIN AND ZMIN.
+
+          IF (LBUF(5).NE.ILAT) CALL                XIT( verbe ,-9 )
+
+      END IF
+
+***    READ THE NEXT GRID AND ZONAL MEAN
+***    (OR THE FIRST WIND COMPONENT ARRAYS).
+
+      NR = 0
+  100 CALL GETSET2( 1, F, LEV,NLEV0, IBUF,MAXW,OK )
+  
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL                             HPDEALLC(PF,IER,0 )
+                  GOTO 050
+              END IF
+              WRITE(6,6030) verbe, NR,NLEV
+              IF (NR.EQ.0)                                     THEN
+                  CALL                             XIT( verbe ,-5 ) 
+              ELSE IF (NR.GT.1)                                THEN
+                  CALL PRTLAB( IBUF )
+              END IF
+              CALL                                 XIT( verbe , 0 )
+          END IF
+
+***        CHECK MISSING VALUE PARAMETRES FOR THE FIRST COMPONENT.
+
+          CALL MISPAR( IN1MISS,FMISS,EPSIL )
+          IF (IN1MISS) EPSIL = ABS( FMISS )*EPSIL
+
+***        IGNORE LABEL OR CHARACTER RECORDS.
+
+          WRITE(KIND1,4) IBUF(1)
+          IF (KIND1.EQ.'LABL' .OR. KIND1.EQ.'CHAR') GOTO 100
+
+***        VERIFY DIMENSIONS AND TYPE.
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+
+          IF (.NOT.OK  .OR.
+     +        NLEV0.GT.NLEV)                                   THEN
+              WRITE(6,6006) NR,NLEV0 ; CALL PRTLAB( IBUF )
+              CALL                                 XIT( verbe ,-6 )
+          END IF
+
+          TIME = IBUF(2)
+          NAME = IBUF(3)
+          WRITE(NOM,4) NAME
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***        READ CORRESPONDING ZONAL MEAN FIELD.
+***        DO SOME CHECKING FOR CONSISTENCY.
+
+  200     CALL GETSET2( 2, ZM, LEV,NLEVZ, IBUF,MAXW,OK )
+
+          IF (.NOT.OK .AND. MAXW.EQ.0)                         THEN
+                  CALL                             HPDEALLC(PF,IER,0 )
+                  CALL PRECEDE( 1,NLEV0 )
+                  GOTO 050
+          END IF
+
+***        AGAIN, IGNORE LABEL OR CHARACTER RECORDS.
+
+          WRITE(KIND2,4) IBUF(1)
+          IF (KIND2.EQ.'LABL' .OR. KIND2.EQ.'CHAR') GOTO 200
+
+***        VERIFY DIMENSIONS/KIND.
+
+          CALL CMPLBL( 0,IBUF, 0,LBUF, OK )
+
+          IF (.NOT.OK            .OR.
+     +        IBUF(2).NE.TIME    .OR.
+     +        IBUF(3).NE.NAME    .OR.
+     +        NLEVZ  .NE.NLEV0   )                             THEN
+              CALL PDATE( CTIME,TIME )
+              WRITE(6,6007) NR,TRIM( CTIME ),NAME
+              CALL PRTLAB2(' Found ',IBUF )
+              CALL                                 XIT( verbe ,-7 )
+          END IF
+
+          IF (.NOT.WINDS)                                     THEN
+
+              MVALUE = IN1MISS
+
+***            COMPUTE THE ZONAL DEVIATIONS FOR THIS 
+***            SCALAR OR NON-ROTATED VECTOR GRID CASE.
+
+              IF (GRTYP.EQ.'A' .OR.
+     +            GRTYP.EQ.'B' .OR.
+     +            GRTYP.EQ.'G' .OR.
+     +            GRTYP.EQ.'L' )                               THEN
+
+                  IF (CMPL.EQ.1)                               THEN
+                      DO  L=0,NLEV0-1
+                          DO  J=0,ILAT-1
+                              NIO  = L*NWDS + J * ILG1 
+                              NZM  = L*ILAT + J +  1
+                              ZAVG = ZM(NZM)
+
+                              IF (.NOT.MVALUE)                 THEN
+                                  DO  I=1,ILG1
+                                      F(NIO+I) = F(NIO+I)-ZAVG
+                                  END DO
+                              ELSE
+     +                        IF (ABS( ZAVG-FMISS ).GT.EPSIL)  THEN
+                                  DO  I=1,ILG1
+                                      IF(ABS( F(NIO+I)-FMISS ).GT.EPSIL)
+     +                                THEN
+                                          F(NIO+I) = F(NIO+I)-ZAVG
+                                      ELSE
+                                          F(NIO+I) = FMISS
+                                      END IF
+                                  END DO
+                              ELSE
+                                  DO  I=1,ILG1
+                                      F(NIO+I) = FMISS
+                                  END DO
+                              END IF
+
+                          END DO
+                      END DO
+                  ELSE
+                      DO  L=0,NLEV0-1
+                          DO  J=0,ILAT-1
+                              NIO = L*NWDS + J * ILG1 
+                              NZM = L*ILAT + J +  1
+                              ZR  = CZ(1,NZM)
+                              ZI  = CZ(2,NZM)
+
+                              IF (.NOT.MVALUE)                 THEN
+                                  DO  I=1,ILG1
+                                      C(1,NIO+I) = C(1,NIO+I)-ZR
+                                      C(2,NIO+I) = C(2,NIO+I)-ZI
+                                  END DO
+                              ELSE
+     +                        IF (ABS( ZR-FMISS ).GT.EPSIL
+     +                       .AND.ABS( ZI-FMISS ).GT.EPSIL)    THEN
+                                  DO  I=1,ILG1
+                                      C1 = C(1,NIO+I)
+                                      C2 = C(2,NIO+I)
+                                      IF (ABS( C1-FMISS).GT.EPSIL
+     +                               .AND.ABS( C2-FMISS).GT.EPSIL)
+     +                                THEN
+                                          C(1,NIO+I) = C(1,NIO+I)-ZR
+                                          C(2,NIO+I) = C(2,NIO+I)-ZI
+                                      ELSE
+                                          C(1,NIO+I) = FMISS
+                                          C(2,NIO+I) = FMISS
+                                      END IF
+                                  END DO
+                              ELSE
+                                  DO  I=1,ILG1
+                                      C(1,NIO+I) = FMISS
+                                      C(2,NIO+I) = FMISS
+                                  END DO
+                              END IF
+
+                          END DO
+                      END DO
+                  END IF
+
+              ELSE IF (GRTYP.EQ.'Z')                           THEN
+
+                  DO  L=0,NLEV0-1
+
+                      NLOUT = L*NBIN
+                      NLIN  = L*NWDS
+
+                      IF (.NOT.MVALUE)                         THEN
+                          DO  NIN=1,ILG1*ILAT
+                              F(NIN+NLIN) =
+     +                        F(NIN+NLIN)-ZM(RANK(NIN)+NLOUT)
+                          END DO
+                      ELSE
+                          DO  NIN=1,ILG1*ILAT
+                              ZAVG = ZM(RANK(NIN)+NLOUT)
+                              IF (ABS( ZAVG       -FMISS ).GT.EPSIL
+     +                       .AND.ABS( F(NIN+NLIN)-FMISS ).GT.EPSIL)
+     +                        THEN
+                                  F(NIN+NLIN) = F(NIN+NLIN) - ZAVG
+                              ELSE
+                                  F(NIN+NLIN) = FMISS
+                              END IF
+                          END DO
+                      END IF
+
+                  END DO
+
+                  CALL PUTHIC ( 'Z','GRTYP',IBUF )
+                  CALL PUTHIGH( IG1,'IG1'  ,IBUF )
+                  CALL PUTHIGH( IG2,'IG2'  ,IBUF )
+                  CALL PUTHIGH( IG3,'IG3'  ,IBUF )
+                  CALL PUTHIGH( IG4,'IG4'  ,IBUF )
+
+              END IF
+
+***            WRITE THE GRID OF ZONAL DEVIATIONS ONTO FILE 3. 
+
+              CALL SETLAB( IBUF, KIND1,-1,' ',-1,ILG1,ILAT,-1,PAK )
+              CALL PUTSET2( 3, F, LEV,NLEV, IBUF,MAXW )
+
+          ELSE
+
+***            READ THE SECOND WIND COMPONENTS.
+
+  300         CALL GETSET2( 3, VG, LEV,NLEV2, JBUF,MAXW,OK )
+  
+              IF (.NOT.OK)                                     THEN
+                  IF (MAXW.EQ.0)                               THEN
+                      CALL                         HPDEALLC(PF,IER,0 )
+                      CALL PRECEDE( 1,NLEV0 )
+                      CALL PRECEDE( 2,NLEV0 )
+                      GOTO 050
+                  END IF
+                  CALL                             XIT( verbe ,-5 ) 
+              END IF
+
+***            CHECK MISSING VALUE PARAMETRES FOR THE SECOND COMPONENT.
+
+              CALL MISPAR( IN2MISS,FMISS,EPSIL )
+              IF (IN2MISS) EPSIL = ABS( FMISS )*EPSIL
+
+              MVALUE = (IN1MISS .OR. IN2MISS)
+
+              NAME = JBUF(3)
+              WRITE(NOM2,4) NAME
+
+***            AND AGAIN, IGNORE LABEL OR CHARACTER RECORDS.
+
+              WRITE(KIND2,4) JBUF(1)
+              IF (KIND2.EQ.'LABL' .OR. KIND2.EQ.'CHAR') GOTO 300
+
+***            VERIFY DIMENSIONS AND TYPE.
+
+              CALL CMPLBL( 0,JBUF, 0,MBUF, OK )
+
+              IF (.NOT.OK  .OR.
+     +            JBUF(2).NE.TIME    .OR.
+     +            NLEV2  .NE.NLEV0   )                         THEN
+                  WRITE(6,6006) NR, NLEV2 ; CALL PRTLAB( JBUF )
+                  CALL                             XIT( verbe ,-6 )
+              END IF
+
+              IF (NR.EQ.0) CALL PRTLAB( JBUF )
+
+***            READ CORRESPONDING ZONAL MEAN FIELD.
+***            DO SOME CHECKING FOR CONSISTENCY.
+
+              CALL GETSET2( 4, ZV, LEV,NLEVZ, JBUF,MAXW,OK )
+
+              IF (.NOT.OK .AND. MAXW.EQ.0)                     THEN
+                  CALL                             HPDEALLC(PF,IER,0 )
+                  CALL PRECEDE( 1,NLEV0 )
+                  CALL PRECEDE( 2,NLEV0 )
+                  CALL PRECEDE( 3,NLEV0 )
+                  GOTO 050
+              END IF
+
+***            AGAIN, WE VERIFY DIMENSIONS/KIND.
+
+              CALL CMPLBL( 0,JBUF, 0,NBUF, OK )
+
+              IF (.NOT.OK            .OR.
+     +            JBUF(2).NE.TIME    .OR.
+     +            JBUF(3).NE.NAME    .OR.
+     +            NLEVZ  .NE.NLEV0   )                         THEN
+                  CALL PDATE( CTIME,TIME )
+                  WRITE(6,6007) NR,TRIM( CTIME ),NOM2
+                  CALL PRTLAB2(' Found ', JBUF )
+                  CALL                             XIT( verbe ,-7 )
+              END IF
+
+***            NOW COMPUTE THE ZONAL DEVIATIONS OF
+***            THESE WIND VECTORS, POSSIBLY ROTATED.
+
+              IF (GRTYP.EQ.'A' .OR.
+     +            GRTYP.EQ.'B' .OR.
+     +            GRTYP.EQ.'G' .OR.
+     +            GRTYP.EQ.'L' )                               THEN
+
+***                NON-ROTATED VECTORS.
+
+                  DO  L=0,NLEV0-1
+
+                      DO  J=0,ILAT-1
+                          NIO = L*NWDS + J * ILG1 
+                          NIN = L*ILAT + J +  1
+                          UZ  = ZU(NIN )
+                          VZ  = ZV(NIN )
+
+                          IF (.NOT.MVALUE)                     THEN
+                              DO  I=1,ILG1
+                                  UG(NIO+I) = UG(NIO+I)-UZ
+                                  VG(NIO+I) = VG(NIO+I)-VZ
+                              END DO
+                          ELSE
+     +                    IF (ABS( UZ-FMISS ).GT.EPSIL
+     +                   .AND.ABS( VZ-FMISS ).GT.EPSIL)        THEN
+                              DO  I=1,ILG1
+                                  IF (ABS( UG(NIO+I)-FMISS ).GT.EPSIL
+     +                           .AND.ABS( VG(NIO+I)-FMISS ).GT.EPSIL)
+     +                            THEN
+                                      UG(NIO+I) = UG(NIO+I)-UZ
+                                      VG(NIO+I) = VG(NIO+I)-VZ
+                                  ELSE
+                                      UG(NIO+I) = FMISS
+                                      VG(NIO+I) = FMISS
+                                  END IF
+                              END DO
+                          ELSE
+                              DO  I=1,ILG1
+                                  UG(NIO+I) = FMISS
+                                  VG(NIO+I) = FMISS
+                              END DO
+                          END IF
+                      END DO
+
+                  END DO
+
+              ELSE IF (GRTYP.EQ.'Z')                           THEN
+
+***                POSSIBLY ROTATED GEM VECTORS.
+
+                  DO  L=0,NLEV0-1
+
+                      NLOUT = L*NWDS
+                      NLIN  = L*NBIN
+
+                      IF (.NOT.MVALUE)                         THEN
+                          DO  NIN=1,ILG1*ILAT
+                              UZ  = ZU(RANK(NIN)+NLIN)
+                              VZ  = ZV(RANK(NIN)+NLIN)
+                              GU  = -UZ * SINT(NIN) - VZ * COST(NIN)
+                              GV  = +UZ * COST(NIN) - VZ * SINT(NIN)
+                              UG(NIN+NLOUT) = UG(NIN+NLOUT)-GU
+                              VG(NIN+NLOUT) = VG(NIN+NLOUT)-GV
+                          END DO
+                      ELSE
+                          DO  NIN=1,ILG1*ILAT
+                              UZ  = ZU(RANK(NIN)+NLIN)
+                              VZ  = ZV(RANK(NIN)+NLIN)
+                              IF (ABS( UZ           -FMISS ).GT.EPSIL
+     +                       .AND.ABS( VZ           -FMISS ).GT.EPSIL
+     +                       .AND.ABS( UG(NIN+NLOUT)-FMISS ).GT.EPSIL
+     +                       .AND.ABS( VG(NIN+NLOUT)-FMISS ).GT.EPSIL)
+     +                        THEN
+                                  GU  = -UZ * SINT(NIN) - VZ * COST(NIN)
+                                  GV  = +UZ * COST(NIN) - VZ * SINT(NIN)
+                                  UG(NIN+NLOUT) = UG(NIN+NLOUT)-GU
+                                  VG(NIN+NLOUT) = VG(NIN+NLOUT)-GV
+                              ELSE
+                                  UG(NIN+NLOUT) = FMISS
+                                  VG(NIN+NLOUT) = FMISS
+                              END IF
+                          END DO
+                      END IF
+
+                  END DO
+
+                  CALL PUTHIC ( 'Z','GRTYP',IBUF )
+                  CALL PUTHIGH( IG1,'IG1'  ,IBUF )
+                  CALL PUTHIGH( IG2,'IG2'  ,IBUF )
+                  CALL PUTHIGH( IG3,'IG3'  ,IBUF )
+                  CALL PUTHIGH( IG4,'IG4'  ,IBUF )
+
+                  CALL PUTHIC ( 'Z','GRTYP',JBUF )
+                  CALL PUTHIGH( IG1,'IG1'  ,JBUF )
+                  CALL PUTHIGH( IG2,'IG2'  ,JBUF )
+                  CALL PUTHIGH( IG3,'IG3'  ,JBUF )
+                  CALL PUTHIGH( IG4,'IG4'  ,JBUF )
+
+              END IF
+
+***            WRITE THE ZONAL MEAN VECTORS ONTO FILES 3 AND 4.
+
+              CALL SETLAB( IBUF, KIND1, -1,NOM, -1, ILG1,ILAT, -1,PAK )
+              CALL SETLAB( JBUF, KIND1, -1,NOM2,-1, ILG1,ILAT, -1,PAK )
+
+              CALL PUTSET2( 8, UG, LEV,NLEV0, IBUF,MAXW )
+              CALL PUTSET2( 9, VG, LEV,NLEV0, JBUF,MAXW )
+ 
+              IF (NR.EQ.0) CALL PRTLAB( IBUF )
+              IF (NR.EQ.0) CALL PRTLAB( JBUF )
+
+          END IF
+
+      NR = NR+1 
+      GOTO 100 
+
+*-------------------------------------------------------------------- 
+    4 FORMAT(A4)
+
+ 6001 FORMAT('0..Problems with input files...'/
+     +       '   Maxw,nlev(sera),maxw,nlev(serb) =',4I8)
+ 6002 FORMAT(' Type mismatch, KIND(1)/KIND(2) = ',A4,'/',A4)
+ 6003 FORMAT(' First file should be typed GRID,SUBA or CMPL, found ',A)
+ 6004 FORMAT(' Second file should be typed ZONL or CMPL, found ',A)
+ 6006 FORMAT(' At set number ',I5,', found ',I3,' level(s) of...')
+ 6007 FORMAT(' At ZONL set number ',I5,', looking for',
+     +       ' TIME,NAME=',A,2X,A)
+
+ 6030 FORMAT(2X,A,' read ',I5,' set(s) of ',I3,' record(s).')
+
+      END 
+#     endif

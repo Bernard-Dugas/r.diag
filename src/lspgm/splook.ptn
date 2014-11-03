@@ -1,0 +1,775 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      splook  OUTSP INPUT OUTPUT [ -t1 VAL1 -name VAL2 -lv1 VAL3 \ 
+*                    -m VAL4 -n VAL5 -kind VAL6 [VAL7] -scal VAL8 ]
+*
+*
+*     AUTHORS - R.Laprise AND J.D.Henderson, NOV 29/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/splook.ptn,v 4.13 2014/10/16 11:29:58 dugas Exp $
+*
+*
+*     PURPOSE...
+*      PRINTS SPECTRAL FIELDS FOUND ON FILE OUTSP. THEY MUST
+*      BE REQUESTED ON INPUT CARDS IN THE SAME ORDER AS THEY
+*      APPEAR ON THE FILE.
+*
+*
+*     PARAMETERS...
+*      CNTR         = -1 TO QUIT PROCESSING IMMEDIATLEY (IN INPUT CARD MODE).
+*      NSTEP (t1)  \
+*      NAM   (name) = RECORD LABEL WORDS 2,3,4 IDENTIFYING THE FIELD TO SUM.
+*      LEVEL (lv1) /
+*      NPR   (n)    = MAXIMUM NUMBER OF N-ROWS TO PRINT
+*      MPR   (m)    = MAXIMUM NUMBER OF M-COLUMNS TO PRINT
+*      KIND(1) CONTROLS OUTPUT FORMAT AS FOLLOWS...
+*                   = 1, (REAL,IMAG.).
+*                   = 3, 2-D AMPL. SPECTRUM IN (M,N-M). (DEFAULT)
+*                   = 4, 2-D AMPL. SPECTRUM IN (M,N). 
+*      KIND(2)      = VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
+*                     FILES AND THEN LV1 AND LV2 ARE ASSUMED TO CONTAIN DECODED
+*                     VALUES. FURTHERMORE, THIS PARAMETRE CAN ONLY BE SPECIFIED
+*                     IN COMMAND-LINE MODE. THE CURRENTLY SUPPORTED VALUES ARE:
+*                     'HAUTEUR'   , heights (m) with respect to sea level
+*                     'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                     'ETA'       , first version of the GEM ETA coordinate
+*                     'PRESSION'  , pressure (mb)
+*                     'ARBITRAIRE', arbitrary level (no units apply)
+*                     'HAUTEURS'  , heights (M) with respect to the surface
+*                     'HYBRIDE'   , hybrid GEM coordinate
+*                     'THETA'     , potential temperature coordinate
+*                     'GALCHEN'   , GalChen generalized coordinate
+*      SCALE (scal) IS A SCALE FACTOR TO APPLY BEFORE PRINTING
+*                   = 0.0, REQUEST AUTOMATIC SCALING TO BE DONE
+*
+*      NOTES: 1) NAM = ' ', '-1' OR 'NEXT' ARE EQUIVALENT, REQUESTING THAT
+*                THE NEXT FIELD BE PRINTED, WHATEVER NSTEP OR LEVEL FOUND.
+*             2) NAM = 'ALL' REQUESTS THAT ALL RECORDS MATCHING NSTEP AND
+*                LEVEL BE DISPLAYED.
+*
+*
+*      READ( 5,5010 CNTR,NSTEP,NAME,LEVEL,NPR,MPR,KIND, SCALE
+*5010  FORMAT(A2,8X,I10,1X,A4,4I5,E10.0) 
+*
+*
+*     EXAMPLE OF INPUT CARD...
+* SPLOOK  1979010100 VORT  500   21   21    3       0.0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 UNKNOWN TYPE OF SPECTRAL ARRAY
+*       2 ERROR READING OUTSP
+*
+*     NON-FATAL CONDITIONS...
+*     101 FINISHED READING OUTSP
+*     102 FINISHED READING DIRECTIVES
+*     103 FINISHED READING WHILE SKIPPING
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM splook
+*    +              (      OUTSP,       INPUT,       OUTPUT,
+*    +               TAPE1=OUTSP, TAPE5=INPUT, TAPE6=OUTPUT) 
+
+*     $Log: splook.ptn,v $
+*     Revision 4.13  2014/10/16 11:29:58  dugas
+*      - Correction a la routine prnms2 (option KIND=4).
+*      - Modifications commandees par la compilation avec GFORTRAN et IFORT.
+*
+*     Revision 4.12  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2013/11/01 19:15:42  bernard
+*     Adapter les sous-routine PRTODS2 (kind=3) et PRMNS2 (kind=4) au MAXN=99 plutot que 21.
+*
+*     Revision 4.10  2013/10/16 21:00:19  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM et MAXN passe de 21 a 99.
+*
+*     Revision 4.9  2010/05/06 16:25:30  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2006/07/13 21:43:36  dugas
+*     Corriger la documentation automatique.
+*
+*     Revision 4.5  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.4  2002/02/02 00:30:47  dugas
+*     Forcer la majusculisation du parametre NAME
+*
+*     Revision 4.3  1998/10/19 20:32:35  armnrbd
+*     Utiliser HPALLOC pour allouer l'espace de travail.
+*     Modifier la documentation.
+*     Implanter le support de RPBLOC.
+*     Implanter un mode automatique.
+*     Appeller les fonctions CHKLVLC et Y2KDAT.
+*
+*     Revision 4.2  1998/07/03  02:26:40  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:20  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:52  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:06:23  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:05  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  92/11/23  14:26:04  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.4  92/11/16  13:24:01  armnrbd
+*     Remplacer GETSIZ2 par GETSIZ.
+*     
+*     Revision 1.3  92/11/10  22:27:58  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/17  15:09:20  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.1  92/03/13  11:35:40  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:57  armnrbd
+*     Initial revision
+*     
+
+***    JAN 17/91 - B.DUGAS, RPN. (CALL TO GETLIGN ADDED)
+***    NOV 21/90 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+***    NOV 29/83 - R.LAPRISE, J.D.HENDERSON. 
+
+*---------------------------------------------------------------------
+      IMPLICIT    REAL (A-H,O-Z), INTEGER (I-N)
+
+      INTEGER, PARAMETER :: MAXLM = lm_maximal
+
+      INTEGER*8   NSTEP
+      CHARACTER*4 NAME,NOM,CNTR*2
+      LOGICAL     OK,SCAL,RPB,ERR,ALL
+      CHARACTER*20 CSTEP,CKIND,CLEVEL,LIGNE*80
+      INTEGER     LSR(2,MAXLM),SORTE, LEN,NWDS,JPAK
+      INTEGER     HEAD,JBUF(taille_entete), VKIND,STAMP
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: SP
+
+      LOGICAL     RPBLOC
+      INTEGER*8   Y2KDAT8
+      CHARACTER*4 GETYP,PKTYP
+      INTEGER     GETSIZ,GETKIND
+      EXTERNAL    GETSIZ,Y2KDAT8,GETKIND,RPBLOC,GETYP,DATE2STAMP
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        MAXN /    99   /,
+     +            SCAL / .FALSE. /,
+     +            ALL  / .FALSE. /,
+     +            RPB  / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/splook.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+      OK     = .TRUE.
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      CALL JCLPNT( NF, 1, 5,6 )
+ 
+***    GET DEFAULT PACKING TYPE.
+
+      PKTYP  = GETYP( 1 )
+      PKTYP  = PKTYP(1:2)
+
+      IF (PKTYP.EQ.'SQ')                                      THEN
+          MAXW = GETSIZ(1, JBUF,LEN,NWDS,JPAK )
+          IF (MAXW.LE.0) GOTO 904
+      END IF
+
+      VKIND0 = GETKIND( )
+      VKIND  = VKIND0
+      CKIND  = ' '
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          CNTR =  ' '
+
+***        CHECK PARAMETRE BLOCK.
+
+          NSTEP  = -1
+          NAME   = ' '
+          CLEVEL = ' '
+          NPR    = MAXN
+          MPR    = MAXN
+          KIND   =  3
+          SCALE  = 0.0
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=900,ERR=901,IOSTAT=IO) NSTEP
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NAME = LIGNE
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) CLEVEL = LIGNE
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=900,ERR=901,IOSTAT=IO) NPR
+
+          OK = RPBLOC('M',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=900,ERR=901,IOSTAT=IO) MPR
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=900,ERR=901,IOSTAT=IO) KIND
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) CKIND = LIGNE
+
+          IF (CKIND.NE.' ')                                    THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          END IF
+
+          OK = RPBLOC('SCAL',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=900,ERR=901,IOSTAT=IO) SCALE
+
+          OK  = .TRUE.
+          RPB = .TRUE.
+
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) GOTO 904
+
+      ALLOCATE( IBUF(LEN),SP(NWDS) )
+
+      IF (.NOT.OK) GOTO 200
+
+  100 CONTINUE
+
+          IF (.NOT.RPB)                                        THEN
+
+***            READ A CARD IDENTIFYING THE FIELD TO BE PRINTED.
+
+              CALL GETLIGN( 5,LIGNE,80,OK )
+              IF (.NOT.OK) GOTO 150
+
+              READ( LIGNE, 5010,ERR=900,END=901,IOSTAT=IO) 
+     +                     CNTR,NSTEP,NAME,CLEVEL,NPR,MPR,KIND, SCALE
+
+***            BY DEFAULT ASK FOR THE NEXT FIELD. ALSO
+***            MAKE USE OF AUTOMATIC SCALING FACILITY.
+
+              IF (NAME.EQ.' '  .OR. 
+     +            NAME.EQ.'-1' .OR.
+     +            NAME.EQ.'NEXT' )                             THEN
+
+                  NAME  = 'NEXT'
+                  NSTEP =    -1
+                  LEVEL =    -1
+                  KIND  =     3
+                  MPR   =   MAXN
+                  NPR   =   MAXN
+
+              END IF
+
+          END IF
+
+          IF (SCALE .EQ. 0.0) 
+     +        SCAL  =  .TRUE. 
+
+***        CKECK CNTR FOR ABORT REQUEST OR EOR FOUND.
+
+  150     IF (CNTR.EQ.'-1' .OR. .NOT.OK)                       THEN
+              IF (CNTR.EQ.'-1') CALL BURNF
+              CALL                                 XIT(' Splook ', 0 )
+          END IF
+
+          IF (CLEVEL.EQ.' ' .OR. CLEVEL.EQ.'-1')               THEN
+             LEVEL =  -1
+             CLEVEL  = '-1'
+             LIGNE(1:12) = ' -1'
+          ELSE
+             IF (INDEX( CLEVEL,'.' ).EQ.0 .AND. CKIND.EQ.' ')  THEN
+                READ( CLEVEL,10, ERR=900,END=901,IOSTAT=IO ) LEVEL
+                CALL CONVPR( LEVEL, RLVL, VKIND, -2 )
+                IF (PKTYP.EQ.'SQ') CALL CONVPR( LEVEL,RLVL,VKIND, +2 )
+             ELSE
+                READ( CLEVEL,11, ERR=900,END=901,IOSTAT=IO ) RLVL
+                IF (PKTYP.EQ.'SQ')                           THEN
+                    CALL CONVPR( LEVEL, RLVL, VKIND,  +2 )
+                ELSE
+                   CALL LVCODE( LEVEL, RLVL/1000.,1 ) 
+                ENDIF
+             ENDIF
+             CALL GET_IP1_STRING( LEVEL,LIGNE(1:12) )
+             CALL LEADBLK( LIGNE(1:12) )
+          END IF
+
+          IF (KIND.EQ.0) KIND = 3
+
+          IF (.NOT.RPB .AND. NAME.EQ.'SKIP')                   THEN
+              CALL SUIVANT( 1, JBUF, ERR,OK )
+              IF (    ERR) GOTO 900
+              IF (.NOT.OK) GOTO 902
+              GOTO 100
+          END IF
+
+          CALL LOW2UP( NAME,NAME )
+          IF (NAME.NE.' ') CALL LEADBLK( NAME )
+
+          IF (.NOT.ALL .AND. NAME.EQ.'ALL')                    THEN
+              NAME = 'NEXT'
+              ALL  = .TRUE.
+          END IF
+
+          NSTEP = Y2KDAT8( NSTEP )
+          CALL DATE2STAMP( NSTEP,STAMP )
+
+          IF (SCALE.EQ.0.0) SCAL = .TRUE.
+
+***        FIND THE REQUESTED SPECTRAL OR FOURIER FIELD. 
+
+  200     CALL GETFLD2( 1, SP, 'SPEC',STAMP,NAME,LEVEL, 
+     +                          IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( IBUF,SP )
+              IF (MAXW.EQ.0) GOTO 050
+              CALL PDATE( CSTEP,STAMP )
+              WRITE(6,6020) TRIM( CSTEP ),NAME,TRIM( LIGNE(1:12) )
+              IF (.NOT.RPB) CALL BURNF
+              CALL                                 XIT(' Splook ',-101) 
+          END IF 
+
+          WRITE(NOM,4) IBUF(3)
+          LAIN     =   IBUF(5)
+          LRLMT    =   IBUF(7) 
+
+***        CONSIDER ANTI-SYMMETRIC OR SYMMETRIC INPUT.
+
+          CALL DIMGT2( LSR,LA0,LR,LM,KTR,LRLMT,  0,-1 )
+          CALL DIMGT2( LSR,LAP,LR,LM,KTR,LRLMT, +1,-1 )
+          CALL DIMGT2( LSR,LAN,LR,LM,KTR,LRLMT, -1,-1 )
+
+          IF (LAIN.EQ.LA0)                                     THEN
+              SORTE =  0
+          ELSE IF (LAIN.EQ.LAP)                                THEN
+              SORTE = +1
+          ELSE IF (LAIN.EQ.LAN)                                THEN
+              SORTE = -1
+          ELSE
+              CALL                                 XIT(' Splook ',-1 )
+          END IF
+
+          CALL DIMGT2( LSR,LA,LR,LM,KTR,LRLMT,  SORTE,0 )
+
+***        FIND SCALE IF REQUIRED.
+
+          IF (SCAL .AND. KIND.GT.2)                            THEN
+
+              AMIN = ABS( SP(1) )
+              AMAX = ABS( SP(1) )
+              DO 250 L=3,2*LA-1,2
+                  AMP  = SQRT(  SP(L  )*SP(L  )
+     +                        + SP(L+1)*SP(L+1) )
+                  AMIN = MIN( AMIN,AMP )
+                  AMAX = MAX( AMAX,AMP )
+  250         CONTINUE
+
+              RANGE = AMAX-AMIN
+              IF (RANGE.NE.0.0)                                THEN
+                  SCALE = 1.E4/(AMAX-AMIN)
+                  SCALE = 10.0**ANINT( LOG10( SCALE ) )
+              ELSE
+                  SCALE = 1.0
+              END IF
+
+          END IF
+                  
+***        PRINT THE COEFF AND GO BACK FOR THE NEXT FIELD. 
+
+          IF (KIND.LE.1)                                       THEN
+              CALL PRST2 ( SP, LSR,LM,NPR,MPR ) 
+CCC       ELSE IF (KIND.EQ.2)                                  THEN
+CCC           CALL PRPOL2( SP, LSR,LM,NPR,MPR,' DEG' )
+          ELSE IF (KIND.EQ.3)                                  THEN
+              CALL PRTODS2(SP, LSR,LM,NPR,MPR,SCALE,NOM, SORTE )
+          ELSE IF (KIND.GE.4)                                  THEN
+              CALL PRNMS2( SP, LSR,LM,NPR,MPR,SCALE,NOM, SORTE )
+          END IF
+
+          WRITE(6,6030)
+          CALL PRTLAB( IBUF )
+
+      IF (     ALL) GOTO 200
+      IF (.NOT.RPB) GOTO 100 
+ 
+***    E.O.F. ON INPUT.
+
+  900 IF (IO.NE.0) WRITE(6,6100) IO
+
+      CALL                                         XIT(' Splook ', 0 )
+
+  901 CALL                                         XIT(' Splook ',-102) 
+  902 CALL                                         XIT(' Splook ',-103) 
+
+  904 CALL                                         XIT(' Splook ',-2 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+ 0020 FORMAT(BN,I20)
+
+ 5010 FORMAT(A2,8X,I10,1X,A4,A5,3I5,E10.0) 
+
+ 6020 FORMAT('0..Eof looking for ',A,2X,A4,1X,A)
+ 6030 FORMAT(/10X,'    Step  Name Level')
+ 6100 FORMAT(' Splook reports I/O error number ',I4)
+
+      END 
+
+      SUBROUTINE prst2 (STR,LSR,LM,NPR,MPR) 
+
+***    JUL  2/79 - J.D.HENDERSON 
+***    ST IS A GENERALLY TRUNCATED SPECTRAL ARRAY (ROW INFO IN LSR). 
+***    PRINT ALL COEFFICIENTS INSIDE BOX (NPR,MPR) CORNERED ON (0,0).
+
+      IMPLICIT REAL (A-H,O-Z), INTEGER (I-N)
+
+      REAL     STR(*)
+      INTEGER  LSR(2,*)
+
+      COMPLEX      ST
+      POINTER (PST,ST(*))
+*-----------------------------------------------------------------------
+
+      PST = LOC( STR(1) )
+
+      WRITE(6,6010) LSR(2,1),LM,NPR,MPR 
+      MLIM=MPR ; IF (MLIM.GT.LM) MLIM=LM
+
+      DO  M=1,MLIM 
+          MS=M-1
+          KL=LSR(1,M) 
+          KR=LSR(1,M+1)-1 
+          KPR=KL+NPR-1
+          IF(KPR.GT.KR) KPR=KR
+
+          WRITE(6,6020) MS
+          WRITE(6,6030) (ST(K),K=KL,KPR)
+      END DO
+
+      RETURN
+
+*-------------------------------------------------------------------- 
+ 6010 FORMAT(/' Spectral array ',2I4,4X,'PRINT ',2I4)
+ 6020 FORMAT(' M=',I4)
+ 6030 FORMAT((1H ,4(4X,1PE13.6,1H,,1PE13.6))) 
+
+      END 
+
+      SUBROUTINE prtods2 (SPR,LSR,LM,NMMPR,MPR,SCALE,NAME, SORTE)
+
+***    CCRN NOV 29/83 - R.LAPRISE, B.DUGAS.
+***    PRINTS A 2-D AMPLITUDE SPECTRUM GIVEN A GENERALIZED SPECTRAL
+***    FIELD SP, FOR WAVE NUMBERS BETWEEN M=0 AND MPR-1 AND
+***    N-M=0 AND NMMPR-1 (MAX 20). 
+***    NOTE THAT SCALE MUST BE SUCH THAT THE SCALED AMPL. FITS IN I6.
+
+      IMPLICIT     REAL (A-H,O-Z), INTEGER (I-N)
+
+    ! integer,     parameter :: maxn = lm_maximal
+      integer,     parameter :: maxn = 99
+
+      REAL         SPR(*)
+      CHARACTER(4) :: NAME,KIND=' '
+      INTEGER      LSR(2,*),SORTE, IA(maxn),FIN,PAS
+      REAL         A(maxn),PH(maxn)
+
+      COMPLEX          SP
+      POINTER     (PSP,SP(*))
+*-----------------------------------------------------------------------
+
+      PSP = LOC( SPR(1) )
+
+      FIN = 0
+      IF (SORTE.EQ.0)                                          THEN
+          PAS = 1
+      ELSE
+          PAS = 2
+          IF (SORTE.GT.0) FIN = 1
+      END IF
+
+      NLIM=MIN0(NMMPR,MAXN) 
+      MLIM=MIN0(MPR,LM) 
+      WRITE(6,6000)NAME,SCALE,(     N-1, N=1,MIN(21,NLIM)) 
+      IF (NLIM > 21) WRITE(6,6001) (N-1, N=22,      NLIM)
+
+      DO 200 M=1,MLIM 
+          MS  = M-1
+
+          KLO = LSR(1,M)
+          KHI = LSR(1,M+1)-1
+
+          IF (M.EQ.1 .OR. SORTE.EQ.0)                          THEN
+              LNT = MIN0( KHI-KLO+1, NMMPR )
+              LNT = MIN0( LNT, MAXN )
+          ELSE
+              LNT = MIN0( PAS * (KHI-KLO+1), NMMPR ) 
+              LNT = MIN0( LNT, MAXN )
+              LNT = (LNT+FIN)/PAS
+          END IF
+
+          CALL CARAP2(A,PH,  SP(KLO),LNT,KIND)
+
+          DO 050 L=1,LNT 
+              IA(L)=NINT(A(L)*SCALE) 
+  050     CONTINUE
+
+          IF (SORTE.EQ.0 .OR. M.EQ.1)                          THEN
+              WRITE (6, 6010)            MS,(IA(K), K=1,MIN(21,LNT))
+              IF (LNT > 21) WRITE (6, 6011) (IA(K), K=22,LNT)
+          ELSE IF (SORTE.GT.0)                                 THEN
+              WRITE (6, 6020)            MS,(IA(K), K=1,MIN(11,LNT))
+              IF (LNT > 11) WRITE (6, 6021) (IA(K), K=12,LNT)
+          ELSE IF (SORTE.LT.0)                                 THEN
+              WRITE (6, 6030)            MS,(IA(K), K=1,MIN(11,LNT))
+              IF (LNT > 11) WRITE (6, 6031) (IA(K), K=12,LNT)
+          END IF
+
+  200 CONTINUE
+
+      RETURN
+
+*-----------------------------------------------------------------------
+ 6000 FORMAT(/1X,A4,2H *,E14.6,5H=====/1X,2HM,,1X,4HN-M=,I2,20I6/)
+ 6001 FORMAT(                          4X,                  21I6 )
+ 6010 FORMAT(/I3,2X,21I6) 
+ 6011 FORMAT( 5X,   21I6) 
+ 6020 FORMAT(/I3,2X,11(     I6  ,:'   N/A') ) 
+ 6021 FORMAT( 5X,   11(     I6  ,:'   N/A') ) 
+ 6030 FORMAT(/I3,2X,11(:'   N/A',     I6  ) ) 
+ 6031 FORMAT( 5X,   11(:'   N/A',     I6  ) ) 
+
+      END 
+      SUBROUTINE prnms2 (SPR,LSR,LM,NPR,MPR,SCALE,NAME, SORTE) 
+
+***    CCRN FEV 27/85 - R.LAPRISE, B.DUGAS.
+***    PRINTS A 2-D (N,M) AMPLITUDE SPECTRUM GIVEN A GENERALIZED 
+***    SPECTRAL FIELD  SP,  FOR WAVENUMBER M=0,MPR-1 AND N=M,NPR-1 
+***    (MAX 20). NOTE THAT SCALE MUST BE SUCH THAT THE SCALED AMPL.
+***    FIT IN I6 FORMAT. 
+
+      IMPLICIT REAL (A-H,O-Z), INTEGER (I-N)
+
+      integer,     parameter :: maxn = 99
+
+      REAL         SPR(*)
+      CHARACTER    FRMT*40,LIGNE*600
+      CHARACTER(4) :: NAME,KIND=' '
+      INTEGER      LSR(2,*), SORTE, IA(maxn),FIN,PAS, I1,I2,ITOT
+      REAL         A(maxn), PH(maxn)
+
+      COMPLEX          SP
+      POINTER     (PSP,SP(*))
+*-----------------------------------------------------------------------
+
+      PSP = LOC( SPR(1) )
+
+      FIN = 0
+      IF (SORTE.EQ.0)                                          THEN
+          PAS = 1
+      ELSE
+          PAS = 2
+          IF (SORTE.GT.0) FIN = 1
+      END IF
+
+      MPR  = MIN0(NPR,MPR) 
+      NLIM = MIN0(NPR,MAXN) 
+      MLIM = MIN0(MPR,LM) 
+      WRITE(6,6000)NAME,SCALE,(     N-1, N=1,MIN(21,NLIM)) 
+      IF (NLIM > 21) WRITE(6,6001) (N-1, N=22,      NLIM)
+
+      DO  M=1,MLIM 
+          MS = M-1
+
+          LIGNE = ' '
+
+          KLO = LSR(1,M)
+          KHI = LSR(1,M+1) -1 
+
+          IF (SORTE.EQ.0 .OR. M.EQ.1)                          THEN
+              LNT = KHI-KLO+1 
+              NHI = MIN0( NLIM, MS+LNT ) 
+              LNT = NHI-MS
+          ELSE
+              LNT = MIN0( PAS * (KHI-KLO+1) + FIN, NMMPR ) 
+              NHI = MIN0( NLIM, MS+LNT )
+              LNT = (NHI-MS+FIN)/PAS
+          END IF
+
+          IF (LNT.LE.0) RETURN
+
+          CALL CARAP2(A,PH,  SP(KLO),LNT,KIND)
+
+***        SCALE THE AMPLITUDES. 
+
+          DO  L=1,LNT
+              IA(L) = NINT(SCALE*A(L)) 
+          END DO
+
+***        PRINT THE SPECTRUM.  FIRST PRINT WAVENUMBER MS, THEN SKIP 
+***        FROM N=0 TO  MS-1,   AND PRINT AMPL. FROM N=MS TO NLIM-1. 
+
+          IF (MS == 0)                                         THEN 
+
+              WRITE(FRMT,6043) LNT ; ITOT = LNT
+              WRITE(LIGNE,FRMT) (IA(K), K=1,LNT)  
+
+          ELSE
+
+              IF (SORTE.EQ.0)                                  THEN
+                  WRITE(FRMT,6040) 6*MS,LNT 
+              ELSE IF (SORTE.LT.0)                             THEN
+                  WRITE(FRMT,6041) 6*MS,LNT 
+              ELSE IF (SORTE.GT.0)                             THEN
+                  WRITE(FRMT,6042) 6*MS,LNT 
+              END IF              
+
+              ITOT = MS+LNT ; IF (SORTE /= 0) ITOT = ITOT+LNT
+
+              WRITE(LIGNE,FRMT) (IA(K), K=1,LNT)
+
+              DO  L=1,MS
+                  I1 = 6*(L-1)+1 ; I2 = 6*L
+                  LIGNE(I1:I2) = '   -- '
+              END DO
+                  
+          END IF
+
+          ! WRITE FIRST LINE
+          WRITE(6,6002) MS,TRIM( LIGNE(1:126) )
+
+          DO  L=22,ITOT,22 ! WRITE THE OTHER LINES
+              I1 = 6*(L-1)+1 ; I2 = min(I1+125, 6*ITOT)
+              WRITE(6,6003) TRIM( LIGNE(I1:I2) )
+          END DO
+
+      END DO
+
+      RETURN
+
+*-----------------------------------------------------------------------
+ 6000 FORMAT(/1X,A4,' * ',1PE14.6,' ===='//1X,'M,   N=',I2,20I6)
+ 6001 FORMAT(                              4X,            21I6 )
+
+ 6002 FORMAT(/I3,2X,A)
+ 6003 FORMAT(    5X,A)
+
+ 6040 FORMAT( '(',I4,'X,',  I4,'I6)' ) 
+ 6041 FORMAT( '(',I4,'X,',  I4,'(:"   N/A",I6) )' ) 
+ 6042 FORMAT( '(',I4,'X,',  I4,'(I6,:"   N/A") )' ) 
+
+ 6043 FORMAT( '(',I4,'I6)' ) 
+
+      END 
+
+      SUBROUTINE carap2 (A,PH,  COEF,LNT,KIND) 
+
+***    CCRN APR 23/81 - R.LAPRISE. 
+
+***    CONVERT A COMPLEX ARRAY COEF OF LENGTH LNT FROM CARTESIAN 
+***    (REAL,IMAG.) TO POLAR FORM (AMPL.,PHASE). 
+***    IF KIND = 'DEG', THE PHASE ANGLE IS RETURNED IN DEGREES, 
+***    OTHERWISE IS IT IN RADIANS. THE PHASE IS NORMALIZED TO LIE
+***    IN THE INTERVAL 0(INCL.) TO 2PI(EXCL.). 
+
+      IMPLICIT REAL (A-H,O-Z), INTEGER (I-N)
+
+      CHARACTER*4 KIND
+      COMPLEX     COEF(LNT)
+      REAL        A(LNT),PH(LNT) 
+
+*-----------------------------------------------------------------------
+      PI = 4.0*ATAN(1.0)
+
+      DO 100 L=1,LNT
+
+          A(L)  = CABS(COEF(L))
+          PH(L) = 0.0
+          IF (A(L).NE.0.)                                      THEN
+                  PH(L) = ATAN2( -AIMAG(COEF(L)), REAL(COEF(L)) )
+              IF (PH(L).LT. 0.0 ) PH(L) = PH(L)+2.0*PI 
+              IF (KIND .EQ.'DEG') PH(L) = PH(L)*180./PI
+          END IF
+
+  100 CONTINUE
+
+      RETURN
+      END 
+#     endif

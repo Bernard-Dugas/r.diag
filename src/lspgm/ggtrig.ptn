@@ -1,0 +1,787 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggtrig  GGIN GGOUT INPUT OUTPUT [-a VAL1 -kind VAL2 [VAL3] -b VAL4 [-lon]]
+*
+*
+*     DESCRIPTION...
+*      ggtrig - GRID SET MULTIPLIED BY CONST*TRIG(LAT)**N OR CONST*TRIG(N*LON)
+*
+*
+*     AUTHOR  - J.D.Henderson, MAY 25/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggtrig.ptn,v 4.14 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE - MULTIPLIES ANY 'A','B','G' 'L' OR 'Z' GRID FILE BY
+*               CONST*TRIG(LAT)**N OR CONST*TRIG(N*LON), WHERE
+*               TRIG CAN BE EITHER OF THE FOLLOWING:
+*               1) ANY OF THE USUAL SINUS, COSINUS
+*                  OR TANGENT FUNCTIONS.
+*               2) THE IDENTITY FUNCTION.
+*
+*
+*     INPUT FILE...
+*      GGIN  = 'A','B','G','L' OR 'Z' GRIDS
+*
+*     OUTPUT FILE...
+*      GGOUT = GGIN MULTIPLIED AS REQUESTED.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      CONST (a)    = MULTIPLYING CONSTANT. BLANK INPUT DEFAULT IS 1.0
+*      KTR   (kind) = 'SIN', 'COS', 'TAN' OR 'IDF'. THE DEFAULT IS 'COS'
+*                     AND 'IDF' STANDS FOR IDENTITY FUNCTION
+*      GEOGR (kind2)= 'ROT' or 'GEO' (the default is 'GEO')
+*                     Stands for GEOGraphical frame of Reference.
+*                     This option can only applied to 'Z' grids.
+*      N     (b)    = INTEGER POWER TO WHICH TRIG FUNCTION IS RAISED
+*                     IF LON IS NULL. OTHERWISE, LONGITUDE WAVE NUMBER.
+*                     THE BLANK INPUT DEFAULT IS SET TO 1
+*      LON          = 0 (DEFAULT) ==> APPLIES TRIG(LAT)**N
+*                   = ANYTHING ELSE ==> APPLIES TRIG(N*LON)
+*
+*     NOTES:  1) 'G' GRIDS ARE CLASSICAL GAUSSIAN GRIDS; 'A' GRIDS ARE
+*                GLOBAL OR HEMISPHERIC LAT-LON GRIDS THAT INCLUDE NEITHER
+*                THE POLES OR THE EQUATOR. THEIR FIRST LATITUDE POINT STARTS
+*                HALF AN INTERVAL FROM THE POLE. 'B' GRIDS ARE AS A GRIDS,
+*                EXCEPT THAT THEY INCLUDE POLES AND MAY ALSO INCLUDE THE
+*                EQUATOR WHEN THERE IS AN UNEVEN NUMBER OF LATITUDES.
+*                THE 'Z' GRID FORMAT IS USED BY THE RPN/CMC GEM MODEL.
+*             2) For rotated 'Z' grids, it is possible to use the
+*                latitudes and longitudes in the rotated or non-rotated
+*                geographical frame of reference.
+*             3) NEGATIVE EXPONENT OPERATIONS ON 'B' OR 'Z' GRIDS ARE
+*                NOT SUPPORTED, AS THEY MAY IMPLY DIVISION BY ZERO
+*                AT THE EQUATOR AND THE POLES. FOR THE SAME REASON,
+*                TAN(LAT) OPERATIONS ARE NOT SUPPORTED FOR 'B' GRIDS.
+*
+*      READ( 5,5010 ) CONST,KTR,N,LON
+*5010  FORMAT(10X,E10.0,2X,A3,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*   GGTRIG      1.E0  COS    2    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 KTR IS NEITHER SIN,COS OR TAN
+*       2 ABORT ERROR READING GGIN
+*       3 ABORT ERROR READIND INPUT DIRECTIVES
+*       4 UNSUPPORTED GRID TYPE
+*       5 UNSUPPORTED OPERATION/"GRID TYPE" COMBINATION
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggtrig
+*     PROGRAM GGTRIG (GGIN,       GGOUT,       INPUT,       OUTPUT,
+*    1          TAPE1=GGIN, TAPE2=GGOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: ggtrig.ptn,v $
+*     Revision 4.14  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.13  2011/01/13 18:52:56  dugas
+*     Correction de la definition de LONR lors du traitement natif de grilles de type Z.
+*
+*     Revision 4.12  2010/05/04 18:57:18  dugas
+*      For rotated 'Z' grids, it is now possible to use the
+*       latitudes and longitudes in the rotated or non-rotated
+*       geographical frame of reference using the GEOGR
+*       command-line argument.
+*
+*     Revision 4.11  2008/11/24 22:06:10  dugas
+*     Ne plus utiliser MAXI/MAXJ. Tout est dynamique.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2008/04/25 21:38:39  dugas
+*     Permettre 20 caracteres pour les parametres reels sur la ligne de commande.
+*
+*     Revision 4.8  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2007/03/12 19:35:55  dugas
+*     Ne plus permettre le mode TAN(LAT) avec les grilles B.
+*
+*     Revision 4.6  2004/11/12 17:55:31  dugas
+*     - Ajouter le support des donnees sur grilles de type L.
+*     - Corriger les calculs associes aux donnees sur grilles de type Z.
+*
+*     Revision 4.5  2003/09/15 16:11:10  dugas
+*     Ajouter le support des grilles de type A,B et Z
+*
+*     Revision 4.4  2002/12/06 16:22:08  dugas
+*     Modifier la documentation automatique et les messages d'erreurs
+*
+*     Revision 4.3  2001/08/31 15:15:06  armnrbd
+*     Ajouter la fonction IDENTITE.
+*     Faire les calcules en REAL*8.
+*     Tenir compte des cas ou IG2=1.
+*
+*     Revision 4.2  1998/07/03 02:26:27  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/02/17  21:29:10  armnrbd
+*     Corriger le traitement de la valeur par defaut de LON.
+*
+*     Revision 4.0  1994/11/17  14:20:27  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.3  94/10/07  16:11:36  armnrbd
+*     Corriger la definitions de TRIGLON a la derniere longitude.
+*     
+*     Revision 3.2  94/02/25  15:24:59  armnrbd
+*     Corriger un bogue dans la lecture de LON en mode ligne.
+*     
+*     Revision 3.1  94/02/16  15:44:43  armnrbd
+*     Implanter fonction trig en longitude optionnelle.
+*     
+*     Revision 3.0  93/10/13  13:56:15  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/12/24  12:05:32  armnrbd
+*     GGTRIG fonctionne egalement sur grilles hemispheriques.
+*     
+*     Revision 1.1  92/12/23  17:11:16  armnrbd
+*     Permettre un exposant negatif.
+*     Implanter le support de RPBLOC.
+*     
+*     Revision 1.0  92/04/29  01:28:02  armnrbd
+*     Initial revision
+*     
+*     MAY 11/83 - R.LAPRISE.
+*     MAY 25/81 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      CHARACTER*5 AN,ALON
+      CHARACTER*3 KTR,CGEO
+      LOGICAL     OK,NEW,RPBLOC,LGEO
+      CHARACTER   PKTYP*4,GRTYP,ZTYP
+      REAL        ZIG1,ZIG2,ZIG3,ZIG4,DLON1,
+     +            DLAT1,DLON2,DLAT2,XLON0,XLAT0
+      CHARACTER   LIGNE*80,CONST8*20,CONST4*10
+      REAL*8      PIS2,DYLA,DEUXPI,RLON,H,CO,CONST
+      INTEGER     IER,NR,NLAT,NLAT0,ILATH,IO,N,NLON,NLON0,
+     +            NFF,I,J,JR,K,IN,NHEM,NHEM0,LON,LONM1,NWDS,
+     +            KBUF(taille_entete),MAXW,LEN,KPAK,IG1,IG2,
+     +            IG3,IG4,DIMX,DIMY,IJ
+
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: F,TRIGLON,TRIGLAT,
+     +                                         RAD,SL,CL,WL,WOSSL
+      REAL,       DIMENSION(:), ALLOCATABLE :: LONR,LATR, VALX,VALY
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     SETIO64
+      CHARACTER*4 GETHIC,GETYP
+      INTEGER     GETHIGH,GETSIZ
+      EXTERNAL    GETSIZ,JCLPNT,RPBLOC,GETLIGN,BURNF,
+     +            XIT,GETFLD2,GAUSSG,TRIGL2,PUTFLD2,LOW2UP,
+     +            SETIO64,GETHIC,GETYP,GETHIGH,GETZREF,
+     +            GETZDES,CIGAXG,D_ROTA
+
+      DATA        NLON0,NLAT0,NHEM0 / 3*-1 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggtrig.ptn,v $'
+
+*---------------------------------------------------------------------
+      NEW    = .TRUE.
+      PIS2   = ASIN( 1.D0 )
+      CO     = PIS2 / 90.
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ( 1, KBUF,LEN,NWDS,KPAK )
+      IF (MAXW.LE.0) CALL                          XIT(' Ggtrig ',-2 )
+
+      ALLOCATE( IBUF(2*LEN),F(NWDS) )
+
+***    READ CONST, KTR, N FROM A CARD.
+***    KTR IS THE KIND OF TRIG FUNCTION ('SIN','COS','TAN').
+***    LON REQUESTS A LONGITUDE DEPENDANT FUNCTION.
+
+      CGEO = 'GEO' ; LGEO = .TRUE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          CONST8 = ' '
+          KTR    = ' '
+          AN     = ' '
+          ALON   = ' '
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) CONST8 = LIGNE
+
+          OK = RPBLOC('KIND', LIGNE)
+          IF (OK) KTR    = LIGNE
+          IF (OK) CALL LOW2UP( KTR,KTR )
+
+          OK = RPBLOC('KIND2', LIGNE)
+          IF (OK) CGEO = LIGNE
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) AN     = LIGNE(1:5)
+
+          OK = RPBLOC('LON',LIGNE)
+          IF (OK) ALON   = LIGNE(1:5)
+
+      ELSE
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                             THEN
+              GOTO 903
+          ELSE
+              READ( LIGNE, 5010, ERR=903,END=903,IOSTAT=IO ) 
+     +                           CONST4,KTR,AN,ALON
+              CALL BURNF
+          END IF  
+
+          CONST8 = CONST4
+
+      END IF
+
+      CALL LOW2UP( CGEO,CGEO )
+      IF (CGEO == 'ROT') LGEO = .FALSE.
+
+***    ACCOUNT FOR DEFAULT VALUES
+
+      IF (KTR   .EQ.' ') KTR    = 'COS'
+      IF (CONST8.EQ.' ') CONST8 = '1.0'
+      IF (AN    .EQ.' ') AN     = '1'
+      IF (ALON  .EQ.' ') ALON   = '0'
+
+      IF (KTR.NE.'SIN' .AND.
+     +    KTR.NE.'COS' .AND.
+     +    KTR.NE.'TAN' .AND.
+     +    KTR.NE.'IDF'    )                                    THEN
+          WRITE(6,6001) KTR
+          CALL                                     XIT(' Ggtrig ',-1 )
+      END IF
+
+      READ( CONST8,20, ERR=903,IOSTAT=IO ) CONST
+      READ( AN,     5, ERR=904,IOSTAT=IO ) N
+      READ( ALON,   5, ERR=905,IOSTAT=IO ) LON
+
+      WRITE(6,6100) CONST,KTR,N
+
+      IN = ABS( N )
+
+      IF (LON.EQ.0) WRITE(6,6130)
+      IF (LON.NE.0) WRITE(6,6140)
+
+***    READ THE NEXT GRID FROM FILE GGIN.
+
+      NR=0
+
+  100 CALL GETFLD2( 1, F, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6110) NR
+              IF (NR.EQ.0)                                     THEN
+                  WRITE(6,6002)
+                  CALL                             XIT(' Ggtrig ',-2 )
+              ELSE
+                  CALL                             XIT(' Ggtrig ', 0 )
+              END IF
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - --
+
+          NLON  = IBUF(5)
+          NLAT  = IBUF(6)
+          NHEM  = IBUF(7)
+
+          IF (NEW           .OR. NHEM.NE.NHEM0 .OR.
+     +        NLAT.NE.NLAT0 .OR. NLON.NE.NLON0)                THEN
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+                  GRTYP = GETHIC ('GRTYP',IBUF )
+                  IG1   = GETHIGH('IG1'  ,IBUF )
+                  IG2   = GETHIGH('IG2'  ,IBUF )
+                  IG3   = GETHIGH('IG3'  ,IBUF )
+                  IG4   = GETHIGH('IG4'  ,IBUF )
+
+              ELSE
+
+                  GRTYP = 'G'
+                  IG2   =  0
+
+              END IF
+
+          END IF
+
+          IF     (GRTYP.EQ.'Z')                                THEN
+
+              IF (NEW           .OR.
+     +            NLAT.NE.NLAT0 .OR. NLON.NE.NLON0)            THEN
+
+                  IF (LON.EQ.0 .AND. N.NE.IN) CALL XIT(' Ggtrig ',-5 )
+
+***                ALLOCATE LONR,LATR AND VALX,VALY.
+
+                  IF (.NOT.NEW) DEALLOCATE( LONR,LATR, VALX,VALY )
+                  ALLOCATE( LONR((NLON+1)*NLAT), VALX(NLON+1) ,
+     +                      LATR((NLON+1)*NLAT), VALY(NLAT) )
+
+                  NEW   = .FALSE.
+
+                  NLON0 =  NLON
+                  NLAT0 =  NLAT
+
+                  CALL GETZREF( 1, '>>',VALX )
+                  CALL GETZREF( 1, '^^',VALY )
+
+***                RETREIVE/DECODE COORDINATE ROTATION INFORMATION.
+***                LATR AND LONR WILL HOLD 2D LATITUDES AND LONGITUDES.
+
+                  CALL GETZDES( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, DIMX,DIMY )
+
+                  IF (DIMX.NE.NLON .OR.
+     +                DIMY.NE.NLAT) CALL           XIT(' Ggtrig ',-6 )
+
+                  IF (LGEO)                                    THEN
+                      CALL CIGAXG( ZTYP, DLAT1,DLON1,DLAT2,DLON2,
+     +                                   ZIG1,ZIG2,ZIG3,ZIG4 )
+                      CALL D_ROTA( LONR,LATR, VALX,VALY, 
+     +                             DLON1,DLAT1,DLON2,DLAT2,
+     +                             XLON0,XLAT0, NLON,NLAT )
+                  ELSE
+                      IJ = 0
+                      DO  J=1,NLAT
+                          DO  I=1,NLON
+                              IJ = IJ+1
+                              LATR(IJ) = VALY(J)
+                          END DO
+                      END DO
+                      IJ = 0
+                      DO  J=1,NLAT
+                          DO  I=1,NLON
+                              IJ = IJ+1
+                              LONR(IJ) = VALX(I)
+                          END DO
+                      END DO
+                  ENDIF
+
+                  IF (LON.EQ.0)                                THEN
+
+***                    RESET LATR TO THE REQUESTED
+***                    LATITUDE TRIG FUNCTION.
+
+                      IF (KTR.EQ.'SIN')                        THEN
+                          DO  J=1,NLON*NLAT
+                              LATR(J) = SIN( CO*LATR(J) )**N
+                          END DO
+                      ELSE IF (KTR.EQ.'COS')                   THEN
+                          DO  J=1,NLON*NLAT
+                              LATR(J) = COS( CO*LATR(J) )**N
+                          END DO
+                      ELSE IF (KTR.EQ.'TAN')                   THEN
+                          DO  J=1,NLON*NLAT
+                              LATR(J) = TAN( CO*LATR(J) )**N
+                          END DO
+                      ELSE IF (KTR.EQ.'IDF')                   THEN
+                          DO  J=1,NLON*NLAT
+                              LATR(J) =      CO*LATR(J)  **N
+                          END DO
+                      END IF
+
+                  ELSE
+
+***                    RESET LONR TO THE REQUESTED
+***                    LONGITUDE TRIG FUNCTION.
+
+                      IF (KTR.EQ.'SIN')                        THEN
+                          DO  I=1,NLON*NLAT
+                              LONR(I) = CONST*SIN( N*CO*LONR(I) )
+                          END DO
+                      ELSE IF (KTR.EQ.'COS')                   THEN
+                          DO  I=1,NLON*NLAT
+                              LONR(I) = CONST*COS( N*CO*LONR(I) )
+                          END DO
+                      ELSE IF (KTR.EQ.'TAN')                   THEN
+                          DO  I=1,NLON*NLAT
+                              LONR(I) = CONST*TAN( N*CO*LONR(I) )
+                          END DO
+                      ELSE IF (KTR.EQ.'IDF')                   THEN
+                          DO  I=1,NLON*NLAT
+                              LONR(I) = CONST*     N*CO*LONR(I)
+                          END DO
+                      END IF
+             
+                  END IF
+
+              END IF
+
+          ELSE IF (LON.EQ.0      .AND.
+     +            (NEW           .OR.
+     +             NLAT.NE.NLAT0 .OR. NHEM.NE.NHEM0))          THEN
+
+              IF ( .NOT.NEW )
+     +           DEALLOCATE( TRIGLAT,RAD,SL,CL,WL,WOSSL )
+
+              ALLOCATE( TRIGLAT(NLAT),RAD(NLAT),
+     +           SL(NLAT),CL(NLAT),WL(NLAT),WOSSL(NLAT) )
+
+              NEW   = .FALSE.
+
+              NHEM0 =  NHEM
+              NLAT0 =  NLAT
+              ILATH =  NLAT
+
+              IF (NHEM.EQ.0) 
+     +        ILATH =  NLAT/2
+
+***            FIRST TIME ONLY...
+
+              IF (GRTYP.EQ.'G')                                THEN
+
+***                GAUSSG COMPUTES THE VALUE OF THE GAUSSIAN
+***                LATITUDES (RAD) AND THEIR SINES (SL) AND
+***                COSINES (CL). AFTER THAT, TRIGL MAKES
+***                THEM GLOBAL (S TO N).
+
+                  CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL )
+                  CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL, NHEM )
+
+              ELSE IF (GRTYP.EQ.'A' .OR. GRTYP.EQ.'B')         THEN
+
+***                DEFINE RAD, AS WELL AS SL AND CL FOR A AND B GRIDS.
+
+                  IF (GRTYP.EQ.'A')                            THEN
+
+                      DYLA = PIS2/ILATH
+
+                      IF (NHEM.EQ.1)                           THEN
+                          RAD(1) = 0.5*DYLA
+                      ELSE
+                          RAD(1) = 0.5*DYLA-PIS2
+                      END IF
+
+                      DO  J=2,NLAT
+                          RAD(J) = RAD(J-1)+DYLA
+                      END DO
+
+                  ELSE IF (GRTYP.EQ.'B')                       THEN
+
+                      IF (NHEM.EQ.0)                           THEN
+                          DYLA   = 2.*PIS2/(NLAT-1)
+                          RAD(1) =-PIS2
+                      ELSE IF (NHEM.EQ.1)                      THEN
+                          DYLA   = PIS2/(NLAT-1)
+                          RAD(1) = 0.0
+                      ELSE IF (NHEM.EQ.2)                      THEN
+                          DYLA   = PIS2/(NLAT-1)
+                          RAD(1) =-PIS2
+                      END IF
+
+                  END IF
+
+                  CL(1) = COS( RAD(1) )
+                  SL(1) = SIN( RAD(1) )
+
+                  DO  J=2,NLAT
+                      RAD(J) = RAD(J-1)+DYLA
+                      CL(J)  = COS( RAD(J) )
+                      SL(J)  = SIN( RAD(J) )
+                  END DO
+                  
+              ELSE IF (GRTYP.EQ.'L')                           THEN
+
+***                DEFINE RAD, AS WELL AS SL AND CL FOR L GRIDS.
+
+                  CALL CIGAXG( GRTYP, XLAT0,XLON0,DLAT1,DLON1,
+     +                                IG1,  IG2,  IG3,  IG4 )
+
+                  DYLA  = DLAT1*CO
+
+                  RAD(1) = XLAT0*CO
+                  CL(1)  = COS( RAD(1) )
+                  SL(1)  = SIN( RAD(1) )
+
+                  DO  J=2,NLAT
+                      RAD(J) = RAD(J-1)+DYLA
+                      CL(J)  = COS( RAD(J) )
+                      SL(J)  = SIN( RAD(J) )
+                  END DO
+
+              ELSE
+
+                  WRITE(6,6004) GRTYP
+                  CALL                             XIT(' Ggtrig ',-4 )
+
+              END IF
+
+***            ACCOUNT FOR NORTH -> SOUTH LATITUDES.
+
+              IF (GRTYP.NE.'L' .AND. IG2.EQ.1)                 THEN
+
+                  IF (NHEM.EQ.0)                               THEN
+                      DO  J=1,NLAT
+
+                          RAD(J) = -RAD(J)
+                          SL(J)  = -SL(J)
+
+                      END DO
+                  ELSE
+                      DO  J=1,NLAT/2
+
+                          H             = RAD(J)
+                          RAD(J)        = RAD(NLAT-J+1)
+                          RAD(NLAT-J+1) = H
+
+                          H             = CL(J)
+                          CL(J)         = CL(NLAT-J+1)
+                          CL(NLAT-J+1)  = H
+
+                          H             = SL(J)
+                          SL(J)         = SL(NLAT-J+1)
+                          SL(NLAT-J+1)  = H
+
+                      END DO
+                  END IF
+
+              END IF
+
+***            SET TRIGLAT TO THE REQUESTED LATITUDE TRIG FUNCTION.
+***            CONSIDER POSSIBLY NEGATIVE VALUES OF N.
+
+              IF (N.NE.IN)                                     THEN
+
+                  IF (GRTYP.EQ.'B') CALL           XIT(' Ggtrig ',-5 )
+
+                  IF (KTR.EQ.'SIN')                            THEN
+                      DO  J=1,NLAT
+                          TRIGLAT(J) = 1./(SL(J)**IN)
+                      END DO
+                  ELSE IF (KTR.EQ.'COS')                       THEN
+                      DO  J=1,NLAT
+                          TRIGLAT(J) = 1./(CL(J)**IN)
+                      END DO
+                  ELSE IF (KTR.EQ.'TAN')                       THEN
+                      DO  J=1,NLAT
+                          TRIGLAT(J) =( CL(J)/ SL(J) )**IN
+                      END DO
+                  ELSE IF (KTR.EQ.'IDF')                       THEN
+                      DO  J=1,NLAT
+                          TRIGLAT(J) = 1./(RAD(J)**IN)
+                      END DO
+                  END IF
+
+              ELSE
+
+                  IF (KTR.EQ.'SIN')                            THEN
+                      DO  J=1,NLAT
+                          TRIGLAT(J) = SL(J)**IN
+                      END DO
+                  ELSE IF (KTR.EQ.'COS')                       THEN
+                      DO  J=1,NLAT
+                          TRIGLAT(J) = CL(J)**IN
+                      END DO
+                  ELSE IF (KTR.EQ.'TAN')                       THEN
+
+                      IF (GRTYP.EQ.'B') CALL       XIT(' Ggtrig ',-5 )
+
+                      DO  J=1,NLAT
+                          TRIGLAT(J) =( SL(J)/ CL(J) )**IN
+                      END DO
+                  ELSE IF (KTR.EQ.'IDF')                       THEN
+                      DO  J=1,NLAT
+                          TRIGLAT(J) =  RAD(J)**IN
+                      END DO
+                  END IF
+
+              END IF
+
+          ELSE IF (LON.NE.0 .AND. 
+     +            (NEW      .OR.   NLON.NE.NLON0))             THEN
+
+              IF ( .NOT.NEW ) DEALLOCATE( TRIGLON )
+                                ALLOCATE( TRIGLON(NLON) )
+
+              NEW    = .FALSE.
+
+              DEUXPI = 4.0*PIS2
+              XLON0  = 0.0
+
+              IF (GRTYP.EQ.'A' .OR. 
+     +            GRTYP.EQ.'G' )                               THEN
+
+                  RLON = N*DEUXPI/( NLON-MOD( NLON,2 ) )
+
+              ELSE IF (GRTYP.EQ.'B')                           THEN
+
+                  RLON = N*DEUXPI/( NLON-1)
+
+              ELSE IF (GRTYP.EQ.'L')                           THEN
+
+                  CALL CIGAXG( GRTYP, XLAT0,XLON0,DLAT1,DLON1,
+     +                                IG1,  IG2,  IG3,  IG4 )
+
+                  XLON0  =   XLON0*CO
+                  RLON   = N*DLON1*CO
+
+              END IF
+
+***            SET TRIGLON TO THE REQUESTED LONGITUDE TRIG FUNCTION.
+***            WE SUPPOSE THAT THE FIRST AND LAST LONGITUDES REPEAT.
+
+              IF (KTR.EQ.'SIN')                                THEN
+                  DO  I=1,NLON
+                      TRIGLON(I) = CONST*SIN( XLON0+(I-1)*RLON )
+                  END DO
+              ELSE IF (KTR.EQ.'COS')                           THEN
+                  DO  I=1,NLON
+                      TRIGLON(I) = CONST*COS( XLON0+(I-1)*RLON )
+                  END DO
+              ELSE IF (KTR.EQ.'TAN')                           THEN
+                  DO  I=1,NLON
+                      TRIGLON(I) = CONST*TAN( XLON0+(I-1)*RLON )
+                  END DO
+              ELSE IF (KTR.EQ.'IDF')                           THEN
+                  DO  I=1,NLON
+                      TRIGLON(I) = CONST*   ( XLON0+(I-1)*RLON )
+                  END DO
+              END IF
+             
+          END IF
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - --
+
+          IF (GRTYP.EQ.'Z')                                    THEN
+
+              IF (LON.EQ.0)                                        THEN
+
+***                MULTIPLY THE GRID BY CONST*TRIG(LAT)**N
+
+                  DO  J=1,NLON*NLAT
+                      F(J) = CONST*LATR(J)*F(J)
+                  END DO
+
+              ELSE
+
+***                MULTIPLY THE GRID BY CONST*TRIG(N*LON)
+
+                  DO  I=1,NLON*NLAT
+                      F(I) = LONR(I)*F(I)
+                  END DO
+
+              END IF
+
+          ELSE
+
+              IF (LON.EQ.0)                                        THEN
+
+***                MULTIPLY THE GRID BY CONST*TRIG(LAT)**N
+
+                  DO  300 J=1,NLAT
+                      JR = (J-1)*NLON
+                      DO  I=1,NLON
+                          K    = JR+I
+                          F(K) = CONST*TRIGLAT(J)*F(K)
+                      END DO
+  300             CONTINUE
+
+              ELSE
+
+***                MULTIPLY THE GRID BY CONST*TRIG(N*LON)
+
+                  DO  400 J=1,NLAT
+                      JR = (J-1)*NLON
+                      DO  I=1,NLON
+                          K    = JR+I
+                          F(K) = TRIGLON(I)*F(K)
+                      END DO
+  400             CONTINUE
+
+              END IF
+
+          END IF
+
+***        SAVE ON FILE GGOUT.
+
+          CALL PUTFLD2( 2, F, IBUF,MAXW )
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  903 IF (IO.NE.0) WRITE(6,6003) IO
+      CALL                                         XIT(' Ggtrig ',-3 )
+  904 IF (IO.NE.0) WRITE(6,6013) IO
+      CALL                                         XIT(' Ggtrig ',-3 )
+  905 IF (IO.NE.0) WRITE(6,6023) IO
+      CALL                                         XIT(' Ggtrig ',-3 )
+
+*---------------------------------------------------------------------
+    5 FORMAT(BN,I5)
+   20 FORMAT(BN,E20.0)
+
+ 5010 FORMAT(10X,A10,2X,A3,2A5)
+
+ 6001 FORMAT('0KTR must be sin,cos, tan or idf.  KTR=',A3)
+ 6002 FORMAT('0 File empty')
+ 6003 FORMAT(' Ggtrig reports I/O error number ',I4,' reading CONST.')
+ 6013 FORMAT(' Ggtrig reports I/O error number ',I4,' reading N.')
+ 6023 FORMAT(' Ggtrig reports I/O error number ',I4,' reading LON.')
+ 6004 FORMAT(' GRTYP=',A,' not yet supported...')
+
+ 6100 FORMAT('0Ggtrig const,ktr,n = ',1PE20.12,3X,A4,I5)
+ 6110 FORMAT(I6,' records read.')
+ 6130 FORMAT('Ggtrig will apply latitude trig function.')
+ 6140 FORMAT('Ggtrig will apply longitude trig function.')
+
+      END
+#     endif

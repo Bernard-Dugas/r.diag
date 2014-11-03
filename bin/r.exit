@@ -1,0 +1,11 @@
+#! /bin/sh
+\cat > message_de_fin_de_travail <<EndOfMessage
+Fin du traitement de ${JOB}
+EndOfMessage
+zxzxzx=${DIAGNOSTIC_EXIT:=DIAGNOSTIC_EXIT}
+\cat ${zxzxzx} | grep abort 1> ${zxzxzx} 2> /dev/null
+if ( test -s ${zxzxzx} ) then
+     \rm message_de_fin_de_travail
+else
+     \mv message_de_fin_de_travail ${zxzxzx}
+fi

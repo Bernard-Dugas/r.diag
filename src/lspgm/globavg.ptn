@@ -1,0 +1,1313 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      globavg  CHAMP SINT OUTPUT [-def]
+*      msfact   CHAMP MSF
+*
+*
+*     PURPOSE...
+*      globavg - CALCULATES SURFACE AREA MEANS OF CHAMP
+*      msfact  - OUTPUT SURFACE MAP-SCALE-FACTORS FOR CHAMP
+*
+*
+*     AUTHOR   - B.Dugas, NOV 23/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/globavg.ptn,v 4.24 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE  - CALCULATES THE SURFACE MEAN OF VALUES IN CHAMP FILE WHICH 
+*    (Globavg)   CAN BE OF SPECTRAL OR FOURIER WAVES, ZONAL CROSS-SECTIONS 
+*                OR HORIZONTAL GRID(S) TYPE. HEMISPHERIC CROSS-SECTION AND
+*                GRIDS FIELDS AS WELL AS COMPLEX GRID ARRAYS ARE ALSO
+*                SUPPORTED. A LAM (LIMITED AREA) ARRAY INPUT WILL GENERATE
+*                THE APPROPRIATE SURFACE WEIGHTED AREA MEANS.
+*
+*     NOTES:  1) NAMES ARE NOT CHECKED AND SUPERLABELS ARE SIMPLY SKIPPED. 
+*             2) SPECIFYING THE "-def" COMMAND-LINE PARAMETER ACTIVATES A
+*                MODE IN WHICH THE PROGRAM SIMPLY DOES THE SUM OF ALL DATA
+*                POINTS. THIS MODE GIVES THE SAME RESULTS AS THE NORMAL ONE
+*                PROVIDED THAT THE ARRAYS HAVE BEEN PRE-MULTIPLIED BY THE
+*                APPROPRIATE SURFACE MAP-SCALE-FACTORS.
+*             3) THE "-def" MODE IS ALSO AUTOMATICALLY ACTIVATED FOR
+*                POLAR-STEREOGRAPHIC ARRAYS.
+*                 
+*     PURPOSE  - ONLY CALCULATES THE MAP-SCALE-FACTORS FOR THE ARRAYS IN
+*    (MSFact)    THE FILE CHAMP. THE RESULTING NUMBERS ARE NOT NORMALIZED
+*                BY THE TOTAL AREA OF THE ARRAYS. THE UNITS ARE THUS THE
+*                PERCENTAGES OF THE GLOBAL AREA ASSOCIATED WITH EACH
+*                GRID POINT. SUPPORTS ARRAY TYPES FOR WHICH GLOBAVG
+*                CAN DEFINE THIS.
+*
+*
+*     INPUT FILE... 
+*      CHAMP = INPUT FILE OF FIELDS. THE FILE CAN BE SUPERLABELLED 
+*              OR NOT. THE FIELDS THEMSELVES CAN BE TYPE ZONL, GRID, 
+*              CMPL, SPEC OR FOUR. SUBA TYPES WILL ALSO BE TREATED
+*              BUT WITHOUT SURFACE MAP-SCALE-FACTORS, EXCEPT FOR
+*              L- AND Z-TYPE RPN ARRAYS WHICH ARE CORRECTLY HANDLED.
+*
+*     OUTPUT FILE... (GLOBAVG OPTIONAL) 
+*      SINT  = OUTPUT ARRAYS OF SURFACE MEANS
+*
+*     OUTPUT FILE... (MSFACT) 
+*      MSF   = OUTPUT ARRAYS OF SURFACE MAP-SCALE-FACTORS
+*
+*     NOTE THAT IF FILE SINT IS SPECIFIED
+*          THEN
+*              THE COMPUTED VALUES ARE WRITTEN TO FILE SINT, (NO RESULT IS
+*              WRITTEN TO STDOUT). THE TYPE OF FILE SINT IS THE SAME AS THAT
+*              FOR THE INPUT FILE CHAMP. THE FILE DESCRIPTOR STRUCTURE IS
+*              LEFT UNCHANGED FOR EACH RECORD
+*          OTHERWISE, 
+*              THE COMPUTED VALUES ARE WRITTEN TO STDOUT
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST LABEL IN CHAMP
+*       2 UNKNOWN/UNSUPPORTED FILE TYPE
+*       3 PREMATURE EOF ON FILE CHAMP
+*       4 FILE MSF NOT SPECIFIED
+*       5 UNSUPPORTED ARRAY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM globavg
+*    1          (      CHAMP,       SINT,       OUTPUT, 
+*    2           TAPE1=CHAMP, TAPE2=SINT, TAPE6=OUTPUT) 
+*     ------------------------------------------------- 
+
+*     $Log: globavg.ptn,v $
+*     Revision 4.24  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.23  2013/11/28 22:24:33  dugas
+*     Faire des appels a MISPAR apres chaque lecture.
+*
+*     Revision 4.22  2011/01/13 18:54:26  dugas
+*     Ajouter le support des grilles Z a reference PS.
+*
+*     Revision 4.21  2010/10/23 16:56:02  dugas
+*     Correction de la documentation.
+*
+*     Revision 4.20  2010/05/06 16:25:30  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*
+*     Revision 4.19  2008/11/24 22:01:18  dugas
+*     Ajouter le mode de fonctionnement MSFACT.
+*
+*     Revision 4.18  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.17  2007/12/20 20:55:24  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser GET_IP1_STRING pour imprimer les niveaux verticaux.
+*
+*     Revision 4.16  2006/07/13 21:45:53  dugas
+*     Corriger le calcul des coupes zonales de grilles G.
+*
+*     Revision 4.15  2006/07/04 18:31:50  dugas
+*     Ajouter le support des donnees manquantes par le biais soit
+*      du parametre "-mvalue valeur [epsilon]", soit de la variable
+*      d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*      nombre reel denotant une valeur manquante et "epsilon" est
+*      le facteur de precision utilise dans les comparaisons. La
+*      valeur par defaut de epsilon est 1%. La seconde methode a
+*      preseance sur la premiere.
+*
+*     Revision 4.14  2005/05/06 18:34:11  dugas
+*     Corriger l'allocation dynamique de l'espace de travail.
+*
+*     Revision 4.13  2005/04/12 17:23:33  dugas
+*     - Corriger les calculs pour les grilles LAM de type Z (Version 2).
+*     - Ajouter un message informatif sur le type de grille en traitement.
+*
+*     Revision 4.12  2004/11/12 17:50:44  dugas
+*     - Augmenter la taille maximale des grilles.
+*     - Corriger les calculs pour les grilles LAM de type Z.
+*     - Ajouter le support des donnees sur grilles de type L.
+*     - Ajouter le support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.11  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.10  2002/05/07 16:32:04  dugas
+*     Corriger le message 6101 a la sortie
+*
+*     Revision 4.9  2002/04/22 15:18:44  dugas
+*     Verifier les limites sur LON dans la routine GLBAVG
+*
+*     Revision 4.8  1999/09/24 17:42:37  armnrbd
+*     Ajouter du code pour les grilles A et B avec Normand Gagnon.
+*
+*     Revision 4.7  1999/08/25 16:51:23  armnrbd
+*     Corriger l'impression des resultats pour les coupes zonales.
+*
+*     Revision 4.6  1998/07/03 02:26:27  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1998/05/28  19:56:12  armnrbd
+*     Ajouter le support des grilles de type Z.
+*
+*     Revision 4.4  1997/09/26  17:38:57  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1996/03/22  20:18:28  armnrbd
+*     Implanter l'option "-def".
+*
+*     Revision 4.2  1996/02/27  20:45:34  armnrbd
+*     Modifier le traitement des enregistrements de type LABL.
+*
+*     Revision 4.1  1995/05/31  14:06:30  armnrbd
+*     Corriger un oubli dans le traitement du cas spectral.
+*
+*     Revision 4.0  1994/11/17  14:20:30  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/10  11:12:11  armnrbd
+*     Ajouter le support de champs hemispheriques.
+*     
+*     Revision 3.0  93/10/13  13:56:16  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/19  13:47:35  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/11/15  19:32:30  armnrbd
+*     Remplacer BACKSPACE par CALL PRECEDE.
+*     
+*     Revision 1.2  92/11/04  22:24:31  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/04/29  01:33:44  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:45  armnrbd
+*     Initial revision
+*     
+*     AVR 04/91 - B. Dugas, RPN. (Version CY920/IRIX F77)
+*     APR 14/88 - F. MAJAESS (ENFORCE VECTORIZATION OF THE DO LOOP 
+*                             180 BY USING A SCALAR TO ACCUMULATE 
+*                             THE SUM INSTEAD OF A VECTOR ELEMENT) 
+*     NOV 16/87 - F. MAJAESS (ELIMINATE DULICATE WEIGHT CALCULATIONS. 
+*                             CONTROL COMPUTED VALUES WRITING TO FILE 
+*                             "OUTPUT" VIA "SINT" FILE SPECIFICATION 
+*                             ON THE PROGRAM CALL CARD). 
+*     NOV 29/83 - B. DUGAS. 
+
+*----------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     MAXI
+      PARAMETER ( MAXI = longitude_maximale )
+      INTEGER     MAXJ
+      PARAMETER ( MAXJ = latitude_maximale )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      CHARACTER    GRTYP,ZTYP
+      CHARACTER*16 MESSAGE,CDATE
+      CHARACTER*4  TYPE,NOM,VALEUR
+      CHARACTER*8  CHAINE(32),VERBE,ALEV*12
+      REAL        ZERO,DEMI,ALON(MAXI),
+     +            ALAT(MAXJ),RESLAT,RESLON,
+     +            XG1,XG2,XG3,XG4
+      LOGICAL     OK,LISTCV,DEF1,DEF2,MVALUE,MSFL
+      REAL*8      CR,RADL(MAXJ),WOSSL(MAXJ),EPSIL,
+     +            SL(MAXJ),WL(MAXJ),CL(MAXJ),FMISS,
+     +            D,DEUXPI,PISUR2,FN,CI,CM(2),OV2ILG1
+      INTEGER     HEAD,JBUF(taille_entete),LEV(MAXLEV),ILEV,
+     +            FIJ,FIL,FILN,FILO,NF,NFL,ILATWL,MAXW,LEN,
+     +            NWDS,JPAK,ILG,ILG1,ILG2,ILAT,ILATH,IER,I,J,
+     +            K,L,N,IJ,JL,JJ,J1,J2,LR,NLEV,IHEM,LENLAB,
+     +            IG1,IG2,IG3,IG4, MIS,TMIS, I1,I2,
+     +            ZIG1,ZIG2,ZIG3,ZIG4, DIMX,DIMY
+
+      INTEGER,    DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:),   ALLOCATABLE :: F,MSF
+      REAL*8,     DIMENSION(:,:), ALLOCATABLE :: C
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC,SETIO64
+      INTEGER     GETSIZ,GETHIGH
+      CHARACTER*4 GETYP,PKTYP,GETHIC
+      EXTERNAL    MACSPE,JCLPNT,GETSIZ,GETFLD2,XIT,
+     +            PRECEDE,GETZX2,GETLAB,PUTLAB,GAUSSG,
+     +            TRIGL2,PUTZX2,PUTFLD2,CIGAXG,MISPAR,
+     +            RPBLOC,GETYP,GETHIC,GLBAVG,GETZREF,
+     +            GETHIGH,SETIO64
+
+      LOGICAL     VRAI,  FAUX
+      DATA        VRAI,  FAUX,   MSFL   /
+     +           .TRUE.,.FALSE.,.FALSE. /
+      DATA        GRTYP   / 'G' /
+      DATA        MESSAGE / 'Aucun' /
+      DATA        DEUXPI,PISUR2 / 360., 90. /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/globavg.ptn,v $'
+
+*------------------------------------------------------------------- 
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3 
+      CALL JCLPNT( NF, 1,2, 6 )
+
+                   LISTCV = .TRUE. 
+      IF (NF.GE.2) LISTCV = .FALSE. 
+
+***    CHECK OPERATING MODE.
+
+      CALL GETVERB( VERBE )
+      CALL LOW2UP( VERBE,VERBE )
+      IF (VERBE == 'MSFACT') MSFL = .TRUE.
+
+      IF (MSFL .AND. LISTCV) CALL                  XIT( Verbe ,-4 ) 
+
+      OK = SETIO64(.TRUE.)
+
+      DEMI   =  1. / 2. 
+      NFL    =  0 
+      ILATWL = -1
+      DEF1   = FAUX
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    CHECK MISSING VALUE PARAMETRES.
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          DEF1 = RPBLOC('DEFAUT',VALEUR)
+
+          IF (MSFL) DEF1 = FAUX ! this option is not available with MSFACT
+
+          IF (DEF1) WRITE(6,6000)
+          IF (DEF1) MESSAGE = 'Deja donne...'
+
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )   
+      IF (MAXW.EQ.0) GOTO 900
+
+      ALLOCATE( IBUF(2*LEN),C(2,NWDS/2+1),F(NWDS),MSF(NWDS) )
+
+***     READ IN THE FIRST FIELD IN CHAMP.
+ 
+  100 CALL GETFLD2( 1, F, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+      IF (.NOT.OK)                                             THEN 
+
+          DEALLOCATE( IBUF,F,C,MSF )
+          IF (MAXW.EQ.0)                           GOTO 050
+
+          IF (NFL.EQ.0) CALL                       XIT( Verbe ,-1 ) 
+
+          IF (.NOT.LISTCV)                                     THEN
+              CALL PRTLAB2('  Last record: ',JBUF )
+              WRITE(6,6010) Verbe,NFL
+          END IF
+
+          CALL                                     XIT( Verbe , 0 ) 
+
+      END IF 
+
+      CALL MISPAR( MVALUE,FMISS,EPSIL )
+      IF (MVALUE) EPSIL = ABS( FMISS )*EPSIL
+
+      DEF2 = DEF1
+      IHEM = IBUF(7)
+
+      WRITE(TYPE,4) IBUF(1)
+      WRITE(NOM, 4) IBUF(3)
+
+***    SAVE CURRENT LABEL DESCRIPTORS.
+
+      IF (TYPE.NE.'LABL')                                      THEN
+          DO  I=1, taille_entete
+              JBUF(I) = IBUF(I)
+          END DO
+      END IF
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+***        FOR SQI FILES, CHECK THE REAL DATA TYPE.
+                                    
+          GRTYP = GETHIC( 'GRTYP',IBUF )
+          IG2   = GETHIGH( 'IG2',IBUF )
+
+          IF (GRTYP.EQ.'A' .OR.
+     +        GRTYP.EQ.'B')                                    THEN
+
+              IF (TYPE.EQ.'GRID')                              THEN
+                  ILG  = IBUF(5)
+                  ILAT = IBUF(6)
+                  ILEV = 1
+              ELSE IF (TYPE.EQ.'ZONL')                         THEN
+                  ILG  = 1
+                  ILAT = IBUF(5)
+                  ILEV = IBUF(6)
+              END IF
+
+***            POSSIBLY ACCOUNT FOR HEMISPHERIC (IHEM.NE.0)
+***            AND FOR NORTH TO SOUTH ORIENTED DATA (IG2.EQ.1).
+
+              RESLON = 0.0
+
+              IF (GRTYP.EQ.'A')                                THEN
+
+                  IF (IHEM.EQ.0)                               THEN
+
+                      RESLAT = 180./FLOAT( ILAT )
+
+                      IF (IG2.EQ.0)                            THEN
+                          ALAT(1) = -90.+0.5*RESLAT
+                      ELSE IF (IG2.EQ.1)                       THEN
+                          ALAT(1) = +90.-0.5*RESLAT
+                      END IF
+
+                  ELSE
+
+                      RESLAT =  90./FLOAT( ILAT )
+
+                      IF (IHEM.EQ.1)                           THEN
+                          IF (IG2.EQ.0)                        THEN
+                              ALAT(1) =       0.5*RESLAT
+                          ELSE IF (IG2.EQ.1)                   THEN
+                              ALAT(1) = +90.0-0.5*RESLAT
+                          END IF
+                      ELSE IF (IHEM.EQ.2)                      THEN
+                          IF (IG2.EQ.0)                        THEN
+                              ALAT(1) = -90.0+0.5*RESLAT
+                          ELSE IF (IG2.EQ.1)                   THEN
+                              ALAT(1) =      -0.5*RESLAT
+                          END IF
+                      END IF
+
+                  END IF
+
+                  IF (ILG.GT.1) RESLON = 360./FLOAT( ILG )
+
+              ELSE IF (GRTYP.EQ.'B')                           THEN
+
+                  IF (ILG.GT.1) RESLON = 360./FLOAT( ILG-1 )
+
+                  IF (IHEM.EQ.0)                               THEN
+
+                      RESLAT = 180./(FLOAT( ILAT )-1.)
+
+                      IF (IG2.EQ.0)                            THEN
+                          ALAT(1) = -90.
+                      ELSE IF (IG2.EQ.1)                       THEN
+                          ALAT(1) = +90.
+                      END IF
+
+                  ELSE
+
+                      RESLAT =  90./(FLOAT( ILAT )-1.)
+
+                      IF (IHEM.EQ.1)                           THEN
+                          IF (IG2.EQ.0)                        THEN
+                              ALAT(1) =  00.0
+                          ELSE IF (IG2.EQ.1)                   THEN
+                              ALAT(1) = +90.0
+                          END IF
+                      ELSE IF (IHEM.EQ.2)                      THEN
+                          IF (IG2.EQ.0)                        THEN
+                              ALAT(1) = -90.0
+                          ELSE IF (IG2.EQ.1)                   THEN
+                              ALAT(1) =  00.0
+                          END IF
+                      END IF
+
+                  END IF
+
+              END IF
+
+              IF (IG2.EQ.1) RESLAT = -RESLAT
+
+              DO  J=2,ILAT
+                  ALAT(J) = ALAT(J-1)+RESLAT
+              END DO
+
+              ALON(1) = 0.0
+              DO  K=2,ILG
+                  ALON(K) = ALON(K-1)+RESLON
+              END DO
+
+          ELSE IF (GRTYP.EQ.'N' .OR.
+     +             GRTYP.EQ.'S' )                              THEN
+
+***            MAP-SCALE-FACTORS ARE NOT USED
+***            WITH POLAR-STEREOGRAPHIC ARRAYS.
+
+              DEF2 = VRAI
+
+***            USE THE 'GRID' TYPE PROCESSING.
+
+              TYPE = 'GRID'
+
+              IF (MSFL)                                        THEN
+
+                  WRITE(6,6005) TYPE,GRTYP
+                  CALL                             XIT( Verbe,-5 )
+
+              ELSE
+
+                  IF (MESSAGE.NE.'Deja donne...')              THEN
+                      WRITE(6,6000)
+                      MESSAGE =  'Deja donne...'
+                  END IF
+
+              END IF
+
+          ELSE IF (GRTYP.EQ.'L')                               THEN
+
+***            DEFINE THE X- AND Y-DIRECTIONAL INFO.
+
+              IG1   = GETHIGH( 'IG1',IBUF )
+              IG3   = GETHIGH( 'IG3',IBUF )
+              IG4   = GETHIGH( 'IG4',IBUF )
+
+              CALL CIGAXG( GRTYP, XG1,XG2,XG3,XG4,
+     +                            IG1,IG2,IG3,IG4 )
+
+              FN = XG1
+              DO  J=1,IBUF(6)
+                  ALAT(J) = MIN( FN , PISUR2 )
+                  FN      =      FN + XG3
+              END DO
+
+              FN = XG2
+              DO  I=1,IBUF(5)
+CCC               ALON(I) = MIN( FN , DEUXPI )
+                  ALON(I) =      FN
+                  FN      =      FN + XG4
+              END DO
+
+          ELSE IF (GRTYP.EQ.'Z')                               THEN
+
+***            RETRIEVE THE X- AND Y-DIRECTIONAL INFO.
+
+              CALL GETZREF( 1, '>>',ALON )
+              CALL GETZREF( 1, '^^',ALAT )
+
+***            RETREIVE/DECODE COORDINATE ROTATION INFORMATION.
+
+              CALL GETZDES( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, DIMX,DIMY )
+
+              IF (ZTYP =='N' .OR. ZTYP == 'S')                 THEN
+
+***                AGAIN, MAP-SCALE-FACTORS ARE NOT USED
+***                WITH POLAR-STEREOGRAPHIC ARRAYS AND WE
+***                USE THE 'GRID' TYPE PROCESSING.
+
+                  DEF2 = VRAI
+                  TYPE = 'GRID'
+
+                  IF (MSFL)                                    THEN
+
+                      WRITE(6,6005) TYPE,GRTYP
+                      CALL                         XIT( Verbe,-5 )
+
+                  ELSE
+
+                      IF (MESSAGE.NE.'Deja donne...')          THEN
+                          WRITE(6,6000)
+                          MESSAGE =  'Deja donne...'
+                      END IF
+
+                  END IF
+
+              END IF
+
+          END IF
+
+      END IF
+      IF (TYPE  == 'GRID' .AND.
+     +    GRTYP == 'G'    .AND.
+     +    MSFL             )                                   THEN
+
+                               ILG   = IBUF(5)
+                               ILG1  = ILG-1
+          IF (MOD(ILG,2) == 0) ILG1  = ILG
+
+                               ILAT  = IBUF(6)
+                               ILATH = ILAT / 2 
+          IF (IHEM.NE.0)       ILATH = ILAT
+
+          OV2ILG1 = 1. / ( 2D0 * ILG1 )
+
+          CALL GAUSSG( ILATH, SL,WL,CL,RADL,WOSSL ) 
+          CALL TRIGL2( ILATH, SL,WL,CL,RADL,WOSSL,IHEM ) 
+
+          IF (IG2 == 0)                                THEN
+              DO  J=1,ILAT
+                  I1 = (J-1)*ILG+1
+                  I2 = I1   +ILG-1
+                  MSF(I1:I2) = WL(J)*OV2ILG1
+              END DO
+          ELSE
+              DO  J=1,ILAT
+                  I1 = (J-1)*ILG+1
+                  I2 = I1   +ILG-1
+                  MSF(I1:I2) = WL(ILAT-J+1)*OV2ILG1
+              END DO
+          END IF
+
+          CALL PUTFLD2( 2, MSF, IBUF,MAXW ) 
+
+          NFL = NFL+1
+          GOTO 100 
+
+      END IF
+      IF (DEF2 .OR. (TYPE.EQ.'SUBA' .AND. GRTYP.NE.'L' 
+     +                              .AND. ZTYP .NE.'L'
+     +                              .AND. ZTYP .NE.'E') )      THEN
+
+***        FURTHERMORE, MAP-SCALE-FACTORS
+***        ARE NOT USED WITH SUBAREA ARRAYS
+***        EXCEPT FOR L- AND Z(E)-TYPE ARRAYS.
+
+          TYPE = 'GRID'
+          DEF2 =  VRAI
+
+          IF (MSFL)                                            THEN
+
+              WRITE(6,6005) TYPE,GRTYP
+              CALL                                 XIT( Verbe,-5 )
+
+          ELSE
+
+              IF (MESSAGE.NE.'Deja donne...')                  THEN
+                  WRITE(6,6000)
+                  MESSAGE =  'Deja donne...'
+              END IF
+
+          END IF
+
+      END IF
+      IF (.NOT.MSFL .AND. TYPE == 'SPEC')                      THEN
+
+***         SPECTRAL CASE 
+ 
+          D   = F(1) / SQRT(2.) 
+
+          DO  I=2,NWDS
+              F(I) = 0. 
+          END DO
+
+          ILEV = 1
+
+      ELSE IF (.NOT.DEF2    .AND.
+     +        (GRTYP.EQ.'A' .OR.  GRTYP.EQ.'B'))               THEN
+
+***        MOYENNES DE GRILLES LAT-LON TELLES QUE CALCULEES PAR GLBAVG
+***        (AJOUT DE N. GAGNON ET B.DUGAS, septembre 1999).
+
+          IF (ILEV.NE.1)                                       THEN
+              CALL PRECEDE( 1,1 )
+              CALL GETZX2( 1, F,ILAT,LEV,NLEV, 
+     +                        IBUF,MAXW,OK )
+          END IF
+
+          DO  L=1,ILEV
+
+              IJ = (L-1)*ILG*ILAT+1
+
+              CALL GLBAVG( D,F(IJ), ALON,ALAT,ILG,ILAT,IHEM,
+     +                              MVALUE,FMISS,EPSIL, MSF )
+
+              IF (MSFL)                                        THEN
+
+                  F = MSF
+
+              ELSE
+
+***                ACCOUNT FOR SUM OVER HALF THE GLOBE.
+
+                  IF (IHEM.NE.0) D = 2.0*D
+
+                  DO  I=0,ILG*ILAT-1
+                      F(IJ+I) = D
+                  END DO
+
+              END IF
+
+          END DO
+
+      ELSE IF (TYPE  == 'SUBA' .AND.
+     +        (GRTYP == 'L'    .OR.
+     +         ZTYP  == 'L'    .OR.
+     +         ZTYP  == 'E')       )                           THEN
+
+***         MOYENNE POUR GRILLE L OU Z (TELLE QUE CALCULEE PAR A. PLANTE).
+
+          ILG  = IBUF(5) 
+          ILAT = IBUF(6)
+          ILEV = 1
+
+          CALL GLBAVG( D,F, ALON,ALAT,ILG,ILAT,0,
+     +                      MVALUE,FMISS,EPSIL, MSF )
+
+          IF (MSFL)                                            THEN
+
+              F = MSF
+
+          ELSE
+
+              DO  I=1,ILG*ILAT
+                  F(I) = D
+              END DO
+
+          END IF
+
+      ELSE IF (.NOT.MSFL)                                      THEN
+
+          IF (TYPE.EQ.'ZONL')                                  THEN
+
+***             ZONAL CASE TRANFORMATION 
+ 
+              ILG   = 1
+              ILAT  = IBUF(5) 
+              ILEV  = IBUF(6)
+
+              IF (ILEV.NE.1)                                   THEN
+                  CALL PRECEDE( 1,1 )
+                  CALL GETZX2( 1, F,ILAT,LEV,NLEV, 
+     +                            IBUF,MAXW,OK )
+              END IF
+
+          ELSE IF (TYPE.EQ.'FOUR')                             THEN
+ 
+***             FOURIER CASE TRANFORMATION 
+
+              ILG  = 2 
+              ILAT = IBUF(6) 
+              ILEV = 1
+              LR   = IBUF(5) * 2 
+
+              DO 250 J=1,ILAT
+                  JJ    = (J  - 1)  * LR + 1
+                  J2    =  2  * J 
+                  J1    =  J2 - 1 
+                  F(J1) = F(JJ) 
+                  F(J2) = F(J1) 
+  250         CONTINUE 
+
+          ELSE IF (TYPE.EQ.'GRID' .OR.
+     +             TYPE.EQ.'CMPL' )                            THEN
+
+***            DEF OF GRID CASE PARAMETERS 
+ 
+              ILG  = IBUF(5) 
+              ILAT = IBUF(6) 
+              ILEV = 1
+ 
+          ELSE IF (TYPE.EQ.'LABL')                             THEN
+
+***            LABEL FOUND.
+
+              LENLAB = IBUF(5)
+
+              CALL GETLAB( 0, CHAINE, IBUF(1),LENLAB, OK )
+             
+              IF (.NOT.LISTCV)                                 THEN
+
+***                WRITE IT TO UNIT 2.
+
+                  IF (NOM.EQ.'LABL')                           THEN
+                      CALL PUTLAB( 2, CHAINE, IBUF(1),LENLAB, 
+     +                                       .FALSE.,.FALSE. )
+                  ELSE IF (NOM.EQ.'FILE')                      THEN
+                      CALL PUTLAB( 2, CHAINE, IBUF(1),LENLAB, 
+     +                                       .TRUE. ,.FALSE. )
+                  ELSE IF (NOM.EQ.'INFO')                      THEN
+                      CALL PUTLAB( 2, CHAINE, IBUF(1),LENLAB,
+     +                                       .FALSE.,.TRUE.  )
+                  END IF
+
+              ELSE
+
+                  WRITE(6,6030) (CHAINE(I),I=1,LENLAB)
+
+              END IF
+
+              GOTO 100
+
+          ELSE IF (TYPE.EQ.'CHAR')                             THEN
+
+***            CHARACTER DATA FOUND.
+
+              IF (.NOT.LISTCV) CALL PUTFLD2( 2, F, IBUF,MAXW )
+
+              GOTO 100
+
+          ELSE
+
+***            UNRECOGNIZED ARRAY TYPE. ABORTING.
+
+              CALL                                 XIT( Verbe ,-2 ) 
+
+          END IF
+
+***         COMPUTATIONS COMMON TO GRID, FOUR AND ZONL CASES 
+
+          IF (TYPE.EQ.'ZONL')                                  THEN
+                                     ILG1  = 1
+                                     ILG2  = 0
+          ELSE
+                                     ILG1  = ILG  - 1
+              IF (DEF2 .OR.
+     +            MOD( ILG,2 ).EQ.0) ILG1  = ILG
+                                     ILG2  = ILG1 - 1
+          END IF
+                                     ILATH = ILAT / 2 
+          IF (IHEM.NE.0)             ILATH = ILAT
+
+          IF (ILATWL.NE.ILATH)                                 THEN 
+              ILATWL = ILATH 
+              IF (DEF2)                                        THEN
+                  DO  J=1,ILAT
+                      WL(J) = 2.0*ILG1
+                  END DO
+              ELSE
+                  CALL GAUSSG( ILATH, SL,WL,CL,RADL,WOSSL ) 
+                  CALL TRIGL2( ILATH, SL,WL,CL,RADL,WOSSL,IHEM ) 
+              END IF
+          END IF 
+
+          IF (TYPE.NE.'CMPL')                                  THEN
+
+              DO 351 L=1,ILEV 
+                  FIL  = (L - 1) * ILG * ILAT + 1
+                  D    = 0.
+                  TMIS = 0
+                  DO 350 J=1,ILAT 
+                      FN     = 0. 
+                      FIJ    = FIL + (J - 1) * ILG
+                      IF (.NOT.MVALUE)                         THEN
+                          DO  I=0,ILG2
+                              FN = FN + F(FIJ+I) * WL(J) * DEMI 
+                          END DO
+                          D = D + FN / ILG1
+                      ELSE
+                          MIS = 0
+                          DO  I=0,ILG2
+                              IF (ABS( F(FIJ+I)-FMISS ).GT.EPSIL)
+     +                        THEN
+                                  FN  = FN  + F(FIJ+I) * WL(J) * DEMI
+                                  MIS = MIS + 1
+                              END IF
+                          END DO 
+                          TMIS = TMIS+MIS
+                          IF (MIS.NE.0) D = D + FN / MIS
+                      END IF
+  350             CONTINUE
+                  IF (.NOT.(MVALUE.AND.(TMIS.EQ.0)))           THEN
+                      F(FIL) = D
+                  ELSE
+                      F(FIL) = FMISS
+                  END IF
+  351         CONTINUE 
+
+***             PUT THE VALUE OF D INTO F 
+ 
+              IF (TYPE.EQ.'FOUR')                              THEN
+
+                  DO  400 J=1,ILAT 
+                      FIJ        = (J - 1) * LR + 1
+                      F(FIJ)     = D 
+                      DO  I=FIJ+1,FIJ+LR-1
+                          F(FIJ) = 0. 
+                      END DO
+  400             CONTINUE 
+
+              ELSE IF (TYPE.EQ.'ZONL')                         THEN
+   
+                  DO 450 L=1,ILEV
+                      FILN = (L -1) * ILAT + 1
+                      FILO = (L -1) * ILAT
+                      D    = F(FILN)
+                      DO  J=1,ILAT
+                          F(FILO+J) = D 
+                      END DO
+  450              CONTINUE 
+   
+              ELSE
+
+                  DO  IJ=2,ILAT*ILG
+                      F(IJ) = D 
+                  END DO
+
+              END IF
+
+          ELSE
+
+              CALL MOVLEV( F,C, NWDS )
+
+***            COMPLEX ARRAY CALCULATION (ASSUMED GAUSSIAN).
+
+              CM(1) = 0.
+              CM(2) = 0.
+              FIJ   = 0
+              TMIS  = 0
+              
+              DO  J=1,ILAT 
+                  CR  = 0. 
+                  CI  = 0. 
+                  IF (.NOT.MVALUE)                             THEN
+                      DO  I=1,ILG1
+                          CR = CR + C(1,FIJ+I) * WL(J) * DEMI 
+                          CI = CI + C(2,FIJ+I) * WL(J) * DEMI 
+                      END DO
+                      CM(1) = CM(1) + CR / ILG1
+                      CM(2) = CM(2) + CI / ILG1
+                  ELSE
+                      MIS = 0
+                      DO  I=1,ILG1
+                          IF (ABS( C(1,FIJ+I)-FMISS ).GT.EPSIL
+     +                   .AND.ABS( C(2,FIJ+I)-FMISS ).GT.EPSIL)
+     +                    THEN
+                              CR  = CR + C(1,FIJ+I) * WL(J) * DEMI 
+                              CI  = CI + C(2,FIJ+I) * WL(J) * DEMI
+                              MIS = MIS+1
+                          END IF
+                      END DO
+                      IF (MIS.NE.0)                            THEN
+                          CM(1) = CM(1) + CR / MIS
+                          CM(2) = CM(2) + CI / MIS
+                      END IF
+                      TMIS = TMIS+MIS
+                  END IF
+                  FIJ = FIJ + ILG
+              END DO
+
+***            PUT THE VALUE OF CM INTO C.
+
+              IF (.NOT.(MVALUE.AND.(TMIS.EQ.0)))               THEN
+                  DO  IJ=1,ILAT*ILG
+                      C(1,IJ) = CM(1)
+                      C(2,IJ) = CM(2)
+                  END DO
+              ELSE
+                  DO  IJ=1,ILAT*ILG
+                      C(1,IJ) = FMISS
+                      C(2,IJ) = FMISS
+                  END DO
+              END IF
+
+              CALL MOVLEV( C,F, NWDS )
+
+          END IF
+ 
+      ELSE
+
+          WRITE(6,6005) TYPE,GRTYP
+          CALL                                     XIT( Verbe ,-5 )
+
+      END IF
+
+***     OUTPUT F INTO FILE SINT=TAPE2 OR PRINT MEAN VALUE D.
+ 
+      IF (.NOT.LISTCV)                                         THEN
+          IF (TYPE.EQ.'ZONL' .AND. ILEV.GT.1)                  THEN
+              CALL PUTZX2( 2, F,LEV, IBUF,MAXW )
+          ELSE
+              CALL PUTFLD2( 2, F, IBUF,MAXW ) 
+          END IF
+          IF (NFL.EQ.0) CALL PRTLAB2(' First record: ',IBUF )
+      ELSE
+          CALL PDATE( CDATE,IBUF(2) )
+          IF (ILEV.EQ.1)                                       THEN
+              CALL GET_IP1_STRING( IBUF(4),ALEV )
+              IF (TYPE.EQ.'CMPL')                              THEN
+                  WRITE(6,6022) 
+     +            IBUF(1),TRIM( CDATE ),IBUF(3),TRIM( ALEV ),F(1),F(2)
+              ELSE
+                  WRITE(6,6021) 
+     +            IBUF(1),TRIM( CDATE ),IBUF(3),TRIM( ALEV ),F(1)
+              END IF
+          ELSE
+              DO  L=1,ILEV
+                  CALL GET_IP1_STRING( LEV(L),ALEV )
+                  IF (TYPE.EQ.'CMPL') WRITE(6,6022)
+     +               IBUF(1),TRIM( CDATE ),IBUF(3),TRIM( ALEV ),
+     +               C(1,(L-1)*ILG*ILAT+1),C(2,(L-1)*ILG*ILAT+1)
+                  IF (TYPE.NE.'CMPL') WRITE(6,6021)
+     +               IBUF(1),TRIM( CDATE ),IBUF(3),TRIM( ALEV ),
+     +               F((L-1)*ILG*ILAT+1)
+              END DO
+          END IF
+      END IF
+
+      NFL = NFL+1
+      GOTO 100 
+
+***    PREMATURE E.O.F. ON UNIT #1.
+
+  900 CALL                                         XIT( Verbe ,-3 )
+
+*---------------------------------------------------------------- 
+    4 FORMAT(A4)
+
+ 6000 FORMAT(' Globavg will not provide surface map-scale-factors.')
+ 6005 FORMAT(' Array type not supported in MSFact ',A,1x,A)
+ 6010 FORMAT(3X,A,' read ',I5,' fields.') 
+ 6021 FORMAT(' From ',A4,2X,A,2X,A4,2X,A,
+     1       ' the surface mean is ', 1P1E13.6) 
+ 6022 FORMAT(' From ',A4,2X,A,2X,A4,2X,A,
+     1       ' the surface mean is ', 1P2E13.6) 
+ 6030 FORMAT(15X,'Label',16x,(36X,112A8/))
+
+      END 
+      SUBROUTINE GLBAVG(GA,F1,LON,LAT,NI,NJ,IHEM,
+     +                        MVALUE,FMISS,EPSIL,
+     +                        MSF )
+
+***   AUTEUR : ANDRE PLANTE MAI 1998.
+
+***   BUT    : Faire la moyenne globale d'un champ GEM.
+
+*     - Voici la grille GEM, les "," representent les point de grilles
+*                            les "|" et "-" limitent les tuiles. Ces frontieres
+*                            sont a mi-distance entre les points de grille.
+*     - Pour connaitre la taille de la tuile (I,J) on a besion des coordonnees
+*       (LAT1,LON1) et (LAT2,LON2).
+*     - On normalise la valeur au point de grille (I,J) par la taille de la
+*       tuile (I,J).
+*     - La somme des tailles des tuiles sur le globe donne 1.0 ou presque,
+*       0.9999999 sur pollux.
+*     - La somme des valeurs normalisees donne la moyenne globale du champ
+*
+*             --------------------------------------------------------------
+*             |       |               |                                    |
+*             |       |               |                                    |
+*             |       |               |                                    |
+*             |       |               |                                    |
+*             |   ,   |  (I,J+1)      |             ,                      |
+*             |       |               |                                    |
+*             |       |               |                                    |
+*             |       |          (LAT2,LON2)                               |
+*             ------------------------*-------------------------------------
+*             |       |               |                                    |
+*             |       |               |                                    |
+*             |(I-1,J)|  (I,J)        |         (I+1,j)                    |
+*             |       |               |                                    |
+*             |       |               |                                    |
+*             --------*-----------------------------------------------------
+*             |  (LAT1,LON1)          |                                    |
+*             |   ,   |  (I,J-1)      |             ,                      |
+*             |       |               |                                    |
+*             --------------------------------------------------------------
+*
+*---------------------------------------------------------------- 
+      IMPLICIT    none
+
+      REAL*8      FAC
+      PARAMETER ( FAC = 1./(180.*4.D0) )
+
+      INTEGER     MAXI
+      PARAMETER ( MAXI = longitude_maximale )
+      INTEGER     MAXJ
+      PARAMETER ( MAXJ = latitude_maximale )
+
+      LOGICAL     GLOBI,GLOBJ,DECRE,MVALUE
+      INTEGER     NI,NJ, I,J, IHEM, LASTI, MS
+      REAL        LON(NI),LAT(NJ)
+      REAL*8      GA,AIRET,AIRE,DAR
+      REAL*8      FMISS,EPSIL,FACTJ,DELTA
+      REAL*8      ALON(MAXI), ALAT(MAXJ),
+     +            LON1(MAXI), LAT1(MAXJ),
+     +            LON2(MAXI), LAT2(MAXJ),
+     +            F1(NI,NJ),  THREE60,POL,ZERO,
+     +            MSF(NI,NJ)
+
+      CHARACTER   MESSAGE*32
+      INTEGER     LASTG,PREVG
+      SAVE        MESSAGE,PREVG
+
+      DATA        THREE60 / 360. /, POL / 90. /, ZERO / 0. /
+      DATA        PREVG / -1 /, MESSAGE /'Pas encore donne'/
+*---------------------------------------------------------------- 
+
+      DAR   = ASIN( 1.D0 )/90.
+      AIRET = 0.
+      GA    = 0.
+      MS    = 0
+
+      MSF   = 0.
+
+      DECRE = .FALSE.
+      GLOBI = .TRUE.
+      GLOBJ = .TRUE.
+
+      DO  I=1,NI
+          ALON(I) = LON(I)
+      END DO
+
+      DO  J=1,NJ
+          ALAT(J) = LAT(J)
+      END DO
+
+***    PAR CONSTRUCTION, GLBAVG EXIGE QUE LON SOIT TOUJOURS COMPRIS
+***    ENTRE 0 ET 360. PAR CONTRE, LON(1) N'EST PAS NECESSAIREMENT
+***    ZERO ET LON(NI) POURRAIT MEME ETRE PLUS GRAND QUE 360. ON
+***    EFFECTUE DONC UNE TRANSLATION DU SYSTEME DE COORDONNEE
+***    POUR QUE CE SOIT TOUJOURS LE CAS.
+
+      DO  I=1,NI
+          ALON(I) = MOD( (ALON(I)-LON(1))+THREE60 , THREE60 )
+      END DO
+
+      LASTI = 1
+      DELTA = 0.
+      DO  I=2,NI
+          DELTA = MAX( DELTA, ABS( ALON(I)-ALON(I-1) ) )
+          IF (ALON(I-1)-ALON(I) .GE. 0.00001*DELTA) GOTO 050
+          LASTI = I
+      END DO
+
+  050 IF (360.-ALON(LASTI).GT.2.0*(ALON(2)-ALON(1))) GLOBI = .FALSE.
+
+      IF (NI.EQ.1)                                             THEN
+
+          GLOBI = .TRUE.
+          LON2(1) = 360.
+          LON1(1) = 0.
+
+      ELSE
+
+          DO  I=1,LASTI
+
+***            PRE-CALCULS DES POSITIONS DES TUILES EN X.
+
+              IF (I.EQ.1)                                          THEN
+                  IF (GLOBI)                                       THEN
+                      LON1(I) =.5*((ALON(LASTI)-THREE60)+ALON(I))
+                  ELSE
+                      LON1(I) =.5*(ALON(I)-ALON(I+1))
+                  END IF
+                  LON2(I)     =.5*(ALON(I)+ALON(I+1))
+              ELSE IF (I.EQ.LASTI)                                 THEN
+                  LON1(I)     =.5*(ALON(I)+ALON(I-1))
+                  IF (GLOBI)                                       THEN
+                      LON2(I) =.5*(ALON(I)+(ALON(1)+THREE60))
+                  ELSE
+                      LON2(I) =.5*(ALON(I)-ALON(I-1)) + ALON(I)
+                  END IF
+              ELSE
+                  LON1(I)     =.5*(ALON(I)+ALON(I-1))
+                  LON2(I)     =.5*(ALON(I)+ALON(I+1))
+              END IF
+
+          END DO
+
+      END IF
+
+***    VERIFIER QUE LA GRILLE EST COMPLETE,
+***    QU'ELLE SOIT HEMISPHERICQUE OU GLOBALE.
+
+      IF (ALAT(02)-ALAT(01).GT.0.0)                            THEN
+
+***        CAS DE LATITUDES CROISSANTES.
+
+          IF      (IHEM.EQ.0)                                  THEN
+              IF  (ALAT(01).GT.-POL+2.*(ALAT(02)-ALAT(01))     .OR.
+     +             ALAT(NJ).LT. POL-2.*(ALAT(NJ)-ALAT(NJ-1)))
+     +             GLOBJ =.FALSE.
+          ELSE IF (IHEM.EQ.1)                                  THEN
+              IF  (ALAT(01).GT.     2.*(ALAT(02)-ALAT(01))     .OR.
+     +             ALAT(NJ).LT. POL-2.*(ALAT(NJ)-ALAT(NJ-1)))
+     +             GLOBJ =.FALSE.
+          ELSE IF (IHEM.EQ.2)                                  THEN
+              IF  (ALAT(01).GT.-POL+2.*(ALAT(02)-ALAT(01))     .OR.
+     +             ALAT(NJ).LT.    -2.*(ALAT(NJ)-ALAT(NJ-1)))
+     +             GLOBJ =.FALSE.
+          END IF
+
+      ELSE
+
+***        CAS DE LATITUDES DECROISSANTES: TOUJOURS GLOBALES.
+
+          GLOBJ =.TRUE.
+          DECRE =.TRUE.
+
+      END IF
+
+      DO  J=1,NJ
+
+***        PRE-CALCULS DES POSITIONS DES TUILES EN Y.
+
+          IF (GLOBJ)                                           THEN
+
+              IF (J.EQ.1)                                      THEN
+                  IF (DECRE)                                   THEN
+                      IF (IHEM.EQ.1)                           THEN
+                          LAT1(J) = -POL
+                      ELSE
+                          LAT1(J) =  0.0
+                       END IF
+                  ELSE
+                      IF (IHEM.EQ.1)                           THEN
+                          LAT1(J) =  0.0
+                      ELSE
+                          LAT1(J) = -POL
+                       END IF
+                  END IF
+              ELSE
+                  LAT1(J) = .5*(ALAT(J-1)+ALAT(J))
+              END IF
+  
+              IF (J.EQ.NJ)                                     THEN
+                  IF (DECRE)                                   THEN
+                      IF (IHEM.EQ.2)                           THEN
+                          LAT2(J) = POL
+                      ELSE
+                          LAT2(J) = 0.0
+                      END IF
+                  ELSE
+                      IF (IHEM.EQ.2)                           THEN
+                          LAT2(J) = 0.0
+                      ELSE
+                          LAT2(J) = POL
+                      END IF
+                  END IF
+              ELSE
+                  LAT2(J) = .5*(ALAT(J)+ALAT(J+1))
+              END IF
+
+          ELSE
+
+              IF (J.EQ.1)                                      THEN
+                  LAT1(J) = MAX( -POL,ALAT(J) + .5*(ALAT(J)-ALAT(J+1)) )
+                  LAT2(J) =                     .5*(ALAT(J)+ALAT(J+1))
+              ELSE IF (J.EQ.NJ)                                THEN
+                  LAT1(J) =                     .5*(ALAT(J)+ALAT(J-1))
+                  LAT2(J) = MIN( +POL,ALAT(J) + .5*(ALAT(J)-ALAT(J-1)) )
+              ELSE
+                  LAT1(J) =                     .5*(ALAT(J)+ALAT(J-1))
+                  LAT2(J) =                     .5*(ALAT(J)+ALAT(J+1))
+              END IF
+
+          END IF
+
+      END DO
+
+      IF (GLOBI .AND. GLOBJ)                                   THEN
+          LASTG = 0
+      ELSE
+          LASTG = 1
+      END IF
+
+      IF (LASTG.NE.PREVG)                                      THEN
+          IF (MESSAGE.EQ.'Pas encore donne')                   THEN
+              MESSAGE = 'Deja donne'
+              IF (LASTG.EQ.0) WRITE(6,'(/A,I4/)')
+     +      ' Global data...  last grid point in X is ',LASTI
+              IF (LASTG.EQ.1) WRITE(6,'(/A/)') ' Limited area data...'
+          END IF
+          PREVG = LASTG
+      END IF
+
+***    ON FAIT MAINTENANT LE CALCUL DE LA MOYENNE GLOBALE.
+
+      DO  J=1,NJ
+
+          FACTJ = ABS( SIN( LAT2(J)*DAR ) - SIN( LAT1(J)*DAR ) )
+
+***        CALCUL DE L'AIRE DE LA TUILE (LE GLOBE A UNE AIRE DE 1).
+
+          IF (.NOT.MVALUE)                                     THEN
+
+              DO  I=1,LASTI
+
+                  MSF(I,J) = FAC * ( LON2(I) - LON1(I) ) * FACTJ
+                  GA    = GA+F1(I,J)*MSF(I,J)
+                  AIRET = AIRET+MSF(I,J)
+
+              END DO
+
+          ELSE
+
+              DO  I=1,LASTI
+
+                  MSF(I,J) = FAC * ( LON2(I) - LON1(I) ) * FACTJ
+
+                  IF (ABS( F1(I,J)-FMISS ).GT.EPSIL)           THEN
+                      GA    = GA+F1(I,J)*MSF(I,J)
+                      AIRET = AIRET+MSF(I,J)
+                  ELSE
+                      MS = MS+1
+                  END IF
+
+              END DO
+
+          END IF
+
+          IF (LASTI == NI-1) MSF(NI,J) = MSF(1,J)
+
+      END DO
+
+      IF (MVALUE .AND. (AIRET.EQ.ZERO))                        THEN
+          GA = FMISS
+      ELSE IF (.NOT.(GLOBI .AND. GLOBJ .AND. (MS.EQ.0)))       THEN
+          GA = GA/AIRET
+      END IF
+
+***    RAYON  = 6.37122E06
+***    PI     = 3.1415926535897 
+***    PRINT*,'AIRET=',AIRET/(4*PI*RAYON**2)
+
+      RETURN
+
+*---------------------------------------------------------------- 
+      END
+#     endif
+

@@ -1,0 +1,767 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 200000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      hovplot  Z INPUT OUTPUT [ -a VAL1 -b VAL2  -c VAL3 -d VAL4   \ 
+*                                -i VAL5    VAL6  -j VAL7    VAL8   \ 
+*                                -k VAL9    VAL10    VAL11          \ 
+*                                -m VAL12   VAL13 -n VAL14   VAL15  \ 
+*                                -label    "VAL16"  "VAL17" "VAL18" \ 
+*                                -kind      VAL19    VAL20 ] 
+*
+*
+*     DESCRIPTION...
+*      hovplot - PRODUCES HOVMUELLER DIAGRAMS OF A TIME SERIES 
+*                OF SINGLE VERTICAL LEVEL ZONAL FILES
+*
+*
+*     AUTHOR  - F. Zwiers, APR 07/86.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/hovplot.ptn,v 4.12 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     INPUT FILE...
+*      Z = FILE OF TIME SERIES OF SLICES ON A SINGLE LEVEL
+*
+*
+*     INPUT PARAMETERS...
+*
+*     ... FIRST LINE ...
+*
+*      SCAL   (a) = SCALING FACTOR. IF SCAL = 0. THEN SCAL,FLO,HI AND
+*                   FINC ARE CHOSEN BY THE PROGRAM.
+*      FLO    (b) = LOWEST VALUE TO BE CONTOURED
+*      HI     (c) = HIGEST VALUE TO BE CONTOURED
+*      FINC   (d) = CONTOUR INTERVAL (A MAX. OF 40 CONTOURS IS PERMITTED)
+*      AR (kind1) = ASPECT RATIO = LENGTH OF Y-AXIS / LENGTH OF XAXIS
+*                   IF AR<=0 THE DEFAULT PLOT IS DRAWN WITH ASPECT RATIO
+*                   DETERMINED FROM THE LENGTH OF RECORD AND NUMBER OF
+*                   RECORDS
+*         (kind2) = IGNORED VALUE FOR CONTOURING ROUTINES (DEF = 10.E37).
+*      NXLAB (i1) = NUMBER OF POINTS ON THE X-AXIS WHICH ARE LABELED
+*                   (DEFAULT IS 0)
+*      NYLAB (j1) = NUMBER OF POINTS ON THE Y-AXIS WHICH ARE LABELED
+*                   (DEFAULT IS 0)
+*      FLIP  (k1) = SWITCH TO FLIP THE Y-AXIS DATA BEFORE DRAWING.
+*                   (0 MEANS DO NOT DO IT, .NOT.0 DO IT)
+*      NXTIC (i2) = NUMBER OF TICKS BETWEEN LABELS ON THE X-AXIS
+*                   (DEFAULT IS 0)
+*      NYTIC (j2) = NUMBER OF TICKS BETWEEN LABELS ON THE Y-AXIS
+*                   (DEFAULT IS 0)
+*      MS    (k2) = LINE PRINTER MAP SCALE FACTOR (OMITTED IF MS=0).
+*                   IF MS < 0 THEN MS=ABS(MS+1) AND THE PUBLICATION
+*                   QUALITY OPTION IS SET.
+*      LHI   (k3) = 0, HIGHS AND LOWS LABELLED,
+*                 =-1, .. NOT LABELLED.
+*
+* 110  READ(5,5010) SCAL,FLO,HI,FINC,AR,NXLAB,NYLAB,
+*    +              FLIP,NXTIC,NYTIC,MS,LHI
+*5010 FORMAT(10X,5E10.0,1X,2I2,1X,2I2,3X,I2,1X,2I2)
+*
+*
+*     ... SECOND LINE ...
+*
+*      XLAB (label1) = 16 CHARACTER LABEL FOR X-AXIS.
+*      XMIN (m1)  = VALUE OF LABEL AT LEFT  HAND END OF X-AXIS
+*      XMAX (m2)  = VALUE OF LABEL AT RIGHT HAND END OF X-AXIS
+*                   (XMIN=XMAX TURNS OFF LABELING OF TICKS ON X-AXIS)
+*      YLAB (label2) = 16 CHARACTER LABEL FOR Y-AXIS.
+*      YMIN (n1)  = VALUE OF LABEL AT LEFT  HAND END OF Y-AXIS
+*      YMAX (n2)  = VALUE OF LABEL AT RIGHT HAND END OF Y-AXIS
+*                   (YMIN=YMAX TURNS OFF LABELING OF TICKS ON Y-AXIS)
+*
+*      READ(5,5020) XLAB,XMIN,XMAX,YLAB,YMIN,YMAX
+*5020 FORMAT(A16,4X,2E10.0,A16,4X,2E10.0)
+*
+*
+*     ... THIRD LINE ...
+*
+*      LABEL (label3) = 80 CHARACTER LABEL FOR CONTOUR MAP.
+*
+*      READ(5,5030) LABEL
+*5030 FORMAT(A80)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*  HOVPLOT        1.      -40.       40.        2.       0.9  2 5   39    0  0 0
+*    SEASON                1.0      40.0    LATITUDE             -90.0      90.0
+*  SEASONAL MEAN ZONAL SURFACE PRESSURE VS TIME FOR RUN FJ (FIRST 40 SEASONS)
+*
+*        01234567890123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7         8
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 UNABLE TO READ FIRST DIRECTIVE LINE
+*       2 INCOMPLETE DIRECTIVE SET (NO FIRST LABEL LINE)
+*       3 INCOMPLETE DIRECTIVE SET (NO SECOND LABEL LINE)
+*       4 UNABLE TO READ SECOND DIRECTIVE LINE
+*
+*     NON-FATAL CONDITIONS...
+*     101 FINISHED READING Z
+*     102 THE SECOND RECORD DIMENSION MUST BE 1
+      103 RECORDS LARGER THAN grille_maximale WORDS
+*     104 MORE THAN ONE SIZE OF RECORDS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM HOVPLOT
+*     PROGRAM HOVPLOT (Z,       INPUT,       OUTPUT,
+*    1           TAPE1=Z, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ----------------------------------------------
+
+*     $Log: hovplot.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2006/01/04 18:14:19  dugas
+*     Ajouter les parametres de la ligne de commande.
+*
+*     Revision 4.7  2002/02/02 00:29:46  dugas
+*     Forcer la majusculisation du parametre NAME
+*
+*     Revision 4.6  1999/04/30 21:05:48  armnrbd
+*     Corriger la declaration de LHI.
+*
+*     Revision 4.5  1999/01/19 21:12:28  armnrbd
+*     Remplacer SCOPY par DSCOPY.
+*
+*     Revision 4.4  1998/10/19  14:57:25  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.3  1998/07/07  18:16:48  armnrbd
+*     Convertir XMIN et XMAX en heures si ce sont des dates.
+*
+*     Revision 4.2  1998/07/03  02:26:30  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:50  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:20:42  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.3  94/08/16  21:02:12  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.2  94/05/25  14:12:15  14:12:15  armnrbd (Bernard Dugas)
+*     Corriger la documentation.
+*     
+*     Revision 3.1  93/11/15  15:14:44  15:14:44  armnrbd (Bernard Dugas)
+*     Traiter toutes les etiquettes avec LOW2UP.
+*     
+*     Revision 3.0  93/10/13  13:56:22  13:56:22  armnrbd (Bernard Dugas)
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.22  93/09/14  09:41:19  armnrbd
+*     Appel a la routine LOW2UP pour la variable LABEL.
+*     
+*     Revision 1.21  92/12/01  11:14:12  armnrbd
+*     Modifier le comportement de l'etiquettage des axes.
+*     
+*     Revision 1.20  92/06/03  12:04:18  armnrbd
+*     Definir LABEL*80,XLAB*16 et YLAB*16.
+*     
+*     Revision 1.12  92/06/03  11:51:35  armnrbd
+*     Dernier BugFix a LABMOD.
+*     Utliser la police #4 dans PWRIT.
+*     
+*     Revision 1.11  92/06/02  16:49:37  armnrbd
+*     Autre correction a l'appel a LABMOD.
+*     
+*     Revision 1.1  92/06/02  12:13:45  armnrbd
+*     Changer le format LABMOD a "F10.1".
+*     
+*     Revision 1.0  92/06/01  15:42:28  armnrbd
+*     Initial revision
+*     
+*     APR 14/88 - F. MAJAESS (REPLACE THE CALL TO MOVLEV SUBROUTINE
+*                             BY A CALL TO THE CRAY SUBROUTINE SCOPY)
+*     APR 07/86 - F.ZWIERS   (HOVMUELLER DIAGRAM ONLY - READ IN A TIME
+*                             SERIES OF ZONAL MEANS OR SLICES)
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+
+      LOGICAL     OK,REW,PB
+      REAL*8      XMIN8,XMAX8
+      CHARACTER   XLAB*16,YLAB*16,
+     +            LIGNE*128,LABEL*80
+      INTEGER     IO,MS,LX,LY,MX,LXY,NSET,NDOT,
+     +            IER,ADD,BASE,NF,NPLOT,FLIP,LHI,
+     +            I,J,NXLAB,NYLAB,NXTIC,NYTIC,
+     +            stamp1,stamp2
+      INTEGER*8   HEURMAX,HEURMIN,IXMAX,IXMIN
+      REAL        AXMAX,SPVAL,XMIN,XMAX,YMIN,X,Y,FINC,
+     +            YMAX,SCAL,ARIMEAN,GEOMEAN,SMALL,XLO,
+     +            XHI,YLO,YHI,FXL,FXH,FYL,FYH,FLO,
+     +            HI,AR,XAXSL,YAXSL
+ 
+      INTEGER     MAJR,MINR,NORM,VALU,LABL,VTIK(4),VHIC(5)
+      CHARACTER   ETIK(4)*4,THIC(5)*4
+ 
+      INTEGER,    DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:),   ALLOCATABLE :: GG2,U
+
+      INTEGER     DISMIN
+      LOGICAL     RPBLOC,PRBLOC
+      REAL        GMEAN2,AMEAN2
+      EXTERNAL    JCLPNT,SYSDAT,GETLIGN,BNDLSET,ISPSET,GETFLD2,XIT,
+     +            BURNF,AMEAN2,DISMIN,PRECON3,SET,PWRIT,PERIM,PERIML,
+     +            LABMOD,CONISP,FRAME,GRIDAL,LOW2UP,RPBLOC
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        AXMAX / 0.75 /
+      DATA        REW   /.TRUE./
+      DATA        PRBLOC / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/hovplot.ptn,v $'
+
+*---------------------------------------------------------------------
+      ALLOCATE( IBUF(HEAD+MAXW),GG2(MAXW),U(MAXW) )
+
+      NF = 3
+      CALL JCLPNT( NF, 1, 5,6 )
+
+      CALL SYSDAT
+
+***    DEFINE BUNDLES.
+
+      MAJR = 1
+      MINR = 2
+      LABL = 3
+      VALU = 4
+      NORM = 5
+
+      THIC(1) ='SIZE'
+      THIC(2) ='INTE'
+      THIC(3) ='ENHA'
+      THIC(4) ='CASE'
+      THIC(5) ='THIC'
+      VHIC(1) = 240
+      VHIC(2) =  2
+      VHIC(3) =  1
+      VHIC(4) =  4
+      VHIC(5) =  2
+
+      ETIK(1) ='SIZE'
+      ETIK(2) ='INTE'
+      ETIK(3) ='ENHA'
+      ETIK(4) ='CASE'
+      VTIK(1) = 480
+      VTIK(2) =  3
+      VTIK(3) =  1
+      VTIK(4) =  4
+
+      CALL BNDLSET( THIC ,VHIC,5,NORM )
+      CALL BNDLSET('THIC',  4, 1,MAJR )
+      CALL BNDLSET('THIC',  2, 1,MINR )
+      CALL BNDLSET( ETIK, VTIK,4,LABL )
+
+      CALL ISPSET(4HLABL, LABL )
+      CALL ISPSET(4HRNDV, 1.0  )
+      CALL ISPSET(3HNHL,   5   )
+      CALL ISPSET(3HNLB,   5   )
+      CALL ISPSET(3HNPV,   5   )
+
+      NPLOT=0
+ 
+***    READ-IN DIRECTIVE CARDS.
+***    CARD 1 ****************************************
+ 
+  100 CONTINUE
+
+***        READ THE CONTROL CARDS - CARD 1.
+
+          IF (RPBLOC( ' ',LIGNE ))                            THEN
+
+***            CHECK PARAMETRE BLOCK.
+
+              SCAL  =  0.0
+              FLO   =  0.0
+              HI    =  0.0
+              FINC  =  0.0
+
+              AR    =  0
+              NXLAB =  0
+              NYLAB =  0
+              FLIP  =  0
+              NXTIC =  0
+              NYTIC =  0
+
+              MS    =  0
+              LHI   =  0
+
+              SPVAL = 10.E37
+
+              OK = RPBLOC('A',LIGNE)
+              IF (OK) READ( LIGNE,15, END=901,ERR=900,IOSTAT=IO ) SCAL
+
+              OK = RPBLOC('B',LIGNE)
+              IF (OK) READ( LIGNE,15, END=901,ERR=900,IOSTAT=IO ) FLO
+
+              OK = RPBLOC('C',LIGNE)
+              IF (OK) READ( LIGNE,15, END=901,ERR=900,IOSTAT=IO ) HI
+
+              OK = RPBLOC('D',LIGNE)
+              IF (OK) READ( LIGNE,15, END=901,ERR=900,IOSTAT=IO ) FINC
+
+              OK = RPBLOC('KIND',LIGNE)
+              IF (OK) READ( LIGNE,15, END=901,ERR=900,IOSTAT=IO ) AR
+
+              OK = RPBLOC('I',LIGNE)
+              IF (OK) READ( LIGNE,05, END=901,ERR=900,IOSTAT=IO ) NXLAB
+
+              OK = RPBLOC('I2',LIGNE)
+              IF (OK) READ( LIGNE,05, END=901,ERR=900,IOSTAT=IO ) NXTIC
+
+              OK = RPBLOC('J',LIGNE)
+              IF (OK) READ( LIGNE,05, END=901,ERR=900,IOSTAT=IO ) NYLAB
+
+              OK = RPBLOC('J2',LIGNE)
+              IF (OK) READ( LIGNE,05, END=901,ERR=900,IOSTAT=IO ) NYTIC
+
+              OK = RPBLOC('K',LIGNE)
+              IF (OK) READ( LIGNE,05, END=901,ERR=900,IOSTAT=IO ) FLIP
+
+              OK = RPBLOC('K2',LIGNE)
+              IF (OK) READ( LIGNE,05, END=901,ERR=900,IOSTAT=IO ) MS
+
+              OK = RPBLOC('K3',LIGNE)
+              IF (OK) READ( LIGNE,05, END=901,ERR=900,IOSTAT=IO ) LHI
+
+              OK = RPBLOC('KIND2',LIGNE)
+              IF (OK) READ( LIGNE,15, END=901,ERR=900,IOSTAT=IO ) SPVAL
+
+              OK = RPBLOC('DEFAUT',LIGNE)
+
+              PRBLOC = .TRUE.
+
+          ELSE
+
+              CALL GETLIGN( 5, LIGNE,128, OK)
+
+              IF (.NOT.OK)                                     THEN
+                  GOTO 110
+              ELSE
+                  READ( LIGNE, 5010, ERR=110,END=110,IOSTAT=IO ) 
+     +                               SCAL,FLO,HI,FINC,AR,NXLAB,NYLAB,
+     +                               FLIP,NXTIC,NYTIC,MS,LHI
+              END IF
+
+          END IF
+
+          GOTO 120
+  110     IF (IO.NE.0)                             WRITE(6,6100) IO
+          IF (NPLOT.EQ.0) CALL                     XIT(' HovPlot',-1 )
+          CALL                                     XIT(' HovPlot', 0 )
+  120     CONTINUE
+ 
+***        SET NCAR OPTIONS BACK TO DEFAULTS
+
+*         CALL ISPSET('CCAR', '*'  )
+*         CALL ISPSET('EXT' , 0.25 )
+*         CALL ISPSET('ECLR',.TRUE.) 
+*         CALL ISPSET('IETI',  1   )
+          CALL ISPSET(4HMAJR, NORM )
+          CALL ISPSET(4HMINR, -1   )
+          CALL ISPSET(3HNHI,   1   )
+          CALL ISPSET(4HECOL,  0   )
+          CALL ISPSET(4HVALU, LABL )
+          CALL ISPSET(4HILAB,  1   )
+          CALL ISPSET(4HNULB,  1   )
+          CALL ISPSET(4HOFFM,  0   )
+*         CALL ISPSET('SIDE', 0.9  )
+
+***        SET THE MASK VALUE FOR CONISP
+
+          IF (.NOT.PRBLOC) SPVAL = 10.E37
+
+          CALL ISPSET(4HOFFP,   1    )
+          CALL ISPSET(4HSPVA, SPVAL  )
+
+***        CHECK FOR PUBLICATION QUALITY OPTION.
+ 
+          IF (MS.LT.0)                                             THEN
+              PB=.TRUE.
+              MS=IABS(MS+1)
+              CALL ISPSET(4HMAJR, MAJR )
+              CALL ISPSET(4HMINR, MINR )
+              CALL ISPSET(3HNHI,   -1  )
+              CALL ISPSET(4HECOL,   1  )
+              CALL ISPSET(4HOFFM,   1  )
+          ELSE
+              PB=.FALSE.
+          END IF
+
+          WRITE(6,6050) NPLOT+1
+ 
+***        CARD 2 ****************************************
+ 
+          IF (PRBLOC)                                          THEN
+
+              XLAB  = ' '
+              XMIN8 =  0
+              XMAX8 =  0
+              YLAB  = ' '
+              YMIN  =  0
+              YMAX  =  0
+
+              OK = RPBLOC('LABEL',LIGNE)
+              IF (OK) XLAB = LIGNE
+
+              OK = RPBLOC('M',LIGNE)
+              IF (OK) READ( LIGNE,15, END=903,ERR=902,IOSTAT=IO ) XMIN8
+
+              OK = RPBLOC('M2',LIGNE)
+              IF (OK) READ( LIGNE,15, END=903,ERR=902,IOSTAT=IO ) XMAX8
+
+              OK = RPBLOC('LABEL2',LIGNE)
+              IF (OK) YLAB = LIGNE
+
+              OK = RPBLOC('N',LIGNE)
+              IF (OK) READ( LIGNE,15, END=903,ERR=902,IOSTAT=IO ) YMIN
+
+              OK = RPBLOC('N2',LIGNE)
+              IF (OK) READ( LIGNE,15, END=903,ERR=902,IOSTAT=IO ) YMAX
+
+          ELSE
+
+              CALL GETLIGN( 5, LIGNE,128, OK)
+
+              IF (.NOT.OK)                                     THEN
+                  GOTO 130
+              ELSE
+                  READ( LIGNE, 5020, ERR=130,END=130,IOSTAT=IO ) 
+     +                               XLAB,XMIN8,XMAX8,YLAB,YMIN,YMAX
+              END IF
+
+          END IF
+
+          if (xmin8 <= 0_8 .or. xmax8 <= 0_8)                  THEN
+              xmin8 = -1 ; XMAX8 = -1
+          end if
+
+          GOTO 140
+  130     IF (IO.NE.0)                             WRITE(6,6100) IO
+          CALL                                     XIT(' HovPlot',-2 )
+  140     CONTINUE
+ 
+***        CARD 3 ****************************************
+ 
+          IF (PRBLOC)                                          THEN
+
+              LABEL = ' '
+
+              OK = RPBLOC('LABEL3',LIGNE)
+              IF (OK) LABEL = LIGNE
+
+          ELSE
+
+              CALL GETLIGN( 5, LIGNE,128, OK)
+
+              IF (.NOT.OK)                                     THEN
+                  IF (IO.NE.0)                     WRITE(6,6100) IO
+                  CALL                             XIT(' HovPlot',-3 )
+              ELSE
+                  LABEL = LIGNE(1:80)
+              END IF
+          END IF
+
+*-----------------------------------------------------------------------
+***        CONSTRUCT THE FIELD TO BE CONTOURED.
+
+***        LEARN ABOUT THE FIELD
+
+          CALL GETFLD2( 1, GG2, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+                      CALL BURNF
+                      CALL                         XIT(' HovPlot',-101)
+          END IF
+
+          IF (IBUF(6).NE.1)                                    THEN
+                      CALL BURNF
+                      CALL                         XIT(' HovPlot',-102)
+          END IF
+
+          if (xmin8 == -1_8)                                   THEN
+              stamp2 = ibuf(2)
+              call stamp2date( stamp2,IXMIN )
+              XMIN8 = IXMIN
+          end if
+
+          LY   = IBUF(5)
+          LX   = 1
+          BASE = LY+1
+
+  170     CONTINUE
+
+             MX = MAXW-BASE
+             IF(MX.LE.0)THEN
+                      CALL BURNF
+                      CALL                         XIT(' HovPlot',-103)
+             ENDIF
+
+             CALL GETFLD2( 1, GG2(BASE), ' ',-1,' ',-1, IBUF,MX,OK )
+    
+             IF(.NOT.OK) GOTO 180
+
+             IF(IBUF(6).NE.1 .OR. IBUF(5).NE.LY)               THEN
+                      CALL BURNF
+                      CALL                         XIT(' HovPlot',-104)
+             END IF
+             LX   = LX+1
+             BASE = BASE+LY
+
+             GOTO 170
+ 
+  180     CONTINUE
+
+          if (xmax8 == -1_8)                                   THEN
+              stamp1 = ibuf(2)
+              call stamp2date( stamp1,IXMAX )
+              XMAX8 = IXMAX
+          end if
+
+          LXY = LX*LY
+
+***        TRANSPOSE THE ARRAY
+
+          ADD = 0
+          IF (FLIP.NE.0)                                       THEN
+              DO 190 I=1,LY
+                  DO J=1,LX
+                      ADD    = ADD+1
+                      U(ADD) = GG2(J*LY-I+1)
+                  END DO
+  190         CONTINUE
+              WRITE(6,6070) 
+          ELSE
+              DO 200 I=1,LY
+                  DO J=1,LX
+                      ADD    = ADD+1
+                      U(ADD) = GG2((J-1)*LY+I)
+                  END DO
+  200         CONTINUE
+          END IF
+ 
+***        SCALE THE FIELD IF NECESSARY
+ 
+          IF (SCAL.EQ.0.)                                      THEN
+              ARIMEAN = AMEAN2( U,LX,LY,0,0 )
+              SMALL   = U(DISMIN( LXY,U,1 ))
+              IF (SMALL.GT.0)                                  THEN
+                  GEOMEAN = GMEAN2( U,LX,LY,0,0 )
+                  WRITE(6,6060) ARIMEAN,GEOMEAN
+              ELSE
+                  WRITE(6,6060) ARIMEAN
+              END IF
+              CALL PRECON3( FLO,HI,FINC,SCAL,U,LX,LY,10,SPVAL )
+              HI = MAX( HI,FLO+10.*FINC )
+              WRITE(6,6061) FLO,HI,FINC,SCAL
+          END IF
+
+          DO 210 I=1,LXY
+             U(I) = U(I)*SCAL
+  210     CONTINUE
+ 
+***        ADJUST PLOT SIZE PARAMETERS
+ 
+          IF ( AR.LE.0.0 ) AR = FLOAT( LY-1 )/FLOAT( LX-1 )
+
+          IF (AR.LE.1.0)                                       THEN
+              XAXSL = AXMAX
+              YAXSL = AXMAX*AR
+          ELSE
+              XAXSL = AXMAX/AR
+              YAXSL = AXMAX
+          END IF
+ 
+          XLO = (1.0-XAXSL)/2.0
+          XHI = XAXSL + XLO
+          YLO = (1.0-YAXSL)/2.0
+          YHI = YAXSL + YLO
+
+***        ENSURE THAT LABELS ARE UPPER-CASE ONLY.
+ 
+          CALL LOW2UP( LABEL,LABEL )
+          CALL LOW2UP( XLAB, XLAB )
+          CALL LOW2UP( YLAB, YLAB )
+
+***        DRAW TITLE.
+ 
+          CALL SET(.01,.99,.01,.99,.01,.99,.01,.99, 1)
+
+          X = XLO
+          Y = YLO+YAXSL + 0.08
+          CALL PWRIT( X,Y,'@4'//LABEL,82,1,0,00 )
+ 
+***        DRAW LABELS
+ 
+          X = XLO + XAXSL/2.0
+          Y = YLO - 0.10
+          CALL PWRIT( X,Y,'@4'//XLAB,18,1, 0,1 )
+
+          X = XLO - 0.10
+          Y = YLO + YAXSL/2.0
+          CALL PWRIT( X,Y,'@4'//YLAB,18,1,90,1 )
+ 
+          NSET =  1
+          NDOT = -INT(O'1634')
+ 
+***        DRAW AND LABEL THE GRID
+ 
+          IF (NXLAB.LE.1) NXLAB = 3
+                          NXLAB = NXLAB-1
+          IF (NYLAB.LE.1) NYLAB = 3
+                          NYLAB = NYLAB-1
+          IF (NXTIC.LT.0) NXTIC = 1
+                          NXTIC = NXTIC+1
+          IF (NYTIC.LT.0) NYTIC = 1
+                          NYTIC = NYTIC+1
+
+          XMAX = XMAX8
+          XMIN = XMIN8
+
+          IF (XMAX8 > 01010100._8 .AND.
+     +        XMIN8 > 01010100._8 )                            THEN
+
+***            CONVERT DATE FORMAT TO HOURS.
+
+              IXMAX = XMAX8 ; IXMIN = XMIN8
+              call date2stamp( IXMAX,stamp1 )
+              call date2stamp( IXMIN,stamp2 )
+              call difdatr( stamp1,stamp2,XMAX8 )
+
+              XMIN    = 0.0
+              XMAX    = XMAX8
+
+          END IF
+
+          IF (XMIN.EQ.XMAX .AND. YMIN.EQ.YMAX)                 THEN
+              CALL SET( XLO,XHI,YLO,YHI,0.01,0.99,0.01,0.99,1 )
+              CALL PERIM( NXLAB,NXTIC,NYLAB,NYTIC )
+          ELSE IF (XMIN.EQ.XMAX)                               THEN
+              CALL SET( XLO,XHI,YLO,YHI,0.01,0.99,YMIN,YMAX,1 )
+              CALL LABMOD( '(F10.0)','(F10.0)',10,10,1,1,0,0,0 )
+              CALL GRIDAL( NXLAB,NXTIC,NYLAB,NYTIC,1,0,5,0.01,YMIN )
+          ELSE IF (YMIN.EQ.YMAX)                               THEN
+              CALL SET( XLO,XHI,YLO,YHI,XMIN,XMAX,0.01,0.99,1 )
+              CALL LABMOD( '(F10.0)','(F10.0)',10,10,1,1,0,0,0 )
+              CALL GRIDAL( NXLAB,NXTIC,NYLAB,NYTIC,1,0,5,XMIN,0.01 )
+          ELSE
+              CALL SET( XLO,XHI,YLO,YHI,XMIN,XMAX,YMIN,YMAX,1 )
+              CALL LABMOD( '(F10.0)','(F10.0)',10,10,1,1,0,0,0 )
+              CALL PERIML( NXLAB,NXTIC,NYLAB,NYTIC )
+          END IF
+ 
+***        DRAW THE PLOT
+ 
+          FXL = 1.0
+          FXH = FLOAT( LX )
+          FYL = 1.0
+          FYH = FLOAT( LY )
+          CALL SET( XLO,XHI,YLO,YHI,FXL,FXH,FYL,FYH,1 )
+          CALL CONISP( U,LX,LX,LY,FLO,HI,FINC,NSET,LHI,NDOT )
+ 
+***        LINE PRINTER IF REQUESTED(MS.NE.0).
+ 
+*         CALL MOVLEV(U,GG2,LXY)
+*         CALL DSCOPY(LXY,U,1,GG2,1)
+*         CALL FCONW2(GG2,FINC,1.,LX,LY,1,1,LX,LY,MS)
+*         WRITE(6,6030) ; CALL PRTLAB( IBUF )
+*         WRITE(6,6040) LABEL
+ 
+*-----------------------------------------------------------------------
+***        LAST CHARACTER DRAWN IS AN X IN THE UPPER RIGHT CORNER.
+ 
+          CALL SET( .01,.99,.01,.99, .01,.99,.01,.99, 1 )
+          CALL PWRIT( .97,.97,'X',1,0,0,0 )
+          CALL FRAME
+          NPLOT = NPLOT+1
+
+      IF (.NOT.PRBLOC) GOTO 100
+  
+  900 IF (IO   .NE.0) WRITE(6,6110) IO
+  901 IF (NPLOT.EQ.0) CALL                         XIT(' Hovplot',-1 )
+  902 IF (IO   .NE.0) WRITE(6,6110) IO
+  903 IF (NPLOT.EQ.0) CALL                         XIT(' Hovplot',-4 )
+      
+      CALL                                         XIT(' Hovplot', 0 )
+*---------------------------------------------------------------------
+
+    5 FORMAT(BN,I5)
+   15 FORMAT(BN,E15.0)
+
+ 5010 FORMAT(10X,5E10.0,1X,2I2,1X,2I2,3X,I2,1X,2I2)
+ 5020 FORMAT(A16,4X,2E10.0,A16,4X,2E10.0)
+ 5030 FORMAT(A80)
+ 6020 FORMAT('0...Eof looking for',I10,2X,A4,I6)
+ 6030 FORMAT('0',10X,'    STEP NAME  LEVEL     LX',
+     1       '    LY    KHEM   NPACK')
+ 6040 FORMAT('+',48X,10A8)
+ 6050 FORMAT('     Begin plot number',I5)
+ 6060 FORMAT(' Arithmetic mean',G12.4,:/
+     +       '  Geometric mean',G12.4)
+ 6061 FORMAT('0 FLO= ',G12.4,', HI= ',G12.4,', FINC= ',G12.4,
+     +                                      ', SCAL= ',G12.4)
+ 6070 FORMAT(' Hovplot flipped Y-Axis information (first at top).')
+ 6100 FORMAT(' Hovplot reports I/O error number ',I3,' on unit 5.')
+ 6110 FORMAT(' I/O error no. ',I3,' detected.')
+
+      END
+#     endif

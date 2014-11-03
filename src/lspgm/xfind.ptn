@@ -1,0 +1,525 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      xfind  XFILE XOUT INPUT OUTPUT [-label "VAL" -def]
+*
+*
+*     AUTHOR  - J.D.Henderson, APR 08/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/xfind.ptn,v 4.16 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     PURPOSE - FINDS SUPERLABELLED SETS ON FILE XFILE AND COPIES THEM TO 
+*               FILE XOUT IN THE ORDER REQUESTED ON CARDS. 
+*
+*
+*     INPUT FILE... 
+*
+*      XFILE = CONTAINS MULTI-LEVEL SETS OF GRIDS, CROSS-SECTIONS ,ETC. 
+*              EACH SET IS PRECEDED BY A CHARACTER SUPERLABEL OR 
+*              ASSOCIATED TO A PARTICULAR ETIKET.
+*
+*     OUTPUT FILE... 
+*      XOUT  = ONE SET COPIED FROM FILE XFILE 
+*
+*
+*     INPUT PARAMETERS... 
+*
+*      ** ANYONE WHO MAKES USE OF THE FIRST FOUR CHARACTERS IN THE LABEL **
+*      **      (i.e. ISWTCH AND DUMMY) HAS TO DO SO VERY CAREFULLY       **
+*
+*      ISWTCH = EXIT CONTROL SWITCH WHICH MUST BE '0', ' ' OR '1'. 
+*               0 OR BLANK - NORMAL ABORT IF REQUESTED FIELD IS NOT FOUND. 
+*               1          - WARNING EXIT IF REQUESTED FIELD IS NOT FOUND.
+*               OTHERWISE  - IMMEDIATE START OF LABEL.
+*      DUMMY  = IF ISWTCH IS 0,1 OR BLANK, MUST CONSIST OF 3 BLANK CHARACTERS
+*
+*      SPRLBL = CHARACTER SUPERLABEL OF SET TO BE FOUND ON XFILE. 
+*      ====> IF ISWTCH IS 0,1 OR BLANK, SUPERLABELS START IN COLUMN 15 <====
+*
+*      NOTES: 1) ANY FOUR CONSECUTIVE STARS DENOTE DON'T CARE CONDITIONS.
+*                THE SAME IS ALSO TRUE FOR BLANK CONTINUATION WHEN THE
+*                "def" PARAMETER IS SPECIFIED ON THE COMMAND LINE.
+*             2) IF "label" IS SPECIFIED AT CALL TIME, IT'S VALUE 
+*                IS PASSED TO ISTCH,DUMMY AND SPRLBL, AS IS.
+*             3) THE ISWTCH/DUMMY ARRANGEMENT IS NOT AVAILABLE FOR
+*                STANDARD SEQUENTIAL FILES.
+*             4) LEADING BLANKS ARE IGNORED IN SPRLBL WHEN XFIND IS USED
+*                WITH STANDARD SEQUENTIAL FILES.
+*
+*
+*      READ( 5,5010 ) SWTCH,DUMMY,SPRLBL
+*5010  FORMAT(10X,A1,A3,A252) 
+*
+*
+*     EXAMPLE OF INPUT CARD... 
+*
+* XFIND.  1   OBSERVED TEMPERATURE CROSS-SECTION (JAN) 
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 DUMMY NOT BLANK AND ISWTCH=0 OR 1
+*       2 EMPTY SUPERLABEL REQUESTED
+*       3 ABORT ERROR READIND XFILE (AND ISWTCH =0 )
+*       4 ABORT ERROR READIND REQUESTED SET ON XFILE (AND ISWTCH =0 )
+*       5 PREMATURE EOF ON XFILE
+*       6 CANNOT CHANGE PACKING TYPE
+
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM xfind
+*    +              (XFILE,       XOUT,       INPUT,       OUTPUT, 
+*    +         TAPE1=XFILE, TAPE2=XOUT, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     ------------------------------------------------------------ 
+
+*     $Log: xfind.ptn,v $
+*     Revision 4.16  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.15  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.14  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.13  2006/09/19 19:04:06  dugas
+*     Modif au macro cvs source.
+*
+*     Revision 4.12  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.11  1999/04/08 22:03:28  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.10  1998/07/20 17:06:51  armnrbd
+*     Corriger le test d'erreur 2.
+*
+*     Revision 4.9  1998/07/03  02:26:47  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.8  1998/04/17  14:01:40  armnrbd
+*     Remplacer LIGNE par SPRLBL apres la lecture du label et
+*     son transfert dans le champs SPRLBL. Causait probleme
+*     avec les fichiers standards.
+*
+*     Revision 4.7  1998/04/07  20:57:28  armnrbd
+*     Enlever le traitement des enregistrements de renvois verticaux.
+*
+*     Revision 4.6  1998/02/17  21:32:39  armnrbd
+*     Seconde iteration des modifs associes a la cle OPKTYP.
+*
+*     Revision 4.5  1997/12/10  18:14:59  armnrbd
+*     Avertir si la cle OPKTYP ne peut etre satisfaite.
+*
+*     Revision 4.4  1997/10/10  19:05:36  armnrbd
+*     Activer le mode I/O a 64 bits.
+*
+*     Revision 4.3  1997/09/26  17:39:31  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/06/02  17:50:05  armnrbd
+*     Modifier le traitement de ZLABEL.
+*
+*     Revision 4.1  1995/12/18  18:54:40  armnrbd
+*     Utilisr GETLAB pour lire les labels et implanter l'option "-def".
+*
+*     Revision 4.0  1994/11/17  14:22:42  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/05/31  20:27:40  armnrbd
+*     Tenter de sauver l'information de niveaux verticaux dans
+*     le cas de grilles zonales a niveaux multiples.
+*     
+*     Revision 3.0  93/10/13  13:57:28  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.8  93/06/04  23:40:31  armnrbd
+*     Corriger la declaration de la variable LINE.
+*     
+*     Revision 1.7  93/06/04  20:05:37  armnrbd
+*     Corriger le traitement des cas ou (OK est faux et MAXW est nul).
+*     
+*     Revision 1.6  92/12/16  12:53:12  armnrbd
+*     Ajouter trois valeurs au parametre "-name".
+*     
+*     Revision 1.5  92/12/15  17:47:17  armnrbd
+*     Ajouter le parametre "-name" a la ligne de commande.
+*     
+*     Revision 1.4  92/11/06  10:43:39  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/10/13  15:57:30  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.2  92/03/17  15:33:07  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.1  92/03/16  10:43:10  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:03  armnrbd
+*     Initial revision
+*     
+
+*     FEV 18/91 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+*     MAR 06/89 - F.MAJAESS (READ THE SUPERLABEL FROM COLUMNS 15-74) 
+*     FEB 23/89 - F.MAJAESS (ALLOW BOTH ABORT AND WARNING EXITS IF THE 
+*                            REQUESTED FIELD IS NOT FOUND) 
+*     OCT 03/88 - F.MAJAESS (ABORT IF A REQUESTED FIELD IS NOT FOUND) 
+*     NOV 04/87 - G.J.B     (OUTPUT IBUF OF FIRST AND LAST LABEL ONLY) 
+*     DEC 06/83 - B.DUGAS. 
+*     APR 08/81 - J.D.HENDERSON 
+
+*----------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     MAXC
+      PARAMETER ( MAXC   = 32 )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      REAL        ZERO
+      CHARACTER*8 NEWLAB(MAXC),OLDLAB(MAXC)
+      CHARACTER*4 KIND,LABL,STAR,NAME
+      CHARACTER   LIGNE*266,SPRLBL*256,DUMMY*3,SWTCH*1
+      LOGICAL     COPY,DUMDUM,OK,RPBLOC,PBLOC,DEFAUT,CHNGTYP
+      INTEGER     JBUF(taille_entete),HEAD,I,IO,ISWTCH,JPAK,
+     +            LEN,LENLAB,LENLAB2,MAXW,NWDS,NFF,
+     +            IER,NREC,NSL
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+
+#     include    "machtype.cdk"
+
+      CHARACTER            NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETSIZ
+      EXTERNAL    GETSIZ
+
+#     include "zlabel.cdk"
+
+      LOGICAL     SETIO64
+      CHARACTER*4 GETYP,PKTYP,PKTYP1,OUTTYP
+      EXTERNAL    MACSPE,JCLPNT,RPBLOC,GETLIGN,XIT,SETIO64,
+     +            RECGET,RECPUT,BURNF,PUTLAB,GETLEV,GETLAB,
+     +            PUTLEV,PRECEDE,LEADBLK,PUTYP,TYPSET
+
+      DATA        LABL   / 'LABL'   /,
+     +            OLDLAB /  MAXC*' '/,
+     +            STAR   / '****'   /,
+     +            DEFAUT / .FALSE.  /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xfind.ptn,v $'
+
+*-------------------------------------------------------------------- 
+***    ACCESS MACHINE DEPENDANT CONSTANTS.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCESS I/O UNIT NAME AND ASSIGN
+***    THEM. SETUP FOR 64-BIT I/O.
+
+      NFF = 4 
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      NSL  =  0 
+      MAXW =  0
+
+      OUTTYP = GETYP( 0 )
+      PKTYP1 = GETYP( 1 )
+      PKTYP  = PKTYP1(1:2)
+
+      IF (PKTYP1.NE.OUTTYP .AND.
+     +    PKTYP .NE.'SQ'   )                                   THEN
+          CALL TYPSET( CHNGTYP )
+          IF (CHNGTYP)                                         THEN
+              WRITE(6,6006) 
+              CALL                                 XIT('  Xfind ',-6 )
+          ELSE
+              CALL PUTYP( 0, PKTYP1 )
+          END IF
+      END IF
+
+      OK    = SETIO64(.TRUE.)
+      PBLOC = RPBLOC( ' ',LIGNE )
+
+  100 IF (PBLOC)                                               THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          SWTCH  = ' '
+          DUMMY  = ' '
+          SPRLBL = ' '
+
+          OK = RPBLOC('LABEL',LIGNE)
+
+          IF (OK) SWTCH  = LIGNE(1:1)
+          IF (OK) DUMMY  = LIGNE(2:4)
+          IF (OK) SPRLBL = LIGNE
+
+          DEFAUT = RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        READ A CARD CONTAINING THE NEXT SUPERLABEL. 
+
+          CALL GETLIGN( 5, LIGNE,266, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              SWTCH  = LIGNE(11:11)
+              DUMMY  = LIGNE(12:14)
+              SPRLBL = LIGNE(11:266)
+          END IF  
+
+      END IF
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+***        LEADING BLANKS ARE IGNORED.
+
+          DUMDUM = .TRUE.
+          ISWTCH = 0
+
+          IF (SPRLBL.NE.' ') CALL LEADBLK( SPRLBL )
+          READ(SPRLBL,32) (NEWLAB(I),I=1,MAXC)
+
+      ELSE
+
+***        NORMAL CASE. CHECK FOR OPERATING MODE.
+
+          ISWTCH = -1
+          DUMDUM = .FALSE.
+          READ(SWTCH,1,ERR=101) ISWTCH
+
+          IF ( (ISWTCH.EQ.0) .OR.
+     +         (ISWTCH.EQ.1) )                                 THEN
+              IF (DUMMY.NE.' ')                                THEN 
+                  WRITE(6,6010) ISWTCH,DUMMY,SPRLBL 
+                  CALL                             XIT('  Xfind ',-1 ) 
+              ELSE
+                  DUMDUM = .TRUE.
+              END IF
+          ELSE
+              ISWTCH = 0
+          END IF 
+
+***        SAVE NEW LABEL IN NEWLAB. CONSIDER DUMMY ARRANGEMENT.
+
+  101     READ(SPRLBL,32) (NEWLAB(I),I=1,MAXC)
+
+          IF (DUMDUM)                                          THEN
+              NEWLAB(1)(1:4) = ' '
+          ELSE
+              NEWLAB(1)(1:1) = SWTCH
+              NEWLAB(1)(2:4) = DUMMY
+          END IF
+
+      END IF
+
+      DO  I=MAXC,1,-1
+          IF (NEWLAB(I).NE.' ') GOTO 150
+      END DO
+
+***   WE HAVE AN EMPTY NEWLAB. ABORT.
+
+      CALL                                         XIT('  Xfind ',-2 )
+
+  150 LENLAB = I+1
+
+      IF (ISWTCH.EQ.-1) ISWTCH = 0
+          
+      WRITE(6,6020) ISWTCH,(NEWLAB(I),I=1,LENLAB)
+      NSL  = NSL+1 
+      NREC = 0 
+
+      CALL PRECEDE( 1,-1 )
+
+***    ASK FOR NECESSARY MEMORY. READ NEXT DATA INFO BUFFER.
+
+  200 IF (MAXW.EQ.0)                                           THEN
+
+          ZLABEL = SPRLBL
+
+          MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )   
+          IF (MAXW.EQ.0) GOTO 999
+
+          MAXW = MAX( MAXW,MAXLEV )
+          LEN  = MAX( LEN, MAXLEV+HEAD )
+
+          ALLOCATE( IBUF(LEN) )
+
+      END IF
+
+***    READ THE NEXT RECORD FROM XFILE. 
+***    IF THIS SUPERLABEL IS NOT FOUND ON THE FILE, PRINT MESSAGE AND 
+***    GO BACK FOR THE NEXT ONE OR ABORT (DEPENDING ON ISWTCH VALUE). 
+
+  250 CALL RECGET( 1, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              DEALLOCATE( IBUF )
+              IF (MAXW.EQ.0) GOTO 200
+              WRITE(6,6030) (NEWLAB(I),I=1,LENLAB)
+              IF (ISWTCH.EQ.0)                                 THEN 
+                  CALL                             XIT('  Xfind ',-3 ) 
+              ELSE 
+                  IF (.NOT.PBLOC) CALL             BURNF 
+                  CALL                             XIT('  Xfind ',-101 ) 
+              END IF 
+          END IF 
+
+          WRITE(KIND,4) IBUF(1)
+          WRITE(NAME,4) IBUF(3)
+
+      IF (.NOT.(KIND.EQ.LABL .OR. PKTYP.EQ.'SQ')) GOTO 250
+
+***    CHECK THE LABEL JUST READ. IF IT IS NOT THE SAME AS NEWLAB 
+***     GO BACK AND READ ANOTHER RECORD. 
+
+      COPY = .TRUE. 
+
+      IF (PKTYP.NE.'SQ')                                       THEN
+
+          LEN = MIN( MAXC, IBUF(5)*IBUF(6) )
+          CALL GETLAB( 0, OLDLAB, IBUF,LEN, OK )
+
+          IF (DEFAUT)                                      THEN
+              LENLAB2 = LENLAB
+          ELSE
+              DO  I=MAXC-1,1,-1
+                  IF (OLDLAB(I).NE.' ') GOTO 350
+              END DO
+  350         LENLAB2 = I+1
+          END IF
+
+          DO  I=1,MAX( LENLAB,LENLAB2 )
+              IF (OLDLAB(I).NE.NEWLAB(I)  .AND. 
+     +            STAR     .NE.NEWLAB(I) ) COPY = .FALSE. 
+          END DO
+
+      ELSE
+
+          CALL PRECEDE( 1,1 )
+
+      END IF
+
+      IF (COPY)                                                THEN
+
+***    THIS IS THE RIGHT LABEL.  COPY THE SET TO XOUT
+***    WITHOUT UNPACKING ANYTHING. STOP AT NEXT LABEL.
+
+  400     IF (MAXW.EQ.0)                                       THEN
+
+***            POSSIBLY RE-ALLOCATE MEMORY.
+
+              MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )   
+              IF (MAXW.EQ.0) GOTO 999
+
+              ALLOCATE( IBUF(LEN) )
+
+          END IF
+
+  450     CALL RECGET( 1, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+              WRITE(KIND,4) IBUF(1)
+              WRITE(NAME,4) IBUF(3)
+
+              IF (.NOT.OK .OR. KIND.EQ.'LABL')                 THEN 
+
+                  DEALLOCATE( IBUF )
+                  IF (MAXW.EQ.0) GOTO 400
+                  IF (NREC.EQ.0)                               THEN 
+                      WRITE(6,6030) (NEWLAB(I),I=1,LENLAB) 
+                      IF (ISWTCH.EQ.0)                         THEN 
+                          CALL                     XIT('  Xfind ',-4 ) 
+                      ELSE 
+                         IF (.NOT.PBLOC) CALL      BURNF 
+                         CALL                      XIT('  Xfind ',-102 ) 
+                     END IF 
+                  END IF 
+
+                  CALL PRTLAB2('  Last record:  ',JBUF )
+                  WRITE(6,6025) NREC
+                  WRITE(6,6040) (NEWLAB(I),I=1,LENLAB) 
+
+                  IF (PBLOC) GOTO 901
+                             GOTO 100
+
+              END IF 
+
+              CALL RECPUT( 2,IBUF )
+
+              DO  I=1,8 
+                  JBUF(I) = IBUF(I) 
+              END DO
+
+          NREC = NREC+1 
+          IF (NREC.EQ.1) CALL PRTLAB2(' First record:  ',IBUF )
+
+          GOTO 450
+
+      ELSE
+
+***        DO NOT COPY. READ UNTIL NEXT LABL BUFFER.
+
+          GOTO 250
+
+      END IF
+
+***    E.O.F. ON INPUT. 
+
+  900 IF (IO.NE. 0)                                WRITE(6,6050) IO 
+  901 CALL                                         XIT('  Xfind ', 0 ) 
+
+***    PREMATURE E.O.F. ON UNIT 1.
+
+  999 CALL                                         XIT('  Xfind ',-5 ) 
+
+*-------------------------------------------------------------------- 
+    1 FORMAT(I1)
+    4 FORMAT(A4)
+   32 FORMAT(32A8)
+
+ 5010 FORMAT(10X,A1,A3,A252) 
+ 6010 FORMAT(' Illegal LABEL ',I3,A3,A252/
+     +       ' *** see DOC for specifics ***' ) 
+
+ 6006 FORMAT(' Xfind cannot change packing type.')
+ 6020 FORMAT('0   Iswtch = ',I1,/'0   Looking for -'/(17X,12A8) ) 
+ 6025 FORMAT( '0 Number of records',I10) 
+ 6030 FORMAT('0...Cannot find  '/(17X,12A8) )
+ 6040 FORMAT('0      Xfind on -'/(17X,12A8) )
+ 6050 FORMAT(' Xfind reports I/O error number ',I4,' on unit 5.')
+
+      END 
+#     endif

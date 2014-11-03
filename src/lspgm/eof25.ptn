@@ -1,0 +1,527 @@
+#     if !defined (memoire_maximale)
+#     define memoire_maximale 100000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      eof25  DATA EOFVAL EOFVEC INPUT OUTPUT [-kind VAL]
+*
+*
+*     AUTHOR - B.Dugas, 29 MARS/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/eof25.ptn,v 4.5 2014/09/25 20:20:47 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      Calcul des facteurs principaux derivant de la matrice
+*      des co-variances d'une series de grilles spaciales reelles
+*      (prealablement transposees ou non) et optionnellement les 
+*      eofs associees a ces variances elles-memes.
+*
+*      Noter que eofvec contient en fait la matrice des facteurs
+*      ("factor loadings") utilisee dans le calcul des facteurs de 
+*      type varimax. Enfin, tous les points ont le meme poids dans 
+*      le calcul de l'orthogonalite. Toute procedure visant a imposer
+*      un poids relatif (de surface ou de niveau de pression) devra
+*      se faire par une multipication prealable des donnees par les 
+*      poids desires.
+*
+*      On pre-suppose notamment que ...
+*
+*      1) La moyenne de l'ensemble des enregistrements a deja ete 
+*         retiree de chaque enregistrement des donnees.
+*      2) Si, on trouve des grilles reelles ou des coupes zonales,
+*         les champs valides a un moment donne sont consecutifs.
+*      3) Le fichier data ne contient qu'un type de variables, ayant
+*         toutes le meme nom.
+*
+*
+*     PARAMETRES...
+*      MODE    = DETERMINE LE MODE DE FONCTIONNEMENT.
+*     (kind)  .EQ. 0 ==> SEULES LES VALEURS PROPRES SONT CALCULEES.
+*             .NE. 0 ==> VALEURS/VECTEURS PROPRES SONT CALCULES.
+*
+*      READ( 5,5000 ) MODE
+*5000  FORMAT(10X,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* EOF25       1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH LEVELS IN DATA
+*       2 DATA TYPE IS COMPLEX
+*       3 UNKNOWN MODE REQUESTED (NOT 0,1)
+*       4 MEMORY ALLOCATION FAILURE
+*       5 INCOMPLETE SET IN DATA
+*       6 ERRORS IN ARGUMENTS TO LAPACK/DSPEVX
+*       7 EIGEN-VALUES FAILED TO CONVERGE
+*       8 UNABLE TO FIND EIGEN-VECTORS
+*       9 PREMATURE END OF FILE ON INPUT
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM EOF25
+*    1              (     DATA,        EOFVAL,       EOFVEC,
+*    2              TAPE1=DATA,  TAPE2=EOFVAL, TAPE3=EOFVEC,
+*    3                    INPUT,       OUTPUT,
+*    4              TAPE5=INPUT, TAPE6=OUTPUT)
+ 
+*     $Log: eof25.ptn,v $
+*     Revision 4.5  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.4  2014/01/28 18:38:22  dugas
+*     Allocation de memoire 'a la F90' et I/O a 64 bits.
+*
+*     Revision 4.3  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.2  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.1  2005/03/03 20:05:55  dugas
+*     Modifications cosmetiques.
+*
+*     Revision 4.0  1994/11/17 14:19:55  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:54  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  93/08/19  15:20:03  armnrbd
+*     Modifications cosmetiques.
+*     
+*     Revision 1.3  93/08/04  11:55:14  armnrbd
+*     Utiliser l'option d'allocation Real*8 de HPALLOC.
+*     
+*     Revision 1.2  93/03/05  10:58:36  armnrbd
+*     Premiere version fonctionnelle sur UNIX (LAPACK).
+*     
+*     Revision 1.1  92/11/08  19:45:21  armnrbd
+*     Initial revision
+*     
+***    MARS 29/87 - B. DUGAS
+ 
+***    MODIFIEE LE 10 FEVRIER 1988 PAR B. DUGAS ...
+***    1) OUTPUT TYPE = INPUT TYPE (PAS DE CAS SPECIAL SI INPUT = TS).
+***    2) ON NE FAIT PLUS LA LECTURE DE LA DIMENSION DU PROBLEME.
+ 
+*--------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLEV = 999 , HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXMEM = memoire_maximale
+
+      CHARACTER*4 TYPE
+      CHARACTER   LIGNE*80 
+      LOGICAL     OK, UP, DN
+      REAL*8      SVAL,VALJ,VL,VU,CORECT,
+     +            TRACE,ANTS,ZERO,HOLD
+      INTEGER     DIMCOV, LEV(MAXLEV), IBUF(HEAD),
+     +            NOM,UN,DEUX,TROIS,ICOMP,IEND,
+     +            NF,NLEV,NLEVA,ILG,ILAT,NWDS,MAXW,
+     +            LEN,MEM,I,JJ,IL,IU,J,IHEM,IO,M,N,MODE,NCALL,
+     +            IPAK,ISTR,NCOV,NVEC,NVAL,NTS,NLVEC,IER
+
+      INTEGER,    ALLOCATABLE,DIMENSION(:) :: FAIL,IWORK,JBUF
+      REAL(8),    ALLOCATABLE,DIMENSION(:) :: GG,COV,WORK,VAL,VEC,D,E
+ 
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER,    EXTERNAL :: GETSIZ2
+      LOGICAL,    EXTERNAL ::  RPBLOC,SETIO64
+      EXTERNAL    JCLPNT,XIT,GETLIGN,BURNF,GETSET2,
+     +            DSPEVX,DSTEVX,PUTFLD2,PUTSET2
+
+      DATA        UN,  DEUX,  TROIS  /
+     +             1,    2,     3    /
+      DATA        ZERO / 0.0_8 /
+      DATA        UP,    DN   / .FALSE., .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/eof25.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+ 
+***    SETUP POUR E/S @ 64-BIT.
+
+      OK = SETIO64(.TRUE.)
+
+***    DONNEES A PLUSIEURS NIVEAUX ?
+ 
+      MAXW = GETSIZ2( 1, IBUF,LEN,NWDS,IPAK, LEV,NLEV )
+ 
+      IF (NLEV.LT.1 .OR. NLEV.GT.MAXLEV) CALL      XIT('  Eof25 ',-1 )
+ 
+***    DEFENITIONS DE CERTAINES CONSTANTES.
+ 
+      NOM  = IBUF(3)
+      ILG  = IBUF(5)
+      ILAT = IBUF(6)
+      IHEM = IBUF(7)
+
+***    TYPE PERMIS DE DONNEES ?
+ 
+      WRITE(TYPE,4) IBUF(1)
+      IF (TYPE.NE.'GRID' .AND. TYPE.NE.'ZONL')                 THEN
+          WRITE(6,6002) TYPE
+          CALL                                     XIT('  Eof25 ',-2 )
+      END IF
+ 
+***    DIMENSION REELLE DE LA MATRICE DE COVARIANCE = DIMCOV*DIMCOV.
+ 
+      DIMCOV = NLEV*NWDS
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK FOR COMMAND LINE PARAMETRE.
+
+          MODE = 0
+ 
+          OK = RPBLOC('KIND',LIGNE)  
+          IF (OK) READ(LIGNE,'(BN,I5)',ERR=9999,END=9999,IOSTAT=IO) MODE
+
+      ELSE
+
+***        PARAMETRE D'EXECUTION...
+***        MODE DE CALCUL (0 = VARIANCES, 1 = VARIANCES & EOF).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 9999
+          ELSE
+              READ( LIGNE, 5000,ERR=9999,END=9999,IOSTAT=IO ) MODE
+              CALL BURNF
+          END IF
+
+      END IF
+
+      WRITE(6,6100) MODE, DIMCOV
+ 
+      IF (MODE.LE.-1 .OR. MODE.GT.1 .OR. DIMCOV.LE.0)          THEN
+          WRITE(6,6003)
+          CALL                                     XIT('  Eof25 ',-3 )
+      END IF
+ 
+***    LA DIMENSION  PHYSIQUE DE  LA MATRICE DE COVARIANCE
+***    ET LE NOMBRE MAXIMAL DE VALEURS PROPRES RECHERCHEES
+***    SERONT (RESPECTIVEMENT)...
+
+      NCOV = DIMCOV*(DIMCOV+1)/2
+      NVAL = DIMCOV/4+1
+
+      IF (MODE.EQ.0)                                           THEN 
+          NVEC = DIMCOV
+      ELSE
+          NVEC = MAX( DIMCOV+NCOV,DIMCOV*DIMCOV )
+      END IF
+
+***    ON DEMANDE LA MEMOIRE DONT ON A BESOIN.
+
+      MEM  = NCOV+NVEC+12*DIMCOV
+      MEM  = 2*MEM+6*DIMCOV+LEN
+
+      IF (MEM.GT.MAXMEM)                                       THEN
+          WRITE(6,6004) MEM-MAXMEM
+          CALL                                     XIT('  Eof25 ',-4 )
+      END IF
+
+      ALLOCATE( D(DIMCOV),GG  (DIMCOV),VAL   (DIMCOV),
+     +          E(DIMCOV),FAIL(DIMCOV),WORK(8*DIMCOV),
+     +          COV(NCOV),VEC (NVEC), IWORK(5*DIMCOV),
+     +          JBUF(LEN),                                  STAT=IER )
+
+      IF (IER /= 0)                                            THEN
+          WRITE(6,6104) IER
+          CALL                                     XIT('  Eof25 ',-4 )
+      END IF
+
+*********************************************************************
+***    INITIALISONS LA MATRICE DE COVARIANCE ...
+ 
+      TRACE = 0.0
+      COV(:) = 0.
+ 
+***    ... ET ALLONS LIRE LES PROCHAINES VALEURS.
+ 
+      NTS = 0
+ 
+  100 CALL GETSET2( UN, GG,LEV,NLEVA, JBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (NTS == 0) CALL                   XIT('  Eof25 ',-5 )
+              GOTO 200
+          ELSE IF (NLEVA /= NLEV)                              THEN
+              WRITE(6,6005) NTS,NLEV,NLEVA
+              CALL                                 XIT('  Eof25 ',-5 )
+          END IF
+ 
+***        AJOUTER CETTE INFORMATION A LA MATRICE ...
+ 
+          DO J=1,DIMCOV
+ 
+              JJ      = J*(J-1)/2
+              VALJ    = GG(J)
+              TRACE   = TRACE  +VALJ*VALJ
+ 
+***            ON TRAITE LES LIGNES DE COV UNE A UNE ...
+ 
+              DO  I=1,J
+                  COV(JJ+I) = COV(JJ+I)+VALJ*GG(I)
+              END DO
+ 
+          END DO
+ 
+          NTS = NTS+1
+ 
+      GOTO 100
+ 
+***    ON A MAINTENANT LU LA DERNIERE VALEUR TEMPORELLE.
+ 
+  200 ANTS = 1./DBLE( NTS )
+ 
+      COV(:) = COV(:)*ANTS
+      TRACE  = TRACE*ANTS
+
+      IF (MODE.NE.0)                                     THEN
+
+***        SAUVER LA MATRICE COV DANS VEC.
+
+          DO  I=1,NCOV
+              VEC(DIMCOV+I) = COV(I)
+          END DO
+
+      END IF
+
+      CALL PRTLAB2(' Last ibuf = ',JBUF )
+      WRITE (6,6120)  TRACE
+ 
+*********************************************************************
+***    CALCUL  DES VALEURS PROPRES  DE COV. LA TRACE CONTIENT
+***    DEJA LA SOMME DES VALEURS PROPRES PUISQUE LE PROCESSUS 
+***    DE DIAGONALISATION CONSERVE SA VALEUR INCHANGEE.
+ 
+      VU = TRACE
+      VL = VU/50.
+
+      NCALL = 0
+
+ 1000 IF (.NOT.(DN.OR.UP))                                     THEN
+
+***        PREMIER CALCUL DES VALEURS PROPRES A PARTIR DE COV.
+
+          CALL DSPEVX( 'N','V','U', DIMCOV, COV, VL,VU, IL,IU, ZERO,
+     +                  M,VAL, VEC,UN, WORK,IWORK, FAIL,IER )
+
+***       TRANSFERER LA FORME TRIDIAGONALE DE COV DANS D ET E.
+      
+          D(1) = COV(1)
+          DO I=2,DIMCOV
+             D(I)   = COV( I+I*(I-1)/2     )
+             E(I-1) = COV( I+I*(I-1)/2 - 1 )
+          END DO
+
+          NCALL = NCALL + 1
+
+      ELSE
+
+***        CALCUL A PARTIR DES VALEURS PROPRES A
+***        PARTIR DE LA FORME TRI-DIAGONALE.
+
+          CALL DSTEVX( 'N','V', DIMCOV, D,E, VL,VU, IL,IU, ZERO,
+     +                  M,VAL, VEC,UN, WORK,IWORK, FAIL,IER )
+
+***       RESTAURER LA FORME TRIDIAGONALE DE COV DANS D ET E.
+      
+          D(1) = COV(1)
+          DO I=2,DIMCOV
+             D(I)   = COV( I+I*(I-1)/2     )
+             E(I-1) = COV( I+I*(I-1)/2 - 1 )
+          END DO
+
+          NCALL = NCALL + 1
+
+      END IF
+
+***    EST-CE  QU'IL Y  A EU ERREUR  ? ...  DEPENDANT DE  SON TYPE,
+***    ON POURRA RESSSAYER AVEC UN INTERVAL MOINS GRAND DE VALEURS.
+ 
+      IF (IER /= 0)                                            THEN
+          IF (IER < 0)                                         THEN
+              WRITE(6,6006) IER
+              CALL                                 XIT('  Eof25 ',-6 )
+          ELSE
+              VL = VL+VU/1000.
+              UP  = .TRUE.
+              IF (.NOT.DN )                                    THEN
+                  IF (VL > VU/4.) CALL             XIT('  Eof25 ',-7 )
+              ELSE
+                  VL = VL-VU/500.
+              END IF
+              GOTO 1100
+          END IF
+      ELSE IF (NCALL > 25)                                     THEN
+          CALL                                     XIT('  Eof25 ',-7 )
+      END IF
+ 
+      SVAL = 0.0_8
+      DO N=1,M
+         SVAL = SVAL+VAL(N)
+      END DO
+ 
+***    ON VERIFIE QUE L'ON A DEJA TROUVE UN POURCENTAGE ASSEZ
+***    IMPORTANT DE LA VARIANCE DANS LES M VALEURS PROPRES.
+ 
+      IF (SVAL < 0.9_8*TRACE)                                  THEN
+          IF (UP) GOTO 1100
+          VL = VL-VU/1000.
+          DN = .TRUE.
+          IF (VL < VU/DBLE( DIMCOV )) GOTO 1100
+          GOTO 1000
+      END IF
+ 
+ 1100 WRITE(6,6130) M, SVAL, (I, VAL(M-I+1), I=1,M)
+ 
+      NVEC = M
+
+      IF (MODE /= 0)                                           THEN
+ 
+***        CALCUL OPTIONNEL DES VECTEURS PROPRES.
+
+          IU = DIMCOV 
+          IL = DIMCOV-NVEC+1
+
+***        RESTAURER LA MATRICE DE COVARIANCE COMPACTEE.
+
+          DO  I=1,NCOV
+              COV(I) = VEC(I+DIMCOV)
+          END DO
+
+***        EFFECTUER LE CALCUL PROPREMENT DIT.
+
+          CALL DSPEVX( 'V','I','U', DIMCOV, COV, VL,VU, IL,IU, ZERO,
+     +                  M,VAL, VEC,DIMCOV, WORK,IWORK, FAIL,IER )
+
+          IF (IER.NE.0)                                        THEN
+              CALL                                 CLREOF25( )
+              CALL                                 XIT('  Eof25 ',-8 )
+          END IF
+
+      END IF
+
+***    ON PLACE LES VALEURS ET LES VECTEURS LEUR CORRESPONDANT
+***    EN ORDRE DECROISSANT.
+ 
+      DO  N=1,NVEC/2
+
+          HOLD          = VAL(     N  )
+          VAL(     N  ) = VAL(NVEC-N+1)
+          VAL(NVEC-N+1) = HOLD
+
+          IF (MODE.NE.0)                                       THEN
+
+              ISTR   = (NVEC-N  )*DIMCOV
+              IEND   = (     N-1)*DIMCOV
+
+              DO I=1,DIMCOV
+                 HOLD        = VEC(ISTR+I)
+                 VEC(ISTR+I) = VEC(IEND+I)
+                 VEC(IEND+I) = HOLD
+              END DO
+
+          END IF
+
+      END DO
+ 
+***    CONSTRUCTION DE LA MATRICE DES FACTEURS PRINCIPAUX.
+ 
+      IF (MODE /= 0)                                           THEN
+          DO  N=1,NVEC
+              CORECT = SQRT( VAL(N) )
+              NLVEC  = (N-1)*DIMCOV
+              DO  I=1,DIMCOV
+                  VEC(NLVEC+I) = VEC(NLVEC+I)*CORECT
+              END DO
+          END DO
+      END IF
+
+*********************************************************************
+***    ON SAUVE LES DERNIERS RESULTATS QU'ON A TROUVES ...
+
+      ICOMP = JBUF(8)
+      CALL SETLAB( JBUF,'ZONL', 0, 'EIVA', UN, NVEC, UN, IHEM, -64 )
+      CALL PUTFLD2( DEUX, VAL, JBUF, MAXW )
+ 
+      IF (MODE.NE.0)                                           THEN
+
+          READ(TYPE,'(A4)') JBUF(1)
+          CALL SETLAB (JBUF, -1, 0, 'EIVE',
+     +                 1, ILG, ILAT, IHEM, ICOMP)
+
+          DO  N=1,NVEC
+              NLVEC = (N-1)*DIMCOV+1 ; JBUF(2) = N
+              CALL PUTSET2( TROIS, VEC(NLVEC), LEV,NLEV, JBUF,MAXW )
+          END DO
+
+      END IF
+ 
+***    ... PUIS C'EST LA FIN NORMALE DES OPERATIONS.
+ 
+      CALL                                         XIT('  Eof25 ', 0 )
+ 
+***    FIN PREMATUREE SUR UNITE 5 OU 1.
+ 
+ 9999 WRITE(6,6009)
+      CALL                                         XIT('  Eof25 ',-9 )
+ 
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+ 5000 FORMAT(10X,I5)
+ 6002 FORMAT(' Field should not be type = ',A4,'.')
+ 6003 FORMAT(' Illegal mode and/or covariance dimension choices ... ')
+ 6004 FORMAT(' Problem too large, missing ',I10,' memory words.')
+ 6104 FORMAT(' Memory allocation problem STAT= ',I5)
+ 6005 FORMAT(' Problem with set ',I5,', nlev expected/found=',2I5)
+ 6006 FORMAT(' Illegal ',I2,' argument.')
+ 6009 FORMAT(' Premature eof on unit 1 or 5.')
+ 6100 FORMAT(' Eof25 working in mode = ',I1,', with a problem of',
+     1       ' order ',I4,'.')
+ 6120 FORMAT(' The trace is equal to ',D13.7)
+ 6130 FORMAT('1The sum of the ',I4,' most important eigenvalues is ',
+     1        D13.7,' and they are :'/
+     2         (4X,I5,1X,D13.7,I5,1X,D13.7,I5,1X,D13.7,I5,1X,D13.7))
+
+      END
+#     endif

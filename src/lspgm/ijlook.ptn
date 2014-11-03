@@ -1,0 +1,969 @@
+#     if !defined (ligne_maximale)
+#         define   ligne_maximale 512
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ijlook  GFILE INPUT OUTPUT [ -t1   VAL1 -t2  VAL2 -t3   VAL3 \ 
+*                                   -lv1  VAL4 -lv2 VAL5 -name VAL6 \ 
+*                                   -i    VAL7   VAL8  \ 
+*                                   -j    VAL9   VAL10 \ 
+*                                   -kind VAL11 [VAL12] ]
+*
+*
+*     DESCRIPTION...
+*      ijlook  - PRINTS TIME SERIES OF A WINDOW IN A GRID FILE
+*
+*
+*     AUTHOR  - J-Francois Fortin ET R.Laprise, FEB 14/84.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ijlook.ptn,v 4.19 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     PURPOSE - PRINTS ALL THE INFORMATION CONTAINED IN GFILE PERTAINING TO
+*               VARIABLE NAME, IN THE WINDOW FROM I1 TO I2 AND FROM J1 TO J2
+*               BETWEEN TIMESTEPS NT1 AND NT2 BY INCREMENT OF INT, AT ALL
+*               LEVELS BETWEEN LV1 AND LV2.
+*
+*
+*     INPUT FILE...
+*      GFILE = FILE CONTAINING A TIME SERIES OF GRIDS.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NT1,NT2     = FIRST AND LAST TIMESTEP NUMBERS TO BE PRINTED.
+*      (t1,t2)       VALUES OF- 1 DEFAULT TO ALL TIMESTEPS.
+*      INT         = TIMESTEP INTERVAL TO BE PRINTED.
+*      (t3)          A VALUE LESS OR EQUAL TO ZERO DEFAULTS TO 1.
+*      LV1,LV2     = UPPER AND LOWER LEVELS TO BE PRINTED
+*                    IN COMMAND-LINE MODE, LV1 AND LV2 MAY ALSO BE THE REAL
+*                    DECODED LEVEL VALUES. IN THAT CASE, THE LEVEL TYPE
+*                    PARAMETER *** ABSOLUTELY HAS TO BE SPECIFIED ***.
+*      NAME        = VARIABLE TO BE PRINTED (BLANK, 'ALL' or '-1' PRINTS ALL)
+*      I1,I2,J1,J2 = VALUES DEFINING WINDOW TO BE PRINTED
+*      KIND-1 (RES)= OUTPUT RESOLUTION 'HI' FOR 5 NUMBER PER LINE AND 'LO'
+*                    FOR 12 NUMBERS PER LINE (THE DEFAULT IS 'LO')
+*      KIND-2      = VERTICAL LEVEL TYPE. ONLY USE THIS WITH IN RPN STD FILES
+*                    AND WHEN LV1 AND LV2 CONTAIN DECODED VALUES. FURTHERMORE,
+*                    THIS PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*                    THE CURRENTLY SUPPORTED VALUES ARE:
+*                    'HAUTEUR'   , heights (m) with respect to sea level
+*                    'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                    'ETA'       , first version of the GEM ETA coordinate
+*                    'PRESSION'  , pressure (mb)
+*                    'ARBITRAIRE', arbitrary level (no units apply)
+*                    'HAUTEURS'  , heights (M) with respect to the surface
+*                    'HYBRIDE'   , hybrid GEM coordinate
+*                    'THETA'     , potential temperature coordinate
+*                    'GALCHEN'   , GalChen generalized coordinate
+*
+*      NOTE: 1) -1,0 FOR  NT,LV,I OR J,  IJLOOK WILL PRINT EVERYTHING.
+*            2) IF NT1,NT2 = 0, IJLOOK WILL PAUSE BETWEEN EACH RECORD.
+*
+*      READ( 5,5010 ) NT1,NT2,INT,LV1,LV2,NAME
+*      READ( 5,5020 ) I1,J1,I2,J2,RES
+*5010  FORMAT(15X,2I10,I5,5X,2I5,5X,1X,A4)
+*5020  FORMAT(4I5,1X,A2)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*   IJLOOK             24        48    1       100  850      VORT
+*  24   30   24   32 HI
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ILLEGAL LOWER-LEFT POSITION SUPPLIED
+*       2 ILLEGAL RESOLUTION REQUESTED
+*       3 ILLEGAL UPPER-RIGHT POSITION SUPPLIED
+*       4 ERROR ABORT READING INPUT PARAMETRES
+*       5 REAL (DECODED) VERTICAL LEVELS, KIND NOT DEFINED
+*       6 INCONSISTENT VALUES IN INPUT PARAMETERS
+*       7 UNABLE TO OPEN GFILE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM IJLOOK
+*     PROGRAM IJLOOK (GFILE,       INPUT,       OUTPUT,
+*    1          TAPE1=GFILE, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -------------------------------------------------
+
+*     $Log: ijlook.ptn,v $
+*     Revision 4.19  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.18  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.17  2008/05/13 16:41:54  dugas
+*     Il est possible de specifier '-i vali -j valj' pour obtenir (vali,valj).
+*
+*     Revision 4.16  2008/05/03 21:13:05  dugas
+*     - Modification generale pour r.gppf.
+*     - Support des arguments I1,I2,J1,J2 sur la ligne de commande.
+*
+*     Revision 4.15  2007/12/20 21:01:45  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.13  2006/04/26 22:30:03  dugas
+*     - Modifier l'allocation dynamique de memoire.
+*     - Code de la coordonnee GALCHEN change (17 --> 21).
+*
+*     Revision 4.12  2004/11/12 16:29:12  dugas
+*     Ajouter support des donnees de type CHAR/datyp=3
+*
+*     Revision 4.11  2003/05/23 20:36:11  dugas
+*     En mode "arguments de ligne de commande" seulement, permettre des
+*      valeurs de LV1 et LV2 reels.  Dans ce cas, le nouvel arguments
+*      -KIND doit etre specifie pour determiner le type de ces
+*      niveaux verticaux (VKIND).
+*     Correctement interpreter le contenu des enregistrements '++'.
+*
+*     Revision 4.10  2002/04/22 15:09:43  dugas
+*     Ajouter le type VKIND=4 (Hauteurs)
+*
+*     Revision 4.9  2002/02/02 01:06:49  dugas
+*     Forcer la majusculisation du parametre NAME
+*
+*     Revision 4.8  1999/07/06 18:21:36  armnrbd
+*     Modifier certains formats de sorties.
+*
+*     Revision 4.7  1999/04/08 21:55:36  armnrbd
+*     Modifications pour compiler sous LINUX.
+*
+*     Revision 4.6  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.5  1998/06/08  02:22:51  armnrbd
+*     Tenir compte des enregistrements LABL.
+*     Corriger les sorties ++ pour les fichiers CCC.
+*
+*     Revision 4.4  1998/05/28  20:00:59  armnrbd
+*     Decoder les enregistrements ++ et les afficher
+*      en mode haute resolution.
+*
+*     Revision 4.3  1998/05/21  20:20:50  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.2  1998/02/18  16:45:51  armnrbd
+*     Verifier les niveaux input avec CHKLVLC.
+*
+*     Revision 4.1  1995/06/13  19:38:52  armnrbd
+*     Modifier le format de sortie HI pour donnees complexes.
+*
+*     Revision 4.0  1994/11/17  14:20:44  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:02:14  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:22  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  92/11/09  21:41:32  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/27  10:57:05  armnrbd
+*     Ajouter un arret entre les enregistrements dans l'un des 
+*     modes automatiques (i.e. NT1,NT2 = 0).
+*     
+*     Revision 1.1  92/03/20  12:12:53  armnrbd
+*     Des valeurs nulles ou vides activent les options de defauts.
+*     
+*     Revision 1.0  92/03/20  11:40:03  armnrbd
+*     Initial revision
+*     
+
+*     MAR 21/92 - B.DUGAS  - VERSION CY910/IRIX f77
+*     OCT 22/87 - M.LAZARE - REVISE CALL TO GETFLD2 TO ALLOW FOR NON-GRID
+*     FEB 14/84 - J-FRANCOIS FORTIN.
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      HEAD
+      PARAMETER  ( HEAD = taille_entete )
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+      INTEGER      MAXLIGNE
+      PARAMETER  ( MAXLIGNE = ligne_maximale )
+
+      CHARACTER*4  NAME,NOM,TYPE
+      REAL         RLV1,RLV2,HOLD,ALEV
+      INTEGER*8 :: KOUNT,NT1,NT2,INT,MUN=-1,ZER=0
+      CHARACTER    RES*2,ALV1*15,ALV2*15,LIGNE*ligne_maximale
+      CHARACTER*20 VALEUR,ANT1,ANT2,CKIND,FORMC
+      LOGICAL      OK, HIGH,RPBLOC,LINEIO,ALLEV,ALLTIM
+      INTEGER      NFF,LV1,LV2,I,IP1,I1,I2,J1,
+     +             J2,IO,ILON,ILAT,VKIND1,VKIND2,
+     +             VKIND,KIND,I10,I20,J10,J20,NI2,
+     +             NJ2,NLEV,PERIOD,LEV(MAXLEV),
+     +             L,LAC,LEN1,LEN2,MAXW,VKIND0,
+     +             LBUF(HEAD),NWDS,VK,NI1,NJ1
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF,C
+      REAL*8,      DIMENSION(:), ALLOCATABLE :: FIELD
+
+#     include     "machtype.cdk" 
+
+      LOGICAL      SETIO64
+      INTEGER*8    Y2KDAT8
+      CHARACTER*4  GETYP,PKTYP
+      INTEGER      GETKIND,GETSIZ
+      EXTERNAL     JCLPNT,RPBLOC,GETLIGN,XIT,
+     +             GETFLD2,PRINTA,PRINTC,PRECEDE,
+     +             SETIO64,GETYP,CONVPR,Y2KDAT8,
+     +             GETKIND,SETKIND,ISMOV,GETSIZ
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         ALLEV  / .FALSE. /,
+     +             ALLTIM / .FALSE. /,
+     +             MAXW   /  0  /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ijlook.ptn,v $'
+
+* -------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 3
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    ALLOCATE WORKING MEMORY.
+
+      MAXW = GETSIZ( 1,LBUF,LEN1,NWDS,LEN2 )
+      IF (MAXW.LE.0) CALL                      XIT(' Ijlook ',-7 )
+
+      ALLOCATE( IBUF(2*LEN1),FIELD(MAXW),C(MAXW) )
+
+      VKIND0 = GETKIND( )
+
+   50 CALL PRECEDE( 1,-1 )
+
+      NAME  = ' '
+      CKIND = ' '
+      VKIND = VKIND0
+
+***    READ INPUT DIRECTIVES.
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+          LINEIO = .FALSE.
+          LIGNE  = ' '
+
+***        CHECK PARAMETRE BLOCK.
+
+          ANT1 = ' '
+          ANT2 = ' '
+          INT  =  0
+          LV1  = -1
+          LV2  = -1
+          RLV1 =-1.0
+          RLV2 =-1.0
+
+          NI1  = -1
+          NI2  = -1
+          NJ1  = -1
+          NJ2  = -1
+          RES  = ' '
+
+          OK = RPBLOC('T1',VALEUR)
+          IF (OK) ANT1 = VALEUR
+
+          OK = RPBLOC('T2',VALEUR)
+          IF (OK) ANT2 = VALEUR
+
+          OK = RPBLOC('T3',VALEUR)
+          IF (OK) READ(VALEUR,20) INT
+          
+          OK = RPBLOC('I',VALEUR)
+          IF (OK) READ(VALEUR,5) NI1
+
+          OK = RPBLOC('I2',VALEUR)
+          IF (OK) READ(VALEUR,5) NI2
+
+          OK = RPBLOC('J',VALEUR)
+          IF (OK) READ(VALEUR,5) NJ1
+
+          OK = RPBLOC('J2',VALEUR)
+          IF (OK) READ(VALEUR,5) NJ2
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) RES = VALEUR(1:2)
+
+          OK = RPBLOC('KIND2',VALEUR)
+          IF (OK) CKIND = VALEUR
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          END IF
+
+          VKIND1 = VKIND
+
+          OK = RPBLOC('LV1',VALEUR)
+          IF (OK)                                              THEN
+              LIGNE(46:50) = VALEUR
+              PERIOD = INDEX( VALEUR, '.' )
+              IF (PERIOD.EQ.0 .AND. CKIND.EQ.' ')              THEN
+                  READ(VALEUR,'(BN,I10)'  ,ERR=904,IOSTAT=IO)  LV1
+                  CALL  CONVPR( LV1, RLV1, VKIND1, -2 )
+              ELSE
+                  READ(VALEUR,'(BN,E10.0)',ERR=904,IOSTAT=IO) RLV1
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( LV1, RLV1, VKIND,  +2 )
+                  ELSE
+                      CALL LVCODE( LV1, RLV1/1000.,1 ) 
+                  END IF
+              END IF
+          END IF
+
+          VKIND2 = VKIND1
+
+          OK = RPBLOC('LV2',VALEUR)
+          IF (OK)                                              THEN
+              LIGNE(51:55) = VALEUR
+              PERIOD = INDEX( VALEUR, '.' )
+              IF (PERIOD.EQ.0 .AND. CKIND.EQ.' ')              THEN
+                  READ(VALEUR,'(BN,I10)'  ,ERR=904,IOSTAT=IO)  LV2
+                  CALL  CONVPR( LV2, RLV2, VKIND2, -2 )
+              ELSE
+                  READ(VALEUR,'(BN,E10.0)',ERR=904,IOSTAT=IO) RLV2
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( LV2, RLV2, VKIND,  +2 )
+                  ELSE
+                      CALL LVCODE( LV2, RLV2/1000.,1 ) 
+                  ENDIF
+              END IF
+          END IF
+
+          OK = RPBLOC('NAME',VALEUR)
+          IF (OK) NAME = VALEUR(1:4)
+
+      ELSE
+
+          LINEIO = .TRUE.
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010,END=900,ERR=900,IOSTAT=IO) 
+     +                     ANT1,ANT2,INT,LV1,LV2,NAME
+              CALL  CONVPR( LV1, RLV1, VKIND1, -2 )
+              CALL  CONVPR( LV2, RLV2, VKIND2, -2 )
+          END IF  
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 904
+          ELSE
+              READ( LIGNE, 5020,END=904,ERR=904,IOSTAT=IO) 
+     +                     NI1,NJ1,NI2,NJ2,RES
+          END IF  
+
+      END IF
+
+      IF (VKIND1.NE.VKIND2) CALL                   XIT(' Ijlook ',-8 )
+
+***    CHECK INPUT PARAMETERS.
+
+      IF (ANT1.EQ.' ')                                         THEN
+          NT1 = -1
+      ELSE
+          READ(ANT1,0020,END=900,ERR=900,IOSTAT=IO) NT1
+      END IF
+
+      IF (ANT2.EQ.' ')                                         THEN
+          NT2 = -1
+      ELSE
+          READ(ANT2,0020,END=900,ERR=900,IOSTAT=IO) NT2
+      END IF
+
+      IF (NT1 >= ZER .AND.
+     +    NT2 == MUN) NT2 = NT1
+      IF (INT <= ZER) INT = 1
+
+      IF (NT1 == MUN .AND. NT2 == MUN) ALLTIM = .TRUE.
+
+      IF (.NOT.ALLTIM)                                         THEN
+          NT1 = Y2KDAT8( NT1 )
+          NT2 = Y2KDAT8( NT2 )
+      END IF
+
+      IF (
+     +    LV1         .EQ.-1 .OR.
+     +    LIGNE(46:55).EQ.' ' )                                THEN
+                                       ALLEV = .TRUE.
+      ELSE IF (LIGNE(46:50).EQ.' ' )                           THEN
+                                       LV1   =  LV2
+                                      RLV1   = RLV2
+      ELSE IF (LIGNE(51:55).EQ.' ' )                           THEN
+                                       LV2   =  LV1
+                                      RLV2   = RLV1
+      END  IF
+
+      IF (.NOT.ALLEV)                                          THEN
+
+          CALL GET_IP1_STRING( LV1,ALV1 )
+          CALL GET_IP1_STRING( LV2,ALV2 )
+
+          CALL LEADBLK( ALV1 )
+          CALL LEADBLK( ALV2 )
+
+          IF (CKIND.EQ.' ' .AND. VKIND0.NE.VKIND1)             THEN
+              DO  I=LEN_TRIM( ALV1 ),1,-1
+                  IF (ALV1(I:I).EQ.' ') EXIT
+              END DO
+              IF (I.NE.0) ALV1 = ALV1(1:I)
+          END IF
+          IF (CKIND.EQ.' ' .AND. VKIND0.NE.VKIND2)             THEN
+              DO  I=LEN_TRIM( ALV2 ),1,-1
+                  IF (ALV2(I:I).EQ.' ') EXIT
+              END DO
+              IF (I.NE.0) ALV2 = ALV2(1:I)
+          END IF
+
+          WRITE(6,6200) TRIM( ALV1 ),TRIM( ALV2 )
+
+          IF (RLV1.GT.RLV2)                                    THEN
+              HOLD  = RLV1
+              RLV1  = RLV2
+              RLV2  = HOLD
+              WRITE(6,6009)
+          END IF
+
+      ELSE
+          WRITE(6,6201)
+      END IF
+
+      I1 = NI1
+      J1 = NJ1
+
+      IF (I1  .EQ.-1 .OR.
+     +    I1  .EQ. 0) I1  = 1
+      IF (J1  .EQ.-1 .OR.
+     +    J1  .EQ. 0) J1  = 1
+
+      IF (I1  .LT. 0 .OR.
+     +    J1  .LT. 0) CALL                         XIT(' Ijlook ',-1 )
+
+      IF (RES .EQ.'-1' .OR.
+     +    RES .EQ.'  ') RES = 'LO'
+
+      IF (RES .NE.'LO' .AND.
+     +    RES .NE.'HI') CALL                       XIT(' Ijlook ',-2 )
+
+
+      NT2  = MAX0( NT2,NT1 )
+      HIGH = (RES .EQ. 'HI')
+
+      WRITE(6,6001) RES
+
+      CALL LOW2UP( NAME,NAME )
+      IF (NAME.NE.' ') CALL LEADBLK( NAME )
+
+  075 IF (MAXW.EQ.0)                                           THEN
+
+***        ALLOCATE WORKING MEMORY.
+
+          MAXW = GETSIZ( 1,LBUF,LEN1,NWDS,LEN2 )
+          IF (MAXW.EQ.0) CALL                      XIT(' Ijlook ',-7 )
+
+          ALLOCATE( IBUF(2*LEN1),FIELD(MAXW),C(MAXW) )
+
+      END IF
+
+***    READ NEXT ARRAY.
+
+  100 CALL GETFLD2( 1, FIELD, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT. OK)                                        THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,FIELD,C )
+                  GOTO 075
+              END IF
+              IF (LINEIO) GOTO 50
+              CALL                                 XIT(' Ijlook ', 0 )
+          END IF
+
+          I2 = NI2
+          J2 = NJ2
+
+          IF (LINEIO)                                          THEN
+              IF     (NI2 .EQ.  0)                             THEN
+                                   I2 = I1
+                  IF (NI1 .EQ.  0) I2 = IBUF(5)
+              END IF
+              IF     (NJ2 .EQ.  0)                             THEN
+                                   J2 = J1
+                  IF (NJ1 .EQ.  0) J2 = IBUF(6)
+              END IF
+          ELSE
+              IF     (NI2 .EQ. -1)                             THEN
+                                   I2 = I1
+                  IF (NI1 .EQ. -1) I2 = IBUF(5)
+              END IF
+              IF     (NJ2 .EQ. -1)                             THEN
+                                   J2 = J1
+                  IF (NJ1 .EQ. -1) J2 = IBUF(6)
+              END IF
+          END IF
+
+          IF (I2 .LT. 0 .OR.
+     +        J2 .LT. 0) CALL                      XIT(' Ijlook ',-3 )
+
+***        DO WE WANT TO SEE THIS ONE ?
+
+          CALL STAMP2DATE( IBUF(2),KOUNT )
+
+          IF (ALLTIM)                        GOTO 200
+
+          IF (LINEIO)                                          THEN
+              IF ( KOUNT    >   NT2 )        GOTO 050
+              IF ( KOUNT    <   NT1 )        GOTO 100
+          ELSE
+              IF ( KOUNT    >   NT2 .OR.
+     +             KOUNT    <   NT1 )        GOTO 100
+          END IF
+          IF (MOD( KOUNT-NT1,INT ) /= ZER)   GOTO 100
+
+  200     WRITE(NOM,4) IBUF(3)
+
+          IF (NAME .EQ. '-1'  .OR.
+     +        NAME .EQ. '  '  .OR.
+     +        NAME .EQ. 'ALL' .OR.
+     +        NAME .EQ.  NOM)                                 THEN
+              GOTO 300
+          ELSE
+              GOTO 100
+          END IF
+
+  300     KIND = GETKIND( )
+
+          IF (.NOT.ALLEV)                                     THEN
+
+              IF (KIND.NE.VKIND) GOTO 100
+
+              CALL CONVPR( IBUF(4),ALEV, VK, -2 )
+
+              IF ( ALEV .LT. RLV1  .OR. ALEV .GT. RLV2) GOTO 100
+
+          END IF
+
+***        PRINT INFORMATION.
+
+  400     ILON = IBUF(5)
+          ILAT = IBUF(6)
+
+          WRITE(TYPE,4) IBUF(1)
+
+          IF (TYPE.EQ.'LABL')                                 THEN
+
+              WRITE(6,6040) (IBUF(I),I=HEAD+1,HEAD+MIN(40,IBUF(5)*2))
+              call prtlab( IBUF )
+              GOTO 100
+
+          END IF
+          
+          IF (TYPE.EQ.'ZONL' .AND. NOM.EQ.'++')               THEN
+
+              NLEV= ILON*ILAT
+
+***            DECODE VERTICAL LEVEL INFORMATION.
+
+              CALL GETLEV( -1, FIELD,NLEV, IBUF,OK )
+
+              IF (.NOT.OK) CALL                    XIT(' Ijlook ', 0 )
+
+              CALL ISMOV( FIELD,LEV,NLEV )
+
+              DO  I=NLEV,1,-1
+                  CALL CONVPR( LEV(I),HOLD, KIND, -1 )
+                  FIELD(I) = HOLD
+              END DO
+
+              IF (KIND.EQ.0  .or.
+     +            KIND.EQ.4)  WRITE(6,6100) 'height'
+              IF (KIND.EQ.1)  WRITE(6,6100) 'sigma/eta'
+              IF (KIND.EQ.2)  WRITE(6,6100) 'pressure'
+              IF (KIND.EQ.5)  WRITE(6,6100) 'hybrid'
+              IF (KIND.EQ.6)  WRITE(6,6100) 'theta'
+              IF (KIND.EQ.21) WRITE(6,6100) 'galchen'
+
+***            FORCE HIGH RESOLUTION MODE.
+
+              OK   =  HIGH
+              HIGH = .TRUE.
+
+          END IF
+
+          I10 = MIN0( I1,IBUF(5) )
+          I20 = MIN0( I2,IBUF(5) )
+          J10 = MIN0( J1,IBUF(6) )
+          J20 = MIN0( J2,IBUF(6) )
+
+          WRITE(6,6020) I1,J1,I2,J2
+
+          WRITE(6,6000)
+          WRITE(6,6010)
+          call prtlab( IBUF )
+
+          IF (TYPE.EQ.'CMPL' .OR.
+     +        TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR' )                                 THEN
+
+***            COMPLEX DATA.
+
+              write(6,6030)
+              CALL PRINTC( FIELD, ILON,ILAT,I10,J10,I20,J20, HIGH )
+
+          ELSE IF (TYPE.EQ.'CHAR')                             THEN
+
+***            CHARACTER DATA... PRINT IT.
+
+              CALL PRECEDE( 1,1 )
+              CALL GETFLD2( 1, C, 'CHAR',-1,NOM,-1, IBUF,MAXW,OK )
+
+              IF      (IBUF(8).EQ.-64)                         THEN
+                  LAC  = IBUF(5)*IBUF(6)*MACHINE
+                  LEN1 = MIN( IBUF(5)*8, MAXLIGNE )
+                  IF (INTSIZE*MACHINE.EQ.1)                    THEN
+                      LEN2 = MIN( IBUF(5), MAXLIGNE/8 )
+                      WRITE(FORMC,"('(',I3,'A8)')") LEN2
+                  ELSE
+                      LEN2 = MIN( 2*IBUF(5), MAXLIGNE/4 )
+                      WRITE(FORMC,"('(',I3,'A4)')") LEN2
+                  END IF
+              ELSE IF (IBUF(8).EQ.-32)                         THEN
+                  LAC  = IBUF(5)*IBUF(6)
+                  LEN1 = MIN( IBUF(5)*4, MAXLIGNE )
+                  LEN2 = MIN( IBUF(5), MAXLIGNE/4 )
+                  WRITE(FORMC,"('(',I3,'A4)')") LEN2
+              END IF
+
+              DO I=1,LAC,LEN2
+                  WRITE(LIGNE,FORMC) (C(L),L=I,MIN( LAC,I+LEN2-1 ))
+                  WRITE(6,'(A)') LIGNE(1:LEN1)
+              END DO
+
+          ELSE
+
+***            REAL DATA.
+
+              write(6,6030)
+              CALL PRINTA( FIELD, ILON,ILAT,I10,J10,I20,J20, HIGH )
+
+          END IF
+
+***        (POSSIBLY) RESTORE ORIGINAL RESOLUTION MODE.
+
+          IF (NOM.EQ.'++') HIGH = OK
+
+***        CONTINUE ? (AUTOMATIC TIMESTEP CASE)
+
+          IF (LINEIO .AND. NT1 .EQ. 0 .AND. NT2 .EQ. 0)        THEN
+              CALL GETLIGN( 5, LIGNE,80, OK)
+              IF (.NOT.OK) GOTO 900
+          END IF
+
+      GOTO 100
+
+***    E-O-F ON INPUT.
+
+  900 CALL                                         XIT(' Ijlook ', 0 )
+  904 CALL                                         XIT(' Ijlook ',-4 )
+
+* -------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0020 FORMAT(BN,I20)
+
+ 5010 FORMAT (15X,2A10,I5,5X,2I5,5X,1X,A4)
+ 5020 FORMAT (4I5,1X,A2)
+
+ 6000 FORMAT (//' Kind    step    name         level   ',
+     +        '     nx      ny     khem    pack')
+ 6001 FORMAT (//' Displaying data at ',A2,' resolution'//)
+ 6009 FORMAT(' Lv1 must be smaller or equal than lv2. Switching them.')
+ 6010 FORMAT (1X,61('-'))
+ 6020 FORMAT ('1 From (',I3,',',I3,') TO (',I3, ',',I3,')'/)
+ 6030 FORMAT (///)
+ 6040 FORMAT (/'1'/2(' Labl: ',20A4/))
+
+ 6100 FORMAT (//' The following holds vertical ',A,
+     +          ' coordinates.'//)
+ 6200 FORMAT(' Select levels ',A,' to ',A)
+ 6201 FORMAT(' Select levels ... ALL LEVELS.')
+
+      END
+      SUBROUTINE PRINTA (X,ILON,ILAT,I1,J1,I2,J2,HIGH)
+
+***    JEAN-FRANCOIS FORTIN - C.C.C.
+***    FEB. 23/84.
+***    MAR.18/86 J.HASLIP - 6030 FORMAT CHANGED 1PE9.3 TO 1PE9.2
+
+***    THIS SUBROUTINE PRINTS THE CURRENT FIELD X.
+***    IT REDIMENSIONS IT IN TWO DIMENSIONS FOR EASE OF USE.
+***    THE NEW ARRAY IS OF THE FORM X(ILON,ILAT)
+
+***    THE ALGORITHM PRINTS ILAT*IWIDE NUMBERS, NTI+IFTI TIMES.
+***    THAT MEANS THAT WE SEPARATE THE FIELD IN BUNCHES OF
+***    IWIDE NUMBERS WIDE AND PRINT THEM ON A SEQUENTIAL BASIS.
+*
+***    HIGH RESOLUTION IS  5 NUMBERS WIDE DISPLAY,
+***    LOW  RESOLUTION IS 12 NUMBERS WIDE DISPLAY.
+
+***                   ----------------
+***                   !    !    !   !!
+***                   !    !    !   !!
+***                   ----------------
+
+***    WOULD BECOME :
+
+***                   ------
+***                   !    !
+***                   !    !
+***                   ------
+***                   !    !
+***                   !    !
+***                   ------
+***                   !    !
+***                   !    !
+***                   ------
+***                   !!
+***                   !!
+***                   --
+
+      IMPLICIT  REAL (A-H,O-Z), INTEGER (I-N)
+
+      REAL*8    X(ILON,ILAT)
+      LOGICAL   HIGH
+* -------------------------------------------------------------------
+
+                IWIDE = 12
+      IF (HIGH) IWIDE = 5
+
+      NTI  =(I2-I1+1)/IWIDE
+      IFTI = MOD((I2-I1+1),IWIDE)
+      K    = I1
+
+      IF (HIGH)                                                THEN
+
+          DO 500 I=1,NTI
+              WRITE(6,6010) ((K+L),L=0,IWIDE-1)
+              WRITE(6,6020)
+              DO 400 J=J2,J1,-1
+                  WRITE(6,6000) J,(X(N,J),N=K,K+IWIDE-1)
+  400         CONTINUE
+              K=K+IWIDE
+              WRITE(6,6021)
+  500     CONTINUE
+
+          IF (IFTI .EQ. 0) RETURN
+
+* -------------------------------------------------------------------
+          WRITE(6,6010) ((K+L),L=0,IWIDE-1)
+          WRITE(6,6020)
+
+          DO 600 J=J2,J1,-1
+              WRITE(6,6000) J,(X(N,J),N=K,K+IFTI-1)
+  600     CONTINUE
+* ===================================================================
+
+      ELSE
+
+          DO 900 I=1,NTI
+              WRITE(6,6040) ((K+L),L=0,IWIDE-1)
+              WRITE(6,6020)
+              DO 800 J=J2,J1,-1
+                  WRITE(6,6030) J,(X(N,J),N=K,K+IWIDE-1)
+  800         CONTINUE
+              K = K+IWIDE
+              WRITE(6,6021)
+  900     CONTINUE
+*
+          IF (IFTI .EQ. 0) RETURN
+
+* -------------------------------------------------------------------
+          WRITE(6,6040) ((K+L),L=0,IWIDE-1)
+          WRITE(6,6020)
+
+          DO 1000 J=J2,J1,-1
+              WRITE(6,6030) J,(X(N,J),N=K,K+IFTI-1)
+ 1000     CONTINUE
+
+      END IF
+
+      WRITE(6,6021)
+      RETURN
+* -------------------------------------------------------------------
+
+ 6000 FORMAT (I4,3X,5(1PE22.15,2X))
+ 6010 FORMAT (15X,4(I4,21X),I4)
+ 6020 FORMAT (1X,126('-'))
+ 6021 FORMAT (1X,126('-')/)
+ 6030 FORMAT (I4,3X,12(1PE9.2,1X))
+ 6040 FORMAT (8X,I4,11(6X,I4))
+
+      END
+      SUBROUTINE PRINTC (X,ILON,ILAT,I1,J1,I2,J2,HIGH)
+
+***    BERNARD DUGAS, 19 OCT 1994 - RPN 
+***    CECI EST LA VERSION COMPLEXE DE LA ROUTINE PRINTA
+***    DE J.F. FORTIN DATEE DU 23 FEB 1984.
+
+***    THIS SUBROUTINE PRINTS THE CURRENT COMPLEX FIELD X.
+***    IT REDIMENSIONS IT IN TWO DIMENSIONS FOR EASE OF USE.
+***    THE NEW ARRAY IS OF THE FORM X(ILON,ILAT)
+
+***    THE ALGORITHM PRINTS ILAT*IWIDE NUMBERS, NTI+IFTI TIMES.
+***    THAT MEANS THAT WE SEPARATE THE FIELD IN BUNCHES OF
+***    IWIDE NUMBERS WIDE AND PRINT THEM ON A SEQUENTIAL BASIS.
+*
+***    HIGH RESOLUTION IS 3 COMPLEX NUMBERS WIDE DISPLAY,
+***    LOW  RESOLUTION IS 6 COMPLEX NUMBERS WIDE DISPLAY.
+
+***                   ----------------
+***                   !    !    !   !!
+***                   !    !    !   !!
+***                   ----------------
+
+***    WOULD BECOME :
+
+***                   ------
+***                   !    !
+***                   !    !
+***                   ------
+***                   !    !
+***                   !    !
+***                   ------
+***                   !    !
+***                   !    !
+***                   ------
+***                   !!
+***                   !!
+***                   --
+
+      IMPLICIT REAL (A-H,O-Z), INTEGER (I-N)
+
+      REAL*8   X(2,ILON,ILAT)
+      LOGICAL  HIGH
+* -------------------------------------------------------------------
+
+                IWIDE = 6
+      IF (HIGH) IWIDE = 3
+
+      NTI  =(I2-I1+1)/IWIDE
+      IFTI = MOD((I2-I1+1),IWIDE)
+      K    = I1
+
+      IF (HIGH)                                                THEN
+
+          DO 500 I=1,NTI
+              WRITE(6,6010) ((K+L),L=0,IWIDE-1)
+              WRITE(6,6020)
+              DO 400 J=J2,J1,-1
+                  WRITE(6,6000) J,(X(1,N,J),X(2,N,J),N=K,K+IWIDE-1)
+  400         CONTINUE
+              K=K+IWIDE
+              WRITE(6,6021)
+  500     CONTINUE
+
+          IF (IFTI .EQ. 0) RETURN
+
+* -------------------------------------------------------------------
+          WRITE(6,6010) ((K+L),L=0,IWIDE-1)
+          WRITE(6,6020)
+
+          DO 600 J=J2,J1,-1
+              WRITE(6,6000) J,(X(1,N,J),X(2,N,J),N=K,K+IFTI-1)
+  600     CONTINUE
+* ===================================================================
+
+      ELSE
+
+          DO 900 I=1,NTI
+              WRITE(6,6040) ((K+L),L=0,IWIDE-1)
+              WRITE(6,6020)
+              DO 800 J=J2,J1,-1
+                  WRITE(6,6030) J,(X(1,N,J),X(2,N,J),N=K,K+IWIDE-1)
+  800         CONTINUE
+              K = K+IWIDE
+              WRITE(6,6021)
+  900     CONTINUE
+*
+          IF (IFTI .EQ. 0) RETURN
+
+* -------------------------------------------------------------------
+          WRITE(6,6040) ((K+L),L=0,IWIDE-1)
+          WRITE(6,6020)
+
+          DO 1000 J=J2,J1,-1
+              WRITE(6,6030) J,(X(1,N,J),X(2,N,J),N=K,K+IFTI-1)
+ 1000     CONTINUE
+
+      END IF
+
+      WRITE(6,6021)
+      RETURN
+* -------------------------------------------------------------------
+
+ 6000 FORMAT (I4,2X,6(1PE21.14,2X))
+ 6010 FORMAT (25X,2(I4,42X),I4)
+ 6020 FORMAT (1X,142('-'))
+ 6021 FORMAT (1X,142('-')/)
+ 6030 FORMAT (I4,3X,12(1PE9.2,1X))
+ 6040 FORMAT (13X,I4,5(16X,I4))
+
+      END
+#     endif

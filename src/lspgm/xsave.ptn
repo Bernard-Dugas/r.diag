@@ -1,0 +1,492 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      xsave  OLD ADD NEW INPUT OUTPUT [-label "VAL1" -def]
+*
+*
+*     AUTHOR  - J.D.Henderson, APR 08/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/xsave.ptn,v 4.13 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     PURPOSE - ADDS ONE SUPERLABELLED SET TO FILE OLD AND COPIES 
+*               THE RESULT TO FILE NEW.
+*
+*
+*     INPUT FILES... 
+*
+*      OLD = FILE OF SUPERLABELED SETS (CAN BE EMPTY) 
+*      ADD = FILE CONTAINING THE NEW SET TO BE ADDED OR REPLACED 
+*
+*     OUTPUT FILE... 
+*
+*      NEW = COPY OF OLD WITH NEW SET ADDED OR REPLACED. 
+*
+*
+*     INPUT PARAMETER... 
+*
+*      SPRLBL = 256 CHARACTER SUPERLABEL FOR NEW SET TO BE ADDED/DELETED. 
+*      TO DELETE A SET: "..DELETE" MUST FIRST BE SPECIFIED IN COLUMNS
+*                       11 TO 18 FOLLOWED BY THE SUPERLABEL, (SUBJECT
+*                       TO THE RESTICTIONS SPECIFIED BELOW), ON THE
+*                       SECOND CARD. AN "EOR" MARK CARD MUST FOLLOW
+*                       THE "..DELETE" AND SUPERLABEL CARDS. 
+*      TO  ADD   A SET: THE SUPERLABEL MUST BE READ FROM COLUMN 11
+*                       TO 266 AND  IT MUST NOT START WITH "0" OR
+*                        "1". IF IT STARTS WITH A SPACE, THE NEXT 
+*                       THREE CHARACTERS MUST ALSO BE SPACES.  AS
+*                       WELL, A VALID SUPERLABEL CONTAINS AT LEAST 
+*                       ONE NON-BLANK CHARACTER. 
+*
+*      NOTES: 1) IF "label" IS SPECIFIED AT CALL TIME, IT'S VALUE IS PASSED TO 
+*                SPRLBL, AND THE DELETE MODE OF OPERATION IS THEN UNAVAILABLE.
+*             2) LEADING BLANKS ARE IGNORED IN SPRLBL WHEN XSAVE IS USED
+*                WITH STANDARD SEQUENTIAL FILES.
+*             3) IF THE "def" PARAMETER IS SPECIFIED, XSAVE WILL ONLY TRY
+*                TO MATCH THE SPECIFED LABEL WITH THOSE ON FILE OLD UP TO
+*                THE LENGTH OF THE NEW LABEL. TRAILING BLANKS ARE IGNORED.
+*                THIS BEHAVIOR CAN BE USEFULL WHEN REPLACING A VERY LONG
+*                LABELED SET OF RECORDS. OTHERWISE, AN EXACT MATCH IS
+*                REQUIRED.
+*
+*
+*      READ( 5,5010 ) SPRLBL
+*5010  FORMAT(10X,A256)
+*
+*     EXAMPLE OF INPUT CARD... 
+* 
+*    XSAVE    OBSERVED TEMPERATURE CROSS-SECTION (JAN) 
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ILLEGAL INPUT LABEL (SEE PRECEEDING)
+*       2 EMPTY (BLANK) INPUT LABEL
+*       3 NO RECORD SAVED FROM ADD
+*       4 ERROR READING INPUT
+*       5 PREMATURE EOF ON OLD OR ADD
+*       6 CANNOT CHANGE/MIX PACKING TYPE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM xsave
+*    +     (      OLD,       ADD,       NEW,       INPUT,       OUTPUT, 
+*    +      TAPE1=OLD, TAPE2=ADD, TAPE3=NEW, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     ------------------------------------------------------------ 
+
+*     $Log: xsave.ptn,v $
+*     Revision 4.13  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.12  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.11  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2006/09/19 19:04:06  dugas
+*     Modif au macro cvs source.
+*
+*     Revision 4.9  2003/07/05 14:53:29  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.8  1999/04/08 22:03:04  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.7  1998/07/20 17:06:08  armnrbd
+*     Corriger le test d'erreur 2.
+*     Corriger la longeur passee a PUTLAB.
+*
+*     Revision 4.6  1998/02/17  21:32:39  armnrbd
+*     Seconde iteration des modifs associes a la cle OPKTYP.
+*
+*     Revision 4.5  1997/12/10  18:14:59  armnrbd
+*     Avertir si la cle OPKTYP ne peut etre satisfaite.
+*
+*     Revision 4.4  1997/11/21  21:26:46  armnrbd
+*     Corriger le traitement des fichiers SQI.
+*
+*     Revision 4.3  1997/10/10  19:05:36  armnrbd
+*     Activer le mode I/O a 64 bits.
+*
+*     Revision 4.2  1997/06/02  17:50:05  armnrbd
+*     Modifier le traitement de ZLABEL.
+*
+*     Revision 4.1  1995/12/18  18:54:40  armnrbd
+*     Utilisr GETLAB pour lire les labels et implanter l'option "-def".
+*
+*     Revision 4.0  1994/11/17  14:22:47  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:08:41  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:31  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  92/12/15  17:47:15  armnrbd
+*     Ajouter le parametre "-name" a la ligne de commande.
+*     
+*     Revision 1.4  92/11/06  10:43:39  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/10/13  15:57:32  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.2  92/03/17  15:33:10  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.1  92/03/16  12:01:28  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:04  armnrbd
+*     Initial revision
+*     
+
+*     AUG 23/91 - B.DUGAS, RPN. (CORRECT BUG TO "OLD" FILE PROCESSING)
+*     APR 18/91 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+*     APR 08/81 - J.D.HENDERSON 
+
+*----------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     MAXC
+      PARAMETER ( MAXC = 32 )
+
+      REAL        ZERO
+      CHARACTER   LIGNE*266,SPRLBL*256
+      LOGICAL     PBLOC,DEFAUT,CHNGTYP,
+     +            COPY,DELETE,OK,RPBLOC
+      CHARACTER*8 NEWLAB(MAXC),OLDLAB(MAXC)
+      CHARACTER*4 KIND,LABL,OUTTYP,SWTCH*1
+      INTEGER     I1,I2,IER,NREC,NSEC,NWDS,JBUF(80),
+     +            HEAD,I,IO,JPAK,LEN,NF,LENLAB,
+     +            LENLAB2,MAXW
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+
+      CHARACTER            NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+#     include    "machtype.cdk"
+
+      INTEGER     GETSIZ
+      EXTERNAL    GETSIZ
+
+#     include "zlabel.cdk"
+
+      LOGICAL     SETIO64
+      CHARACTER*4 GETYP,PKTYP,PKTYP1,PKTYP2,GETPARC*128
+      EXTERNAL    GETYP,MACSPE,JCLPNT,RPBLOC,GETLIGN,XIT,
+     +            RECGET,RECPUT,BURNF,PUTYP,TYPSET,
+     +            PUTLAB,LEADBLK,GETPARC,GETLAB,
+     +            SETIO64
+
+      DATA        LABL   / 'LABL'   /,
+     +            OLDLAB /  MAXC*' '/,
+     +            COPY   / .TRUE.   /,
+     +            DEFAUT / .FALSE.  /,
+     +            DELETE / .FALSE.  /,
+     +            PBLOC  / .FALSE.  /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xsave.ptn,v $'
+
+*-------------------------------------------------------------------- 
+***    ACCESS MACHINE DEPENDANT CONSTANTS.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCESS I/O UNIT NAME AND ASSIGN
+***    THEM. SETUP FOR 64-BIT I/O.
+
+      NF = 5
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+
+      OUTTYP = GETYP( 0 )
+      PKTYP1 = GETYP( 1 )
+      PKTYP2 = GETYP( 2 )
+      PKTYP  = PKTYP1(1:2)
+
+      OK    = SETIO64(.TRUE.)
+      PBLOC = RPBLOC( ' ',LIGNE )
+
+      IF (PBLOC)                                               THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          SPRLBL = ' '
+
+          OK = RPBLOC( 'LABEL',LIGNE )
+          IF (OK) SPRLBL = LIGNE
+
+          DEFAUT = RPBLOC( 'DEFAUT',LIGNE )
+
+      ELSE
+
+***        READ A CARD CONTAINING THE SUPERLABEL TO CHECK.
+
+  100     CALL GETLIGN( 5, LIGNE,266, OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010, ERR=900,END=901,IOSTAT=IO ) SPRLBL   
+          END IF  
+
+***        DELETE MODE REQUESTED ?
+
+          IF (.NOT.DELETE .AND. SPRLBL(1:8).EQ.'..DELETE')     THEN
+              DELETE = .TRUE.
+              GOTO 100
+          END IF
+
+      END IF
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+          CALL LEADBLK( SPRLBL )
+
+      ELSE
+
+***        DO WE HAVE A VALID LABEL ?
+
+          WRITE(SWTCH,1) SPRLBL
+
+          IF ( (SWTCH.EQ.'0') .OR.
+     +         (SWTCH.EQ.' ') .OR.
+     +         (SWTCH.EQ.'1') )                                THEN
+              IF (SPRLBL(2:4).NE.' ')                          THEN 
+                  WRITE(6,6010) SPRLBL 
+                  WRITE(6,6011)
+                  CALL                             XIT('  Xsave ',-1 ) 
+              END IF
+          END IF 
+
+      END IF 
+
+***    SAVE NEW LABEL IN NEWLAB.
+
+      READ(SPRLBL,32) (NEWLAB(I),I=1,MAXC)
+
+      DO  I=MAXC-1,1,-1
+          IF (NEWLAB(I).NE.' ') GOTO 150
+      END DO
+
+***    ABORT ON EMPTY (BLANK) LABEL.
+
+      CALL                                         XIT('  Xsave ',-2 ) 
+          
+  150 LENLAB = I+1
+
+      IF (.NOT.DELETE)                                         THEN
+          WRITE(6,6020) (NEWLAB(I),I=1,LENLAB)
+      ELSE
+          WRITE(6,6021) (NEWLAB(I),I=1,LENLAB)
+      END IF
+
+      NSEC = 1
+      NREC = 0 
+      NF   = 1
+
+***    ASK FOR NECESSARY MEMORY. READ NEXT DATA INFO BUFFER.
+
+  200 MAXW = GETSIZ( NF, JBUF,LEN,NWDS,JPAK )   
+
+      IF (MAXW.EQ.0)                                           THEN
+          NF = NF+1
+          IF (NF.EQ.3) GOTO 999
+          GOTO 200
+      END IF
+
+      ALLOCATE( IBUF(LEN) )
+
+      IF (NF.EQ.2) GOTO 400
+
+***    READ THE NEXT RECORD FROM XFILE. 
+***    IF THIS SUPERLABEL IS NOT FOUND ON THE FILE, PRINT MESSAGE AND 
+***    GO BACK FOR THE NEXT ONE OR ABORT (DEPENDING ON ISWTCH VALUE). 
+
+  250 CALL RECGET( 1, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF )
+                  GOTO 200
+              END IF
+              WRITE(6,6030) NREC
+              IF (DELETE)                                      THEN
+                  IF (.NOT.PBLOC) CALL             BURNF 
+                  CALL                             XIT('  Xsave ', 0 )
+              END IF
+              GOTO 400
+          END IF 
+
+          WRITE(KIND,4) IBUF(1)
+          IF (KIND.EQ.LABL)                                    THEN
+
+***            CHECK THE LABEL JUST READ. IF IT IS THE SAME AS NEWLAB 
+***             DO NOT COPY IT AND IT'S ASSOCIATED RECORDS TO UNIT 3.
+
+              LEN = MIN( MAXC, IBUF(5)*IBUF(6) )
+              CALL GETLAB( 0, OLDLAB, IBUF,LEN, OK )
+
+              IF (DEFAUT)                                      THEN
+                  LENLAB2 = LENLAB
+              ELSE
+                  DO  I=MAXC-1,1,-1
+                      IF (OLDLAB(I).NE.' ') GOTO 300
+                  END DO
+  300             LENLAB2 = I+1
+              END IF
+
+              COPY = .FALSE.
+              DO  I=1,MAX( LENLAB,LENLAB2 )
+                  IF (OLDLAB(I).NE.NEWLAB(I))                  THEN
+                      COPY = .TRUE. 
+                      GOTO 350
+                  END IF
+              END DO
+
+          ELSE IF (PKTYP.EQ.'SQ')                              THEN
+
+              LIGNE  = GETPARC( 'ETIKET' )
+
+              COPY = .FALSE.
+
+              I2 = 0
+              DO  I=1,LENLAB
+                  I1 = I2+1
+                  I2 = I2+8
+                  IF (LIGNE(I1:I2).NE.NEWLAB(I) .AND.
+     +                LIGNE(I1:I2).NE.' ')                     THEN
+                      COPY = .TRUE.
+                      GOTO 350
+                  END IF
+              END DO
+
+          END IF
+
+***        CONTINUE COPYING FROM UNIT 1.
+
+  350     IF (COPY)                                            THEN
+              CALL RECPUT( 3,IBUF )
+              NREC = NREC+1
+          END IF
+
+       GOTO 250
+
+***    FINISHED READING OLD.  COPY THE ADD SET TO NEW
+***    WITHOUT UNPACKING ANYTHING. STOP AT FIRST LABEL.
+
+  400 CONTINUE
+
+***    CHECK FOR PACKING TYPE CONSISTENCY. PKTYP1 IS ONLY
+***    CONSIDERED IF FILE OLD CONTAINED VALID RECORDS.
+
+      IF (NREC.EQ.0) PKTYP1 = PKTYP2
+
+      IF ((PKTYP1.NE.OUTTYP .OR.
+     +     PKTYP2.NE.OUTTYP .OR.
+     +     PKTYP1.NE.PKTYP2).AND.
+     +     PKTYP .NE.'SQ'   )                                  THEN
+          CALL TYPSET( CHNGTYP )
+          IF (PKTYP1.NE.PKTYP2 .OR. CHNGTYP)                   THEN
+              WRITE(6,6006) 
+              CALL                                 XIT('  Xfind ',-6 )
+          ELSE
+              CALL PUTYP( 0, PKTYP2 )
+          END IF
+      END IF
+
+
+  401 CALL RECGET( 2, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          WRITE(KIND,4) IBUF(1)
+          IF (.NOT.OK .AND. MAXW.EQ.0)                         THEN
+
+              NF = 2
+
+              DEALLOCATE( IBUF )
+              GOTO 200
+
+          ELSE IF (.NOT.OK .OR. KIND.EQ.'LABL')                THEN 
+
+              IF (NSEC.EQ.1)                                   THEN 
+                  WRITE(6,6040)
+                  CALL                             XIT('  Xsave ',-3 ) 
+              ELSE 
+                  WRITE(6,6041) NSEC
+                  IF (.NOT.PBLOC) CALL             BURNF 
+                  CALL                             XIT('  Xsave ', 0 ) 
+              END IF 
+          END IF 
+
+          IF (NSEC.EQ.1 .AND. PKTYP.NE.'SQ') 
+     +    CALL PUTLAB( 3, NEWLAB,  JBUF, MAX( HEAD/MACHINE,LENLAB ),
+     +                                  .FALSE.,.FALSE. )
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              IF (NSEC.EQ.1) WRITE(SPRLBL,32) (NEWLAB(I),I=1,LENLAB)
+              ZLABEL = SPRLBL
+          END IF
+
+          CALL RECPUT( 3,IBUF )
+
+          ZLABEL = ' '
+
+      NSEC = NSEC+1
+      GOTO 401
+
+***    PREMATURE E.O.F. ON INPUT. 
+
+  900 IF (IO.NE.0) WRITE(6,6050) IO 
+  901 CALL                                         XIT('  Xsave ',-4 ) 
+
+***    PREMATURE E.O.F. ON UNITS 1 AND 2.
+
+  999 CALL                                         XIT('  Xsave ',-5 ) 
+
+*-------------------------------------------------------------------- 
+    1 FORMAT(A1)
+    4 FORMAT(A4)
+   32 FORMAT(32A8)
+
+ 5010 FORMAT(10X,A256) 
+ 6010 FORMAT(' Illegal LABEL ',A256)
+ 6011 FORMAT(' *** see DOC for specifics ***' ) 
+
+ 6006 FORMAT(' Xsave cannot change and/or mix packing types.')
+ 6020 FORMAT('0Adding SuperLabel -'/(17X,12A8) ) 
+ 6021 FORMAT('0Deleting SuperLabel -'/(17X,12A8) ) 
+ 6030 FORMAT('0Xsave copyed ',I5,' record(s) from OLD.')
+ 6040 FORMAT('0Xsave did not save any record from ADD to NEW...')
+ 6041 FORMAT('0Xsave copyed ',I5,' records   from ADD.')
+ 6050 FORMAT(' Xsave reports I/O error number ',I4,' on unit 5.')
+
+      END 
+#     endif

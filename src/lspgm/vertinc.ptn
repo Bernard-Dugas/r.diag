@@ -1,0 +1,338 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      vertinc  XIN XOUT OUTPUT [ -def ]
+*
+*
+*     DESCRIPTION...
+*      vertinc  - VERTICAL PRESSURE INCREMENTS (DELTA P) LEVEL BY LEVEL
+*
+*
+*     AUTHOR   - B.Dugas, MAY 20 1994.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/vertinc.ptn,v 4.9 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     PURPOSE - PRODUIRE LES INCREMENTS DE PRESSIONS TELS QU'UTILISES DANS LE
+*               PROGRAMME VPINT. CECI EST NECESSAIRE DANS LE CAS D'UNE INTEGRALE
+*               VERTICALE CALCULEE PAR LE BIAIS D'UN CALCUL MATRICIEL. UN SEUL
+*               JEUX DE DELTA-P/G EST PRODUIT. LES UNITES SONT EN PASCAL.
+*
+*               SI LA CLE -def N'EST PAS SPECIFIEE, LE TOIT EST FIXE A 0 MB
+*               ET LA SURFACE EST FIXEE ARBITRAIREMENT A 101330 PASCALS.
+*
+*               PAR CONTRE, SI LA CLE -def EST SPECIFIEE, LE TOIT CORRESPONDS
+*               AU PREMIER NIVEAU DE XIN ET LA SURFACE, AU DERNIER NIVEAU.
+*
+*               LES NIVEAUX D'ENTREE PEUVENT CROITRE OU DECROITRE MAIS CE,
+*               SEULEMENT DE FACON MONOTONE.
+*
+*     INPUT FILE...
+*      XIN = FILE OF PRESSURE LEVEL SETS OF TYPE ZONL,GRID,SUBA,CMPL OR SPEC.
+*
+*     OUTPUT FILE...
+*      XOUT = ONE SET OF DELTA-P CORRESPONDING TO THE LEVELS OF XIN.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NOT ENOUGH OR TOO MANY LEVELS IN FIRST SET OF XIN
+*       2 NOT ENOUGH LEVELS IN LAST SET READ
+*       3 INPUT LEVELS DO NOT VARY MONOTONICALLY
+*       4 XIN DOES NOT CONTAIN PRESSURE LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM vertinc
+*    +            ( XIN,        XOUT,       OUTPUT,
+*    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
+
+*     $Log: vertinc.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  1998/07/03 02:26:45  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  18:15:42  armnrbd
+*     Deuxieme phase de la generalisation de taille_entete.
+*
+*     Revision 4.4  1997/09/26  17:39:28  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1996/11/26  20:15:04  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.2  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.1  1995/07/06  02:53:20  armnrbd
+*     Ajouter option pour modifier conditions aux frontieres.
+*
+*      
+*     Revision 4.0  94/11/17  14:22:20  14:22:20  armnrbd (Bernard Dugas)
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.1  94/05/20  23:48:11  armnrbd
+*     Premiere version fonctionnelle.
+*     
+*     Revision 3.0  94/05/20  22:50:23  armnrbd
+*     Version initiale.
+*     
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      CHARACTER   VALEUR*10
+      LOGICAL     ALTB,INCREAS
+      CHARACTER   NAME*4,TYPE*4
+      REAL        ZERO,GINV,DP,SQRT2,
+     +            PR(MAXLEV),PRH(0:MAXLEV+1)
+      INTEGER     HEAD,JBUF(taille_entete),JPAK,LEV(MAXLEV),
+     +            IL,I,L,MAXW,LEN,NWDS,IER,NLEV,NF,
+     +            TOP,BOT,INC,VKIND
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: GG
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2
+
+      LOGICAL     RPBLOC
+      CHARACTER   GETYP*4,PKTYP*2
+      EXTERNAL    MACSPE,XIT,RPBLOC,GETYP,
+     +            CONVPR,GETSET2,PUTSET2,CMPLBL
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vertinc.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+
+      CALL JCLPNT( NF, 1,2, 6 )
+
+***    GET PACKING TYPE.
+
+      PKTYP = GETYP( 1 )
+
+      ALTB = .FALSE.
+      GINV = 1./9.80616
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ALTB = RPBLOC('DEFAUT',VALEUR)
+
+          WRITE(6,6000)
+
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+      MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (NLEV.EQ.0) WRITE(6,6100)
+      CALL PRTLAB( JBUF )
+
+      IF (MAXW.LE.0     .OR.
+     +    NLEV.LE.2     .OR.
+     +    NLEV.GT.MAXLEV   ) CALL                  XIT(' Vertinc',-1 )
+
+      WRITE(TYPE,4) JBUF(1)
+      WRITE(NAME,4) JBUF(3)
+
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(LEN),GG(NWDS*NLEV) )
+
+      WRITE(6,6300) TYPE,NAME
+
+      DO  L=1,NLEV
+          CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+          IF (PKTYP.EQ.'SQ' .AND. VKIND.NE.2) CALL XIT(' Vertinc',-4 ) 
+      END DO
+
+      CALL WRITLEV2( LEV,NLEV,JBUF )
+
+***    CHECK THAT WE HAVE ENOUGH LEVELS.
+
+      IF (NLEV.LT.2)                                           THEN
+          WRITE(6,6002) NLEV
+          CALL                                     XIT(' Vertinc',-2 )
+      END IF
+
+***    CHECK THAT THE LEVELS ARE INCREASING OR DECREASING.
+
+      INCREAS = .TRUE.
+      IF (PR(1).LT.PR(2))                                      THEN
+          INCREAS = .TRUE.
+      ELSE IF (PR(1).GT.PR(2))                                 THEN
+          INCREAS = .FALSE.
+      ELSE
+          WRITE(6,6003)
+         CALL                                      XIT(' Vertinc',-3 )
+      END IF
+
+      DO  L=3,NLEV
+          IF ((     INCREAS .AND. PR(L).LE.PR(L-1))
+     +   .OR.
+     +        (.NOT.INCREAS .AND. PR(L).GE.PR(L-1)))           THEN
+              WRITE(6,6003)
+              CALL                                 XIT(' Vertinc',-3 )
+          END IF
+      END DO
+
+      IF (INCREAS)                                             THEN
+          TOP =  1
+          BOT =  NLEV
+          INC =  1
+      ELSE
+          TOP =  NLEV
+          BOT =  1
+          INC = -1
+          WRITE(6,6400)
+      END IF
+
+***    CONVERT MB TO PASCALS (AND DIVIDE BY G).
+***    COMPUTE PRESSURE HALF LEVELS FOR INTEGRAL IN P.
+
+      IF (ALTB)                                                THEN
+          PRH(TOP)  = GINV*PR(TOP)*100.
+      ELSE
+          PRH(TOP)  = 0.0  ! PLUTOT QUE GINV*PR(TOP)*50. DANS VPINT
+      END IF
+      
+      DO  L=TOP+INC,BOT,INC
+          PRH(L)  = GINV*( PR(L)+PR(L-INC) )*50.
+      END DO
+   
+      IF (ALTB)                                                THEN
+          PRH(BOT+INC) = GINV*PR(BOT)*100.
+      ELSE
+          PRH(BOT+INC) = GINV*101330.
+      END IF
+      
+      IL = (TOP-1)*NWDS
+
+***    CALCULATE ALL THE DELTA-Ps.
+ 
+      DP = (PRH(TOP+INC)-PRH(TOP))
+
+      IF (TYPE.EQ.'SPEC')                                      THEN
+
+          DO  I=1,NWDS*NLEV
+              GG(I) = 0.0
+          END DO
+
+          SQRT2       = SQRT( 2.0 )
+          GG(IL+1)    = DP*SQRT2
+
+          DO  L=TOP+INC,BOT,INC
+              IL       = IL+NWDS*INC
+              GG(IL+1) = (PRH(L+INC)-PRH(L))*SQRT2
+          END DO
+
+      ELSE IF (TYPE.EQ.'ZONL' .OR.
+     +         TYPE.EQ.'SUBA' .OR.
+     +         TYPE.EQ.'GRID' .OR.
+     +         TYPE.EQ.'CMPL')                                 THEN
+
+          IF (TYPE.NE.'CMPL')                                  THEN 
+              DO  I=1,NWDS
+                  GG(IL+I) = DP
+              END DO
+          ELSE
+              DO  I=1,NWDS,2
+                  GG(IL+I)   = DP
+                  GG(IL+I+1) = 0.0
+              END DO
+          END IF
+
+          DO  100 L=TOP+INC,BOT,INC
+ 
+              IL  = IL+INC*NWDS
+              DP  = (PRH(L+INC)-PRH(L))
+
+              IF (TYPE.NE.'CMPL')                              THEN
+                  DO  I=1,NWDS
+                      GG(IL+I) = DP
+                  END DO
+              ELSE
+                  DO  I=1,NWDS,2
+                      GG(IL+I)   = DP
+                      GG(IL+I+1) = 0.0
+                  END DO
+              END IF
+
+  100     CONTINUE
+
+      END IF
+
+***    PUT THE RESULT ONTO FILE 2. USE THE
+***    FIRST LABEL OF FILE 1 AS DESCRIPTOR.
+
+      DO  I=1,taille_entete
+          IBUF(I) = JBUF(I)
+      END DO
+
+      CALL PUTSET2( 2, GG, LEV,NLEV, IBUF,MAXW )
+
+***    NORMAL TERMINATION.
+
+      CALL                                         XIT(' Vertinc', 0 )
+      STOP
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6002 FORMAT('0 Vertinc found NLEV=',I6)
+ 6003 FORMAT(' Levels should be varying monotonically.')
+
+ 6000 FORMAT(' Vertinc will use its alternate boundary conditions.')
+ 6100 FORMAT('0... Vertinc input file is empty.')
+ 6300 FORMAT('0Vertinc on ',A4,2X,A4)
+ 6400 FORMAT(' Levels are decreasing.')
+
+      END 
+#     endif

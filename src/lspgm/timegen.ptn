@@ -1,0 +1,419 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      timegen  INF TOUT OUTPUT [ -def [ VAL0 ] -delt VAL1 ]
+*
+*
+*     DESCRIPTION...
+*      timegen - CREATES A FILE WITH VALUES SET EQUAL TO TIMESTEP
+*                ** OR **
+*                MODIFIES THE TIMESTEP INFORMATION IN A FILE
+*
+*
+*     AUTHOR   - B.Dugas, NOV 29/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/timegen.ptn,v 4.15 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     PURPOSES - (MODE 1, DEFAULT, NO COMMAND-LINE ARGUMENTS) GENERATES
+*                 A FILE WHOSE VALUES ARE SET TO THE TIMESTEP VALUE AS
+*                 FOUND IN IBUF(2) FOR CCRN FILES AND IN IP3 FOR RPN
+*                 STANDARD FILES.
+*              - (MODE 2, "-def" OR "-def 0" COMMAND-LINE ARGUMENTS)
+*                 REPLACE THE TIMESTEP INFORMATION OF EACH SET BY ITS
+*                 ACTUAL ORDINAL IN THE FILE ITSELF.
+*              - (MODE 3, "-def 1"  COMMAND-LINE ARGUMENT) AS IN
+*                 MODE 1, BUT ALWAYS USE IBUF(2). DO NOT USE IP3.
+*              - (MODE 4, "-def 2 -delt VALUE" ARGUMENTS) RESET
+*                 THE INTERNAL TIMESTEP DESCRIPTOR TO "VALUE"
+*                 (ONLY INSIDE RPN/CMC STANDARD FILES)
+*                 
+*
+*     NOTES (APPLY ONLY TO MODES 1 AND 3)
+*                -  FOR SPECTRAL TYPE FILES, ONLY THE REAL PART OF
+*                   THE (0,0) COEFFICIENT RECORD VALUES IS SET.
+*                -  FOR CMPL TYPE FILES, ONLY THE REAL PART OF 
+*                   EACH WORD IS SET.
+*                -  THIS INFO IS MAINLY USED TO DETERMINE SAMPLE
+*                   SIZES AS SAVED BY PROGRAMS SUCH AS TIMAVG OR
+*                   TIMCOV. FOR SQI FILES, THIS INFORMATION IS
+*                   USUALLY FOUND IN THE IP3 DESCRIPTOR.
+*
+*
+*     INPUT FILE...
+*      INF  = FILE CONTAINING RECORDS AT PRESSURE LEVEL(S), IT CAN BE
+*             OF TYPE SPECTRAL, ZONAL CROSS-SECTIONS, COMPLEX ARRAYS,
+*             SUBAREAS OR GLOBAL GRID(S).
+*
+*     OUTPUT FILE...
+*     (MODES 1 AND 3) 
+*      TOUT = FILE OF THE SAME TYPE AS INF WITH THE VALUE(S) OF
+*             EACH RECORD SET EQUAL TO A MEASURE OF THE TIMESTEP
+*     (MODE 2)
+*      TOUT = FILE OF THE SAME TYPE AS INF WITH THE VALUE OF IBUF(2)
+*             SET TO THE TIME SET ORDINAL IN THE ORIGINAL FILE
+*     (MODE 4)
+*      TOUT = ACTUAL DATA UNCHANGED FROM INPUT EXCEPT FOR THE INTERNAL
+*             TIMESTEP DESCRIPTOR WHICH IS RESET TO THE DESIRED VALUE
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON FILE INF
+*       2 UNKNOWN DATA TYPE
+*       3 PROBLEM READING VAL0
+*       4 UNABLE TO ALLOCATE ENOUGH WORKING MEMORY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM timegen
+*    +             (INF,       TOUT,       OUTPUT,
+*    +        TAPE1=INF, TAPE2=TOUT, TAPE6=OUTPUT)
+*     --------------------------------------------
+
+*     $Log: timegen.ptn,v $
+*     Revision 4.15  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.14  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.13  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.12  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.11  2002/01/14 15:28:58  dugas
+*     Ajouter un nouveau mode (4) ou il est possible de modifier le
+*      descripteur interne DEET dans le cas des fichiers CMC/RPN.
+*
+*     Revision 4.10  2001/10/11 11:15:05  armnrbd
+*     Les noms lus par GETSIZ4 et ecrits par PUTMSET2 contiennent
+*     maintenant les etiquettes des enregistrements (RPN STD).
+*
+*     Revision 4.9  2001/09/24 14:58:16  armnrbd
+*     Implanter GETSIZ4 et GET/PUT(MSET2).
+*
+*     Revision 4.8  2001/03/17 21:42:56  armnrbd
+*     Remplacer GETPARI par GETHIGH.
+*
+*     Revision 4.7  2000/04/07 20:19:48  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.6  1999/06/30 16:02:14  armnrbd
+*     Ajouter un troisieme mode de fonctionnement.
+*     Travailler en mode 64 bits (suite aux mods Y2K).
+*
+*     Revision 4.5  1997/09/26 17:39:26  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1997/05/12  17:06:56  armnrbd
+*     Corriger le nom a la sortie lorsque NVAR est plus grand que 1.
+*
+*     Revision 4.3  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.2  1996/10/15  17:16:02  armnrbd
+*     Sauver ou lire la taille de l'echantillon dans IP3
+*     pour les fichiers de type SQI.
+*
+*     Revision 4.1  1995/07/06  02:55:47  armnrbd
+*     Ajouter un second mode de traitement.
+*
+*     Revision 4.0  1994/11/17  14:22:11  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/09  11:33:09  armnrbd
+*     Corriger un bogue dans le traitement des grilles.
+*     
+*     Revision 3.0  93/10/13  13:57:17  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/23  14:26:03  14:26:03  armnrbd (Bernard Dugas)
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/11/15  19:32:59  armnrbd
+*     Implanter PKTYP.
+*     
+*     Revision 1.2  92/10/13  15:57:24  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.1  92/04/01  21:57:34  armnrbd
+*     Premier jeu de corrections.
+*     
+*     Revision 1.0  92/03/26  15:43:29  armnrbd
+*     Initial revision
+*     
+ 
+*     NOV 29/83 - B. DUGAS.
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 1999 )
+
+      REAL         ZERO
+      LOGICAL      OK,ALTT
+      CHARACTER*20 VARIAB(MAXLEV)
+      CHARACTER    PKTYP*2,VALEUR*10
+      CHARACTER*4  TYPE,TIME,HOLDN
+      INTEGER      I,J,L,ILAT,LR, JPAK,MAXW,
+     +             LEV(MAXLEV,2),NWDS, NF,NFF,IER,
+     +             FIL,HEAD,LEN,JBUF(taille_entete),NSET,
+     +             STEP(MAXLEV),NS,NLEVAR,IO,DEET,
+     +             TLEV,KIND,SET(0:MAXLEV)
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,      DIMENSION(:), ALLOCATABLE :: F
+
+#     include "machtype.cdk" 
+
+      CHARACTER*4  GETYP
+      LOGICAL      RPBLOC,SETIO64
+      INTEGER      GETSIZ4,GETHIGH
+      EXTERNAL     GETSIZ4,MACSPE,JCLPNT,
+     +             GETMSET2,XIT,PUTMSET2,PUTHIGH,
+     +             RPBLOC,GETYP,GETHIGH,SETIO64
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         TIME / 'TIME' /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/timegen.ptn,v $'
+
+*-------------------------------------------------------------------
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ASSIGN I/O UNITS.
+
+      NFF = 3
+      CALL JCLPNT( NFF, 1,2, 6 )
+ 
+      PKTYP = GETYP( 1 )
+
+      ALTT = .FALSE.
+      KIND = -1
+      NF   =  0
+      NS   =  0
+      DEET =  0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ALTT = RPBLOC('DEFAUT',VALEUR )
+          IF (ALTT) READ(VALEUR,0005,ERR=903,IOSTAT=IO ) KIND
+
+          OK = RPBLOC('DELT',VALEUR )
+          IF (OK) READ(VALEUR,0005,ERR=903,IOSTAT=IO ) DEET
+
+      END IF
+
+      IF (KIND.LE.-1) KIND = 0
+      IF (KIND.GE.+3) KIND = 1
+      IF (KIND.EQ. 1) ALTT = .FALSE.
+
+      IF (ALTT .AND. KIND.EQ.0)  WRITE(6,6000)
+
+***    ASK FOR WORKING MEMORY. CHECK FIRST DATA BUFFER.
+
+  100 MAXW = GETSIZ4( 1, JBUF,LEN,NWDS,JPAK,
+     +                   SET,NSET, LEV,VARIAB, MAXLEV )
+
+      IF (MAXW.LE.0) CALL                          XIT(' Timegen',-1 )
+
+      HOLDN  = VARIAB(1)(1:4)
+      NLEVAR = SET(NSET)
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(2*LEN),F(NWDS*NLEVAR), STAT=IER )
+
+      IF (IER.NE.0)                                            THEN
+          WRITE(6,6004) 8*(NWDS*NLEVAR+LEN*(MOD( MACHINE,2 )+1))
+          CALL                                     XIT(' Timegen',-4 )
+      END IF
+
+***     READ IN THE NEXT SET OF FIELDS FROM INF.
+ 
+  200 CALL GETMSET2( 1, F, SET,NSET, LEV,VARIAB,STEP, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,F )
+                  GOTO 100
+              END IF
+              IF (NF.EQ.0)                                     THEN
+                  CALL                             XIT(' Timegen',-1 )
+              ELSE
+                  CALL PRTLAB2('  Timegen on ',IBUF )
+                  WRITE(6,6010) NF
+                  CALL                             XIT(' Timegen', 0 )
+              END IF
+          ELSE
+
+              NS = NS+1
+
+          END IF
+
+***        RECALC OF CERTAIN CONSTANTS.
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              IF (KIND.EQ.0) TLEV = GETHIGH('IP3',IBUF )
+              IF (KIND.EQ.1) TLEV = IBUF(2)
+          ELSE
+              TLEV = IBUF(2)
+          END IF
+
+          NWDS = IBUF(5)*IBUF(6)
+
+          WRITE(TYPE,4) IBUF(1)
+          IF (TYPE.EQ.'ZONL') NWDS = IBUF(5)
+
+          IF (.NOT.ALTT)                                       THEN
+
+***        MODES 1 AND 3.
+
+              IF (TYPE.EQ.'SPEC')                              THEN
+
+***            SPECTRAL CASE.
+ 
+                  DO 300 L=0,NLEVAR-1
+
+                        FIL  = L*NWDS+1
+                      F(FIL) = TLEV * SQRT(2.)
+
+                      DO I=1,NWDS-1
+                          F(FIL+I) = 0.
+                      END DO
+
+  300             CONTINUE
+
+              ELSE IF (TYPE.EQ.'CMPL')                         THEN
+
+***            COMPLEX ARRAYS CASE.
+
+                  DO  J=1,NWDS*NLEVAR,2
+                      F(J)   = TLEV
+                      F(J+1) = 0.0
+                  END DO
+
+              ELSE IF ( TYPE.EQ.'FOUR')                        THEN
+ 
+***            FOURIER CASE.
+ 
+                  ILAT = IBUF(6)
+                  LR   = IBUF(5) * 2
+
+                  FIL = 1
+
+                  DO 400 L=0,NLEVAR-1
+
+                      DO J=1,ILAT
+
+                          F(FIL)     = TLEV
+                            FIL      = FIL + 1
+
+                          DO I=2,LR
+                              F(FIL) = 0.
+                                FIL  = FIL + 1
+                          END DO
+
+                      END DO
+
+  400             CONTINUE
+
+              ELSE IF (TYPE .EQ.'GRID' .OR.
+     +                 TYPE .EQ.'SUBA' .OR.
+     +                 TYPE .EQ.'ZONL' )                       THEN
+ 
+***            GRID/SUBA/ZONL CASE.
+ 
+                  DO  J=1,NWDS*NLEVAR
+                      F(J) = TLEV
+                  END DO
+ 
+              ELSE
+
+                  CALL PRTLAB2('  Timegen on ',IBUF )
+                  CALL                             XIT(' Timegen',-2 )
+
+              END IF
+ 
+              IF (NSET.EQ.1) VARIAB(1)(1:4) = TIME
+
+          ELSE IF (KIND.EQ.0)                                  THEN
+
+***        MODE 2. MODIFIY SEQUENCE INFORMATION.
+
+              IBUF(2) = NS
+
+          ELSE IF (PKTYP.EQ.'SQ' .AND. KIND.EQ.2)              THEN
+
+***        MODE 4. MODIFIY DEET INTERNAL FILE DESCRIPTOR.
+
+              CALL PUTHIGH( DEET,'DEET',IBUF )
+
+          END IF
+
+***        PUT F INTO OUTPUT FILE POUT = TAPE2.
+ 
+          IBUF(8) = -64
+
+          IF (NF.EQ.0) CALL PRTLAB2('  Timegen on ',IBUF )
+          CALL PUTMSET2( 2, F, SET,NSET, LEV,VARIAB,MAXLEV, IBUF,MAXW )
+
+          VARIAB(1)(1:4) = HOLDN
+
+      NF = NF + NLEVAR
+      GOTO 200
+
+***    PROBLEM READING KIND.
+
+  903 IF (IO.NE.0) WRITE(6,6003) IO
+      CALL                                         XIT(' Timegen',-3 )
+*----------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+
+ 6000 FORMAT('  Timegen will only modify IBUF(2).')
+ 6003 format('  Timegen reports I/O error number ',I3,' reading VAL0.')
+ 6004 FORMAT('  Unable to allocate enough working memory'/
+     +       '  Requesting ',I10,' characters.')
+
+ 6010 FORMAT('  Timegen read ',I5,' fields.')
+
+      END
+#     endif

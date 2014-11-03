@@ -1,0 +1,10 @@
+# if  defined (F77)
+#     define AIMAG IMAG
+# endif
+# if  defined (o32)
+#     define ALLOC_NABT
+#     define ALLOC_ABT
+# else
+#     define ALLOC_NABT CALL DMMSNABT( .true. )
+#     define ALLOC_ABT CALL DMMSNABT( .false. )
+# endif

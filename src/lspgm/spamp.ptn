@@ -1,0 +1,227 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spamp  X Y OUTPUT
+*
+*
+*     DESCRIPTION...
+*      spamp  - PRODUCES AMPLITUDE OF COMPLEX ARRAY
+*
+*
+*     AUTHOR  - G.J.Boer, MAR 1985.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spamp.ptn,v 4.9 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     PURPOSE - FILE ARITHMETIC PROGRAM Y = SQROOT( X * CONJG(X) ),
+*               SO THAT Y IS THE COMPLEX AMPLITUDE OF X.
+*
+*     NOTE    - X HAS TO BE COMPLEX.
+*
+*
+*     INPUT FILE...
+*      X = ANY COMPLEX ARRAY
+*
+*     OUTPUT FILE...
+*      Y = COMPLEX AMPLITUDE OF FILE X (IN REAL PART OF EACH COMPLEX WORD)
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 X CONTAINS NON-COMPLEX DATA
+*       2 ERROR READING X
+*       3 MORE THAN ONE SIZE IN X
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spamp
+*    +              (X,       Y,       OUTPUT,
+*    +         TAPE1=X, TAPE2=Y, TAPE6=OUTPUT)
+*     ----------------------------------------
+
+*     $Log: spamp.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2013/12/11 22:12:51  dugas
+*     Enlever la declaration redondante de GETSIZ.
+*
+*     Revision 4.7  2013/10/16 18:55:54  bernard
+*     Les declarations sont faites 'a la' F90 et ne plus appeller MACSPE.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  2000/09/25 04:04:28  armnrbd
+*     Utiliser le mode IO64.
+*
+*     Revision 4.2  1998/07/03 02:26:36  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:18  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:38  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:06:17  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:55  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/10  21:16:38  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/04/29  01:34:11  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:54  armnrbd
+*     Initial revision
+*     
+*     01 OCT 1991 - B.DUGAS, RPN : Version (CY920/IRIX f77).
+*        MAR 1985 - G.J.BOER     : ORIGINAL VERSION.
+
+*-----------------------------------------------------------------------
+      IMPLICIT   none
+
+      INTEGER,   PARAMETER :: HEAD  = taille_entete
+      REAL(8),   PARAMETER :: ZERO = 0.0 
+
+      LOGICAL    OK,SPEC
+      CHARACTER  KIND*4
+      INTEGER    I,JBUF(HEAD),JPAK,
+     +           NFF,NR, LEN,MAXW,NWDS,IER
+
+      INTEGER,   DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL(8),   DIMENSION(:), ALLOCATABLE :: A
+
+      LOGICAL,   EXTERNAL :: SETIO64
+      INTEGER,   EXTERNAL :: GETSIZ
+      EXTERNAL   MACSPE,JCLPNT,GETFLD2,
+     +           CMPLBL,PUTFLD2,XIT
+
+      CHARACTER  NOMPRG*256
+      COMMON    /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spamp.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+                   NFF = 3
+      CALL JCLPNT( NFF, 1,2, 6 )
+
+      NR = 0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    READ FIRST INFO BUFFER.
+
+  100 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) GOTO 900
+
+***    MAKE SURE THAT THE FIELD IS COMPLEX.
+
+      WRITE(KIND,4) JBUF(1)
+      SPEC = (KIND.EQ.'SPEC' .OR.
+     +        KIND.EQ.'FOUR' .OR.
+     +        KIND.EQ.'CMPL')
+      IF (.NOT.SPEC) CALL                      XIT('  Spamp ',-1 )
+ 
+***    ALLOCATE WORKING MEMORY.
+
+      ALLOCATE( IBUF(2*LEN),A(NWDS) )
+
+***    READ THE NEXT FIELD.
+ 
+  200 CALL GETFLD2( 1, A, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF,A )
+
+              IF (MAXW.EQ.0) GOTO 100
+
+              IF (NR.EQ.0)                                     THEN
+                  WRITE(6,6002)
+                  CALL                             XIT('  Spamp ',-2 )
+              END IF
+
+              WRITE(6,6020) NR
+              CALL                                 XIT('  Spamp ', 0 )
+
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+ 
+***        MAKE SURE THAT THE FIELDS ARE THE SAME KIND AND SIZE. 
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK ) 
+
+          IF (.NOT.OK)                                         THEN
+
+              WRITE(6,6003) ; CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Spamp ',-3 )
+
+          END IF
+ 
+***        COMPUTE THE AMPLITUDE.
+ 
+          DO  I=1,NWDS,2
+              A(I  ) = SQRT( A(I)*A(I) + A(I+1)*A(I+1) )
+              A(I+1) = ZERO
+          END DO
+ 
+***        SAVE THE RESULT.
+ 
+          CALL PUTFLD2( 2, A, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1
+      GOTO 200
+
+ 900  WRITE(6,6004)
+      CALL                                         XIT('  Spamp ',-2 )
+
+*-----------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6001 FORMAT(' Data file is not complex... aborting.')
+ 6002 FORMAT(' Error reading first record... aborting.')
+ 6003 FORMAT(' New data type/size... aborting on:')
+ 6004 FORMAT(' Unable to read first information buffer.')
+
+ 6020 FORMAT('0 Spamp read',I6,' records.')
+
+      END
+#     endif

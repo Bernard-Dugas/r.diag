@@ -1,0 +1,586 @@
+#     if !defined (nombre_de_trous)
+#         define   nombre_de_trous 10000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      linint  XIN XOUT INPUT OUTPUT [-t1 VAL01 [VAL02 [VAL03 [VAL04 [VAL05 [VAL06]]]]] \
+*                                     -t2 VAL07 [VAL08 [VAL09 [VAL10 [VAL11 [VAL12]]]]] \
+*                                     -t3 VAL13 [VAL14 [VAL15 [VAL16 [VAL17 [VAL18]]]]] \
+*                                     -kind VAL19 ]
+*
+*
+*     AUTHORS - B.Dugas, 9 fevrier 1987.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/linint.ptn,v 4.10 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      THIS PROGRAM WILL LINEARLY INTERPOLATE BETWEEN TWO SPECIFIC 
+*      TIME INTERVAL, REPLACING ANYTHING FOUND BETWEEN THEM. AS MANY
+       AS nombre_de_trous SUCH INTERVALS CAN BE TREATED. THE TIMESTEPS SHOULD
+*      BE IN ORDER, AS NO REWIND IS DONE BETWEEN SETS OF INTERVALS.
+*      FINALLY, XIN SHOULD NOT CONTAIN MORE THAN A SINGLE VARIABLE.
+*
+*
+*     INPUT PARAMETER...
+*
+*      T1 (t1) = START OF INTERPOLATING INTERVAL
+*      T2 (t2) = END OF INTERPOLATING INTERVAL
+*      DT (t3) = NUMBER OF TIMESTEPS TO BE INSERTED
+*      KIND    = FLAG TO INDICATE METHOD OF TIME MEASUREMENT.
+*              = 0 ==> IBUF(2),T1,T2 AND T3 IN KOUNT UNITS.
+*              = 1 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHH
+*                      AND T3 IS IN HOURS.
+*              = 2 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHHMM
+*                      AND T3 IS IN MINUTES AND NO LEAP YEAR.
+*              = 3 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHH
+*                      AND T3 IS IN HOURS. BUT NOW, LEAP YEARS ARE
+*                      ACCOUNTED FOR.
+*
+*      NOTES: 1) KIND = 0,1 OR 2 DO NOT TAKE LEAP YEARS INTO ACCOUNT
+*                AND ARE INTENDED FOR USE WITH MODEL OUTPUT.
+*             2) KIND CAN ONLY BE SPECIFIED ON THE FIRST INPUT CARD.
+* 
+*      READ( 5,5000 ) T1,T2,DT,KIND
+*5010 FORMAT(10X,2I10,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+* LININT       22176     22344    6    0
+*              65520     65784   10
+*             149184    149256    2
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR ABORT READING XIN OR TOO MANY LEVELS
+*       2 ERROR ABORT READING INPUT
+*       3 FIRST TIMESTEP MISMATCH WITH INTERPOLATION INTERVAL
+*       4 NOT THE SAME NUMBER OF LEVELS
+*       5 MORE THAN ONE HORIZONTAL SIZE IN XIN
+*       6 ERROR READING END OF INTERVAL
+*       7 COULD NOT FIND T2
+*       8 COULD NOT FIND T1
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM linint 
+*    1              (XIN, XOUT,   INPUT, OUTPUT, 
+*    2               TAPE5=XIN,   TAPE2=XOUT, 
+*    3               TAPE5=INPUT, TAPE6=OUTPUT) 
+
+*     $Log: linint.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2011/06/06 19:25:38  dugas
+*     Noms de fichiers a 512 caracteres max.
+*
+*     Revision 4.8  2010/05/06 16:25:30  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.4  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.3  1998/07/03  02:26:31  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1997/09/26  17:39:07  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1996/04/17  14:20:53  armnrbd
+*     Augmenter le nombre maximal de trous a 10000.
+*
+*     Revision 4.0  1994/11/17  14:20:56  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.8  94/09/22  12:55:57  12:55:57  armnrbd (Bernard Dugas)
+*     Petite retouche a la derniere modification.
+*     
+*     Revision 3.7  94/08/11  17:32:58  17:32:58  armnrbd (Bernard Dugas)
+*     Ajouter le support de formats de date historiques.
+*     
+*     Revision 3.6  94/06/21  23:27:58  armnrbd
+*     Clarifier la documentation automatique.
+*     
+*     Revision 3.5  94/06/16  15:57:29  armnrbd
+*     Ajouter le traitement selon le premier pas de
+*     temps que l'on trouve sur le fichier de donnees.
+*     
+*     Revision 3.4  94/05/30  12:48:45  armnrbd
+*     Corriger la sortie XIT( -7 ).
+*     
+*     Revision 3.3  94/05/30  12:13:13  12:13:13  armnrbd (Bernard Dugas)
+*     Corriger une erreur dans la section RPBLOC.
+*     
+*     Revision 3.2  94/05/24  15:04:28  15:04:28  armnrbd (Bernard Dugas)
+*     Implanter le support de RPBLOC.
+*     
+*     Revision 3.1  94/05/23  17:21:11  armnrbd
+*     Premiere version fonctionnelle UNIX.
+*     
+*     Revision 3.0  94/05/23  16:30:19  16:30:19  armnrbd (Bernard Dugas)
+*     Version initiale UNIX.
+*     
+
+***    FEB 09/87 - B.DUGAS 
+
+***    MODIFIEE LE 20 DECEMBRE 1988 PAR B. DUGAS ... 
+***    ...  ON TRAITE LE CAS A PLUSIEURS NIVEAUX ET ON AUGMENTE LE 
+***         NOMBRE DE POINTS D'INTERPOLATIONS MAXIMAL A 1000. 
+***    MODIFIEE LE 19 MAI 1989 PAR B. DUGAS ... 
+***    ...  IBUF(2)  N'EST  PLUS CONSTANT A  L'INTERIEUR D'UN BLOC 
+***         D'INTERPOLATION. 
+
+*---------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+      INTEGER     NMAX
+      PARAMETER ( NMAX = nombre_de_trous )
+
+      REAL*8      IDT
+      REAL        ZERO,ODT
+      LOGICAL     OK,OK1,OK2,OK3
+      CHARACTER   TYPE*4,LIGNE*80
+      CHARACTER   NAM1*512,NAM2*512
+      CHARACTER*20 CTIME,CT1,CT2
+      INTEGER*8 :: DT(NMAX),T1(NMAX),T2(NMAX),
+     +             NT1,NT2,NDT,TIME,ZER=0
+      INTEGER     LEV(MAXLEV),NLEV,NLEV1,NLEV2,
+     +            JBUF(taille_entete),IER,JPAK,
+     +            HEAD,MAXW,NWDS,FIRST,DTM,MEM,
+     +            LAST,K,I,IL,NFIL,N,IO,LEN
+
+      REAL,       DIMENSION(:), ALLOCATABLE :: G1,G2,GO
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF 
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ2
+      INTEGER*8   Y2KDAT8,NEWTIM,ADDTIM
+      EXTERNAL    GETSIZ2,NEWTIM,ADDTIM,MACSPE,JCLPNT,
+     +            RPBLOC,GETSET2,CMPLBL,PUTSET2,XIT,GETLIGN,
+     +            GETNAM,Y2KDAT8
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/linint.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      N    =  0 
+      NFIL =  4 
+      LAST =  0 
+
+      CALL JCLPNT( NFIL, 1,2, 5,6 )
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+      MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.LE.0 .OR. NLEV.GT.MAXLEV) CALL      XIT(' Linint ',-1 )
+
+      WRITE(TYPE,0004) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+      MEM  = MAX( MAXW,NWDS*NLEV )
+
+      ALLOCATE( IBUF(LEN),G1(MEM),G2(MEM),GO(MEM) )
+
+      CALL STAMP2DATE( JBUF(2),TIME ) ; CALL PDATE( CTIME,TIME )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          DTM  = 0
+
+          OK1 = RPBLOC( 'KIND',LIGNE )
+          IF (OK1) READ(LIGNE,5,ERR=100,IOSTAT=IO) DTM
+
+          T1(1) = 0
+          T2(1) = 0
+          DT(1) = 0
+
+***        READ FIRST KEY GROUP.
+
+          OK1 = RPBLOC( 'T1',LIGNE )
+          IF (OK1) READ(LIGNE,20,ERR=100,IOSTAT=IO) T1(1)
+          OK2 = RPBLOC( 'T2',LIGNE )
+          IF (OK2) READ(LIGNE,20,ERR=100,IOSTAT=IO) T2(1)
+          OK3 = RPBLOC( 'T3',LIGNE )
+          IF (OK3) READ(LIGNE,20,ERR=100,IOSTAT=IO) DT(1)
+
+          OK = (OK1 .AND. OK2 .AND. OK3)
+          IF (OK)                                              THEN
+
+           N = N+1
+
+***         READ SECOND KEY GROUP.
+
+           OK1 = RPBLOC( 'T12',LIGNE )
+           IF (OK1) READ(LIGNE,20,ERR=100,IOSTAT=IO) T1(2)
+           OK2 = RPBLOC( 'T22',LIGNE )
+           IF (OK2) READ(LIGNE,20,ERR=100,IOSTAT=IO) T2(2)
+           OK3 = RPBLOC( 'T32',LIGNE )
+           IF (OK3) READ(LIGNE,20,ERR=100,IOSTAT=IO) DT(2)
+
+           OK = (OK1 .AND. OK2 .AND. OK3)
+           IF (OK)                                             THEN
+
+            N = N+1
+ 
+***          READ THIRD KEY GROUP.
+
+            OK1 = RPBLOC( 'T13',LIGNE )
+            IF (OK1) READ(LIGNE,20,ERR=100,IOSTAT=IO) T1(3)
+            OK2 = RPBLOC( 'T23',LIGNE )
+            IF (OK2) READ(LIGNE,20,ERR=100,IOSTAT=IO) T2(3)
+            OK3 = RPBLOC( 'T33',LIGNE )
+            IF (OK3) READ(LIGNE,20,ERR=100,IOSTAT=IO) DT(3)
+
+            OK = (OK1 .AND. OK2 .AND. OK3)
+            IF (OK)                                            THEN
+
+             N = N+1
+
+***           READ FOURTH KEY GROUP.
+
+             OK1 = RPBLOC( 'T14',LIGNE )
+             IF (OK1) READ(LIGNE,20,ERR=100,IOSTAT=IO) T1(4)
+             OK2 = RPBLOC( 'T24',LIGNE )
+             IF (OK2) READ(LIGNE,20,ERR=100,IOSTAT=IO) T2(4)
+             OK3 = RPBLOC( 'T34',LIGNE )
+             IF (OK3) READ(LIGNE,20,ERR=100,IOSTAT=IO) DT(4)
+
+             OK = (OK1 .AND. OK2 .AND. OK3)
+             IF (OK)                                           THEN
+
+              N = N+1
+
+***            READ FIFTH KEY GROUP.
+
+              OK1 = RPBLOC( 'T15',LIGNE )
+              IF (OK1) READ(LIGNE,20,ERR=100,IOSTAT=IO) T1(5)
+              OK2 = RPBLOC( 'T25',LIGNE )
+              IF (OK2) READ(LIGNE,20,ERR=100,IOSTAT=IO) T2(5)
+              OK3 = RPBLOC( 'T35',LIGNE )
+              IF (OK3) READ(LIGNE,20,ERR=100,IOSTAT=IO) DT(5)
+
+              OK = (OK1 .AND. OK2 .AND. OK3)
+              IF (OK)                                          THEN
+
+               N = N+1
+
+***             READ SIXTH KEY GROUP.
+
+               OK1 = RPBLOC( 'T16',LIGNE )
+               IF (OK1) READ(LIGNE,20,ERR=100,IOSTAT=IO) T1(6)
+               OK2 = RPBLOC( 'T26',LIGNE )
+               IF (OK2) READ(LIGNE,20,ERR=100,IOSTAT=IO) T2(6)
+               OK3 = RPBLOC( 'T36',LIGNE )
+               IF (OK3) READ(LIGNE,20,ERR=100,IOSTAT=IO) DT(6)
+
+               IF (OK1 .AND. OK2 .AND. OK3)                    THEN
+
+                N = N+1
+
+               END IF
+              END IF
+             END IF
+            END IF
+           END IF
+          END IF
+
+      ELSE
+
+***        READ-IN AS MANY AS NMAX SET OF TIMESTEPS
+***        WHERE INTERPOLATION HAS TO BE DONE. 
+
+          CALL GETLIGN( 5, LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 100
+          ELSE
+              READ(LIGNE,5000, END=100,ERR=100,IOSTAT=IO) 
+     +                        T1(1), T2(1), DT(1), DTM
+          END IF
+
+          N  = 1
+
+  050     CALL GETLIGN( 5, LIGNE,80,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  GOTO 100
+              ELSE
+                  READ(LIGNE,5000, END=100,ERR=100,IOSTAT=IO) 
+     +                             T1(N+1), T2(N+1), DT(N+1), I
+              END IF
+
+          N  = N+1 
+          GOTO 050 
+
+      END IF
+
+      CALL SET_DTM( DTM )
+
+  100 IF (N.EQ.0) CALL                             XIT(' Linint ',-2 ) 
+
+***    CHECK PARAMETRE AND FILE CONSISTENCY.
+
+      DO  I=1,N
+
+          T1(I) = Y2KDAT8( T1(I) )
+          T2(I) = Y2KDAT8( T2(I) )
+
+          IF (T2(I)       <= T1(I)   .OR. T1(I) <= LAST .OR. 
+     1        DT(I)       <= ZER     .OR.    N  >  NMAX .OR. 
+     2        T2(I)-T1(I) <  DT(I)+1                       )   THEN
+              
+              CALL PDATE( CT1,T1(I) ) ; CALL PDATE( CT2,T2(I) ) 
+              WRITE(6,6002) I,N,TRIM( CT1 ),TRIM( CT2 ),DT(I)
+              CALL                                 XIT(' Linint ',-2 ) 
+          END IF
+
+          LAST = T1(I)
+
+      END DO
+
+      IF (TIME > T2(N))                                        THEN
+
+***        NOTHING TO INTERPOLATE.
+***        COPY INPUT ONTO OUTPUT AND QUIT.
+
+          CALL GETNAM( 1,NAM1 )
+          CALL GETNAM( 2,NAM2 )
+          
+          CALL SYSTEM( 'cp '//trim( NAM1 )//' '//trim( NAM2 ) )
+
+          CALL                                     XIT(' Linint ', 0 )
+
+      ELSE
+
+***        FIND THE FIRST INTERPOLATING INTERVAL.
+
+          FIRST = 1
+          DO  I=1,N
+              IF (TIME > T1(I) .AND.
+     +            TIME < T2(I) )                               THEN
+                  WRITE(6,6003) TRIM( CTIME ),I
+                  CALL                             XIT(' Linint ',-3 )
+              ELSE IF (TIME >= T2(I))                          THEN
+                  FIRST = I+1
+              END IF
+          END DO
+
+      END IF
+
+      CALL PRTLAB2(' Linint on ibuf = ',JBUF )
+
+***    READ-IN DATA. 
+
+      DO 350 I=FIRST,N 
+
+          CALL PDATE( CT1,T1(I) ) ; CALL PDATE( CT2,T2(I) ) 
+          WRITE (6,6010) DT(I), TRIM( CT1 ), TRIM( CT2 ) 
+
+          NT1 = NEWTIM( T1(I),DTM, OK )
+          NT2 = NEWTIM( T2(I),DTM, OK )
+
+***        LIRE JUSQU'A T1.
+
+          IF (TIME.EQ.T1(I) .AND. I.NE.FIRST) GOTO 200
+
+  150     CALL GETSET2( 1, G1,LEV,NLEV1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)       CALL                  XIT(' Linint ', 0 ) 
+          IF (NLEV.NE.NLEV1) CALL                  XIT(' Linint ',-4 ) 
+
+          CALL STAMP2DATE( IBUF(2),TIME ) ; CALL PDATE( CTIME,TIME )
+
+***        IGNORE LABEL/CHARACTER RECORDS.
+
+          WRITE(TYPE,0004) IBUF(1)
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 150
+
+***        SAUVER TOUTES LES DONNEES ENTRE LES T2 ET T1.
+
+          IF (TIME <= T1(I))
+     +    CALL PUTSET2( 2, G1, LEV,NLEV1, IBUF,MAXW )
+
+  200     IF (TIME == T1(I))                                   THEN 
+
+              CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+              IF (.NOT.OK) CALL                    XIT(' Linint ',-5 ) 
+
+***            LIRE JUSQU'A T2.
+
+  250         CALL GETSET2( 1, G2,LEV,NLEV2, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)       CALL              XIT(' Linint ',-6 ) 
+              IF (NLEV.NE.NLEV2) CALL              XIT(' Linint ',-4 ) 
+ 
+              CALL STAMP2DATE( IBUF(2),TIME ) ; CALL PDATE( CTIME,TIME )
+
+***            IGNORE LABEL/CHARACTER RECORDS.
+
+              WRITE(TYPE,0004) IBUF(1)
+              IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 250
+
+              IF (TIME == T2(I))                               THEN 
+ 
+                  CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+                  IF (.NOT.OK) CALL                XIT(' Linint ',-5 ) 
+
+***                INTERPOLER DE T1 A T2 (INCLUSIVEMENT).
+
+                  IDT = DBLE( NT2-NT1 )/(DT(I)+1)
+                  ODT = 1.0/DBLE(DT(I)+1) 
+                  NDT = NINT( IDT )
+
+                  DO  IL=1,NLEV1*NWDS
+                      G2(IL) = (G2(IL)-G1(IL))*ODT 
+                      GO(IL) =  G1(IL)+G2(IL) 
+                  END DO
+
+                  TIME = ADDTIM( T1(I),NDT,DTM )
+                  CALL DATE2STAMP( TIME,IBUF(2) )
+                  CALL PDATE( CTIME,TIME )
+
+                  CALL PUTSET2( 2, GO, LEV,NLEV1, IBUF,MAXW ) 
+
+                  DO 300 K=2,DT(I)+1
+
+                      DO  IL=1,NLEV1*NWDS
+                          GO(IL) = GO(IL)+G2(IL) 
+                      END DO
+
+                      TIME = ADDTIM( TIME,NDT,DTM )
+                      CALL DATE2STAMP( TIME,IBUF(2) )
+                      CALL PDATE( CTIME,TIME )
+
+                      CALL PUTSET2( 2, GO, LEV,NLEV1, IBUF,MAXW )
+
+  300             CONTINUE 
+
+***                TRANSFERER G2 DANS G1
+***                ET RE-DEFINIR TIME.
+
+                  DO  IL=1,NLEV1*NWDS
+                      G1(IL) = G2(IL)
+                  END DO
+
+              ELSE IF (TIME > T2(I))                           THEN 
+
+***                OVERSTEPING WHILE SEARCHING FOR T2.
+
+                  WRITE(6,6078) TRIM( CTIME ),'T2',TRIM( CT2 )
+                  CALL                             XIT(' Linint ',-7 )
+
+              ELSE 
+
+***                ON CHERCHE TOUJOURS T2.
+
+                  GOTO 250 
+
+              END IF 
+
+          ELSE IF (TIME > T1(I))                               THEN 
+
+***            OVERSTEPING WHILE SEARCHING FOR T1.
+
+              WRITE(6,6078) TRIM( CTIME ),'T1',TRIM( CT1 )
+              CALL                                 XIT(' Linint ',-8 )
+
+          ELSE 
+
+***            ON CHERCHE TOUJOURS T1.
+
+              GOTO 150 
+
+          END IF 
+
+  350 CONTINUE 
+
+***    COPY REST AND STOP, STILL IGNORING LABEL/CHARACTER RECORDS.
+
+  900 CALL GETSET2( 1, GO,LEV,NLEV1, IBUF,MAXW,OK )
+
+      IF (OK)                                                  THEN
+          WRITE(TYPE,0004) IBUF(1)
+          IF (TYPE.NE.'LABL' .AND. TYPE.NE.'CHAR')
+     +    CALL PUTSET2( 2, GO, LEV,NLEV1, IBUF,MAXW )
+          GOTO 900
+      END IF
+
+      CALL                                         XIT(' Linint ', 0 )
+
+*-------------------------------------------------------- 
+ 0004 FORMAT(A4) 
+ 0005 FORMAT(BN,I5) 
+ 0010 FORMAT(BN,I10)
+ 0020 FORMAT(BN,I20)
+
+ 5000 FORMAT(10X,2I10,2I5) 
+
+ 6002 FORMAT(' Set ',I3,' of ',I3,' T1,T2,DT=',A,1X,A,1X,I6)
+ 6003 FORMAT(' First timestep ',A,' is inside the interpolation',
+     +       ' interval number ',I3)
+ 6078 FORMAT(' Found ',A,' while searching for ',A2,'=',A)
+ 6010 FORMAT(' Inserting ',I2,' timestep(s) between ',A, 
+     +       ' and ',A,'.')
+
+      END 
+#     endif
+
+

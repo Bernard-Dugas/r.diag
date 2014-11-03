@@ -1,0 +1,280 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      newnam  IN OUT INPUT OUTPUT [-name VAL1]
+*
+*
+*     DESCRIPTION...
+*      newnam - CHANGES THE NAME IN IBUF(3) OF ALL RECORDS ON A FILE
+*
+*
+*     AUTHOR  - J.D.Henderson, JUL 10/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/newnam.ptn,v 4.8 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     PURPOSE - COPIES FILE IN TO FILE OUT RE-SETTING THE THIRD WORD OF
+*               THE LABEL IN EACH RECORD TO A NEW NAME READ FROM A CARD.
+*
+*
+*     INPUT FILE...
+*
+*      IN  = FILE TO BE RENAMED.
+*
+*     OUTPUT FILE...
+*      OUT = COPY OF IN WITH ALL RECORDS RENAMED
+*
+*
+*     INPUT PARAMETER...
+*
+*      NAME = NEW NAME TO BE INSERTED INTO LABEL WORD 3.
+*
+*      READ( 5,5010 ) NAME
+*5010  FORMAT(11X,A4)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*   NEWNAM VORT
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NO VALID RECORDS FOUND IN FILE IN
+*       2 PREMATURE EOF IN FILE IN
+*       3 ERROR ABORT READING INPUT
+*       4 CANNOT CHANGE PACKING TYPE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM newnam
+*    +              ( IN,       OUT,       INPUT,       OUTPUT,
+*    +          TAPE1=IN, TAPE2=OUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ---------------------------------------------------------
+
+*     $Log: newnam.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:21:11  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.5  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.4  2000/09/25 04:04:28  armnrbd
+*     Utiliser le mode IO64.
+*
+*     Revision 4.3  1998/02/17 21:32:39  armnrbd
+*     Seconde iteration des modifs associes a la cle OPKTYP.
+*
+*     Revision 4.2  1997/12/10  18:14:59  armnrbd
+*     Avertir si la cle OPKTYP ne peut etre satisfaite.
+*
+*     Revision 4.1  1997/09/26  17:39:10  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:15  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:04:22  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:37  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/12/15  14:10:35  armnrbd
+*     Ajouter le parametre "-name" a la ligne de commande.
+*     
+*     Revision 1.3  92/11/10  13:05:41  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/17  14:59:33  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/11  21:41:16  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:52  armnrbd
+*     Initial revision
+*     
+
+*     MAI 27/91 - B.Dugas, RPN (Version CY920/IRIX F77).
+*     MAY 13/83 - R.LAPRISE.
+
+*-----------------------------------------------------------------------
+      IMPLICIT   none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+
+      LOGICAL     OK,ZINFO,CHNGTYP
+      CHARACTER   TYPE*4,NAME*4,OLDNAM*4, 
+     +             LIGNE*80,VALEUR*10
+      INTEGER     JBUF(taille_entete),JPAK,HEAD, LEN,MAXW, 
+     +            IO,NFF,NLEV,NR,LEV(MAXLEV),NWDS,GETSIZ2, IER
+      REAL        ZERO
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC,SETIO64
+      CHARACTER*4 GETYP,PKTYP,PKTYP1,OUTTYP
+      EXTERNAL    MACSPE,JCLPNT,RPBLOC,HPALLOC,HPDEALLC,XIT,GETYP,
+     +            PUTYP,GETSIZ2,RECGET,RECPUT,TYPSET,SETIO64
+*======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/newnam.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      NR = 0
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      OUTTYP = GETYP( 0 )
+      PKTYP1 = GETYP( 1 )
+      PKTYP  = PKTYP1(1:2)
+
+      IF (PKTYP1.NE.OUTTYP .AND.
+     +    PKTYP .NE.'SQ'   )                                   THEN
+          CALL TYPSET( CHNGTYP )
+          IF (CHNGTYP)                                         THEN
+              WRITE(6,6015) 
+              CALL                                 XIT(' Newnam ',-4 )
+          ELSE
+              CALL PUTYP( 0, PKTYP1 )
+          END IF
+      END IF
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NAME = ' '
+
+          OK = RPBLOC('NAME',VALEUR)
+          IF (OK) NAME = VALEUR(1:4)
+
+      ELSE
+
+***        READ THE NEW NAME FROM A CARD.
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5010, ERR=901,END=902,IOSTAT=IO ) NAME
+              CALL BURNF
+          END IF  
+
+      END IF
+
+***    ASK FOR NECESSARY MEMORY.
+
+  100 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.LE.0) GOTO 900
+
+      ALLOCATE( IBUF(2*LEN) )
+
+***    COPY THE FILE AND INSERT THE NEW NAME.
+
+  200 CALL RECGET( 1, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+***        VERIFIER POUR FIN DE FICHIER (OK=FAUX) OU
+***        BIEN POUR CHANGEMENT DE DIMENSION (MAXW=0).
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF )
+
+              IF (MAXW.EQ.0)                                   THEN
+                  GOTO 100
+
+              ELSE IF (NR.EQ.0)                                THEN
+                  WRITE(6,6010)
+                  CALL                             XIT(' Newnam ',-1 )
+
+              ELSE
+                  WRITE(6,6020) NR,NAME
+                  CALL                             XIT(' Newnam ', 0 )
+
+              END IF
+
+          END IF
+
+***        CHECK FOR MULTI-LEVEL ZONAL FIELDS INFO RECORD.
+
+          WRITE(TYPE,  4) IBUF(1)
+          WRITE(OLDNAM,4) IBUF(3)
+          ZINFO = (TYPE.EQ.'ZONL' .AND. OLDNAM.EQ.'++') 
+
+***        WRITE AFTER CHANGING NAME.
+
+          IF (.NOT.ZINFO)
+     +    READ(NAME,   4) IBUF(3)
+
+          CALL RECPUT( 2, IBUF )
+
+      IF (.NOT.ZINFO) NR = NR+1
+      GOTO 200
+
+***    E.O.F. ON INPUT.
+
+  900 WRITE(6,6010)
+      CALL                                         XIT(' Newnam ',-2 )
+
+  901 IF (IO.NE.0) WRITE(6,6100) IO
+  902 CALL                                         XIT(' Newnam ',-3 )
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 5010 FORMAT(11X,A4)
+ 6010 FORMAT(' File empty.')
+ 6015 FORMAT(' Newnam cannot change packing type.')
+ 6020 FORMAT(1X,I6,' Labels changed to new name  ',A4)
+ 6100 FORMAT(' Newnam reports I/O error number ',I4,' on unit 5.')
+
+      END
+#     endif

@@ -1,0 +1,266 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      invntry IN01 [IN02 [IN03 [ ... [IN79] ... ]]] OUTPUT
+*
+*
+*     AUTHOR  - R.Laprise, NOV 23/82.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/invntry.ptn,v 4.14 2014/09/25 20:20:50 dugas Exp $
+* 
+*
+*     PURPOSE - PRINTS EACH RECORD LABEL IN A SET OF FILES ALONG
+*               WITH THE LENGTH OF THE PACKED DATA FIELD. 
+*
+*     NOTE    - THE FIRST 256 CHARACTERS OF SUPER LABELS ARE PRINTED 
+*               AS WELL AS THE TOTAL FILE LENGTHS (INCLUDING THE LABELS).
+*
+* 
+*     INPUT FILE... 
+*      IN01 TO IN79 = FILES FOR WHICH ALL LABELS ARE TO BE PRINTED. 
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM invntry
+
+*     $Log: invntry.ptn,v $
+*     Revision 4.14  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.13  2010/03/09 21:48:26  dugas
+*     Utiliser PRTLAB3 au lieu de get_ip1_string pour imprimer IBUF(1:8).
+*
+*     Revision 4.12  2008/11/24 22:04:38  dugas
+*     Agrandir les formats 6005 et 6010 (pour des fichiers plus gros).
+*
+*     Revision 4.11  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.10  2007/12/20 20:55:24  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser GET_IP1_STRING pour imprimer les niveaux verticaux.
+*
+*     Revision 4.9  2007/08/29 17:34:13  dugas
+*     - Passer de 10 a 79 noms de fichiers.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.8  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.7  2001/01/19 00:35:20  armnrbd
+*     Re-aactiver l'appel a LBLCHK et agrandir GETPARC.
+*
+*     Revision 4.6  2000/04/05 17:37:06  armnrbd
+*     Enlever un appel a LBLCHK et modifier l'ecriture
+*     des huits premiers mots de IBUF (pour F90 sur LINUX).
+*
+*     Revision 4.5  1999/04/08 22:04:30  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.4  1998/07/03 02:26:30  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1998/06/10  18:50:12  armnrbd
+*     Utiliser GETHIGH pour lire LR dans IBUF.
+*
+*     Revision 4.2  1998/06/08  02:19:57  armnrbd
+*     Utiliser GETHIC pour la gestion de NEWL.
+*
+*     Revision 4.1  1997/09/26  17:39:04  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:20:46  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/03/18  14:23:36  armnrbd
+*     Pouvoir lire jusqu'a 10 fichiers sequentiellement.
+*     
+*     Revision 3.0  93/10/13  13:56:24  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/06  14:09:22  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/10/13  15:57:35  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.2  92/03/24  21:26:55  armnrbd
+*     Ajouter le "endif" manquant a la fin de la section DOC.
+*     
+*     Revision 1.1  92/03/24  21:02:10  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:47  armnrbd
+*     Initial revision
+*     
+***    AUTHOR: R.LAPRISE, CCRN - NOV 23/82
+
+***    MODIFICATION HISTORY:
+***     ...  OCT 01/90 - B.DUGAS, RPN (PORT FROM COS TO IRIX). 
+***     ...  NOV 14/90 - B.DUGAS, RPN (SINGLE PRECISION PACKER).
+***     ...  DEC 10/90 - B.DUGAS, RPN (DYNAMIC MEMORY ALLOCATION).
+***     ...  FEV 19/91 - B.DUGAS, RPN (BLOC RECABT AJOUTE).
+***     ...  SEP 24/91 - B.DUGAS, RPN (TENIR COMPTE DE NEWL)
+
+*-------------------------------------------------------------------- 
+      IMPLICIT     none
+
+      INTEGER      MAXC
+      PARAMETER  ( MAXC = 32 )
+
+      LOGICAL      OK
+      CHARACTER*8  CHAINE(MAXC)
+      CHARACTER*4  LABL,TYPE,PKTYP
+      CHARACTER*80 NEWETIK,OLDETIK,CBUF*72
+      INTEGER      IPAK, NFF,NR, NW,LR,LF, NIO,IER,ZERO
+      INTEGER      I,HEAD,JBUF(taille_entete),JPAK, LEN,NWDS,MAXW
+
+      INTEGER,     DIMENSION(:),ALLOCATABLE :: IBUF
+
+C     CHARACTER*4  GETHIC,NEWL,IBUF4
+C     EXTERNAL     GETHIC,LBLCHK
+
+      INTEGER      GETSIZ,GETHIGH
+      CHARACTER*4  GETYP,GETPARC*128
+      EXTERNAL     GETSIZ,GETYP,GETPARC,MACSPE,JCLPNT,
+     +             XIT,RECGET,GETHIGH
+
+#     include     "machtype.cdk"
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         LABL  / 'LABL'/, LR / 0 /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/invntry.ptn,v $'
+
+*-------------------------------------------------------------------- 
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ASIGN I/O UNITS.
+
+      NFF = 80
+      CALL JCLPNT( NFF, 11,12,13,14,15,16,17,18,19,20,
+     +                  21,22,23,24,25,26,27,28,29,30,
+     +                  31,32,33,34,35,36,37,38,39,40,
+     +                  41,42,43,44,45,46,47,48,49,50,
+     +                  51,52,53,54,55,56,57,58,59,60,
+     +                  61,62,63,64,65,66,67,68,69,70,
+     +                  71,72,73,74,75,76,77,78,79,80,
+     +                  81,82,83,84,85,86,87,88,89, 6 )
+
+      NIO = 11
+      NFF = 10+NFF
+
+      NR  = 0
+      NW  = 0
+ 
+      PKTYP   = GETYP( NIO )
+      OLDETIK = ' '
+
+***    ASK FOR WORKING MEMORY. CHECK FIRST DATA BUFFER.
+
+  100 MAXW = GETSIZ( NIO, JBUF,LEN,NWDS,JPAK )   
+      IF (MAXW.EQ.0) CALL                          XIT(' Invntry',-101 )
+
+      ALLOCATE( IBUF(LEN) )
+
+***    READ NEXT BLOCK.
+
+  200 CALL RECGET( NIO, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF )
+                  GOTO 100
+              ELSE IF (NIO.LT.NFF)                             THEN
+                  WRITE(6,6005) NIO-10,NW 
+                  NIO = NIO+1
+                  NR  = 0
+                  NW  = 0
+                  GOTO 200
+              END IF
+
+              WRITE(6,6005) NIO-10,NW 
+              CALL                                XIT(' Invntry', 0 ) 
+
+          END IF
+
+          NR = NR+1 
+
+          CALL  LBLCHK( LR,NWDS,IPAK,IBUF )
+          WRITE(TYPE,4) IBUF(1)
+
+          LR = GETHIGH('LEN',IBUF )
+          LF = LR-HEAD/(MOD( MACHINE,2 )+1)
+          NW = NW+LR
+
+          CALL PRTLAB3( CBUF,IBUF )
+
+          IF (TYPE.NE.LABL)                                    THEN
+
+              IF (PKTYP(1:2).EQ.'SQ')                          THEN
+                  NEWETIK = GETPARC( 'ETIKET' )
+                  IF (NEWETIK.NE.OLDETIK)                      THEN
+                      OLDETIK =  NEWETIK
+                      WRITE(6,6011) NEWETIK
+                  END IF
+              END IF
+
+C             NEWL = GETHIC('NEWL',IBUF )
+C             WRITE(IBUF4,4) IBUF(4)
+C
+C             IF (TYPE .EQ.'ZONL' .AND.
+C    +           (IBUF4.EQ.'NEWL' .OR. NEWL.EQ.'NEWL'))
+C    +            IBUF(4) = 0
+
+              WRITE(6,6010) NR, TRIM( CBUF ), LF 
+
+          ELSE
+
+              LEN = MIN( MAXC, IBUF(5)*IBUF(6) )
+              CALL GETLAB( 0, CHAINE, IBUF,LEN, OK )
+              WRITE(6,6012) NR, TRIM( CBUF ), (CHAINE(I),I=1,LEN)
+
+          END IF
+
+      GOTO 200 
+*-------------------------------------------------------------------- 
+
+    4 FORMAT(A4)
+
+ 6000 FORMAT(2X,A4,I12,1X,A4,A,2I6,I10,I6)
+ 6005 FORMAT('0File No. ',I2.2,' length (including labels)',
+     +       ' is ',I10,' words.') 
+ 6010 FORMAT(1X,I5,A,'  Data words=',I8)
+ 6011 FORMAT(5X,'... =',A80)
+ 6012 FORMAT(1X,I5,A/(5x,'... =',10A8))
+
+      END 
+#     endif

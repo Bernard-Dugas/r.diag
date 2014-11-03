@@ -1,0 +1,554 @@
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 10000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      rangrd  GG INPUT OUTPUT [ -n    VAL1 -name VAL2 -lon VAL3 \ 
+*                                -lat  VAL4 -npg  VAL5 -a   VAL6 \ 
+*                                -kind VAL7 VAL8 -delt VAL9 ] [ -def ]
+*
+*
+*     AUTHOR - B.Dugas, AVRIL 23/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/rangrd.ptn,v 4.16 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      CREATE A FILE, GG, CONTAINING NSETS  OF ILEV LEVELS OF RANDOM 
+*      GRIDS OF SIZE (ILG,ILAT). THE ORIGINAL RANDOM SEED IS READ IN 
+*      AS WELL AS RELEVANT DIMENSIONS AND NUMBER OF TIME STEPS. 
+*
+*
+*     PARAMETRE...
+*      NSETS (n)       = NUMBER OF TIMESETS IN GG  (DEF=100)
+*      DELT            = TIME DELTA BETWEEN SAMPLES IN SECONDS (DEF=0).
+*                        THIS ARGUMENT IS ALWAYS LESS THAN 99999 AND CAN
+*                        ONLY BE SET VIA THE COMMAND LINE. WHEN DEFINED,
+*                        THE INITIAL TIME IS SET TO 1979010100.
+*      NAME            = DATA NAME                 (DEF='DATA')
+*      ILEV  (plv)     = NUMBER OF VERTICAL LEVELS (DEF=16,MAX=999)
+*                        IF ILEV IS NEGATIVE, EACH -ILEV LVL VALUES ARE READ WITH
+*                        A I10 FORMAT OR AN E10.0 IF ITS VALUE CONTAINS A DECIMAL
+*                        POINT.
+*      ILG   (lon)     = LONGITUDINAL DIMENSION    (DEF=32)
+*      ILAT  (lat)     = LATITUDINAL DIMENSION     (DEF=16)
+*      NPACK (npg)     = PACKING FACTOR            (DEF=-32)
+*      SEED  (a)       = INTEGER SEED USED IN RANDOM NUMBER GENERATOR
+*      KIND  (kind(1)) = OUTPUT DISTRIBUTION TYPE.
+*                        'UNIF', FOR UNIFORM [0.,1.] (DEFAULT)
+*                        'GAUS', FOR GAUSSIAN.
+*      VKIND (kind(2)) = VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
+*                        FILES AND THEN LV1 AND LV2 ARE ASSUMED TO CONTAIN DECODED
+*                        VALUES. FURTHERMORE, THIS PARAMETRE CAN ONLY BE SPECIFIED
+*                        IN COMMAND-LINE MODE. THE CURRENTLY SUPPORTED VALUES ARE:
+*                        'HAUTEUR'   , heights (m) with respect to sea level
+*                        'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                        'ETA'       , first version of the GEM ETA coordinate
+*                        'PRESSION'  , pressure (mb) (*** DEFAULT ***)
+*                        'ARBITRAIRE', arbitrary level (no units apply)
+*                        'HAUTEURS'  , heights (M) with respect to the surface
+*                        'HYBRIDE'   , hybrid GEM coordinate
+*                        'THETA'     , potential temperature coordinate
+*                        'GALCHEN'   , GalChen generalized coordinate
+*
+*      LVL             = VERTICAL LEVELS (ILEV ARE READ IN A SECOND LINE)
+*
+*      READ(5,5000) NSETS,NAME,ILEV,ILG,ILAT,NPACK, SEED,KIND
+*      IF (ILEV.GT.0)
+*      READ( 5,5001 ) (LVL(I),I=1,ILEV)
+*      IF (ILEV.LT.0)
+*      READ( 5,5002 ) (LVL(I),I=1,-ILEV)
+*5000  FORMAT(10X,I5,1X,A4,4I5,I10,1X,A4,i5) 
+*5001  FORMAT(16I5)
+*5002  FORMAT(8I10)
+*
+*     NOTES 1) NO INPUT CARDS ARE READ WHEN THE 'def' PARAMETRE IS SPECIFIED
+*           2) EITHER SPECIFYING THE 'def' PARAMETRE OR ENTERING AN EMPTY
+*              FIRST LINE WILL SETUP A SET OF DEFAULT VALUES.
+*              NAMELY,
+*
+*               NSETS=100, NAME='DATA', ILEV=1,LVL(1)=500, NPACK=-32, 
+*               SEED=1234567890  AND ILG=32,ILAT=16
+*
+*           3) THE RESULTS ARE MUTIPLIED BY THE LOCAL LEVEL PRESSURE IN MBS,
+*              SO THAT THE UNIFORM RANGE OF VALUES GOES FROM 0 TO THE LOCAL
+*              PRESSURE. THE GAUSSIAN DISTRIBUTION HAS ZERO MEAN AND UNIT 
+*              VARIANCE BEFORE AGAIN BEING MUTIPLIED BY THE LOCAL PRESSURE.
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*RANGRD      20 DATA   10  128   64  -16  12345678
+* 100  200  300  400  500  600  700  800  900 1000
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 MEMORY ALLOCATION PROBLEM
+*      2 PROBLEM READING FIRST INPUT LINE
+*      3 PROBLEM READING SECOND OR SUCCESSIVE INPUT LINES
+*      4 LVL DOES NOT DATA CONSISTENT WITH VKIND
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM RANGRD 
+*    1              (       GG,       INPUT,       OUTPUT, 
+*    2               TAPE11=GG, TAPE5=INPUT, TAPE6=OUTPUT) 
+ 
+*     $Log: rangrd.ptn,v $
+*     Revision 4.16  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.15  2013/12/11 22:07:22  dugas
+*     Remplace RAND/SRAND par les intrinseques FORTRAN RANDOM_SEED/RANDOM_NUMBER.
+*
+*     Revision 4.14  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2008/04/25 21:38:39  dugas
+*     Permettre 20 caracteres pour les parametres reels sur la ligne de commande.
+*
+*     Revision 4.11  2007/12/20 21:07:49  dugas
+*     - Specifier explicitement le type de niveau vertical recherche.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2006/09/19 19:17:32  dugas
+*     - Ajouter un jeux complet de parametres de ligne de commande.
+*     - Ajouter l'option de sortie de distributions gaussiennes.
+*
+*     Revision 4.9  2003/10/24 20:58:43  dugas
+*     Implementer du code compatible RS6000
+*
+*     Revision 4.8  2001/03/17 00:59:10  armnrbd
+*     Utiliser PUTHIGH plutot que PUTPARI.
+*
+*     Revision 4.7  1998/07/03 02:26:35  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.6  1998/05/21  20:20:52  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.5  1997/09/26  17:39:13  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1997/01/30  03:24:51  armnrbd
+*     Utiliser SETLAB et LBLCHK pour calculer LEN et MAXW.
+*
+*     Revision 4.3  1995/07/18  14:11:35  armnrbd
+*     Changer la valeur initiale de NODEFAU
+*
+*     Revision 4.2  1995/01/20  15:59:38  armnrbd
+*     Suite et fin de la correction precedente.
+*
+*     Revision 4.1  94/11/28  22:58:11  armnrbd
+*     Corriger le traitement du mode de fonctionnement par defaut.
+*     
+*     Revision 4.0  94/11/17  14:21:24  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*     
+*     Revision 3.6  94/04/18  13:33:25  armnrbd
+*     Inserer une declaration specifique HP-UX.
+*     
+*     Revision 3.5  94/04/14  22:03:57  22:03:57  armnrbd (Bernard Dugas)
+*     Version compatible HP-UX (DRAND48 et SRAND48).
+*     
+*     Revision 3.4  94/03/22  15:32:19  15:32:19  armnrbd (Bernard Dugas)
+*     Modifier la documentation automatique.
+*     
+*     Revision 3.3  94/03/17  16:22:06  armnrbd
+*     Corriger un bogue dans le remplissage vertical.
+*     
+*     Revision 3.2  94/01/13  10:42:02  armnrbd
+*     Modifications cosmetiques.
+*     
+*     Revision 3.1  94/01/12  21:33:08  21:33:08  armnrbd (Bernard Dugas)
+*     Modifier l'appel a GETLIGN qui s'occupe des niveaux verticaux.
+*     
+*     Revision 3.0  93/10/13  13:56:45  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/08/19  15:20:22  15:20:22  armnrbd (Bernard Dugas)
+*     Modifications cosmetiques.
+*     
+*     Revision 1.0  93/03/03  13:34:44  armnrbd
+*     Initial revision
+*     
+*     * APR 23/87 - B. DUGAS. 
+*     * FEV 03/88 - CHANGE VALUES WITH DIFFERENT LEVELS. 
+ 
+*---------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+      INTEGER     MAXMEM
+      PARAMETER ( MAXMEM= memoire_maximale )
+
+      INTEGER     SEED(1)
+
+      CHARACTER*10 CLEVP(MAXLEV)
+      LOGICAL     OK,NODEFAU,BIGF
+      REAL        PR(MAXLEV),HOLD
+      CHARACTER*4 LIGNE*100,VTYP*16,DATA,NAME,KIND,PKTYP
+      INTEGER     LVL(MAXLEV),NSETS,JBUF(taille_entete),
+     +            JPAK,IO,ILEV,ILG,ILG1,ILAT,NPACK,NF,NWDS,
+     +            MEM,START,END,NT,J,K,L,IJL,MAXW,IER,LEN,
+     +            VKIND,VK,RESET,DEET
+ 
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: GG
+
+      REAL,       EXTERNAL :: TGAUSS
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETKIND
+      CHARACTER*4,EXTERNAL :: GETYP,GETKINDC*16
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,XIT,PUTFLD2,
+     +            SETLAB,CONVPR,WRITLEV,PUTHIGH
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        DATA  /
+     +           'DATA' /
+      DATA        NODEFAU , OK    /
+     +           .TRUE.   ,.TRUE. /
+
+      DATA      ( CLEVP(L), L=1,16 ) /
+     +            '   10','   20','   30','   50',
+     +            '   70','  100','  150','  200',
+     +            '  250','  300','  400','  500',
+     +            '  700','  850','  925',' 1000'
+     +                               /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/rangrd.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      CALL JCLPNT( NF, 11, 5,6 )
+ 
+***    GET DEFAULT PACKING TYPE.
+
+      PKTYP = GETYP( 0 )
+      PKTYP = PKTYP(1:2)
+
+***    TAKE CARE OF DEFAULT VALUES.
+
+      READ(DATA,'(A4)') NAME
+      NSETS  =  100
+      DEET   =  0
+      ILEV   =  1
+      ILG    =  32
+      ILAT   =  16
+      NPACK  = -32
+      SEED(1)=  1234567890
+      LVL(1) =  500
+      KIND   = 'UNIF'
+      VKIND  =  2
+      VTYP   = ' '
+
+      BIGF   =.FALSE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) NSETS
+
+          OK = RPBLOC('DELT',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) DEET
+
+          OK = RPBLOC('PLV',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) ILEV
+
+          OK = RPBLOC('LON',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) ILG
+
+          OK = RPBLOC('LAT',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) ILAT
+
+          OK = RPBLOC('NPG',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) NPACK
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) SEED
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) KIND = LIGNE
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) VTYP = LIGNE
+
+          IF (VTYP.NE.' ')                                     THEN
+              CALL SETKIND( VTYP )
+              VKIND = GETKIND( )
+          END IF
+
+          NODEFAU = .NOT.RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        READ DIMENSIONS AND ORIGINAL SEED. 
+ 
+          CALL GETLIGN( 5, LIGNE, 100,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+
+              READ( LIGNE, 5000,ERR=901,END=901,IOSTAT=IO )
+     +              NSETS, NAME, ILEV, ILG, ILAT, NPACK, SEED, KIND
+          END IF
+
+      END IF
+
+      IF (ILEV.LT.0)                                           THEN
+          ILEV = -ILEV
+          BIGF =.TRUE.
+      END IF
+
+      IF (KIND.NE.'UNIF' .AND. KIND.NE.'GAUS') KIND = 'UNIF'
+
+      WRITE(6,6100)    NSETS, NAME, ILEV, ILG, ILAT, NPACK, SEED, KIND
+
+                         ILG1  = ILG+1
+      IF (PKTYP.EQ.'SQ') ILG1  = ILG
+
+***    SET UP BASIC LABEL. 
+ 
+      CALL SETLAB( JBUF, 'GRID',-1,NAME,-1, ILG1,ILAT,0,NPACK ) 
+      CALL LBLCHK( LEN, NWDS,JPAK,JBUF )
+
+      MAXW = LEN-HEAD
+ 
+***    ASK FOR REQUIRED MEMORY, IF POSSIBLE ... 
+ 
+      MEM = ILEV*NWDS+MAXW+HEAD
+ 
+      IF (MEM.GT.MAXMEM)                                       THEN 
+          WRITE(6,6001) MEM-MAXMEM 
+          CALL                                     XIT(' Rangrd ',-1 ) 
+      END IF 
+ 
+      ALLOCATE( IBUF(MAXW+HEAD),GG(NWDS*ILEV) )
+ 
+      DO  L=1,HEAD
+          IBUF(L) = JBUF(L)
+      END DO
+
+      IF (DEET.NE.0 .AND. PKTYP.EQ.'SQ')                       THEN
+          CALL PUTHIGH( DEET     ,'DEET' ,IBUF )
+          CALL PUTHIGH( 010179000,'DATEO',IBUF )
+      END IF
+
+***    READ LEVELS (16/CARD)
+ 
+      IF (NODEFAU .OR. ILEV.GT.1)                              THEN
+
+          IF (BIGF)                                            THEN
+              START = 1
+              END   = MIN( ILEV, 8 )
+
+  100         CALL GETLIGN( 5, LIGNE,80,OK )
+
+                  IF (.NOT.OK) GOTO 902
+                  READ( LIGNE, 5002, ERR=902,END=902,IOSTAT=IO ) 
+     +                               (CLEVP(L), L=START,END)
+
+              IF (END.LT.ILEV)                                 THEN
+                  START = END+1
+                  END   = MIN( ILEV,END+8 )
+                  GOTO 100
+              END IF
+          ELSE
+              START = 1
+              END   = MIN( ILEV, 16 )
+
+  101         CALL GETLIGN( 5, LIGNE,80,OK )
+
+                  IF (.NOT.OK) GOTO 902
+                  READ( LIGNE, 5001, ERR=902,END=902,IOSTAT=IO ) 
+     +                               (CLEVP(L), L=START,END)
+
+              IF (END.LT.ILEV)                                 THEN
+                  START = END+1
+                  END   = MIN( ILEV,END+16 )
+                  GOTO 101
+              END IF
+          END IF
+
+      END IF
+
+      IF (NODEFAU) CALL BURNF 
+
+***    CHECK LVL CODING.
+
+      DO  L=1,ILEV
+          IF (INDEX( CLEVP(L),'.' ).EQ.0 .AND. VTYP.EQ.' ')    THEN
+              READ( CLEVP(L),05, ERR=902,END=902,IOSTAT=IO ) LVL(L)
+              CALL CONVPR( LVL(L), PR(L), VK, -2 )
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  IF (VK.NE.VKIND)                             THEN
+                      IF (L.EQ.1)                              THEN
+                          VKIND = VK
+                      ELSE
+                          CALL                     XIT(' Rangrd ',-4 )
+                      END IF
+                  END IF
+                  CALL CONVPR( LVL(L),PR(L),VK, +2 )
+              END IF
+          ELSE
+             READ( CLEVP(L),10, ERR=902,END=902,IOSTAT=IO ) PR(L)
+             IF (PKTYP.EQ.'SQ')                                THEN
+                 CALL CONVPR( LVL(L), PR(L), VKIND, +2 )
+             ELSE
+                 CALL LVCODE( LVL(L), PR(L)/1000.,1 ) 
+             END IF
+          END IF
+      END DO
+
+      VTYP = GETKINDC( VKIND )
+      CALL WRITLEV( PR,ILEV,VTYP)
+
+***    SET-UP SEED BUFFER. 
+
+      K=1
+      CALL RANDOM_SEED( SIZE=K )
+      CALL RANDOM_SEED( PUT=SEED(1:K) )
+      IF (KIND.EQ.'GAUS') HOLD = TGAUSS( -1 )
+      RESET = 0
+
+***    CREATE GRIDS. 
+ 
+      DO 300 NT=0,NSETS-1
+ 
+***        DO IT FOR ALL LEVELS. 
+
+          END = 0
+
+          DO 200 L=1,ILEV 
+
+***            APPLY CURRENT SEED. 
+
+              START = END+1
+              END   = END+NWDS
+
+              IF (KIND.EQ.'UNIF')                              THEN
+                  CALL RANDOM_NUMBER( GG(START:END) )
+                  GG(START:END) =  PR(L)*GG(START:END)
+              ELSE IF (KIND.EQ.'GAUS')                         THEN
+                  DO  IJL=START,END
+                      GG(IJL) = PR(L)*TGAUSS(RESET)
+                  END DO
+              END IF
+
+  200     CONTINUE 
+ 
+***        SAVE FIELD. 
+ 
+          IBUF(2) = NT 
+*         IF (PKTYP.EQ.'SQ') CALL PUTHIGH( NT,'NPAS',IBUF )
+          CALL PUTSET2( 11, GG, LVL,ILEV, IBUF,MAXW )
+ 
+  300 CONTINUE 
+ 
+      CALL PRTLAB( IBUF )
+      CALL                                         XIT(' Rangrd ', 0 ) 
+ 
+***    PREMATURE E.O.F. ON INPUT. 
+ 
+  901 CALL                                         XIT(' Rangrd ',-2 ) 
+  902 CALL                                         XIT(' Rangrd ',-3 ) 
+ 
+*----------------------------------------------------------------------- 
+ 0005 FORMAT(BN,I10)
+ 0010 FORMAT(BN,E10.0)
+#     if defined (AIX)
+ 5000 FORMAT(10X,I5,1X,A4,4I5,E10.0,1X,A4,I5) 
+#     else
+ 5000 FORMAT(10X,I5,1X,A4,4I5,I10,1X,A4,I5) 
+#     endif
+ 5001 FORMAT(16A5) 
+ 5002 FORMAT(8A10) 
+
+ 6001 FORMAT(' Missing at least ',I6,'words of available memory.')
+#     if defined (AIX)
+ 6100 FORMAT(/' Nsets=',I5,',  name= ',A,',',4X,'ilev= ',I5,', ilg=', 
+     +     I5,','/'  ilat=',I5,', npack=',I5,', seed= ',E15.5,
+     +            ' and kind= ',A) 
+#     else
+ 6100 FORMAT(/' Nsets=',I5,',  name= ',A4,',',4X,'ilev= ',I5,', ilg=', 
+     +     I5,','/'  ilat=',I5,', npack=',I5,', seed= ',I10,
+     +            ' and kind= ',A) 
+#     endif
+ 
+      END 
+      REAL FUNCTION TGAUSS (RESET)
+
+      IMPLICIT    none
+
+      INTEGER     RESET
+
+***    RETURNS A NORMALLY DISTRIBUTED DEVIATE WITH ZERO MEAN AND
+***    UNIT VARIANCE, USIND RAND AS THE SOURCE OF UNIFORM DEVIATES.
+
+***    CODE SOURCE: NUMERICAL RECIPES IN FORTRAN, 2ND ED., P.280
+
+      REAL        RSQ,V1,V2,RN(1)
+      REAL,       SAVE :: FAC,GSET
+      INTEGER,    SAVE :: SET = 0
+
+      IF (RESET.LT.0) SET = 0
+
+      IF (SET.EQ.0)                                            THEN
+  100     CONTINUE
+              CALL RANDOM_NUMBER( RN(1:1) ) ; V1 = 2*RN(1)-1
+              CALL RANDOM_NUMBER( RN(1:1) ) ; V2 = 2*RN(1)-1
+              RSQ = V1**2+V2**2
+          IF (RSQ.GE.1. .OR. RSQ.EQ.0.) GOTO 100
+          FAC     = SQRT( -2.*LOG( RSQ )/RSQ )
+          GSET    = V1*FAC
+          TGAUSS  = V2*FAC
+          SET     = 1
+      ELSE
+          TGAUSS  = GSET
+          SET     = 0
+      END IF
+
+      RETURN
+      END
+#     endif

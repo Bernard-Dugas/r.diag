@@ -1,0 +1,286 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      joiner  INA INB OUT OUTPUT
+*
+*
+*     DESCRIPTION...
+*      joiner - JOINS TWO FILES. RESULT HAS ASCENDING STEP NUMBERS.
+*
+*
+*     AUTHOR  - J.D.Henderson, FEB 13/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/joiner.ptn,v 4.9 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     PURPOSE - JOINS TOGETHER TWO TIME ORDERED GCM DIAGNOSTICS FILES INA
+*               AND INB PUTTING THE RESULTING DATASET ON FILE OUT.
+*
+*     NOTES   - 1) TIMESTEP NUMBERS SHOULD BE INCREASING FROM INA TO INB.
+*               2) COPYING BEGINS IN INB ONLY WHEN HIGHER STEP NUMBERS ARE
+*                  READ AND ONLY THE FIRST OF MULTIPLE SAVES IN INB IS SAVED.
+*               3) THIS PROGRAM CAN RUN ON EITHER GRID OR SPECTRAL FILES.
+*
+*     INPUT FILES...
+*      INA = FIRST  INPUT FILE
+*      INB = SECOND INPUT FILE
+*
+*     OUTPUT FILE...
+*      OUT = FILE OF INA,INB JOINED
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON INB
+*       2 PREMATURE EOF ON INA
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM joiner
+*     PROGRAM JOINER (INA,       INB,       OUT,       OUTPUT,
+*    1          TAPE1=INA, TAPE2=INB, TAPE3=OUT, TAPE6=OUTPUT)
+*     --------------------------------------------------------
+
+*     $Log: joiner.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.6  2005/04/14 18:15:49  dugas
+*     Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.5  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.4  2003/01/21 14:56:48  dugas
+*     Modifier l'allocation dynamique de memoire
+*
+*     Revision 4.3  1999/04/08 22:01:45  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.2  1997/10/10 19:05:36  armnrbd
+*     Activer le mode I/O a 64 bits.
+*     Utiliser HPALLOC/HPDEALLC pour la memoire dynamique.
+*
+*     Revision 4.1  1997/09/26  17:39:04  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:20:47  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:04:06  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:24  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/10  09:33:15  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/05/05  10:17:23  armnrbd
+*     Corriger "EXTERNAL JOINSUB" ==> "EXTERNAL JOINMEM".
+*     
+*     Revision 1.0  92/04/06  16:05:25  armnrbd
+*     Initial revision
+*     
+
+*     FEB 13/80 - J.D.HENDERSON.
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      LOGICAL     OK
+      REAL        ZERO
+      CHARACTER*4 TYPE
+      INTEGER     KBUF(taille_entete),NAME,HEAD,NSKIP,NFF,NF,MEM,
+     +            NRECS,MAXW,NLEV,LEV(MAXLEV),NSTEP,NRTOT,LASTIN,
+     +            NWDS,KPAK,LEN
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,     DIMENSION(:), ALLOCATABLE :: SET
+
+#     include  "machtype.cdk"
+
+      LOGICAL     SETIO64
+      INTEGER     GETSIZ2
+      EXTERNAL    SETIO64,MACSPE,JCLPNT,GETSIZ2,
+     +            GETFLD2,CMPLBL,PUTFLD2,XIT
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/joiner.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF=4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+      NRECS = 0
+      NSKIP = 0
+
+      NF = 1
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    ALLOCATION DE MEMOIRE DYNAMIQUE.
+
+  100 MAXW = GETSIZ2( NF, KBUF,LEN,NWDS,KPAK, LEV,NLEV )   
+
+      IF (MAXW.EQ.0 .OR. NLEV.LE.  0   .OR.
+     +                   NLEV.GT.MAXLEV)                       THEN
+
+          GOTO 902
+
+      ELSE
+
+          WRITE(TYPE,'(A4)') KBUF(1)
+          MEM  = MAX( MAXW,NWDS*NLEV )
+
+          IF (TYPE   .EQ.'ZONL' .AND. 
+     +        KBUF(6).NE.  1)    MEM = MAX( MAXW,NWDS )
+
+          ALLOCATE( IBUF(2*LEN),SET(MEM*MACHINE) )
+
+      END IF
+
+      IF (NF.EQ.2) GOTO 300
+
+***    COPY THE FIRST FILE WITHOUT ANY CHECKING.
+
+  200 CALL GETSET2( 1, SET,LEV,NLEV, IBUF,MAXW,OK )
+
+          IF (OK)                                              THEN
+
+              NRECS = NRECS+NLEV
+              CALL PUTSET2( 3, SET, LEV,NLEV, IBUF,MAXW )
+
+              GOTO 200
+
+          ELSE IF (MAXW.EQ.0)                                  THEN
+
+              DEALLOCATE( IBUF,SET )
+              GOTO 100
+
+          END IF
+
+***    STOP IF THE FIRST FILE IS EMPTY.
+***    NSTEP = LAST STEP NUMBER IN FIRST FILE.
+
+      WRITE(6,6010) NRECS
+
+      IF (NRECS.EQ.0) GOTO 902
+
+      NSTEP = IBUF(2)
+      NRTOT = NRECS
+
+***    THE NAME OF THE FIRST FIELD ON THE SECOND FILE
+***    IS USED TO DETERMINE THE START OF EACH NEW GROUP.
+
+  300 CALL GETSET2( 2, SET,LEV,NLEV, IBUF,MAXW,OK )
+
+          IF (OK)                                              THEN
+
+              IF (NRTOT.EQ.NRECS .AND.
+     +            NSKIP.EQ.  0   )                             THEN
+
+                  NAME = IBUF(3)
+
+***                ADD THE SECOND FILE TO THE END OF THE FIRST ONE.
+***                CHECK FOR DUPLICATE GROUPS (SAME STEP NUMBER).
+
+                  NSKIP = 0
+                  NRECS = 0
+
+              END IF
+
+              IF (IBUF(3).EQ.NAME) LASTIN = NSTEP
+
+              IF (IBUF(2).LE.LASTIN)                           THEN
+
+                  NSKIP = NSKIP+NLEV
+
+              ELSE
+
+                  NSTEP = IBUF(2)
+                  CALL PUTSET2( 3, SET, LEV,NLEV, IBUF,MAXW )
+                  NRECS = NRECS+NLEV
+
+              END IF
+
+              GOTO 300
+
+          ELSE IF (MAXW.EQ.0)                                  THEN
+
+              NF = 2
+
+              DEALLOCATE( IBUF,SET )
+              GOTO 100
+
+          END IF
+
+
+***    REACHED EOF ON BOTH FILES.
+
+      IF (NSKIP.GT.0) WRITE(6,6030) NSKIP
+                      WRITE(6,6035) NRECS
+
+                      NRTOT = NRTOT+NRECS
+
+                      WRITE(6,6050) NRTOT
+
+  901 IF (NRECS.EQ.0)                                          THEN
+          WRITE(6,6040)
+          CALL                                     XIT(' Joiner ',-1 )
+      END IF
+
+      CALL                                         XIT(' Joiner ', 0 )
+
+  902 WRITE(6,6020)
+      CALL                                         XIT(' Joiner ',-2 )
+
+*---------------------------------------------------------------------
+ 6010 FORMAT('0'I6,' records copied from first file.')
+ 6020 FORMAT('0..First input file is empty.')
+ 6030 FORMAT('0',I6,' records skipped in second file.')
+ 6035 FORMAT('0',I6,' records added from second file.')
+ 6040 FORMAT('0..Second file empty or has no new steps.')
+ 6050 format('0',i6,' records now on new file.')
+
+      END
+#     endif

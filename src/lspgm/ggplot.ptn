@@ -1,0 +1,2461 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggplot  Z U V X INPUT OUTPUT [ -t1 VAL1 -name VAL2 -lv1 VAL3 \ 
+*                                     -kind VAL4 -def ] 
+*
+*
+*     DESCRIPTION...
+*      ggplot  - CREATES NCAR MAP AND/OR VECTOR PLOT FROM CCC FILE(S)
+*
+*
+*     AUTHORS - J.D.Henderson, L.Lefaivre AND R.Laprise.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggplot.ptn,v 4.32 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     PURPOSE - PLOT MAPS OF Z, Z AND X, VECTOR FIELD OF (U,V), Z AND (U,V),
+*               Z, X AND (U,V), WITH OR WITHOUT CONTINENTAL OUTLINE, ON LAT-
+*               LONG OR POLAR STEREOGRAPHIC PROJECTION. CONTOURS OF Z AND X 
+*               MAY BE PLOTTED BY CONTOURING ISOTROPIC LINES, OR FILLING 
+*               CONTOUR LEVELS WITH PATTERNS, OR A COMBINATION OF BOTH FOR 
+*               EACH FIELD.
+*
+*               TO PLOT A SUB-AREA, EXECUTE PROGRAM SUBAREA TO PRODUCE
+*               THE IELDS Z, X, U, V AS NEEDED. IF SUBAREA IS NOT CALLED, 
+*               Z,X,U AND V WILL BE TREATED AS GLOBAL OR HEMISPHERIC DATA, 
+*               IE PLOTTED OVER A GLOBAL OR HEMISPHERIC MAP, ACCORDING
+*               TO IBUF(7). THE PROGRAM USES THE NCAR PLOT PACKAGE.
+*               
+*
+*     INPUT FILES...
+*      Z    = FILE CONTAINING GRIDS TO BE CONTOURED/SHADED
+*      U,V  = FILES CONTAINING THE U AND V WIND COMPONENTS TO BE PLOTTED
+*      X    = POSSIBLE SECOND FILE CONTAINING GRIDS TO BE CONTOURED/SHAD
+*
+*
+*     CARDS READ...
+*
+*     FOR CONTOUR MAP...
+*     ===============
+*
+*     CARD 1-
+*     ------
+*      READ(5,5010)NSTEP,NAME,LEVEL,ICOSH1,ICOSH2,MS,SCAL,
+*                  FLO,HI,FINC,MOD,LHI,JPS
+*5010  FORMAT(10X,I10,1X,A4,I5,2I1,I3,4E10.0,I1,2I2)
+*
+*      NSTEP (t1) TIMESTEP NUMBER
+*                 =   -1,  FOR A DON'T CARE CONDITION.
+*      NAME       NAME OF THE VARIABLE TO BE CONTOURED.
+*                 ='SKIP', AND VECTOR PLOT IS LATER INTENDED, MOD HAS TO
+*                          BE CORRECTLY SPECIFIED ON THIS FIRST SKIP CARD.
+*                 ='NEXT', TO CONTOUR NEXT FIELD,
+*                 = BLANK, TO NOT CHECK THE NAME OF THE NEXT FIELD,
+*                 ='ALL',  TO CONTOUR ALL FIELDS. THE CARD SET IS ONLY
+*                          READ ONCE AND APPLIED EVERYWHERE.
+*      LEVEL (lv1) LEVEL NUMBER
+*      ICOSH1     CONTOUR LINE/FILL CODE FOR FIRST SCALAR FIELD.
+*      ICOSH2     CONTOUR LINE/FILL CODE FOR SECOND SCALAR FIELD.
+*                 = 0, CONTOUR LINES ONLY
+*                 = 1, CONTOUR LINES, NO ZERO LINE
+*                 = 2, CONTOURS AND SHADING
+*                 = 3, CONTOURS AND SHADING, NO ZERO LINE
+*                 = 4, SHADING ONLY
+*
+*                 NOTE : FOR THE NO ZERO LINE OPTION, IT IS ASSUMED THAT
+*                        SCAL,FLO,HI,FINC ARE CHOSEN SO THAT (0.-FLO)/FI
+*                        IS AN INTEGER DIVISIBLE BY TWO, AND THAT NEITHE
+*                        FLO OR HI = 0.
+*
+*      MS         WAS LINE PRINTER MAP SCALE CONTROL (NO LONGER SUPPORTED).
+*                 IF MS<0 THEN THE PUBLICATION QUALITY OPTIONS ARE ACTIVE.
+*                 =-1, NO CONTOUR LABELS, THICKER LINES, NO HIGH,LOW LABELS.
+*                 =-2, NO CONTOUR LABELS, THICKER LINES.
+*      SCAL       SCALING FACTOR. IF SCAL = 0. THEN SCAL,FLO,HI AND
+*                 FINC ARE CHOSEN BY THE PROGRAM.
+*      FLO        LOWEST VALUE TO BE CONTOURED
+*      HI         HIGEST VALUE TO BE CONTOURED
+*      FINC       CONTOUR INTERVAL
+*      MOD        = 0, ONE SCALAR FIELD ONLY.
+*                 = 1, VECTOR PLOT ONLY (CARD 1 USED ONLY TO DEFINE MOD,
+*                      AND JPS CARD 2 IS IGNORED)
+*                 = 2, BOTH SCALAR AND VECTOR FIELDS ARE PLOTTED.
+*                 = 3, TWO SCALAR FIELDS (IF BOTH CONTOURED, THE FIRST
+*                      WILL USE SOLID LINES, THE SECOND WILL USE DASHED)
+*                 = 4, TWO SCALAR FIELDS, 1 VECTOR FIELD.
+*      LHI        =0,1,HIGHS,LOWS LABELLED. LON   0 IN CENTRE. M,P DRAWN
+*                 =-1, .......NOT LABELLED. LON   0 IN CENTRE. M,P DRAWN
+*                 = 2, HIGHS,LOWS LABELLED. LON 180 IN CENTRE. M,P DRAWN
+*                 =-2, .......NOT LABELLED. LON 180 IN CENTRE. M,P DRAWN
+*                 = 3, HIGHS,LOWS LABELLED. LON   0 IN CENTRE. M,P NOT D
+*                 =-3, .......NOT LABELLED. LON   0 IN CENTRE. M,P NOT D
+*                 = 4, HIGHS,LOWS LABELLED. LON 180 IN CENTRE. M,P NOT D
+*                 =-4, .......NOT LABELLED. LON 180 IN CENTRE. M,P NOT D
+*
+*                 NOTE : THE LON 0/180 OPTION IS ONLY EXECUTED FOR GLOBA
+*                        LAT-LON PLOTS. OTHERWISE IT IS IGNORED.
+*
+*      ABS(JPS)   = 1, NMC STANDART 55x51 POLAR STEREOGRAPHIC PROJECTION.
+*                 = 2, NON-STANDART POLAR STEREOGRAPHIC PROJECTION. 
+*                 = 7, SQUARE PLOT IRREGARDLESS OF ASPECT RATIO OF INPUT
+*                      FILE. TICKS ON SIDE OF PLOT AT EACH DATA POINT. T
+*                      DATA POINTS ARE THE ORIGINAL GRID POINTS IF PLOTT
+*                      A CYLINDRICAL EQUIDISTANT PLOT. OTHERWISE THEY AR
+*                      INTERPOLATED POINTS, AND BEAR NO RELATION TO THE
+*                      ORIGINAL MODEL GRID. NO CONTINENTAL OUTLINE.
+*                 =0,8,CYLINDRICAL EQUIDISTANT PROJECTION.
+*                 = 9, SAME AS FOR JPS=7, BUT THE ASPECT RATIO OF THE
+*                      PLOT IS THE SAME AS THAT OF THE INPUT FILE.
+*      JPS        < 0, NO CONTINENTAL OUTLINE IS PLOTTED.
+*
+*                 NOTE : IF JPS = 7 OR 9 WHEN PLOTTING A VECTOR FIELD ON
+*                        OR NOT CONTOURING THE FIRST SCALAR FIELD (MOD=1
+*                        ICOSH=4) JPS IS SET TO 8, AND A WARNING MESSAGE
+*                        PRINTED.
+*
+*     CARD 2-
+*     ------
+*      READ(5,5015) LABEL1
+*5015  FORMAT(A80)
+*
+*      LABEL1 IS AN 80 CHARACTER LABEL FOR CONTOUR MAP. ABSENT IF NAME='SKIP'.
+*
+*
+*     FOR NON-STANDART POLAR/STEREOGRAPHIC PROJECTIONS... 
+*     ================================================ 
+*
+*     CARD 3- 
+*     ------- 
+*
+*      READ(5,5020) IP,JP,D60,DGRW 
+*5020  FORMAT(20X,2I5,2E10.0) 
+*
+*      IP,JP        POSITION OF THE POLE WITH RESPECT TO THE ARRAY 
+*                   ORIGIN (1,1).  THIS DOES NOT HAVE TO BE INSIDE 
+*                   THE ARRAY (I.E. EITHER NUMBERS CAN BE NEGATIVE 
+*                   OR  LARGER THAN THE ACTUAL ARRAY SIZES). (1,1) 
+*                   WILL MEAN THAT THE POLE  AND ORIGIN  COINCIDE. 
+*      DGRW         THE ORIENTATION OF THE GREENWICH MERIDIAN WITH 
+*                   TO THE HORIZONTAL. POSITIVE  VALUES CLOCKWISE. 
+*      D60          DEFINES THE GRID SIZE IN METERS. 
+*
+*      THE LAST TWO VALUES SHOULD BE THE SAME AS THE ONES ENTERED 
+*      IN A PREVIOUSLY CALLED GGAPS, AND HAVE THE SAME MEANING... 
+*
+*
+*     FOR SHADING CONTOUR LEVELS OF FIRST SCALAR FIELD
+*     ================================================
+*
+*     CARD 4-
+*     -------
+*      READ(5,5025) NPAT, (IPAT(I),I=1,NPAT)
+*5025  FORMAT(10X,10I5)
+*
+*      NPAT        NUMBER OF GRAY SCALE LEVELS. (3 TO 20 LEVELS).
+*                  = 0, IMPLIES 10.
+*      IPAT(NPAT)  NPAT GRAY SCALE PATTERN CODES.
+*                  0=WHITE, 48=LIGHT GREY, 49+ = INCREASINGLY DARKER GRE
+*                  INPUT 0,48,50,52,... OR 0,48,0,48,... SUGGESTED.
+*                 (IRRELEVANT IF NPAT=0)
+*
+*
+*     CARD 5-
+*     -------
+*      READ(5,5030) (ZLEV(I),I=1,NPAT)
+*5030  FORMAT(10X,7E10.0)
+*
+*      ZLEV(NPAT) = NPAT DATA VALUES AT WHICH TO CHANGE SHADING PATTERNS
+*                   THE FIRST IPAT PATTERN WILL SHADE THE CONTOUR LEVEL
+*                   WITH VALUES < ZLEV(1). THE SECOND IPAT PATTERN WILL
+*                   SHADE AREAS WITH VALUES BETWEEN ZLEV(1) AND ZLEV(2),
+*                   AND SO ON FOR THE REST OF THE ARRAY.
+*                  (IRRELEVANT IF NPAT=0)
+*
+*
+*     FOR SECOND SCALAR FIELD
+*     =======================
+*
+*     CARD 6-
+*     ------
+*      READ(5,5010)NSTEP,NAME,LEVEL,ICOSH1,ICOSH2,MS,SCAL,FLO,
+*                  HI,FINC,MOD,LHI,JPS
+*5010  FORMAT(10X,I10,1X,A4,I5,2I1,I3,4E10.0,I1,2I2)
+*
+*      VARIABLES IN () ARE NOT USED, BUT THEIR PLACES HAVE BEEN KEPT.
+*
+*      NSTEP      TIMESTEP NUMBER
+*      NAME       NAME OF THE VARIABLE TO BE CONTOURED.
+*      LEVEL      LEVEL NUMBER
+*      (ICOSH1)   NOT USED
+*      (ICOSH2)   NOT USED
+*      (MS)       NOT USED
+*      SCAL       SCALING FACTOR. IF SCAL = 0. THEN SCAL,FLO,HI AND
+*                 FINC ARE CHOSEN BY THE PROGRAM.
+*      FLO        LOWEST VALUE TO BE CONTOURED
+*      HI         HIGEST VALUE TO BE CONTOURED
+*      FINC       CONTOUR INTERVAL
+*      (MOD)      NOT USED
+*      LHI        =0,1,HIGHS,LOWS LABELLED
+*                 =-1, .......NOT LABELLED
+*      (JPS)      NOT USED
+*
+*     CARD 7-
+*     -------
+*      READ(5,5015) LABEL2
+*5015  FORMAT(A80)
+*
+*      LABEL2 IS AN CHARACTER LABEL FOR SECOND SCALAR FIELD
+*
+*
+*     FOR SHADING CONTOUR LEVELS OF SECOND SCALAR FIELD
+*     =================================================
+*
+*     CARD 8-
+*     -------
+*      SAME AS CARD 3
+*
+*     CARD 9-
+*     -------
+*      SAME AS CARD 4
+*
+*
+*     FOR VECTOR PLOT...
+*     ===============
+*
+*     CARD 10-
+*     -------
+*      READ(5,5035) VSCAL,VLO,VI,INCX,INCY
+*5035  FORMAT(10X,3E10.0,2I5)
+*
+*      VSCAL      SCALING FACTOR FOR VECTOR MAGNITUDE
+*      VLO        LOWEST VECTOR MAGNITUDE TO BE PLOTTED
+*      VI         VECTOR MAGNITUDE TO BE DRAWN AS ARROW OF LENGTH  DX
+*      INCX       EVERY INCX GRID POINT VECTOR IS PLOTTED ALONG X AXIS
+*      INCY       EVERY INCY GRID POINT VECTOR IS PLOTTED ALONG Y AXIS
+*
+*      NOTE : NO SCALING IS DONE IF INCX OR INCY IS LESS THAN 1 .
+*
+*     CARD 11-
+*     --------
+*      READ(5,5015) LABELV
+*5015  FORMAT(A80)
+*
+*      LABELV IS AN 80 CHARACTER LABEL FOR VECTOR PLOT.
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+* GGPLOT.         -1   -1   -134  0        1.     -100.      100.
+*  CONTOUR AND SHADE FIRST FIELD FROM -100 TO 100 BY 5. (SCREEN FILLING)
+*             7   52    0   48    0   48    0   52
+*                 0.       10.       15.       20.       25.       30.
+* GGPLOT.         -1   -1   -1             1.        0.      100.
+*   SHADE SECOND FIELD WITH SEVEN SHADING LEVELS.
+*             7   52    0   48    0   48    0   52
+*                 0.       10.       15.       20.       25.       30.
+*                 1.        0.       10.    2    2
+* VECPLOT OF EVERY SECOND (U,V) VECTOR.
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     NOTES   - 1) VALUES EQUAL TO "SPVAL=10.E37" ARE NOT PLOTTED.
+*               2) IF THE '-def' KEY IS SPECIFIED, THE PROGRAM ENTERS AN
+*                  AUTOMATIC PLOTTING MODE IN WHICH EVERY RECORD IN FILE
+*                  Z WILL BE PLOTTED, EITHER USING DEFAULT PARAMETRES VALUES
+*                  OR INFORMATION FOUND ON THE FILE ITSELF. THE ONLY VALUE
+*                  THAT CAN THEN BE SPECIFIED IS JPS (USING THE '-kind' KEY).
+*               3) OTHERWISE, 2 TO 11 CARDS ARE READ IN.
+*               4) WHEN USING RPN STD FILES, THE LABEL1,LABEL2 AND LABELV
+*                  INPUT FIELDS CAN CONTAIN THE %NOMVAR% AND/OR %ETIKET%
+*                  SPECIAL VALUES. THESE WILL THEN BE REPLACED AT RUN
+*                  TIME BY THE ACTUAL VALUES OF NOMVAR AND ETIKET FOR
+*                  THE CURRENT FIELDS BEING PLOTTED.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS 
+*
+*     FATAL CONDITIONS...
+*       1 SECOND SCALAR FIELD NOT SAME SIZE AS FIRST
+*       2 FIRST VECTOR  FIELD NOT SAME SIZE AS FIRST SCALAR
+*       3 SECOND VECTOR  FIELD NOT SAME SIZE AS FIRST SCALAR
+*       4 ERROR ABORT READING INPUT CARD 1. NO PLOTS PRODUCED.
+*       5 ERROR ABORT READING INPUT CARD 2
+*       6 ERROR ABORT READING INPUT CARD 3
+*       7 ERROR ABORT READING INPUT CARD 4
+*       8 ERROR ABORT READING INPUT CARD 5
+*       9 ERROR ABORT READING PLTINFO
+*      10 ERROR ABORT READING INPUT CARD 6
+*      11 ERROR ABORT READING INPUT CARD 7
+*      12 ERROR ABORT READING INPUT CARD 8
+*      13 ERROR ABORT READING INPUT CARD 9
+*      14 ERROR ABORT READING INPUT CARD 10
+*      15 ERROR ABORT READING INPUT CARD 11
+*      16 PLTINFO ERROR
+*
+*     NON-FATAL CONDITIONS...
+*     101 NO MORE FIELDS AVAILABLE FROM FILE Z
+*     102 Z RECORD TYPE IS NOT GRID OR SUBA
+*     103 NO MORE FIELDS AVAILABLE FROM FILE U
+*     104 U RECORD TYPE IS NOT GRID OR SUBA
+*     105 pltinfo PATH NAME TOO LONG
+*     106 COULD NOT FIND FILE pltinfo
+*     107 NO MORE FIELDS AVAILABLE FROM FILE X
+*     108 X RECORD TYPE IS NOT GRID OR SUBA
+*     109 NO MORE FIELDS AVAILABLE FROM FILE V
+*     110 V RECORD TYPE IS NOT GRID OR SUBA
+*     111 EOF ON FILE Z AFTER SKIP
+
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggplot
+*    +               ( Z,       U,       V,       X,       INPUT,
+*    +                                                     OUTPUT,
+*    +           TAPE1=Z, TAPE2=U, TAPE3=V, TAPE4=X, TAPE5=INPUT,
+*    +                                               TAPE6=OUTPUT)
+*     ------------------------------------------------------------
+
+*     $Log: ggplot.ptn,v $
+*     Revision 4.32  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.31  2013/11/28 22:24:33  dugas
+*     Faire des appels a MISPAR apres chaque lecture.
+*
+*     Revision 4.30  2010/05/06 16:26:15  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*     - CVMGT est remplace par la fonction intrinseque MERGE.
+*
+*     Revision 4.29  2008/07/24 19:57:42  dugas
+*     Les parametres de la ligne de commande -t1, -name et -lv1
+*     sont maintenant pris en charge par ce module. Le dernier
+*     d'entre eux peut etre specifie avec 10 caracteres, donc
+*     avec des formats entiers (code) ou reels (decode).
+*
+*     Revision 4.28  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.27  2008/04/25 21:15:37  dugas
+*     Redefinir SLEVEL avant l'appel a GET_IP1_STRING.
+*
+*     Revision 4.26  2007/12/20 21:06:37  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.25  2006/07/04 18:16:13  dugas
+*     - Ajouter le support des donnees manquantes par le biais soit
+*       du parametre "-mvalue valeur [epsilon]", soit de la variable
+*       d'environnement "MISSING_VALUE=valeur", ou "valeur" est le
+*       nombre reel denotant une valeur manquante et "epsilon" est
+*       le facteur de precision utilise dans les comparaisons. La
+*       valeur par defaut de epsilon est 1%. La seconde methode a
+*       preseance sur la premiere.
+*     - Modifier la mise a l'echelles des grilles scalaires. Le calcul
+*       utilise maintenant le "epsilon" retourne par la routine MISPAR.
+*
+*     Revision 4.24  2002/02/02 00:29:46  dugas
+*     Forcer la majusculisation du parametre NAME
+*
+*     Revision 4.23  2001/10/29 14:49:53  armnrbd
+*     Documenter les options %NOMVAR% et %ETIKET% pour les LABELS.
+*
+*     Revision 4.22  2001/10/23 14:18:14  armnrbd
+*     Ajouter le traitement de %NOMVAR% et %ETIKET% dans les labels.
+*
+*     Revision 4.21  2001/03/16 22:09:11  armnrbd
+*     Utiliser GETHIC/GETHIGH plutot que GETPARC/GETPARI.
+*
+*     Revision 4.20  2000/04/03 15:28:52  armnrbd
+*     Verifier le resultat de l'allocation dynamique de memoire.
+*
+*     Revision 4.19  1999/06/28 14:06:42  armnrbd
+*     Corriger la lectures des IPATx et ZLEVx.
+*     Corriger le rembonnage des unites I/O.
+*
+*     Revision 4.18  1999/05/14 20:49:43  armnrbd
+*     Utiliser le repertoire BIG_TMPDIR pour pltinfo.
+*
+*     Revision 4.17  1999/04/08 22:10:04  armnrbd
+*     Definir des valeurs par defauts des parametres qui peuvent
+*     etre lus sur la premiere ligne de directives. Ceux-ci ne
+*     sont plus initilalises dans le mode "-def".
+*
+*     Revision 4.16  1999/03/29 22:40:54  armnrbd
+*     Initialiser les valeurs de la premiere ligne d'entree.
+*
+*     Revision 4.15  1999/01/19 21:12:28  armnrbd
+*     Remplacer SCOPY par DSCOPY.
+*
+*     Revision 4.14  1998/10/19  14:57:51  armnrbd
+*     Modifier la ducumentation.
+*     Faire a appel a la fonction Y2KDAT.
+*
+*     Revision 4.13  1998/09/24  19:47:41  armnrbd
+*     Corriger le mode FLIP.
+*     Tenir compte de la repetition (ou non) du meridien de GW.
+*
+*     Revision 4.12  1998/07/23  03:27:10  armnrbd
+*     Renverser l'ordre des latitudes pour une grille Lat-Long si IG2=1 (suite).
+*
+*     Revision 4.11  1998/07/22  19:54:58  armnrbd
+*     Renverser l'ordre des latitudes pour une grille Lat-Long si IG2=1.
+*
+*     Revision 4.10  1998/07/14  18:19:17  armnrbd
+*     Agrandir le format de la date pour le mode automatique (bis).
+*
+*     Revision 4.9  1998/07/14  16:50:58  armnrbd
+*     Agrandir le format de la date pour le mode automatique.
+*
+*     Revision 4.8  1998/07/03  02:26:26  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.7  1998/05/28  20:02:06  armnrbd
+*     Modifier le mode qualite publication (MS=-2).
+*
+*     Revision 4.6  1998/02/18  16:45:51  armnrbd
+*     Verifier les niveaux input avec CHKLVLC.
+*
+*     Revision 4.5  1998/01/05  15:23:18  armnrbd
+*     Mettre plus d'info sur le titre dans le mode automatique.
+*
+*     Revision 4.4  1997/09/26  17:38:56  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1997/08/21  16:21:59  armnrbd
+*     Utiliser GETSIZ pour determiner la taille des grilles.
+*
+*     Revision 4.2  1997/02/17  03:44:30  armnrbd
+*     Corriger les numeros I/O de certains modes de travail.
+*
+*     Revision 4.1  1995/11/01  21:53:08  armnrbd
+*     Ajouter le parametre '-kind'.
+*
+*     Revision 4.0  1994/11/17  14:20:23  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/08/13  20:24:06  armnrbd
+*     Ajouter le support de grilles hemispheriques lat-lon.
+*     
+*     Revision 3.1  94/03/31  15:40:14  armnrbd
+*     Corriger l'affichage de vecteurs en dehors du cadre.
+*     
+*     Revision 3.0  93/10/13  13:56:12  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.8  93/06/09  20:34:25  20:34:25  armnrbd (Bernard Dugas)
+*     Remplacer la chaine "  -1" par "NEXT" a l'interne.
+*     
+*     Revision 1.7  93/02/24  15:37:03  armnrbd
+*     Implanter l'utilisation de "CALL SUIVANT".
+*     Utiliser "CALL PRECEDE" plutot que "REWIND".
+*     
+*     Revision 1.6  92/12/14  13:46:43  armnrbd
+*     Fixer MR=1 plutot que MR=5.
+*     Implanter la geographie a 0.1 degree pour de petites fenetres.
+*     
+*     Revision 1.5  92/06/03  11:52:26  armnrbd
+*     Utliser la police #4 dans PWRIT.
+*     
+*     Revision 1.4  92/04/09  15:33:13  armnrbd
+*     Corriger un bogue dans le traitement des vecteurs.
+*     
+*     Revision 1.3  92/03/17  12:36:09  armnrbd
+*     Correction mineure.
+*     
+*     Revision 1.2  92/03/17  12:33:28  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/11  11:37:57  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:44  armnrbd
+*     Initial revision
+*     
+
+*     AUG 20/91 - B.DUGAS     (USE BUNDLES FOR LABL/MAJR/MINR OPTIONS)
+*     MAY 23/91 - B.DUGAS     (MODIFY AUTOMATIC SHADING PATERNS)
+*     MAY 10/91 - B.DUGAS     (Add 'ALL' mode;
+*                              Automatic shade selection)
+*     MAR 21/91 - B. Dugas    (Version CY920/ IRIX F77)
+*     APR 17/90 - F. MAJAESS  (CHANGE CONREC MASK VALUE TO "10.E500")
+*     MAR 07/90 - F. MAJAESS  (SET CONREC MASK VALUE = "10.E1500")
+*     OCT 30/89 - F. MAJAESS  (CORRECT LAT/LON VALUES FOR P.S. PLOT)
+*     JUN 13/88 - F. MAJAESS  (ADD A CHECK FOR KIND WITH WARNING EXIT)
+*     APR 14/88 - F. MAJAESS  (REPLACE CALLS TO MOVLEV SUBROUTINE BY
+*                              CALLS TO THE CRAY SUBROUTINE SCOPY)
+*     FEB 29/88 - F. MAJAESS  (DISABLE HEAVY CONTINENTAL OUTLINE FOR
+*                              PUBLICATION QUALITY OPTION)
+*     AUG 10/87 - M.SUTCLIFFE (REWRITE..........................
+*                              GENERALIZE PLOTTED AREA, ADD SECOND SCALA
+*                              FIELD OPTION, ADD CONTOUR LEVEL SHADING,
+*                              THICKEN PUBLICATION QUALITY LINES, LABEL
+*                              CORNER COORDINATES OF C.E. PROJ'N SUB-ARE
+*                              PLOTS.)
+*     AVR 10/85 - R.LAPRISE, B.DUGAS. (ADD PUBLICATION QUALITY OPTION,
+*                              AUTOMATIC SCALING AND 2-D SIMPLE MAP FILL
+*                              AND ZEROING-OUT OF THE VECTOR POLE VALUES
+
+*-----------------------------------------------------------------------
+      IMPLICIT     REAL (A-H,O-Z), INTEGER (I-N)
+
+      INTEGER      NPAT0
+      PARAMETER  ( NPAT0   = 21 )
+
+      LOGICAL      OK1,OK2,OK3,OK4
+      LOGICAL      OK,FLIP,SUBAREA,MP,PUB,CONT,CONT1,CONT2,
+     +             SHAD,SHAD1,SHAD2,ALL,MAP,CRNLAB,PS,SECOND,
+     +             NZERO,NZERO1,NZERO2,SQUARE,TICK,EX,ERR,GREP
+      INTEGER      IPAT(NPAT0),IPAT1(NPAT0),IPAT2(NPAT0),HEAD,PJPS
+      REAL         ZLEV(NPAT0),ZLEV1(NPAT0),ZLEV2(NPAT0),ASCAL1,ASCAL2
+      INTEGER      IBUF1(8),IBUF2(8),IBUFV(8), VKIND0,VKIND1,VKIND2
+      INTEGER      MAXW,LENI,NWDS,KPAK
+
+      INTEGER      IOS1,IOS2,IOV1,IOV2, KBUF(taille_entete)
+      INTEGER      MAJR,MINR,NORM,VALU,LABL,VTIK(4),VHIC(5)
+      CHARACTER*4  ETIK(4),THIC(5)
+
+      CHARACTER    GRTYP
+      INTEGER      IG1,IG2,IG3,IG4
+      REAL         TP,RLV1,RLV2
+
+      LOGICAL      MVALUE
+      REAL*8       SPVAL8,EPSIL8
+      REAL         SPVAL, EPSIL
+
+      INTEGER*8    NSTEP
+      INTEGER      NSTEP1 ,NSTEP2
+      CHARACTER*20 ATEMPS1,ATEMPS2,ATEMPSV
+      CHARACTER*4  PNAME1 ,PNAME2 ,PNAMEV
+      CHARACTER*12 ETIKET1,ETIKET2,ETIKETV
+
+      CHARACTER*4  NAME,NAME1,NAME2,TYPE
+      CHARACTER*12 NIVEAU1,NIVEAU2,NIVEAUV
+      CHARACTER*88 LABEL,LABEL1,LABEL2,LABELV,LIGNE
+      CHARACTER    EVALUE*256,LNAME*256,TMPDIR*6
+      CHARACTER    ANSTEP*20,ALEVEL*10,SLEVEL*15
+
+      POINTER    ( IB,IBUF(8) )
+      POINTER    ( JB,JBUF(8) )
+
+      POINTER    ( BN,GG2(1) )
+      POINTER    ( IU,U(1) )
+      POINTER    ( IV,V(1) )
+      POINTER    ( IT,TP(1) )
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC
+      INTEGER*8   Y2KDAT8
+      CHARACTER*4 GETYP,GETHIC,PKTYP
+      INTEGER     GETSIZ,GETHIGH,GETKIND
+      EXTERNAL    JCLPNT,GETYP,SYSDAT,BNDLSET,ISPSET,GETLIGN,VELSET,
+     +            PRECON3,ISPGET,CONISP,HAFLVS,HAFTONP,GETSIZ,
+     +            PRECEDE,SUIVANT,LEADBLK,GETFLD2,XIT,BURNF,CIGAXG,
+     +            DSCOPY,GETMPN,GETHIC,LLFXY,POLSTR,CYLEQ,Y2KDAT8,
+     +            VELVCT,OPTN,GETSET,LOW2UP,PWRIT,FRAME,RPBLOC,
+     +            HPALLOC,HPDEALLC,GETHIGH,ROWORDS,
+     +            MISPAR,GETKIND
+
+      DATA         OK1,OK2,OK3,OK4 / 4*.FALSE. /
+
+      DATA         OK     / .TRUE.   /
+      DATA         ALL    / .FALSE.  /
+      DATA         TMPDIR / 'TMPDIR' /
+      DATA         PJPS   /   -999   /
+      DATA         IPAT   / 104,101, 89, 81, 21, 85, 91,101,104, 12*0 /
+      DATA         ZLEV   / 
+     +             1.0E36,2.0E36,3.0E36,4.0E36,5.0E36,6.0E36,7.0E36,
+     +             8.0E36,9.0E36,1.0E37,1.1E37,1.2E37,1.3E37,1.4E37,
+     +             1.5E37,1.6E37,1.7E37,1.8E37,1.9E37,2.0E37,2.1E37
+     +                    /
+
+***    INITIALZE INPUT LINES (IN CASE OF "-def" MODE).
+
+      DATA         ANSTEP ,  NAME1 , ALEVEL /
+     +               ' '  ,   ' '  ,   ' '  /
+      DATA         ICOSH1 , ICOSH2 ,     MS ,  MODP ,  LHI1 ,  JPS /
+     +                  0 ,      0 ,      0 ,     0 ,     0 ,    0 /
+      DATA          SCAL1 ,   FLO1 ,    HI1 , FINC1 /
+     +                0.0 ,    0.0 ,    0.0 ,   0.0 /
+
+      DATA          LABEL /   ' '  /
+
+      DATA             IP ,     JP ,    D60 ,  DGRW /
+     +                  0 ,      0 ,    0.0 ,   0.0 /
+
+      DATA          NPAT1 ,  NPAT2 /
+     +                  0 ,      0 /
+
+      DATA          NAME2 /   ' '  /
+      DATA             I1 ,     I2 ,    MS2 ,    I3 ,  LHI2 ,   I4 /
+     +                  0 ,      0 ,      0 ,     0 ,     0 ,    0 /
+      DATA          SCAL2 ,   FLO2 ,    HI2 , FINC2 /
+     +                0.0 ,    0.0 ,    0.0 ,   0.0 /
+
+      DATA         LABEL2 /   ' '  /
+
+      DATA          VSCAL ,    VLO ,     VI ,  INCX ,  INCY /
+     +                0.0 ,    0.0 ,    0.0 ,     0 ,     0 /
+
+      DATA         LABELV /   ' '  / 
+      DATA         ETIKET1,ETIKET2,ETIKETV /  3*' '  /
+      DATA         LENE1  ,LENE2  ,LENEV   /  3* 0   /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggplot.ptn,v $'
+
+*--------------------------------------------------------------------
+      CALL MACSPE( HEAD,ZERO )
+
+***    ASSIGN I/O UNITS.
+
+      NF=6
+      CALL JCLPNT( NF, 1,2,3,4, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      IF (PKTYP.EQ.'SQ')                                      THEN
+          MAXW = GETSIZ( 1, KBUF,LENI,NWDS,KPAK )
+          IF (MAXW.LE.0) CALL                      XIT(' Ggplot ',-101)
+      END IF
+
+      VKIND0 = GETKIND( )
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK1 = RPBLOC('T1',LIGNE)
+          IF (OK1) ANSTEP  = LIGNE
+
+          OK2 = RPBLOC('NAME',LIGNE)
+          IF (OK2) NAME1  = LIGNE
+
+          OK3 = RPBLOC('LV1',LIGNE)
+          IF (OK3) ALEVEL = LIGNE
+
+          OK4 = RPBLOC('KIND',LIGNE)
+          IF (OK4) READ(LIGNE,5,END=905,ERR=905,IOSTAT=IO) PJPS
+
+          ALL = RPBLOC('DEFAUT',LIGNE)
+          ALL = ( ALL .OR. OK1 .OR. OK2 .OR. OK3 .OR. OK4 )
+
+          LIGNE = ' '
+
+      END IF
+
+      CALL SYSDAT
+      NPLOT = 0
+
+***    DEFINE BUNDLES.
+
+      MAJR = 1
+      MINR = 2
+      LABL = 3
+      VALU = 4
+      NORM = 5
+
+      THIC(1) ='SIZE'
+      THIC(2) ='INTE'
+      THIC(3) ='ENHA'
+      THIC(4) ='CASE'
+      THIC(5) ='THIC'
+      VHIC(1) = 240
+      VHIC(2) =  3
+      VHIC(3) =  1
+      VHIC(4) =  4
+      VHIC(5) =  2
+
+      ETIK(1) ='SIZE'
+      ETIK(2) ='INTE'
+      ETIK(3) ='ENHA'
+      ETIK(4) ='CASE'
+      VTIK(1) = 480
+      VTIK(2) =  3
+      VTIK(3) =  1
+      VTIK(4) =  4
+
+      CALL BNDLSET( THIC ,VHIC,5,NORM)
+      CALL BNDLSET('THIC',  4, 1,MAJR)
+      CALL BNDLSET('THIC',  2, 1,MINR)
+      CALL BNDLSET( ETIK, VTIK,4,LABL)
+
+      CALL ISPSET(4HLABL, LABL )
+      CALL ISPSET(4HRNDV, 1.0  )
+      CALL ISPSET(3HNHL,   5   )
+      CALL ISPSET(3HNLB,   5   )
+      CALL ISPSET(3HNPV,   5   )
+
+***    CARD 1 ******************************
+
+  110 IF (.NOT.ALL) CALL GETLIGN( 5, LIGNE,80, OK )
+
+      IF (.NOT.OK)                                             THEN
+          GOTO 905
+      ELSE IF (LIGNE.EQ.' ' .AND. NPLOT.EQ.0)                  THEN
+          IF (.NOT.OK1) ANSTEP = '   '
+          IF (.NOT.OK2) NAME1  = 'ALL'
+          IF (.NOT.OK3) ALEVEL = '   '
+      ELSE
+          ALEVEL = ' '
+          READ( LIGNE, 5010,END=905,ERR=905,IOSTAT=IO ) 
+     +                      ANSTEP,NAME1,ALEVEL(1:5),ICOSH1,ICOSH2,
+     +                      MS,SCAL1,FLO1,HI1,FINC1,MODP,LHI1,JPS
+      END IF  
+
+***    CHECK FOR AUTOMATIC MODE, I.E. NAME='ALL'. 
+***    IF MODE IS SET, RESET NAME TO 'NEXT'.
+
+      CALL LOW2UP( NAME1,NAME1 )
+      IF (NAME1 .NE.' ') CALL LEADBLK( NAME1 )
+      IF (ALEVEL.NE.' ') CALL LEADBLK( ALEVEL )
+
+      IF (NAME1.EQ.'ALL')                                      THEN
+          ALL    = .TRUE.
+          NAME1  = ' '
+          IF (ANSTEP.EQ.' ') ANSTEP = '-1'
+          IF (ALEVEL.EQ.' ') ALEVEL = '-1'
+      ELSE IF (NAME1.EQ.'-1')                                  THEN
+          NAME1  = ' '
+      END IF
+
+      READ(ANSTEP,20,ERR=905,IOSTAT=IO ) NSTEP
+      NSTEP = Y2KDAT8( NSTEP ) ; CALL DATE2STAMP( NSTEP,NSTEP1 )
+
+      IF (ALEVEL.NE.'-1')                                      THEN
+         IF (INDEX( ALEVEL,'.' ).EQ.0)                         THEN
+            READ(ALEVEL,10,ERR=905,IOSTAT=IO ) LEVEL1
+            CALL  CONVPR( LEVEL1, RLV1, VKIND1, -2 )
+            IF (PKTYP.EQ.'SQ') CALL CONVPR( LEVEL1,RLV1,VKIND1, +2 )
+         ELSE
+            READ(ALEVEL,11,ERR=905,IOSTAT=IO ) RLV1
+            IF (PKTYP.EQ.'SQ')                                 THEN
+               CALL  CONVPR( LEVEL1, RLV1, VKIND0, +2 )
+            ELSE
+               CALL LVCODE( LEVEL1,RLV1/1000.,1 )
+            END IF
+         END IF
+      ELSE
+         LEVEL1 = -1
+      END IF
+
+      WRITE(6,6010) NPLOT+1
+
+***    SET NCAR OPTIONS BACK TO DEFAULTS
+
+*     CALL ISPSET('CCAR', '*'  )
+*     CALL ISPSET('EXT' , 0.25 )
+*     CALL ISPSET('ECLR',.TRUE.) 
+*     CALL ISPSET('IETI',  1   )
+
+      CALL ISPSET(4HMAJR, NORM )
+      CALL ISPSET(4HMINR, -1   )
+      CALL ISPSET(3HNHI,   1   )
+      CALL ISPSET(4HECOL,  0   )
+      CALL ISPSET(4HVALU, LABL )
+      CALL ISPSET(4HILAB,  1   )
+      CALL ISPSET(4HNULB,  1   )
+      CALL ISPSET(4HOFFM,  0   )
+      CALL VELSET(4HOFFM,  0   )
+      CALL ISPSET(4HBNDS, 1010101 )
+
+*     CALL VELSET(4HBNDS, 1010101 )
+*     CALL ISPSET('SIDE', 0.9  )
+
+***    CHECK MISSING VALUE PARAMETRES AND
+***    SET THE MASK VALUE FOR CONISP
+
+      CALL MISPAR( MVALUE,SPVAL8,EPSIL8 )
+
+      SPVAL = SPVAL8 ; EPSIL = EPSIL8 ; EPSIL = EPSIL*SPVAL
+
+      CALL ISPSET(4HOFFP,   1    )
+      CALL ISPSET(4HSPVA, SPVAL  )
+      CALL ISPGET(4HSPVA, SSPVAL )
+      WRITE(6,6000)   SSPVAL
+
+***    INITIALIZE PLOT OPTIONS
+
+      CONT1    = .FALSE.
+      CONT2    = .FALSE.
+      CRNLAB   = .FALSE.
+      FLIP     = .FALSE.
+      MAP      = .FALSE.
+      MP       = .FALSE.
+      NZERO1   = .FALSE.
+      NZERO2   = .FALSE.
+      PS       = .FALSE.
+      PUB      = .FALSE.
+      SHAD1    = .FALSE.
+      SHAD2    = .FALSE.
+      SQUARE   = .FALSE.
+      SUBAREA  = .FALSE.
+      TICK     = .FALSE.
+
+      MR       =  1
+
+      NDOT1    = -INT(O'1634')
+      NDOT2    =      O'1634'
+      NSETC    = -1
+      NSETS    = -1
+      NSETV    = -1
+
+***    SET PLOT OPTIONS ACCORDING TO FIRST CARD
+
+      IF (PJPS.NE.-999 .AND. ALL)
+     +     JPS =  PJPS
+
+      IF (JPS .EQ.0) JPS  = 8
+      IF (LHI1.EQ.0) LHI1 = 1
+
+      IF (MS .LT.0)                                    PUB    =  .TRUE.
+      IF (MODP.NE.1 .AND. ICOSH1.NE.4)                 CONT1  =  .TRUE.
+      IF (MODP.GT.2 .AND. ICOSH2.NE.4)                 CONT2  =  .TRUE.
+      IF (CONT1     .AND. CONT2)                       NDOT1  = O'1777'
+      IF (CONT1     .AND.(ICOSH1.EQ.1.OR.ICOSH1.EQ.3)) NZERO1 =  .TRUE.
+      IF (CONT2     .AND.(ICOSH2.EQ.1.OR.ICOSH2.EQ.3)) NZERO2 =  .TRUE.
+      IF (MODP.NE.1 .AND. ICOSH1.GT.1)                 SHAD1  =  .TRUE.
+      IF (MODP.GT.2 .AND. ICOSH2.GT.1)                 SHAD2  =  .TRUE.
+
+      IF (IABS(JPS).EQ.7 .OR .IABS(JPS).EQ.9)                  THEN
+        IF (MODP   .EQ.1 .OR. (SHAD1 .AND. .NOT.CONT1))        THEN
+          JPS = 8
+          WRITE(6,6005)
+        ELSE
+                                                      TICK   = .TRUE.
+          IF (IABS(JPS).EQ.7)                         SQUARE = .TRUE.
+        END IF
+      END IF
+
+      IF (TICK)                                                THEN
+        NSETC = 0
+        NSETS = 1
+      END IF
+
+      IF (JPS.GT.0)                                   MAP    = .TRUE.
+      JPS = IABS(JPS)
+      
+      IF (JPS       .EQ.1 .OR. JPS      .EQ.2)        PS     = .TRUE.
+      IF (.NOT.PS         .AND. 
+     +   (IABS(LHI1).EQ.1 .OR. IABS(LHI).EQ.3) )      FLIP   = .TRUE.
+      IF (IABS(LHI1).LT.3)                            MP     = .TRUE.
+      IF (LHI1      .GT.0)                            LHI1   =  0
+
+***    ACCOUNT FOR I/O UNIT NUMBERS.
+
+      IOS1 = 1
+      IOV1 = 2
+      IOV2 = 3
+      IOS2 = 4
+
+      IF (MODP.EQ.1)                                           THEN
+        IOV1 = 1
+        IOV2 = 2
+      ELSE IF (MODP.EQ.3)                                      THEN
+        IOS2 = 2
+      END IF
+
+***    SET OPTIONS FOR PUBLICATION QUALITY PLOTS
+
+      IF (PUB)                                                 THEN
+        MS    = ABS( MS+1 )
+        IF (MS.EQ.0)
+     1  LHI1  = -1
+        NSETS =  2*NSETS
+        CALL ISPSET(4HMAJR, MAJR )
+        CALL ISPSET(4HMINR, MINR )
+        IF (MS.EQ.0)
+     1  CALL ISPSET(3HNHI,   -1  )
+        CALL ISPSET(4HECOL,   1  )
+        CALL ISPSET(4HOFFM,   1  )
+*       CALL VELSET(4HOFFM,   1  )
+      END IF
+
+***    REWIND NECESSARY FILES ONCE
+
+      IF (NPLOT.EQ.0)                                          THEN
+                                      CALL PRECEDE( 1,-1 )
+        IF (MODP.NE.0)                CALL PRECEDE( 2,-1 )
+        IF (MODP.EQ.2 .OR. MODP.EQ.4) CALL PRECEDE( 3,-1 )
+        IF (MODP.EQ.4)                CALL PRECEDE( 4,-1 )
+      END IF
+
+***    SKIP THIS FIELD AND REPOSITION AT NEXT
+
+      IF (NAME1.EQ.'SKIP')                                     THEN
+        CALL SUIVANT( 1, KBUF,ERR,OK )
+        IF (.NOT.OK .OR. ERR) GOTO 990
+                              GOTO 110
+      END IF
+
+***    CARD 2 *************************
+
+      IF (.NOT.ALL)                                            THEN
+
+        CALL GETLIGN( 5, LIGNE,85, OK )
+
+        IF (.NOT.OK)                                           THEN
+          GOTO 910
+        ELSE
+          READ( LIGNE, 5015,END=910,ERR=910,IOSTAT=IO ) LABEL1
+        END IF  
+
+      else
+
+        LABEL1 = 'AUTOMATIC'
+
+      END IF
+
+***    CARD 3 *************************
+
+      IF (JPS.EQ.2)                                            THEN
+
+          CALL GETLIGN( 5, LIGNE,80, OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 915
+          ELSE
+              READ( LIGNE,5020, END=915,ERR=915,IOSTAT=IO ) 
+     +                          IP,JP,D60,DGRW 
+          END IF
+
+      END IF
+
+***    CARDS 4 AND 5 ******************
+
+      IF (SHAD1)                                               THEN
+
+        CALL GETLIGN( 5, LIGNE,80, OK )
+
+        IF (.NOT.OK)                                           THEN
+          GOTO 920
+        ELSE
+          READ( LIGNE, 5025, END=920,ERR=920,IOSTAT=IO ) NPAT1
+          NPAT1 = MAX( 0, MIN( NPAT0,NPAT1 ) )
+          IF (NPAT1.NE.0)                                      THEN
+            READ( LIGNE, 5025, END=920,ERR=920,IOSTAT=IO )
+     +                         IDUMY,(IPAT1(I),I=1,MIN( 9,NPAT1 ))
+            IF (NPAT1.GT.9)                                    THEN
+              CALL GETLIGN( 5, LIGNE,80, OK )
+              IF (.NOT.OK)                                     THEN
+                GOTO 920
+              ELSE
+                READ( LIGNE, 5025, END=920,ERR=920,IOSTAT=IO )
+     +                             (IPAT1(I),I=10,MIN( 19,NPAT1 ))
+                IF (NPAT1.GT.19)                               THEN
+                  CALL GETLIGN( 5, LIGNE,80, OK )
+                  IF (.NOT.OK)                                 THEN
+                    GOTO 920
+                  ELSE
+                    READ( LIGNE, 5025, END=920,ERR=920,IOSTAT=IO )
+     +                                 (IPAT1(I),I=20,NPAT1)
+                  END IF
+                END IF
+              END IF
+            END IF
+          END IF
+        END IF  
+
+        CALL GETLIGN( 5, LIGNE,80, OK )
+
+        IF (.NOT.OK)                                           THEN
+          GOTO 925
+        ELSE
+          IF (NPAT1.NE.0)                                      THEN
+            READ( LIGNE, 5030, END=925,ERR=925,IOSTAT=IO ) 
+     +                         (ZLEV1(I),I=1,MIN( 7,NPAT1 ))
+            IF (NPAT1.GT.7)                                    THEN
+              CALL GETLIGN( 5, LIGNE,80, OK )
+              IF (.NOT.OK)                                     THEN
+                GOTO 925
+              ELSE
+                READ( LIGNE, 5030, END=925,ERR=925,IOSTAT=IO )
+     +                             (ZLEV1(I),I=8,MIN( 14,NPAT1 ))
+                IF (NPAT1.GT.14)                               THEN
+                  CALL GETLIGN( 5, LIGNE,80, OK )
+                  IF (.NOT.OK)                                 THEN
+                    GOTO 925
+                  ELSE
+                    READ( LIGNE, 5030, END=925,ERR=925,IOSTAT=IO )
+     +                                 (ZLEV1(I),I=15,NPAT1)
+                  END IF
+                END IF
+              END IF
+            END IF
+          END IF
+        END IF  
+
+      END IF
+
+      IF (MODP.GT.2)                                           THEN
+
+***      CARDS 6 AND 7 ***************
+
+        CALL GETLIGN( 5, LIGNE,80, OK )
+
+        IF (.NOT.OK)                                           THEN
+          GOTO 935
+        ELSE
+          ALEVEL = ' '
+          READ( LIGNE, 5010, END=935,ERR=935,IOSTAT=IO ) 
+     +                       ANSTEP,NAME2,ALEVEL(1:5),I1,I2,
+     +                       MS2,SCAL2,FLO2,HI2,FINC2,I3,LHI2,I4
+        END IF
+
+        READ(ANSTEP,20,ERR=935,IOSTAT=IO ) NSTEP
+        NSTEP = Y2KDAT8( NSTEP ) ; CALL DATE2STAMP( NSTEP,NSTEP2 )
+
+        IF (ALEVEL.NE.' ') CALL LEADBLK( ALEVEL )
+        IF (ALEVEL.EQ.' ') ALEVEL = '-1'
+
+        IF (ALEVEL.NE.'-1')                                    THEN
+           IF (INDEX( ALEVEL,'.' ).EQ.0)                       THEN
+              READ(ALEVEL,10,ERR=905,IOSTAT=IO ) LEVEL2
+              CALL  CONVPR( LEVEL2, RLV2, VKIND2, -2 )
+              IF (PKTYP.EQ.'SQ') CALL CONVPR( LEVEL2,RLV2,VKIND2, +2 )
+           ELSE
+              READ(ALEVEL,11,ERR=905,IOSTAT=IO ) RLV2
+              IF (PKTYP.EQ.'SQ')                               THEN
+                 CALL  CONVPR( LEVEL2, RLV2, VKIND0, +2 )
+              ELSE
+                 CALL LVCODE( LEVEL2,RLV2/1000.,1 )
+              END IF
+           END IF
+        ELSE
+           LEVEL2 = -1
+        END IF
+
+        CALL GETLIGN( 5, LIGNE,85, OK )
+
+        IF (.NOT.OK)                                           THEN
+          GOTO 940
+        ELSE
+          READ( LIGNE, 5015, END=940,ERR=940,IOSTAT=IO ) LABEL2
+        END IF
+
+        CALL LOW2UP( NAME2,NAME2 )
+        IF (NAME2.NE.'    ') CALL LEADBLK( NAME2 )
+        IF (NAME2.EQ.'-1  ')
+     +      NAME2  = '    '
+
+***      CARDS 8 AND 9 **********************
+
+        IF (SHAD2)                                             THEN
+
+          CALL GETLIGN( 5, LIGNE,80, OK )
+
+          IF (.NOT.OK)                                         THEN
+            GOTO 945
+          ELSE
+            READ( LIGNE, 5025, END=945,ERR=945,IOSTAT=IO ) NPAT2
+            NPAT2 = MAX( 0, MIN( NPAT0,NPAT2 ) )
+            IF (NPAT2.NE.0)                                    THEN
+            READ( LIGNE, 5025, END=945,ERR=945,IOSTAT=IO )
+     +                         IDUMY,(IPAT2(I),I=1,MIN( 9,NPAT2 ))
+              IF (NPAT2.GT.9)                                  THEN
+                CALL GETLIGN( 5, LIGNE,80, OK )
+                IF (.NOT.OK)                                   THEN
+                  GOTO 945
+                ELSE
+                  READ( LIGNE, 5025, END=945,ERR=945,IOSTAT=IO )
+     +                               (IPAT2(I),I=10,MIN( 19,NPAT2 ))
+                  IF (NPAT2.GT.19)                             THEN
+                    CALL GETLIGN( 5, LIGNE,80, OK )
+                    IF (.NOT.OK)                               THEN
+                      GOTO 945
+                    ELSE
+                      READ( LIGNE, 5025, END=945,ERR=945,IOSTAT=IO )
+     +                                   (IPAT2(I),I=20,NPAT2)
+                    END IF
+                  END IF
+                END IF
+              END IF
+            END IF
+          END IF  
+
+          CALL GETLIGN( 5, LIGNE,80, OK )
+
+          IF (.NOT.OK)                                         THEN
+            GOTO 950
+          ELSE
+            IF (NPAT2.NE.0)                                    THEN
+              READ( LIGNE, 5030, END=950,ERR=950,IOSTAT=IO ) 
+     +                           (ZLEV2(I),I=1,MIN( 7,NPAT2 ))
+              IF (NPAT2.GT.7)                                  THEN
+                CALL GETLIGN( 5, LIGNE,80, OK )
+                IF (.NOT.OK)                                   THEN
+                  GOTO 950
+                ELSE
+                  READ( LIGNE, 5030, END=950,ERR=950,IOSTAT=IO )
+     +                               (ZLEV2(I),I=8,MIN( 14,NPAT2 ))
+                  IF (NPAT2.GT.14)                             THEN
+                    CALL GETLIGN( 5, LIGNE,80, OK )
+                    IF (.NOT.OK)                               THEN
+                      GOTO 950
+                    ELSE
+                      READ( LIGNE, 5030, END=950,ERR=950,IOSTAT=IO )
+     +                                   (ZLEV2(I),I=15,NPAT2)
+                    END IF
+                  END IF
+                END IF
+              END IF
+            END IF
+          END IF  
+
+        END IF
+
+      END IF
+
+***    CARDS 10 AND 11 **********************
+
+      IF (MODP.NE.0 .AND. MODP.NE.3)                           THEN
+
+***    PLOT THE VECTOR FIELD (U,V).
+***    READ THE VECTOR PLOT CARDS AND THE U FIELD.
+ 
+        CALL GETLIGN( 5, LIGNE,80, OK )
+
+        IF (.NOT.OK)                                           THEN
+          GOTO 955
+        ELSE
+          READ( LIGNE, 5035, END=955,ERR=955,IOSTAT=IO ) 
+     +                       VSCAL,VLO,VI,INCX,INCY  
+        END IF  
+
+        IF (VSCAL.EQ.0.) VSCAL = 1.
+
+        CALL GETLIGN( 5, LIGNE,85, OK )
+
+        IF (.NOT.OK)                                           THEN
+          GOTO 960
+        ELSE
+          READ( LIGNE, 5015, END=960,ERR=960,IOSTAT=IO ) LABELV
+        END IF  
+ 
+      END IF
+
+*--------------------------------------------------------------
+***    ALLOCATE WORKING MEMORY
+
+      IF (MODP.EQ.1)                                           THEN
+        MAXW = GETSIZ( IOV1, KBUF,LENI,NWDS,KPAK )
+      ELSE
+        MAXW = GETSIZ( IOS1, KBUF,LENI,NWDS,KPAK )
+      END IF
+
+      IF (NPLOT.NE.0)                                          THEN
+        CALL HPDEALLC( IB,IER,0 )
+      END IF
+
+      ALLOC_NABT
+      CALL HPALLOC( IB, 2*HEAD+6*MAXW, IER,0 )
+      ALLOC_ABT
+
+      IF (IER.EQ.0)                                            THEN
+          JB = LOC( IBUF(MAXW+1+HEAD) )
+          BN = LOC( JBUF(MAXW+1+HEAD) )
+          IU = LOC(  GG2(MAXW+1) )
+          IV = LOC(    U(MAXW+1) )
+          IT = LOC(    V(MAXW+1) )
+      ELSE
+          WRITE(6,6017) 2*HEAD+6*MAXW
+          CALL                                     XIT(' Ggplot ',-17 )
+      END IF
+
+*--------------------------------------------------------------
+***    READ FIELD FROM FILE Z IF AVAILABLE, ELSE FROM FILE U
+
+  111 SECOND = .FALSE.
+      IF (ALL .AND. NPLOT.NE.0) WRITE(6,6010) NPLOT+1
+
+      IF (MODP.NE.1)                                           THEN
+
+        CALL GETFLD2( IOS1, GG2, ' ',NSTEP1,NAME1,LEVEL1, IBUF,MAXW,OK )
+
+        IF (.NOT.OK)                                           THEN
+            SLEVEL = ' -1'
+            CALL PDATE( ATEMPS1,NSTEP1 )
+            IF (LEVEL1.NE.-1) CALL GET_IP1_STRING( LEVEL1,SLEVEL )
+            WRITE(6,6015) TRIM( ATEMPS1 ),NAME1,TRIM( SLEVEL )
+            CALL BURNF
+            CALL                                   XIT(' Ggplot ',-101)
+        END IF
+
+        CALL PDATE( ATEMPS1,IBUF(2) )
+        CALL LEADBLK( ATEMPS1 )
+        WRITE(PNAME1,4) IBUF(3)
+
+        call get_ip1_string( ibuf(4),NIVEAU1 )
+        call leadblk( NIVEAU1 )
+
+        IF (PKTYP(1:2).EQ.'SQ')                                THEN
+            ETIKET1(1:4)  = GETHIC ( 'ETIK1',IBUF )
+            ETIKET1(5:8)  = GETHIC ( 'ETIK2',IBUF )
+            IF (PKTYP.NE.'SQ89')
+     +      ETIKET1(9:12) = GETHIC ( 'ETIK3',IBUF )
+            LENE1         = INDEX( ETIKET1 // '     ' , '     ' ) - 1
+            LENE1         = MAX( LENE1,4 )
+        END IF
+
+        DO  I=1,8
+            IBUF1(I) = IBUF(I)
+        END DO
+
+      ELSE
+
+        CALL GETFLD2( IOV1, GG2, ' ',NSTEP1,' ',LEVEL1, IBUF,MAXW,OK )
+
+        IF (.NOT.OK)                                           THEN
+            SLEVEL = ' -1'
+            CALL PDATE( ATEMPS1,NSTEP1 )
+            IF (LEVEL1.NE.-1) CALL GET_IP1_STRING( LEVEL1,SLEVEL )
+            WRITE(6,6015) TRIM( ATEMPS1 ),'NEXT',TRIM( SLEVEL )
+            CALL BURNF
+            CALL                                   XIT(' Ggplot ',-103)
+        END IF
+
+        CALL PDATE( ATEMPSV,IBUF(2) )
+        CALL LEADBLK( ATEMPSV )
+        WRITE(PNAMEV,4) IBUF(3)
+
+        call get_ip1_string( ibuf(4),NIVEAUV )
+        call leadblk( NIVEAUV )
+
+        IF (PKTYP(1:2).EQ.'SQ')                                THEN
+            ETIKETV(1:4)  = GETHIC ( 'ETIK1',IBUF )
+            ETIKETV(5:8)  = GETHIC ( 'ETIK2',IBUF )
+            IF (PKTYP.NE.'SQ89')
+     +      ETIKETV(9:12) = GETHIC ( 'ETIK3',IBUF )
+            LENEV         = INDEX( ETIKETV // '     ' , '     ' ) - 1
+            LENEV         = MAX( LENEV,4 )
+        END IF
+
+        DO  I=1,8
+            IBUFV(I) = IBUF(I)
+        END DO
+
+      END IF
+
+***    ILLEGAL KIND ENCOUNTERED, WARNING EXIT.
+
+      WRITE(TYPE,4) IBUF(1)
+      IF (TYPE.NE.'GRID' .AND. TYPE.NE.'SUBA')                 THEN
+        WRITE(6,6050) TYPE
+         CALL BURNF
+         IF (MODP.NE.1) CALL                       XIT(' Ggplot ',-102)
+         IF (MODP.EQ.1) CALL                       XIT(' Ggplot ',-104)
+      END IF
+
+***    MOVE THE FIELD TO THE U ARRAY
+
+      LX  = IBUF(5)
+      LY  = IBUF(6)
+      LXY = LX*LY
+
+      CALL DSCOPY( LXY,GG2,1,U,1 )
+
+      GREP = .FALSE.
+      IF (MOD( LX,2 ).EQ.1) GREP = .TRUE.
+
+***    IF THE FIELD IS A SUBAREA, GET THE COORDINATES FROM THE
+***    FILE FT45 (IN THE CASE OF A CCRN FILE) WHICH MAY HAVE BEEN
+***    CREATED BY PROGRAM SUBAREA OR FROM THE EXTENDED RECORD INFO
+***    (IN THE CASE OF A RPN SEQUENTIAL FILE). OTHERWISE, SET THE
+***    COORDINATES TO THE STANDARD CYLINDRICAL EQUIDISTANT OR
+***    POLAR STEREOGRAPHIC AREA.
+
+      IF (TYPE.EQ.'SUBA')                                      THEN
+
+        IF (PKTYP.NE.'SQ')                                     THEN
+
+          IF (NPLOT.EQ.0)                                      THEN
+
+***                         SEARCH FOR FILE 'pltinfo'.
+
+                           INQUIRE( FILE='pltinfo',
+     +                              ERR=999,IOSTAT=IO, EXIST=EX )
+
+            IF (.NOT.EX)                                       THEN
+
+***                         NO pltinfo IN CURRENT DIRECTORY.
+***                         CHECK FOR $TMPDIR/pltinfo.
+
+                           CALL GETMPN( EVALUE )
+                           LENTMP = INDEX( EVALUE,' ' )
+
+                           IF (LENTMP.EQ.0) LENTMP = 257
+                           IF (LENTMP.GT.250) CALL XIT(' Ggplot ',-105 )
+
+              IF (LENTMP.NE.1)                                 THEN
+
+***                         BUILD NEW NAME FROM TMPDIR AND NAME. CHECK
+***                         FOR FILE EXISTENCE IN "TMPDIR" DIRECTORY.
+
+                           LNAME = EVALUE(1:LENTMP-1)// '/' //'pltinfo'
+                           INQUIRE( FILE=LNAME,
+     +                              ERR=999,IOSTAT=IO, EXIST=EX )
+
+                IF (.NOT.EX)                                   THEN
+
+                           WRITE(6,6055)
+                           CALL                    XIT(' Ggplot ',-106 )
+
+                END IF
+
+              ELSE
+
+                           WRITE(6,6055)
+                           CALL                    XIT(' Ggplot ',-106 )
+
+              END IF
+            
+            ELSE
+
+***                         USE 'pltinfo' IN CURRENT DIRECTORY.
+
+                           LNAME = 'pltinfo'
+
+            END IF
+ 
+                           OPEN( UNIT=45,  FILE=LNAME,
+     +                                     ERR=999,IOSTAT=IO,
+     +                                     STATUS='OLD',
+     +                                     ACCESS='SEQUENTIAL',
+     +                                     FORM='UNFORMATTED' )
+ 
+
+          END IF
+
+          REWIND 45
+          READ(45,END=930) DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM,NOUTYP
+
+                           PS      = .TRUE.
+          IF (NOUTYP.EQ.0) PS      = .FALSE.
+          IF (.NOT.PS)     CRNLAB  = .TRUE.
+
+        ELSE
+
+***        GRILLE RPN DE TYPE L,N OU S.
+
+          GRTYP = GETHIC( 'GRTYP',IBUF )
+          IG1   = GETHIGH('IG1'  ,IBUF )
+          IG2   = GETHIGH('IG2'  ,IBUF )
+          IG3   = GETHIGH('IG3'  ,IBUF )
+          IG4   = GETHIGH('IG4'  ,IBUF )
+
+          IF (GRTYP.EQ.'N' .OR. GRTYP.EQ.'S')                  THEN
+
+            CALL CIGAXG( GRTYP, XIP,XJP,D60,DGRW,
+     +                          IG1,IG2,IG3,IG4 )
+
+            NHEM = IBUF(7)
+
+***          RETREIVE THE LOWER LEFT CORNER. 
+
+            X = 1.-XIP 
+            Y = 1.-XJP
+            CALL LLFXY( DLAT1,DLON1,X,Y,D60,DGRW, NHEM ) 
+ 
+***          RETREIVE THE UPPER RIGHT CORNER. 
+
+            X = LX-XIP 
+            Y = LY-XJP
+            CALL LLFXY( DLAT2,DLON2,X,Y,D60,DGRW, NHEM ) 
+ 
+            PS = .TRUE.
+
+          ELSE IF (GRTYP.EQ.'L')                               THEN
+
+            CALL CIGAXG( GRTYP, DLAT1,DLON1,DY,DX,
+     +                          IG1,IG2,IG3,IG4 )
+
+***          RETREIVE THE UPPER RIGHT CORNER. 
+
+            DLON2 = DLON1+DX*(LX-1)
+            DLAT2 = DLAT1+DY*(LY-1)
+
+            IF (DLON2.GT.360.) DLON2 = DLON2-360.
+
+            PS = .FALSE.
+
+          END IF
+
+          SUBAREA = .TRUE.
+          FLIP    = .FALSE.
+
+        END IF
+
+      ELSE
+
+***      THIS IS NOT FLAGGED AS A 'SUBA' PLOT. 
+
+        NHEM = IBUF(7) 
+
+        IF (PS)                                                THEN
+
+          IF (NHEM.NE.2)                                       THEN 
+            IHM =  1 
+          ELSE 
+           IHM = -1 
+          END IF 
+ 
+          IF (ABS(JPS).EQ.1)                                   THEN 
+ 
+***          RESET STANDART VALUES IN CASE THEY HAVE BEEN MODIFIED. 
+ 
+            DLAT1 = -4.9*IHM 
+            DLON1 = -122.6*IHM 
+            DLAT2 = -4.9*IHM 
+            DLON2 = 57.4*IHM 
+            DGRW  = -10. 
+ 
+          ELSE 
+
+***          NON-STANDART POLAR-STEREOGRAPHIC PLOT. LOWER LEFT CORNER. 
+ 
+            X = FLOAT(1-IP) 
+            Y = FLOAT(1-JP) 
+            CALL LLFXY( DLAT1,DLON1,X,Y,D60,DGRW, NHEM ) 
+ 
+***          UPPER RIGHT CORNER. 
+
+            X = FLOAT(LX-IP) 
+            Y = FLOAT(LY-JP) 
+            CALL LLFXY( DLAT2,DLON2,X,Y,D60,DGRW, NHEM ) 
+ 
+          END IF 
+ 
+        ELSE
+
+          IF (PKTYP(1:2).EQ.'SQ')                              THEN
+
+            GRTYP = GETHIC ('GRTYP',IBUF )
+            IG2   = GETHIGH('IG2'  ,IBUF )
+
+***          CHECK ORDER OF THE LATITUDES.
+
+            IF ((GRTYP.EQ.'G'  .OR.
+     +           GRTYP.EQ.'B'  .OR.
+     +           GRTYP.EQ.'A') .AND.
+     +          (IG2  .EQ. 1 ) )
+     +           CALL ROWORDS( GG2,TP,LX,LY )
+
+          END IF
+
+***        LAT-LONG CYLINDRICAL-EQUIDISTANT PLOT.
+
+          IF (NHEM.EQ.0)                                       THEN
+            DY  = 180./LY
+          ELSE
+            DY  = 90./LY
+          END IF
+
+          DY    = 1.E-5*ANINT(1.E5*DY)
+
+          IF (NHEM.NE.1)                                       THEN
+            DLAT1 = .5*DY - 90.
+          ELSE
+            DLAT1 = .5*DY
+          END IF
+
+          DLAT2 = DLAT1 + (LY-1.)*DY
+
+***        ACCOUNT FOR THE GW MERIDIAN REPETITION (OR NOT).
+
+          DX = 360./(LX-MOD( LX,2 ))
+          IF (GREP) DX = 0.
+
+***        MAP PROJ CONSTANTS.
+
+          IF (FLIP)                                            THEN
+            DGRW  =  0.0  -DX/2.
+            DLON1 = -179.9
+            DLON2 =  179.9-DX
+          ELSE
+            DGRW  =  180.0-DX/2.
+            DLON1 =  0.1
+            DLON2 = -0.1  -DX
+          END IF
+
+        END IF
+
+      END IF
+
+*------------------------------------------------------------------
+***    DRAW THE BACKGROUND, OR SET UP FOR SCREEN FILLING PLOT,
+***    AS CHOSEN IN CARD 1.
+
+      IF (TICK)                                                THEN
+
+        ASPECT = FLOAT(LY)/FLOAT(LX)
+        IF (ASPECT.GE..95.OR.SQUARE) CALL ISPSET(4HSIDE, 0.8 )
+        IF (SQUARE)                  CALL ISPSET(3HEXT , 1.0 )
+
+      ELSE
+
+        IF (PS)                                                THEN
+        CALL POLSTR( MAP,NHEM,.FALSE.,MR,DLAT1,DLON1,DLAT2,DLON2,
+     1                                                     DGRW,MP )
+        ELSE
+          IF (PUB)                                             THEN
+            CALL CYLEQ( MAP,.FALSE.,.FALSE.,MR,DLAT1,DLON1,DLAT2,
+     1                                               DLON2,DGRW,MP )
+          ELSE
+            CALL CYLEQ( MAP,CRNLAB,PUB,MR,DLAT1,DLON1,DLAT2,DLON2,
+     1                                                     DGRW,MP )
+          END IF
+        END IF
+
+      END IF
+
+*---------------------------------------------------------------------
+***    PRODUCE PLOT(S) FROM FILE Z (AND X) ACCORDING TO CARDS 1 THU 8
+
+  115 IF (SECOND)                                              THEN
+        CONT  =  CONT2
+        FLO   =   FLO2
+        HI    =    HI2
+        FINC  =  FINC2
+        ICOSH = ICOSH2
+        LHI   =   LHI2
+        NDOT  =  NDOT2
+        NPAT  =  NPAT2
+        NZERO = NZERO2
+        SCAL  =  SCAL2
+        SHAD  =  SHAD2
+        DO 116 I=1,NPAT
+          IPAT(I) = IPAT2(I)
+          ZLEV(I) = ZLEV2(I)
+  116   CONTINUE
+        IF (LHI.GT.0) LHI =  0
+        IF (PUB
+     1 .AND.MS.EQ.0)  LHI = -1
+      ELSE
+        CONT  =  CONT1
+        FLO   =   FLO1
+        HI    =    HI1
+        FINC  =  FINC1
+        ICOSH = ICOSH1
+        LHI   =   LHI1
+        NDOT  =  NDOT1
+        NPAT  =  NPAT1
+        NZERO = NZERO1
+        SCAL  =  SCAL1
+        SHAD  =  SHAD1
+        DO 117 I=1,NPAT
+          IPAT(I) = IPAT1(I)
+          ZLEV(I) = ZLEV1(I)
+  117   CONTINUE
+      END IF
+
+      IF (MODP.NE.1)                                           THEN
+
+***      EXCHANGE LEFT AND RIGHT HALVES OF THE GLOBAL C-E FIELD
+***      TO SHIFT LON 180 TO THE CENTRE OF THE PLOT.
+
+        IF (FLIP)                                              THEN
+
+          ILGH = (LX-MOD( LX,2 ))/2
+          DO 130 J=1,LY
+            JR = (J-1)*LX
+            DO 120 I=1,ILGH
+              NL = JR+I
+              NR = NL+ILGH
+              U(NL) = GG2(NR)
+              U(NR) = GG2(NL)
+  120       CONTINUE
+            IF (GREP)
+     +      U(JR+LX) = U(JR+1)
+  130     CONTINUE
+
+        END IF
+
+***      CALCULATE SCALE FACTOR AUTOMATICALLY IF DESIRED
+
+        IF (SCAL.EQ.0.)                                        THEN
+          CALL PRECON3( FLO,HI,FINC,SCAL,U,LX,LY,10,SPVAL )
+          HI = MAX( HI,FLO+10.*FINC )
+          WRITE(6,6020) FLO,HI,FINC,SCAL
+          IF (.NOT.SECOND) ASCAL1 = SCAL
+          IF (     SECOND) ASCAL2 = SCAL
+        END IF
+
+***      SCALE THE FIELD
+
+        U(1:LXY) = MERGE( U(1:LXY)*SCAL,
+     +                    U(1:LXY),
+     +               ABS( U(1:LXY)-SPVAL ) > EPSIL )
+
+***      DRAW THE CONTOURS OF THE FIELD WITH OR WITHOUT THE
+***      ZERO CONTOUR LINE
+
+        IF (CONT)                                              THEN
+
+          IF (NZERO .AND. (FLO*HI.LT.0.))                      THEN
+
+            FLOA = FLO+FINC
+            FLOB =  2.*FINC
+            HIA  = -2.*FINC
+            FINCA=  2.*FINC
+
+*           IF (.NOT.PUB)                                      THEN
+*             CALL ISPGET('ILAB', K )
+*             CALL ISPGET('IMAJ', J )
+*             CALL ISPGET('IMIN', I )
+*             CALL ISPSET('ILAB', 0 )
+*             CALL ISPSET('IMAJ', 1 )
+*           END IF
+
+            CALL CONISP( U,LX,LX,LY,FLOA,HI,FINCA,NSETC,LHI,NDOT )
+
+*           IF (.NOT.PUB)                                      THEN
+*             CALL ISPSET('ILAB', 1 )
+*             CALL ISPSET('IMAJ', 2 )
+*             CALL ISPSET('IMIN', 2 )
+*             CALL ISPSET('NULB', 0 )
+*           END IF
+
+            CALL CONISP( U,LX,LX,LY,FLO,HIA,FINCA,NSETC,LHI,NDOT )
+            CALL CONISP( U,LX,LX,LY,FLOB,HI,FINCA,NSETC,LHI,NDOT )
+
+*           IF (.NOT.PUB)                                      THEN
+*             CALL ISPSET('ILAB', K )
+*             CALL ISPSET('IMAJ', J )
+*             CALL ISPSET('IMIN', I )
+*             CALL ISPSET('NULB', 1 )
+*           END IF
+
+          ELSE
+
+            CALL CONISP( U,LX,LX,LY,FLO,  HI,FINC,NSETC,LHI,NDOT1 )
+
+          END IF
+
+        END IF
+
+***      SHADE CONTOUR LEVELS IF DESIRED
+
+        IF (SHAD)                                              THEN
+
+          IF (NPAT.EQ.0)                                       THEN
+              HLO = FLO
+              HHI = HI
+              NP1 = 9
+              NP2 = 9
+              DO 265 L=1,NP1
+                  ZLEV(L)=HLO+2.*FINC*(L-1)
+  265         CONTINUE
+          ELSE
+              HLO = 0.
+              HHI = 0.
+              NP1 = NPAT
+              NP2 = NPAT
+          END IF
+
+          CALL HAFLVS( NP1,ZLEV,NP2,IPAT )
+
+          IF (NPAT.EQ.0)                                       THEN
+              WRITE(6,6060) NP1,(IPAT(J),J=1,NP1+1)
+              WRITE(6,6061)     (ZLEV(J),J=1,NP1)
+          END IF
+
+          CALL HAFTONP( U,LX,LX,LY,HLO,HHI,0,1,NSETS,0,0. )
+
+        END IF
+
+***      PRODUCE LINE PRINTER PLOT WITH SCALE MS
+*
+*       IF (MS.NE.0)                                           THEN
+*         CALL DSCOPY( LXY,U,1,GG2,1 )
+*         CALL FCONW2( GG2,FINC,1.,LX,LY,1,1,LX,LY,MS )
+*       END IF
+
+        IX = LX
+        IY = LY
+ 
+      END IF
+
+*------------------------------------------------------------------
+***    READ SECOND SCALAR FIELD, THEN PRODUCE ITS PLOT
+
+      IF (MODP.GT.2 .AND. .NOT.SECOND)                         THEN
+        SECOND = .TRUE.
+
+***      READ SECOND SCALAR FIELD
+
+        CALL GETFLD2( IOS2, GG2, ' ',NSTEP2,NAME2,LEVEL2, IBUF,MAXW,OK )
+
+        IF (.NOT.OK)                                           THEN
+            SLEVEL = ' -1'
+            CALL PDATE( ATEMPS2,NSTEP2 )
+            IF (LEVEL2.NE.-1) CALL GET_IP1_STRING( LEVEL2,SLEVEL )
+            WRITE(6,6015) TRIM( ATEMPS2 ),NAME2,TRIM( SLEVEL )
+            CALL BURNF
+            CALL                                   XIT(' Ggplot ',-107 )
+        END IF
+
+        CALL PDATE( ATEMPS2,IBUF(2) )
+        CALL LEADBLK( ATEMPS2 )
+        WRITE(PNAME2,4) IBUF(3)
+
+        call get_ip1_string( ibuf(4),NIVEAU2 )
+        call leadblk( NIVEAU2 )
+
+        IF (PKTYP(1:2).EQ.'SQ')                                THEN
+            ETIKET2(1:4)  = GETHIC ( 'ETIK1',IBUF )
+            ETIKET2(5:8)  = GETHIC ( 'ETIK2',IBUF )
+            IF (PKTYP.NE.'SQ89')
+     +      ETIKET2(9:12) = GETHIC ( 'ETIK3',IBUF )
+            LENE2         = INDEX( ETIKET2 // '     ' , '     ' ) - 1
+            LENE2         = MAX( LENE2,4 )
+        END IF
+
+        DO  I=1,8
+            IBUF2(I) = IBUF(I)
+        END DO
+
+***    ILLEGAL KIND ENCOUNTERED, WARNING EXIT.
+
+        WRITE(TYPE,4) IBUF(1)
+        IF (TYPE.NE.'GRID' .AND. TYPE.NE.'SUBA')               THEN
+          WRITE(6,6050) TYPE
+          CALL BURNF
+          CALL                                     XIT(' Ggplot ',-108 )
+        END IF
+
+***      MOVE FIELD TO ARRAY U
+
+        LX = IBUF(5)
+        LY = IBUF(6)
+        IF (LX.NE.IX.OR.LY.NE.IY) CALL             XIT(' Ggplot ',-1)
+        LXY = LX*LY
+
+        CALL DSCOPY( LXY,GG2,1,U,1 )
+
+        GREP = .FALSE.
+        IF (MOD( LX,2 ).EQ.1) GREP = .TRUE.
+
+        GOTO 115
+
+      END IF
+
+*-----------------------------------------------------------------------
+      IF (MODP.NE.0 .AND. MODP.NE.3)                           THEN
+
+***    PLOT THE VECTOR FIELD (U,V). READ THE U FIELD.
+ 
+        IF (MODP.NE.1)                                         THEN
+
+          CALL GETFLD2( IOV1, GG2, ' ',NSTEP1,' ',LEVEL1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              NAME   = 'NEXT'
+              SLEVEL = ' -1'
+              CALL PDATE( ATEMPS1,NSTEP1 )
+              IF (LEVEL1.NE.-1) CALL GET_IP1_STRING( LEVEL1,SLEVEL )
+              WRITE(6,6015) TRIM( ATEMPS1 ),NAME,TRIM( SLEVEL )
+              CALL BURNF
+              CALL                                 XIT(' Ggplot ',-103 )
+          END IF
+
+          CALL PDATE( ATEMPSV,IBUF(2) )
+          CALL LEADBLK( ATEMPSV )
+          WRITE(PNAMEV,4) IBUF(3)
+
+          call get_ip1_string( ibuf(4),NIVEAUV )
+          call leadblk( NIVEAUV )
+
+          IF (PKTYP(1:2).EQ.'SQ')                              THEN
+              ETIKETV(1:4)  = GETHIC ( 'ETIK1',IBUF )
+              ETIKETV(5:8)  = GETHIC ( 'ETIK2',IBUF )
+              IF (PKTYP.NE.'SQ89')
+     +        ETIKETV(9:12) = GETHIC ( 'ETIK3',IBUF )
+              LENEV         = INDEX( ETIKETV // '     ' , '     ' ) - 1
+              LENEV         = MAX( LENEV,4 )
+          END IF
+
+          DO  I=1,8
+              IBUFV(I) = IBUF(I)
+          END DO
+
+***    ILLEGAL KIND ENCOUNTERED, WARNING EXIT.
+
+          WRITE(TYPE,4) IBUF(1)
+          IF (TYPE.NE.'GRID' .AND. TYPE.NE.'SUBA')             THEN
+            WRITE(6,6050) TYPE
+            CALL BURNF
+            CALL                                   XIT(' Ggplot ',-104 )
+          END IF
+
+              LX =  IBUF(5)
+              LY =  IBUF(6)
+          IF (LX.NE.IX .OR.
+     +        LY.NE.IY) CALL                       XIT(' Ggplot ',-2 )
+              LXY=  LX*LY
+
+          GREP = .FALSE.
+          IF (MOD( LX,2 ).EQ.1) GREP = .TRUE.
+
+          IF (PKTYP(1:2).EQ.'SQ')                              THEN
+
+            GRTYP = GETHIC( 'GRTYP',IBUF )
+            IG2   = GETHIGH('IG2'  ,IBUF )
+
+***          CHECK ORDER OF THE LATITUDES.
+
+            IF ((GRTYP.EQ.'G'  .OR.
+     +           GRTYP.EQ.'B'  .OR.
+     +           GRTYP.EQ.'A') .AND.
+     +          (IG2  .EQ. 1 ) )
+     +           CALL ROWORDS( GG2,TP,LX,LY )
+
+          END IF
+
+        END IF
+
+        IF (FLIP)                                              THEN
+
+          ILGH=(LX-MOD( LX,2 ))/2
+          DO 240 J=1,LY
+            JR=(J-1)*LX
+            DO 230 I=1,ILGH
+              NL=JR+I
+              NR=NL+ILGH
+              U(NL)=GG2(NR)
+              U(NR)=GG2(NL)
+  230       CONTINUE
+            IF (GREP)
+     +      U(JR+LX)=U(JR+1)
+  240     CONTINUE
+
+          CALL DSCOPY( LXY,U,1,GG2,1 )
+
+        END IF
+ 
+***    ZERO-OUT POINTS AND SCALE THE U FIELD.
+ 
+        IF (INCX.LT.1 .OR. INCY.LT.1)                          THEN
+
+          LXR =  LX
+          LYR =  LY
+
+        ELSE
+
+          LXR = (LX-1)/INCX+1
+          LYR = (LY-1)/INCY+1
+ 
+          U(1:LXR*LY) = MERGE( 0.,U(1:LXR*LY),U(1:LXR*LY) /= SPVAL )
+
+          DO 370   J=1, LYR
+            JJ =  (J-1)*INCY+1
+            DO 370 I=1, LXR
+              N     = I           + (JJ-1)*LXR
+              NN    =(I-1)*INCX+1 + (JJ-1)*LX
+              U(N)  = MERGE( GG2(NN)*VSCAL, U(N), U(N) /= SPVAL )
+  370     CONTINUE
+ 
+        END IF
+
+***    ZERO-OUT THE POLE VALUES.
+ 
+        IPN = (LY-1)*LXR
+        IF (.NOT.PS .AND. .NOT.SUBAREA)                        THEN
+          DO 390 I=1,LXR
+            U(I)     = MERGE( 0., U(I)    , U(I)     /= SPVAL )
+            U(I+IPN) = MERGE( 0., U(I+IPN), U(I+IPN) /= SPVAL )
+  390     CONTINUE
+        END IF
+ 
+*.......................................................................
+***    READ IN V FIELD.
+ 
+        CALL GETFLD2( IOV2, GG2, ' ',NSTEP1,' ',LEVEL1, JBUF,MAXW,OK )
+
+        IF (.NOT.OK)                                           THEN
+            NAME   = 'NEXT'
+            SLEVEL = ' -1'
+            CALL PDATE( ATEMPS1,NSTEP1 )
+            IF (LEVEL1.NE.-1) CALL GET_IP1_STRING( LEVEL1,SLEVEL )
+            WRITE(6,6015) TRIM( ATEMPS1 ),NAME,TRIM( SLEVEL )
+            CALL                                   XIT(' Ggplot ',-109 )
+        END IF
+
+***    ILLEGAL KIND ENCOUNTERED, WARNING EXIT.
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.NE.'GRID' .AND. TYPE.NE.'SUBA')                 THEN
+         WRITE(6,6050) TYPE
+         CALL BURNF
+         CALL                                      XIT(' Ggplot ',-110 )
+      END IF
+
+      IF (JBUF(5).NE.LX .OR. JBUF(6).NE.LY) CALL   XIT(' Ggplot ',-3  )
+
+      IF (PKTYP(1:2).EQ.'SQ')                                  THEN
+
+        GRTYP = GETHIC( 'GRTYP',JBUF )
+        IG2   = GETHIGH('IG2'  ,JBUF )
+
+***      CHECK ORDER OF THE LATITUDES.
+
+        IF ((GRTYP.EQ.'G'  .OR.
+     +       GRTYP.EQ.'B'  .OR.
+     +       GRTYP.EQ.'A') .AND.
+     +      (IG2.  EQ. 1 ) )
+     +       CALL ROWORDS( GG2,TP,LX,LY )
+
+      END IF
+
+***    EXCHANGE TWO HALVES OF FIELD TO SHIFT LON 0 TO CENTRE
+
+        IF (FLIP)                                              THEN
+
+          ILGH=(LX-MOD( LX,2 ))/2
+          DO 440 J=1,LY
+            JR=(J-1)*LX
+            DO 430 I=1,ILGH
+              NL=JR+I
+              NR=NL+ILGH
+              V(NL)=GG2(NR)
+              V(NR)=GG2(NL)
+  430       CONTINUE
+            IF (GREP)
+     +      V(JR+LX)=V(JR+1)
+  440     CONTINUE
+
+          CALL DSCOPY( LXY,V,1,GG2,1 )
+
+        END IF
+ 
+***    ZERO-OUT POINTS AND SCALE THE V FIELD.
+ 
+        IF (INCX.GT.1 .AND. INCY.GT.1)                         THEN
+
+          V(1:LXR*LY)= MERGE( 0., V(1:LXR*LY), V(1:LXR*LY) /= SPVAL )
+
+          DO 470 J=1,LYR
+            JJ=(J-1)*INCY+1
+            DO 470 I=1,LXR
+              N    =  I           + (JJ-1)*LXR
+              NN   = (I-1)*INCX+1 + (JJ-1)*LX
+              V(N) = MERGE( GG2(NN)*VSCAL, V(N), V(N) /= SPVAL )
+  470     CONTINUE
+ 
+        END IF
+
+***    ZERO-OUT THE POLE VALUES.
+ 
+        IF (.NOT.PS .AND. .NOT.SUBAREA)                        THEN
+          DO 490 I=1,LXR
+            V(I)     = MERGE( 0., V(I)    , V(I)     /= SPVAL )
+            V(I+IPN) = MERGE( 0., V(I+IPN), V(I+IPN) /= SPVAL )
+  490     CONTINUE
+        END IF
+ 
+*    * DRAW THE VECTOR PLOT.
+*      --------------------
+
+        IF (PUB) CALL OPTN('TH', 3 )
+
+        CALL VELVCT( U,LXR, V,LXR, LXR,LY, VLO,VI,NSETV,0,SPV )
+
+        IF (PUB) CALL OPTN('TH', 1 )
+*
+      END IF
+
+*-----------------------------------------------------------------------
+                                     WRITE(6,6030)
+      IF (MODP.NE.1)                 CALL PRTLAB( IBUF1 )
+      IF (MODP.GT.2)                 CALL PRTLAB( IBUF2 )
+      IF (MODP.NE.0 .AND. MODP.NE.3) CALL PRTLAB( IBUFV )
+      IF (MODP.NE.0 .AND. MODP.NE.3) CALL PRTLAB( JBUF  )
+
+***    WRITE LABELS ABOVE PLOT AND TO OUTPUT FILE
+
+      CALL GETSET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+
+      IF (MODP.NE.1)                                           THEN
+          CALL LOW2UP( LABEL1,LABEL )
+          IF (ALL)                                             THEN
+              DO 570 L=80,1,-1
+                  IF (LABEL(L:L).NE.' ') GOTO 571
+  570         CONTINUE
+  571         IF (L.LE.32)                                     THEN
+                  WRITE(LABEL(L+1:L+56),40) NPLOT+1,PNAME1,ASCAL1
+                  LABEL =      TRIM( LABEL   )//
+     +                    ' '//TRIM( NIVEAU1 )//
+     +                    ' '//TRIM( ATEMPS1 )//
+     +                    ' '//TRIM( ETIKET1 )
+              END IF
+          ELSE
+              L = INDEX( LABEL // '%NOMVAR%' , '%NOMVAR%' )
+              IF (L.LE.77)                                     THEN
+                  LABEL(L   :L+3 ) = PNAME1
+                  LABEL(L+4 :88  ) = LABEL(L+8:88)
+              END IF
+              IF (LENE1.GT.0)                                  THEN
+                  L = INDEX( LABEL // '%ETIKET%' , '%ETIKET%' )
+                  IF (L.LE.81-LENE1)                           THEN
+                      LIGNE(L+LENE1:88       ) = LABEL  (L+8    :88   )
+                      LABEL(L      :L+LENE1-1) = ETIKET1(1      :LENE1)
+                      LABEL(L+LENE1:88       ) = LIGNE  (L+LENE1:88   )
+                  END IF
+              END IF
+          END IF
+          CALL                         PWRIT( XC,IYB+64,
+     +                                       '@4'//LABEL,82,1,0,0 )
+                                     WRITE(6,6040) LABEL
+      END IF
+
+      IF (MODP.GT.2)                                           THEN
+          CALL LOW2UP( LABEL2,LABEL )
+          IF (ALL)                                             THEN
+              DO 572 L=80,1,-1
+                  IF (LABEL(L:L).NE.' ') GOTO 573
+  572         CONTINUE
+  573         IF (L.LE.32)                                     THEN
+                  WRITE(LABEL(L+1:L+56),40) NPLOT+1,PNAME2,ASCAL2
+                  LABEL =      TRIM( LABEL   )//
+     +                    ' '//TRIM( NIVEAU2 )//
+     +                    ' '//TRIM( ATEMPS2 )//
+     +                    ' '//TRIM( ETIKET2 )
+              END IF
+          ELSE
+              L = INDEX( LABEL // '%NOMVAR%' , '%NOMVAR%' )
+              IF (L.LE.77)                                     THEN
+                  LABEL(L  :L+3) = PNAME2
+                  LABEL(L+4:88 ) = LABEL(L+8:88)
+              END IF
+              IF (LENE2.GT.0)                                  THEN
+                  L = INDEX( LABEL // '%ETIKET%' , '%ETIKET%' )
+                  IF (L.LE.81-LENE2)                           THEN
+                      LIGNE(L+LENE2:88       ) = LABEL  (L+8    :85   )
+                      LABEL(L      :L+LENE2-1) = ETIKET2(1      :LENE2)
+                      LABEL(L+LENE2:88       ) = LIGNE  (L+LENE2:85   )
+                  END IF
+              END IF
+          END IF
+          CALL                         PWRIT( XC,IYB+44,
+     +                                       '@4'//LABEL,82,1,0,0 )
+                                     WRITE(6,6040) LABEL
+      END IF
+
+      IF (MODP.NE.0 .AND. MODP.NE.3)                           THEN
+          CALL LOW2UP( LABELV,LABEL )
+          IF (ALL)                                             THEN
+              DO 574 L=80,1,-1
+                  IF (LABEL(L:L).NE.' ') GOTO 575
+  574         CONTINUE
+  575         IF (L.LE.32)                                     THEN
+                  WRITE(LABEL(L+1:L+56),40) NPLOT+1,PNAMEV,VSCAL
+                  LABEL =      TRIM( LABEL   )//
+     +                    ' '//TRIM( NIVEAUV )//
+     +                    ' '//TRIM( ATEMPSV )//
+     +                    ' '//TRIM( ETIKETV )
+              END IF
+          ELSE
+              L = INDEX( LABEL // '%NOMVAR%' , '%NOMVAR%' )
+              IF (L.LE.77)                                     THEN
+                  LABEL(L  :L+3) = PNAMEV
+                  LABEL(L+4:88 ) = LABEL(L+8:85)
+              END IF
+              IF (LENEV.GT.0)                                  THEN
+                  L = INDEX( LABEL // '%ETIKET%' , '%ETIKET%' )
+                  IF (L.LE.81-LENEV)                           THEN
+                      LIGNE(L+LENEV:88       ) = LABEL  (L+8    :85   )
+                      LABEL(L      :L+LENEV-1) = ETIKETV(1      :LENEV)
+                      LABEL(L+LENEV:88       ) = LIGNE  (L+LENEV:85   )
+                  END IF
+              END IF
+          END IF
+          CALL                         PWRIT( XC,IYB+24,
+     +                                       '@4'//LABEL,82,1,0,0 )
+                                     WRITE(6,6040) LABEL
+      END IF
+
+      CALL                             PWRIT(1010,1010,'X',   1, 0,0,0)
+
+      CALL FRAME
+      NPLOT=NPLOT+1
+
+      IF (.NOT.ALL)                                            THEN
+          GOTO 110
+      ELSE
+          GOTO 111
+      END IF
+
+*-------------------------------------------------
+  905 IF (NPLOT.EQ.0) CALL                         XIT(' Ggplot ',-4  )
+      CALL                                         XIT(' Ggplot ', 0  )
+  910 CALL                                         XIT(' Ggplot ',-5  )
+  915 CALL                                         XIT(' Ggplot ',-6  )
+  920 CALL                                         XIT(' Ggplot ',-7  )
+  925 CALL                                         XIT(' Ggplot ',-8  )
+  930 CALL                                         XIT(' Ggplot ',-9 )
+  935 CALL                                         XIT(' Ggplot ',-10 )
+  940 CALL                                         XIT(' Ggplot ',-11 )
+  945 CALL                                         XIT(' Ggplot ',-12 )
+  950 CALL                                         XIT(' Ggplot ',-13 )
+  955 CALL                                         XIT(' Ggplot ',-14 )
+  960 CALL                                         XIT(' Ggplot ',-15 )
+
+***    EOF ON FILE Z AFTER SKIP
+
+  990 CALL BURNF
+      CALL                                         XIT(' Ggplot ',-111 )
+
+***    ERROR OPENING/OPERATING FILE PLTINFO.
+
+  999 IF (IO.NE.0) 
+     +  CALL PERROR(' Please check file pltinfo ')
+        CALL                                       XIT(' Ggplot ',-16 )
+
+*------------------------------------------------------------------
+
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+   10 FORMAT(BN,I10)
+   20 FORMAT(BN,I20)
+   11 FORMAT(BN,E10.0)
+   40 FORMAT(1X,I3.3,1X,A4,' *',1PE8.2)
+
+ 5010 FORMAT(10X,A10,1X,A4,A5,2I1,I3,4E10.0,I1,2I2)
+ 5015 FORMAT(A)
+ 5020 FORMAT(20X,2I5,2E10.0) 
+ 5025 FORMAT(10X,10I5)
+ 5030 FORMAT(10X,7E10.0)
+ 5035 FORMAT(10X,3E10.0,2I5)
+ 6000 FORMAT(' Conisp mask value = ',E16.5)
+ 6005 FORMAT(' WARNING : screen filling option not compatible with ',
+     1      /,'           mod,icosh1 choices. Continuing with jps = 8')
+ 6010 FORMAT('     Begin plot number',I5)
+ 6015 FORMAT('0..EOF looking for ',A,2X,A4,1X,A)
+ 6017 FORMAT(' Unable to allocate ',I9,' words.')
+ 6020 FORMAT('0 FLO= ',G12.4,', HI= ',G12.4,', FINC= ',G12.4,
+     1                                      ', SCAL= ',G12.4)
+ 6030 FORMAT('0',10X,'    STEP NAME  LEVEL     LX',
+     1       '    LY    KHEM   NPACK')
+ 6040 FORMAT('+',48X,A80)
+ 6050 FORMAT('  Ggplot warning exit caused by illegal kind = ',A4)
+ 6055 FORMAT('  Ggplot could not find file pltinfo ')
+ 6060 FORMAT(' After HAFLVS, nl=',I2,', npats=',20I4)
+ 6061 FORMAT(22X,'zlev='/(22X,5E12.5))
+
+      END
+      SUBROUTINE CYLEQ(CO,LAB,PB,IDT,DLAT1,DLON1,DLAT2,DLON2,DGRW,MP)
+
+***    CCRN AUG 10/87 - M.SUTCLIFFE. REVISED TO PLOT ANY AREA, AND
+***                      SHRINK MAP SIZE IF TOO LARGE.
+***    CCRN AVR 06/84 - B.DUGAS, R.LAPRISE, N.SARGENT.
+***    PLOT CYLINDRICAL EQUIDISTANT BACKGROUND.
+
+***    CO  = TRUE TO DRAW CONTINENTAL OUTLINES.
+***    LAB = TRUE TO LABEL CORNERS OF PLOT (NON PUBLICATION PLOTS ONLY).
+***    PB  = TRUE FOR A HEAVY CONTINENTAL OUTLINE.
+***    ABS(IDT) GIVES THE SPACING BETWEEN POINTS OF BACKGROUND,
+***    IDT POSITIVE/NEGATIVE FOR CONTINUOUS/DOTTED BACKGROUND,
+***    DLAT1,DLON1,DLAT2,DLON2 ARE THE LATITUDE AND LONGITUDE OF THE
+***    LOWER LEFT AND UPPER RIGHT CORNERS.
+***    DGRW IS THE CENTRE LONGITUDE OF THE AREA.
+***    MP = TRUE FOR MERIDIANS AND PARALLELS DRAWN.
+
+      IMPLICIT    none
+
+      CHARACTER*8 COORD
+      LOGICAL     MP,LAB,PB,CO
+      INTEGER     CE,COIN,OUTL,CL,CH,DOT,LABL,PERI,
+     +            GR,IXA,IXB,IYA,IYB, LTYPE,  IDT, M,N
+      REAL        DLON1,DLON2,DLAT1,DLAT2, XC,XD,YC,YD, DGRW,
+     +            XLON, DLON, XLAT, DLAT
+
+
+      EXTERNAL    MAPOPT,MAPLBL,MAPFST,MAPSET,MAPVEC,GETSET,SET,
+     +            MAPINT,MAPROJ,MAPLT,MAPDRW
+
+      DATA          CE, COIN, OUTL,   CL,  CH,  DOT, LABL, PERI,   GR /
+     +            2HCE, 2HCO, 2HOU, 2HCL,2HCH, 2HDO, 2HLA, 2HPE, 2HGR /
+
+*---------------------------------------------------------------------
+      CALL MAPROJ( CE, 0.0,DGRW,0.0 )
+      CALL MAPSET( COIN, DLAT1,DLON1,DLAT2,DLON2 )
+
+      IF (DLAT2-DLAT1.LT.20. AND.
+     +    DLON2-DLON1.LT.40. )                                 THEN
+          CALL MAPOPT( OUTL, CH ) 
+      ELSE
+          CALL MAPOPT( OUTL, CL ) 
+      END IF
+
+      CALL MAPOPT( DOT,  IDT )  
+      CALL MAPOPT( LABL,.FALSE. ) 
+      CALL MAPOPT( PERI,.TRUE. ) 
+
+      CALL MAPINT
+
+***    IF PLOT IS TOO HIGH, SHRINK THE PLOT BY .9 ALONG BOTH AXES.
+
+      CALL GETSET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+      M = IXB-IXA
+      N = IYB-IYA
+      IF (N .GT. 820)                                          THEN
+        IYB = .9*N + IYA
+        IXB = .9*M + IXA
+      END IF
+      CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+
+***    WRITE THE COORDINATES OF THE AREA ON THE PLOT.
+
+      IF (LAB.AND..NOT.PB)                                     THEN
+        WRITE(COORD,'(F6.2,2X)') DLAT1
+        CALL                     PWRIT( 1,      60,    COORD, 6,10,0,0 )
+        WRITE(COORD,'(F8.2)')    DLON1
+        CALL                     PWRIT( 35,     40,    COORD, 8,10,0,0 )
+        WRITE(COORD,'(F6.2,2X)') DLAT2
+        CALL                     PWRIT( 1,      IYB-5, COORD, 6,10,0,0 )
+        WRITE(COORD,'(F8.2)')    DLON2
+        CALL                     PWRIT( IXB-65, 40,    COORD, 8,10,0,0 )
+      END IF
+
+***    TRACE THE PERIMETER OF THE MAP.
+
+      CALL MAPLBL
+
+***    DRAW THE CONTINENTAL OUTLINES.
+
+      IF (CO) CALL MAPLT
+
+      IF (CO.AND.PB)                                           THEN
+        CALL SETI( 11,11 )
+        CALL GETSET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        IXA = IXA+1
+        IXB = IXB+1
+        CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        CALL MAPLT
+        IYA = IYA+1
+        IYB = IYB+1
+        CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        CALL MAPLT
+        IXA = IXA-1
+        IXB = IXB-1
+        CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        CALL MAPLT
+        IYA = IYA-1
+        IYB = IYB-1
+        CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        CALL SETI( 10,10 )
+      END IF
+*
+      IF (MP)                                                  THEN
+
+*      * DRAW MERIDIANS
+
+        DLON   =   90.0
+        XLON   = -180.0
+        DLAT   =    2.0
+ 320    XLAT   =  -90.0
+
+        CALL MAPFST( XLAT,XLON )
+ 330    XLAT = XLAT+DLAT
+        CALL MAPVEC( XLAT,XLON )
+        IF (XLAT+DLAT.LE.90.) GOTO 330
+        XLON = XLON+DLON
+        IF (XLON.LT.180.) GOTO 320
+
+***      DRAW EQUATOR
+
+        DLON =    2.0
+        XLAT =    0.0
+        XLON = -180.0
+        CALL MAPFST( XLAT,XLON )
+ 350    XLON = XLON+DLON
+        CALL MAPVEC( XLAT,XLON )
+        IF (XLON.LT.180.) GOTO 350
+
+***      LABEL THE EQUATOR, GREENWHICH MERIDIAN, DATE LINE AND POLES
+
+        CALL MAPOPT( LABL,.TRUE. ) 
+        CALL MAPOPT( PERI,.FALSE. ) 
+        CALL MAPLBL
+ 
+      ENDIF
+*
+      RETURN
+*
+      END
+      SUBROUTINE POLSTR(CO,IP,PB,IDT,DLAT1,DLON1,DLAT2,DLON2,DGRW,MP)
+
+***    CCRN AUG 10/87 M.SUTCLIFFE.
+***    GENERALIZE PLOTTED AREA, SHRINK PLOT IF TOO LARGE, SEPARATE
+***    CONTINENT DRAWING FROM MERIDIAN/PARALLEL DRAWING OPTIONS.
+
+***    CCRN OCT 20/82 - N.E.SARGENT.
+***    PLOT POLAR STEREOGRAPHIC BACKGROUND.
+
+***    CO  = TRUE FOR CONTINENTAL OUTLINE DRAWN
+***    IP  = 2 FOR SOUTH POLE, 0 OR 1 FOR NORTH POLE
+***    PB  = TRUE FOR HEAVY CONTINENTAL OUTLINE
+***    ABS(IDT) GIVES THE SPACING BETWEEN POINTS OF BACKGROUND,
+***    IDT POSITIVE/NEGATIVE FOR CONTINUOUS/DOTTED BACKGROUND.
+***    DLAT1,DLON1,DLAT2,DLON2 ARE LATITUDES AND LONGITUDES OF
+***    LOWER LEFT HAND CORNER AND UPPER RIGHT HAND CORNER RESPECTIVELY.
+***    DGRW = ANGLE FROM GREENWHICH MERIDIAN TO HORIZONTAL AXIS.
+***    MP = TRUE/FALSE FOR MERIDIANS,PARALLELS DRAWN/OMITTED.
+
+      IMPLICIT none
+
+      LOGICAL  MP,CO,PB
+      REAL     XC,XD,YC,YD,DGRW, DLON1,DLON2,DLAT1,DLAT2,
+     +         RMINLON,RMAXLON,  XLON, DLON, XLAT, DLAT,
+     +         RMINLAT,RMAXLAT
+      INTEGER  IXA,IXB,IYA,IYB, LTYPE,  IDT,IP,
+     +         ST,COIN,OUTL, DOT,CL,CH, LABL,PERI,GR
+
+      EXTERNAL MAPOPT,MAPLBL,MAPFST,MAPSET,MAPVEC,GETSET,SET,
+     +         MAPINT,MAPROJ,MAPLT,MAPDRW
+
+      DATA       ST, COIN, OUTL,   CL,   CH,  DOT, LABL, PERI,   GR  /
+     +         2HST, 2HCO, 2HOU, 2HCL, 2HCH, 2HDO, 2HLA, 2HPE, 2HGR  /
+
+*-----------------------------------------------------------------------
+      IF (IP.EQ.2)                                             THEN
+        CALL MAPROJ( ST, -90.,0.0,90.-DGRW ) 
+      ELSE 
+        CALL MAPROJ( ST, 90.,0.0,-90.-DGRW ) 
+      END IF 
+      CALL MAPSET( COIN, DLAT1,DLON1,DLAT2,DLON2 ) 
+
+      IF (DLAT2-DLAT1.LT.20. AND.
+     +    DLON2-DLON1.LT.20. )                                 THEN
+          CALL MAPOPT( OUTL, CH ) 
+      ELSE
+          CALL MAPOPT( OUTL, CL ) 
+      END IF
+
+      CALL MAPOPT( DOT,  IDT )  
+      CALL MAPOPT( LABL,.FALSE. ) 
+      CALL MAPOPT( PERI,.TRUE. ) 
+
+      CALL MAPINT
+
+***    IF PLOT IS TOO HIGH, SHRINK THE PLOT BY .9 ALONG BOTH AXES.
+
+      CALL GETSET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+      IF (IYB-IYA .GT. 820)                                    THEN
+        IYB = .9*(IYB-IYA) + IYA
+        IXB = .9*(IXB-IXA) + IXA
+      END IF
+      CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+
+***    TRACE THE PERIMETER OF THE MAP.
+
+      CALL MAPLBL
+
+***    DRAW THE CONTINENTAL OUTLINES.
+
+      IF (CO) CALL MAPLT
+
+      IF (CO.AND.PB)                                           THEN
+        CALL SETI( 11,11 )
+        CALL GETSET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        IXA = IXA+1
+        IXB = IXB+1
+        CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        CALL MAPLT
+        IYA = IYA+1
+        IYB = IYB+1
+        CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        CALL MAPLT
+        IXA = IXA-1
+        IXB = IXB-1
+        CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        CALL MAPLT
+        IYA = IYA-1
+        IYB = IYB-1
+        CALL SET( IXA,IXB,IYA,IYB,XC,XD,YC,YD,LTYPE )
+        CALL SETI( 10,10 )
+      END IF
+
+      IF (MP) THEN
+
+          RMINLON =-180.0
+          RMAXLON = 180.0
+          RMINLAT = -90.0
+          RMAXLAT =  90.0
+
+***        DRAW MERIDIANS.
+
+          DLON    =  30.0
+          DLAT    =  30.0
+          XLON    = RMINLON
+  320     XLAT    = RMINLAT
+          IF (AMOD(XLON,90.).NE.0.) XLAT = RMINLAT+30.
+          CALL MAPFST( XLAT,XLON )
+  330     XLAT = XLAT+DLAT
+          CALL MAPVEC( XLAT,XLON )
+          IF (XLAT+DLAT.LT.91. .AND. AMOD(XLON,90.).EQ.0.) GOTO 330
+          IF (XLAT+DLAT.GT.60.) GOTO 335
+          GOTO 330
+  335     CONTINUE
+          XLON = XLON+DLON
+          IF (XLON.LT.RMAXLON) GOTO 320
+
+***        DRAW PARALLELS.
+
+          DLAT = 30.0
+          DLON =  2.0
+          XLAT =-60.0
+  340     XLON = RMINLON
+          CALL MAPFST( XLAT,XLON )
+  350     XLON = XLON+DLON
+          CALL MAPVEC( XLAT,XLON )
+          IF (XLON.LT.RMAXLON) GOTO 350
+          XLAT=XLAT+DLAT
+          IF (XLAT.LT.RMAXLAT) GOTO 340
+
+***      LABEL THE EQUATOR, GREENWHICH MERIDIAN, DATE LINE, AND POLES.
+
+        CALL MAPOPT( LABL,.TRUE. ) 
+        CALL MAPOPT( PERI,.FALSE. ) 
+        CALL MAPLBL
+      END IF
+ 
+      RETURN
+      END
+#     endif

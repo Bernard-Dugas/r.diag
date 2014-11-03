@@ -1,0 +1,375 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      gsmslph  GSTEMP GLNSP GPHIS GPMSL GLNPT INPUT OUTPUT \
+*              [ -n VAL1 -a VAL2 -b VAL3 -l VAL4 -kind VAL5 ]
+*
+*
+*     DESCRIPTION...
+*      gsmslph - COMPUTES MEAN-SEA-LEVEL PRESSURE FROM HYBRID T, LNSP, PHIS
+*
+*
+*     AUTHOR  - M. Lazare, JAN 19/89 (FROM GSMSLP BUT FOR HYBRID MODEL)
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gsmslph.ptn,v 4.9 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE - FROM A SERIES OF HYBRID LEVEL TEMPERATURES (=GSTEMP) AND
+*               LN(PS) (=GLNSP), COMPUTE  A  SERIES  OF  MEAN-SEA-LEVEL
+*               PRESSURES (=GPMSL), USING THE MOUNTAIN FIELD PHIS (=GPHIS).
+*
+*
+*     INPUT FILES...
+*      GSTEMP = HYBRID LEVEL GRID SETS OF TEMPERATURE (DEG K).
+*      GSLNSP = CORRESPONDING GRIDS OF LN(SF.PRES.)
+*      GPHIS  = GRID OF SURFACE GEOPOTENTIAL.
+
+*     (EXCLUSIVELY FOR GAL-CHEN LEVELS SUCH AS IN THE RCM MODEL)
+*      GSLNPT = SET OF LN(PRESSURE) ON THERMODYNAMIC LEVELS.
+*
+*     OUTPUT FILE...
+*      GPMSL  = MEAN-SEA-LEVEL PRESSURE GRIDS (IN MB).
+*
+*
+*     INPUT PARAMETERS...
+*
+*      GAM    (a)    = LOW LEVEL LAPSE RATE (DEFAULT .0065).
+*      NLVLUP (n)    = NUMBER OF LEVELS BETWEEN REFERENCE
+*                      AND LOWEST LEVEL TEMP (DEFAULT 1).
+*      LAY    (l)    = LAYERING SCHEME USED IN MODEL (DEFAULT 3).
+*      COORD  (kind) = VERTICAL COORDINATE (ETA, SIG OR GAL-CHEN).
+*      PLID   (b)    = MODEL "LID" IN PASCALS (DEFAULT 500.)
+*
+*      NOTE THAT LAY AND PLID ARE NOT USED FOR GAL-CHEN LEVELS.
+*
+*      READ(5,5010) GAM,NLVLUP,LAY,COORD,PLID
+*5010  FORMAT(10X,F10.0,2I5,1X,A4,E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+** GSMSLP      .0065    1    3  ETA      500.
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NOT ENOUGH OR TOO MANY VERTICAL LEVELS
+*       2 UNABLE TO READ GPHIS
+*       3 GPHIS NOT THE SAME SIZE AS GSTEMP
+*       4 UNABLE TO READ GSTEMP
+*       5 MORE THAN ONE SIZE FOUND IN GSTEMP
+*       6 UNABLE TO READ GLNSP
+*       7 GLNSP NOT THE SAME SIZE AS GSTEMP
+*       8 HAVING PROBLEMS READING DIRECTIVE CARD
+*       9 UNABLE TO READ GLNPT
+*      10 GLNPT NOT THE SAME SIZE AS GSTEMP
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM gsmslph 
+*     PROGRAM GSMSLPH(GSTEMP,       GLNSP,       GPHIS,       GPMSL,
+*    +          TAPE1=GSTEMP, TAPE2=GLNSP, TAPE3=GPHIS, TAPE4=GPMSL,
+*    +                GLNPT,  TAPE7=GLNPT,
+*    +                INPUT,        OUTPUT,TAPE5=INPUT, TAPE6=OUTPUT) 
+*     ---------------------------------------------------------------
+
+*     $Log: gsmslph.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:10:29  dugas
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  1998/10/20 17:49:58  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.5  1998/07/03  02:26:29  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1997/09/26  17:39:01  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1996/11/12  19:38:19  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*     Modifier le support des fichiers SQI.
+*
+*     Revision 4.2  1996/09/19  15:07:05  armnrbd
+*     Premiere version fonctionnelle.
+*
+*     Revision 4.1  1995/11/06  16:21:27  armnrbd
+*     Corriger l'allocation de LNSP.
+*
+*     Revision 4.0  1995/11/04  02:01:54  armnrbd
+*     Version initiale.
+
+*     AUG 24/93 - M. GIGUERE ( INTRODUCING GAL-CHEN LEVELS )
+*     JAN 12/93 - E. CHAN  (DECODE LEVELS IN 8-WORD LABEL)
+*     JAN 29/92 - E. CHAN     (CONVERT HOLLERITH LITERALS TO ASCII)
+*     JAN 19/89 - M.LAZARE. - BASED ON GSMSLP EXCEPT FOR HYBRID MODEL.          
+*     MAY 06/81 - R.LAPRISE.- ORIGINAL VERSION GSMSLP.
+
+*-------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      LOGICAL     OK
+      CHARACTER   LIGNE*80
+      CHARACTER*4 CPMSL,CLNPT,CLNSP,
+     +            CPHIS,CTEMP,COORD
+      INTEGER     LEV(MAXLEV),IBUF,KBUF(taille_entete),VKIND,
+     +            IO,IER,NLVLUP,LAY,MAXW,LEN,NPTS,
+     +            NLEV,LOWEST,I,L,NT,NFF,NRECS,KPAK
+      REAL        SH(MAXLEV),SHB(MAXLEV),ACH(MAXLEV),
+     +            AH(MAXLEV),BH(MAXLEV), BCH(MAXLEV),
+     +            PHIS,PMSL,LNSP,LNPT,RGAS,GRAV,RGOCP,
+     +            GAM,PLID,GAMRGOG,PL,PS,TS,TBAR,T,TCON
+
+      POINTER   ( P1,LNPT(1) )
+      POINTER   ( P2,LNSP(1) )
+      POINTER   ( P3,PHIS(1) )
+      POINTER   ( P4,PMSL(1) )
+      POINTER   ( P4,T(1) )
+      POINTER   ( P5,IBUF(8) )
+      
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ2
+      CHARACTER*4 PKTYP,GETYP
+      EXTERNAL    GETSIZ2,JCLPNT,GETLIGN,BURNF,CONVPR,GETYP,
+     +            SIGLOC,HPALLOC,GETFLD2,PUTFLD2,XIT,DEFCPHY,
+     +            RPBLOC,LEADBLK
+
+      DATA        TCON / 0.0 /
+      DATA        CPMSL, CLNPT, CLNSP, CPHIS, CTEMP /
+     +            'PMSL','LNPT','LNSP','PHIS','TEMP'/
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gsmslph.ptn,v $'
+
+*---------------------------------------------------------------------
+***    DEFINITION DES CONSTANTES ET PARAMETRES PHYSIQUES.
+
+      CALL DEFCPHY( GRAV,RGAS )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 7
+      CALL JCLPNT( NFF, 1,2,3,4,7, 5,6 )
+
+      NRECS = 0 
+      RGOCP = 2./7. 
+
+      PKTYP = GETYP( 1 )
+
+      IF (PKTYP.EQ.'SQ89')                                     THEN
+          CPMSL = 'P0'
+          CLNSP = 'LP'
+          CLNPT = 'PT'
+          CTEMP = 'TT'
+          CPHIS = 'MT'
+          TCON  = 273.15
+      END IF
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NLVLUP =  1
+          GAM    =  0.0065
+          LAY    =  3
+          COORD  = 'ETA'
+          PLID   =  500.
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) COORD = LIGNE(1:4)
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ( LIGNE, 0005, ERR=901,END=901,IOSTAT=IO ) NLVLUP
+
+          OK = RPBLOC('L',LIGNE)
+          IF (OK) READ( LIGNE, 0005, ERR=901,END=901,IOSTAT=IO ) LAY
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 0010, ERR=901,END=901,IOSTAT=IO ) GAM
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 0010, ERR=901,END=901,IOSTAT=IO ) PLID
+
+      ELSE
+
+***        READ THE CONTROL CARDS.
+
+          CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5010, END=901,ERR=901,IOSTAT=IO ) 
+     +                     GAM,NLVLUP,LAY,COORD,PLID
+              CALL BURNF
+          END IF  
+
+      END IF
+
+      IF (COORD.NE.' ') CALL LEADBLK( COORD )
+      IF (COORD.EQ.' ') COORD = 'ETA'
+
+      WRITE(6,6000) GAM,NLVLUP 
+      WRITE(6,6010) LAY,COORD,PLID
+
+***    USE THE TEMP AT THE (NLVLUP+1) LEVEL ABOVE SURFACE TO EXTRAPOL. 
+
+      MAXW = GETSIZ2( 1, KBUF,LEN,NPTS,KPAK, LEV,NLEV )
+
+      IF ((NLEV.LT.1).OR.(NLEV.GT.MAXLEV)) CALL    XIT(' Gsmslph',-1 )
+      NLEV = NLEV-NLVLUP
+      IF (NLEV.LE.0) CALL                          XIT(' Gsmslph',-99) 
+      LOWEST = LEV(NLEV)
+
+      IF (COORD.NE.'GALC')                                     THEN
+
+***        DETERMINE VERTICAL ARRAYS USED TO CALCULATE PRESSURE. 
+
+          DO  L=1,NLEV
+              CALL CONVPR( LEV(L), SH(L), VKIND, -2 )
+              IF (VKIND.EQ.2) SH(L) = SH(L) * 0.001 
+          END DO
+
+          CALL SIGLOC( ACH,BCH,AH,BH,SH,SHB,NLEV,LAY,COORD,PLID )
+
+      END IF
+
+***    ALLOCATE WORKING MEMORY.
+
+      CALL HPALLOC( P1, 4*NPTS,IER,1 )
+      P2 = LOC( LNPT(NPTS+1) )
+      P3 = LOC( LNSP(NPTS+1) )
+      P4 = LOC( PHIS(NPTS+1) )
+      CALL HPALLOC( P5, LEN ,  IER,1 )
+
+***    GET THE MOUNTAIN FIELD. 
+
+      CALL GETFLD2( 3, PHIS, 'GRID'//'SUBA',-1,CPHIS,-1, IBUF,MAXW,OK )
+
+      IF (.NOT.OK) CALL                            XIT(' Gsmslph',-2 )
+      IF (IBUF(5)*IBUF(6).NE.NPTS) CALL            XIT(' Gsmslph',-3 )
+
+      CALL PRTLAB( IBUF )
+
+***    GET REFERENCE LEVEL OF TEMPERATURE. 
+
+  100 CALL GETFLD2( 1, T, 'GRID'//'SUBA',-1,CTEMP,LOWEST, IBUF,MAXW,OK )
+
+          IF (.NOT.OK .AND. NRECS.EQ.0) CALL       XIT(' Gsmslph',-4 )
+          IF (IBUF(5)*IBUF(6).NE.NPTS) CALL        XIT(' Gsmslph',-5 )
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6030)NRECS
+              CALL                                 XIT(' Gsmslph', 0 ) 
+          END IF 
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          NT = IBUF(2)
+
+***        GET LN(PS) FOR CORRESPONDING TIMESTEP.
+
+          CALL GETFLD2( 2, LNSP, 'GRID'//'SUBA',NT,CLNSP,-1,
+     +                            IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK) CALL                        XIT(' Gsmslph',-6 )
+          IF (IBUF(5)*IBUF(6).NE.NPTS) CALL        XIT(' Gsmslph',-7 )
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          IF (COORD.EQ.'GALC')                                 THEN
+
+***            GET LN(PT) AT SAME REFERENCE LEVEL OF TEMPERATURE.
+
+              CALL GETFLD2( 7, LNPT, 'GRID'//'SUBA',NT,CLNPT,LOWEST,
+     +                                IBUF,MAXW,OK )
+
+              IF (.NOT.OK) CALL                    XIT(' Gsmslph',-9 )
+              IF (IBUF(5)*IBUF(6).NE.NPTS) CALL    XIT(' Gsmslph',-10)
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          END IF
+
+***        COMPUTE M.S.L. PRESSURE.
+
+***        ASSUME A UNIFORM LAPSE RATE OF (DT/DZ)=-GAM, FROM REFERENCE 
+***        LEVEL TO THE SURFACE, AND THEN FROM THE SURFACE TO SEA LEVEL. 
+***        USE HYDROSTATIC EQUATION AND CONSTANT-LAPSE RATE EQUATION
+***        FIRST TO DETERMINE "SURFACE TEMPERATURE". 
+
+          DO  I=1,NPTS 
+              GAMRGOG = GAM*RGAS/GRAV 
+              IF (COORD.EQ.'GALC')                             THEN
+                  PS  = EXP( LNSP(I) )
+                  PL  = EXP( LNPT(I) )
+              ELSE
+                  PS  = 100. * EXP( LNSP(I) )
+                  PL  = ACH(NLEV) + BCH(NLEV)*PS
+              END IF
+              TS      = (T(I)+TCON)  * (PS/PL)**GAMRGOG 
+              TBAR    = TS           + 0.5*GAM*PHIS(I)/GRAV 
+              PMSL(I) = EXP( LNSP(I) + PHIS(I)/(RGAS*TBAR) ) 
+          END DO
+
+***        SAVE M.S.L. PRESSURE. 
+
+          READ( CPMSL,'(A4)') IBUF(3)
+                              IBUF(4) = 1 
+
+          CALL PUTFLD2( 4, PMSL, IBUF,MAXW ) 
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+      NRECS=NRECS+1 
+      GOTO 100 
+
+***    E.O.F. ON INPUT.
+
+  901 CALL                                         XIT(' Gsmslph',-8 )
+*-----------------------------------------------------------------------
+
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,F10.0,2I5,1X,A4,E10.0)
+
+ 6000 FORMAT(' Gam=',E10.3,' temp. level used is ilev -',I2)
+ 6010 FORMAT(' Lay,icoord,plid  = ',I5,1X,A4,F10.3)
+ 6025 FORMAT(1X,A4,I12,1X,A4,I10,4I8)
+ 6030 FORMAT(1X,I5,' fields saved.')
+
+      END 
+#     endif

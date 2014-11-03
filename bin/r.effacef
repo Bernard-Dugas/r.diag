@@ -1,0 +1,77 @@
+#! /bin/sh
+#
+zxzxzx=${DIAGNOSTIC_EXIT:=DIAGNOSTIC_EXIT}
+if ( test -s "${zxzxzx}" ) then
+     exit 0
+fi
+#
+eval `cclargs   -dn     "aucun_nom_local"     ",,,,"  \
+                -pdn    "aucun_nom_permanent" "nil"   \
+                -own    "aucun_repertoire"    "$HOME" \
+                -f      "non"                 "oui"   \
+                -na     "non"                 "oui"   \
+                ++ $*`
+# 
+# usage: effacef  [-dn Local_Filename] [-pdn Permanent_Filename]
+#                 [-own [Alternate_Directory]] [-f] [-na]
+#
+# notes: 1) le nom Local_Filename pointe a un fichier dans le
+#           repertoire courant.
+#        2) le parametre pdn prendra par defaut la valeur de dn.
+#        3) l'option "f" (pour force) efface les fichiers avec
+#           l'option "-f", sans avis. Ceci n'est pas le comportement 
+#           par defaut de effacef.
+#
+# auteur:   B. Dugas, RPN/10 decembre 1992.
+#
+# modifications: 1) Ajouter le support de DIAGNOSTIC_EXIT.
+#                   (BD - 30 juin 1993)
+#
+if ( test "${dn}" = aucun_nom_local -a ${pdn} = aucun_nom_permanent ) then
+     echo " "
+     echo " usage: effacef  [-dn Local_Filename] [-pdn Permanent_Filename]"
+     echo "                 [-own [Alternate_Directory]] [-f] [-na]"
+     echo " "
+     exit  1
+fi
+#
+if ( test "${own}" = aucun_repertoire ) then
+     own=`pwd`
+fi
+#
+if ( test ${f} = oui ) then
+     FORCE="-f"
+else
+     FORCE=''
+fi
+#
+if ( test "${pdn}" = aucun_nom_permanent ) then
+     pdn=${own}/${dn}
+else
+     pdn=${own}/${pdn}
+fi
+#
+DN=${pdn}
+#
+if ( test ! -f "${DN}" ) then
+     echo "Le ficher $dn n'existe pas."
+     if ( test "${na}" = non ) then
+          exit 1
+     elif ( test "${na}" = oui ) then
+          exit 0
+     fi
+fi
+#
+STATUS=0
+#
+\rm ${FORCE} ${DN} 2> /dev/null
+if ( test $? != 0 ) then
+     STATUS=2
+fi
+#
+if ( test ${na} = non ) then
+     exit $STATUS
+fi
+#
+exit 0
+

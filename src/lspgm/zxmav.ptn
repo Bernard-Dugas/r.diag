@@ -1,0 +1,238 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zxmav ZXIN ZXOUT OUTPUT
+*
+*
+*     DESCRIPTION... 
+*      ZXMAV  - COMPUTES MERIDIONAL AVERAGE OF ONE CROSS-SECTION 
+*
+*
+*     AUTHOR  - J.D.Henderson, Nov. 07/1980.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxmav.ptn,v 4.9 2014/09/25 20:20:57 dugas Exp $
+*
+*
+*     PURPOSE - READS ONE CROSS-SECTION FROM FILE ZXIN, INTEGRATES IN LATITUDE
+*               AND PUTS THE RESULTS ON FILE ZXOUT. 
+*
+*     NOTE    - AT INPUT THE CROSS-SECTION IS ORDERED FROM S TO N AND 
+*               TOP TO BOTTOM. MAXIMUM LATITUDES IS 1999, MAXIMUM LEVELS IS 999. 
+*
+*
+*     INPUT FILE... 
+*      ZXIN  = ONE CROSS-SECTION ON PRESSURE LEVELS 
+*
+*     OUTPUT FILE... 
+*      ZXOUT = ONE CROSS-SECTION WHERE EACH LEVEL IS SET TO THE MERIDION 
+*              AVERAGE OF THE CORRESPONDING LEVEL OF ZXIN. 
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ ZXIN
+*       2 TOO MANY OR NOT ENOUGH LEVELS IN ZXIN
+*       3 ZXIN IN NOT A ZONAL CROSS-SECTION FILE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ZXMAV 
+*     PROGRAM ZXMAV (ZXIN,       ZXOUT,       OUTPUT, 
+*    1         TAPE1=ZXIN, TAPE2=ZXOUT, TAPE6=OUTPUT) 
+*     ----------------------------------------------- 
+
+*     $Log: zxmav.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:57  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2013/10/17 11:28:50  bernard
+*     Utiliser le macro latitude_maximale pour definir le parametre MAXJ.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2008/04/25 21:10:56  dugas
+*     Toujours utiliser GET_IP1_STRING avant d'imprimer un niveau vertical.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/08/25 20:08:42  dugas
+*     Corriger l'allocation de memoire dynamique de IBUF.
+*
+*     Revision 4.3  1999/08/25 16:57:35  armnrbd
+*     Enlever l'obligation de traiter des donnees globales.
+*
+*     Revision 4.2  1998/07/03 02:26:51  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:58  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:23:07  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  93/10/26  16:52:24  armnrbd
+*     Premiere version fonctionnelle sur UNIX.
+*     
+*     Revision 3.0  93/10/24  01:36:27  armnrbd
+*     Premiere version Unix-RPN.
+*     
+*     MAY 14/83 - R.LAPRISE. 
+*     NOV 07/80 - J.D.HENDERSON 
+
+*--------------------------------------------------------------------- 
+      IMPLICIT     none
+
+      INTEGER, PARAMETER :: HEAD = taille_entete , MAXLEV = 999
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+
+      LOGICAL      OK 
+      CHARACTER    TYPE*4,SLEV*15
+      REAL*8       FL(MAXLEV),F(MAXJ),VAL,VAL2,
+     +             SL(MAXJ),CL(MAXJ),RADI,RADF,
+     +             WL(MAXJ),WOSSL(MAXJ),RAD(MAXJ),PIH
+      INTEGER      LEV(MAXLEV),NFF,MAXW,NLEV,IER,NLAT,
+     +             ILATH,L,J,IPAK,NWDS,LEN, NHEM,
+     +             JBUF(HEAD)
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:), ALLOCATABLE :: X
+
+      INTEGER      GETSIZ2
+      EXTERNAL     GETSIZ2,JCLPNT,GETZX2,
+     +             GAUSSG,TRIGL2,PUTZX2
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxmav.ptn,v $'
+
+*---------------------------------------------------------------------
+      NFF = 3 
+      CALL JCLPNT( NFF, 1,2, 6 )
+
+      PIH  = 2.0*ATAN(1.0D0) 
+
+***    ALLOCATE X AFTER FINDING HOW MANY LEVELS IN ZXIN.
+
+      MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,IPAK, LEV,NLEV )
+
+      IF (MAXW.LE. 0 .OR.
+     +    NLEV.LT. 1 .OR. 
+     +    NLEV.GT.MAXLEV) CALL                     XIT('  Zxmav ',-2 ) 
+
+      WRITE(TYPE,'(A4)') JBUF(1)
+
+      IF (TYPE.NE.'ZONL') CALL                     XIT('  Zxmav ',-3 )
+
+      NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(LEN),X(NWDS*NLEV) )
+
+      NHEM = JBUF(7)
+
+***    GET THE CROSS-SECTION. STOP IF THE FILE IS EMPTY. 
+***    LEV WILL CONTAIN THE PRESSURE LEVEL VALUES IN MILLIBARS. 
+
+      CALL GETZX2( 1, X, NLAT,LEV,NLEV, IBUF,MAXW,OK ) 
+
+      IF (.NOT.OK) CALL                            XIT('  Zxmav ',-1 ) 
+      IF ((NLEV.LT.1) .OR. (NLEV.GT.MAXLEV)) CALL  XIT('  Zxmav ',-2 ) 
+
+***    GAUSSG COMPUTES THE VALUE OF THE GAUSSIAN LATITUDES AND
+***    THEIR SINES AND COSINES FOR THE NH (N TO S). TRIGL2 MAKES
+***    THEM GLOBAL OR HEMISPHERIC (S TO N), ACCORDING TO NHEM.
+
+                     ILATH = NLAT/2 
+      IF (NHEM.NE.0) ILATH = NLAT
+
+      CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL ) 
+      CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL,NHEM ) 
+
+      IF (NHEM.EQ.0)                                           THEN
+          RADI = -PIH
+          RADF =  PIH
+      ELSE IF (NHEM.EQ.1)                                      THEN
+          RADI =  0
+          RADF =  PIH
+      ELSE IF (NHEM.EQ.2)                                      THEN
+          RADI = -PIH
+          RADF =  0
+      END IF
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+***    INTEGRATE EACH LEVEL IN LATITUDE.
+
+      DO  100 L=1,NLEV 
+
+          DO  J=1,NLAT 
+              F(J) = X(J+(L-1)*NLAT) * CL(J) 
+          END DO
+
+          VAL  =  F(1)*(RAD(1)-RADI) 
+          VAL2 = CL(1)*(RAD(1)-RADI) 
+
+          DO  J=2,NLAT 
+              VAL  = VAL  +.5*(  F(J)+  F(J-1))*(RAD(J)-RAD(J-1)) 
+              VAL2 = VAL2 +.5*( CL(J)+ CL(J-1))*(RAD(J)-RAD(J-1)) 
+          END DO
+
+          VAL   = VAL  +  F(NLAT)*(RADF-RAD(NLAT)) 
+          VAL2  = VAL2 + CL(NLAT)*(RADF-RAD(NLAT)) 
+
+          FL(L) = VAL  /  VAL2 
+
+          CALL GET_IP1_STRING( LEV(L),SLEV )
+          WRITE(6,6028) SLEV,FL(L) 
+
+  100 CONTINUE 
+
+***    PUT THE LATITUDE INTEGRALS ON FILE ZXOUT. 
+
+      IF (NLEV.GT.1) IBUF(4) = 1
+                     IBUF(6) = NLEV
+
+      CALL PRTLAB( IBUF )
+
+      DO  200 L=1,NLEV 
+
+          DO  J=1,NLAT 
+              X(J+(L-1)*NLAT) = FL(L) 
+          END DO
+
+  200 CONTINUE 
+
+      CALL PUTZX2( 2, X,LEV, IBUF,MAXW )
+
+      CALL                                         XIT('  Zxmav ', 0 ) 
+*--------------------------------------------------------------------- 
+
+ 6028 FORMAT(' Latitude integral at level ',A,1PE15.6) 
+
+      END 
+#     endif

@@ -1,0 +1,10 @@
+variable=`echo $1 | tr "[A-Z]" "[a-z]"`
+if [ "${variable}_value" =   "on_value" -o \
+     "${variable}_value" = "true_value" -o \
+     "${variable}_value" = "vrai_value" -o \
+     "${variable}_value" =  "oui_value" -o \
+     "${variable}_value" =  "yes_value" ]; then
+   exit 0
+else
+   exit 1
+fi

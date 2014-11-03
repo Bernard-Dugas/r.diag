@@ -1,0 +1,837 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      solflux  INFILE FSO INPUT OUTPUT \ 
+*                       [-a VAL1 -b VAL2 -delt VAL3 -c VAL4 \ 
+*                        -kind VAL5  [VAL6] -nhem VAL7 -i VA87 \ 
+*                        -j VAL9 -d60 VAL10 -dgrw VAL11 -K VAL12]
+*
+*
+*     DESCRIPTION...
+*      solflux - RE-COMPUTE THE INCIDENT SOLAR FLUX AT THE TOP OF THE MODEL
+*
+*     AUTHOR  - R. Laprise, MAY 13/1983.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/solflux.ptn,v 4.15 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     PURPOSE - RE-COMPUTE THE INCIDENT SOLAR FLUX AT THE TOP OF THE
+*               ATMOSPHERE FOR THE TIMESTEPS AND ON THE SAME GRID TYPE
+*               FOUND IN INFILE. THE ORIGINAL CODE WAS ADAPTED FROM SOLFLX
+*               AS WRITTEN BY J.P.BLANCHET AT CCRN.
+*
+*
+*     INPUT FILE...
+*      INFILE = A PROPERLY SORTED FILE PROVIDING THE
+*               GEOMETRY AND TIMESTEP INFORMATION.
+*
+*     OUTPUT FILES...
+*      FSO = INCIDENT SOLAR FLUX AT TOA (W M-2)
+*
+* 
+*    INPUT PARAMETERS...
+*
+*     DAY    (a)      = INITIAL (JULIAN) DAY OF THE PERIOD
+*     GMT    (b)      = INITIAL G.M.TIME (HR)
+*     DELT            = LENGTH OF TIMESTEP OF MODEL RUN (S)
+*     INCDAY (kind-1) = 1,0 TO INCREMENT THE DECLINATION ANGLE OR NOT (DEF=1).
+*     DTM    (kind-2) = FLAG TO INDICATE METHOD OF TIME MEASUREMENT.
+*                     = 0 ==> IBUF(2),T1,T2 AND T3 IN KOUNT UNITS.
+*                     = 1 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT
+*                             YYYYMMDDHH AND T3 IS IN HOURS.
+*                     = 2 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT
+*                             YYMMDDHHMM AND T3 IS IN MINUTES AND
+*                             NO LEAP YEAR.
+*                     = 3 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT
+*                             YYYYMMDDHH AND T3 IS IN HOURS. BUT NOW,
+*                             LEAP YEARS ARE ACCOUNTED FOR.
+*     KHEM   (nhem)   = 0,1,2 TYPE DE GRILLE (GLOBAL, PS NORD OU SUD)
+*
+*     SCON   (c)      = SOLAR CONSTANT USED (DEF=1367. W/M**2)
+*     SMOOTH (k)      = 1, ACCUMULATE RESULT EVERY DELT SECONDS, SAVING
+*                          THE AVERAGE AT THE NEXT SAMPLE TIMES (DEFAULT).
+*                     = 0, ONLY DO THE CALCULATION AT SAMPLE TIMES.
+*
+*     NOTE: WHEN KHEM.NE.0, AND WHILE READING CCC TYPE FILES, THE FOLLOWING
+*     4 PARAMETERS ARE ALSO CONSIDERED. NOT SO WHILE READING RPN FILES.
+*
+*     PX     (i)    = POSITION EN X DU POLE P/R AU COIN INFERIEUR GAUCHE
+*     PY     (j)    = POSITION EN Y DU POLE P/R AU COIN INFERIEUR GAUCHE
+*     D60           = RESOLUTION DE LA GRILLE A 60 DEGRES
+*     DGRW          = ANGLE ENTRE LE MERIDIEN 0 ET AXE DES X
+*
+*     KHEM AS WELL AS THESE LAST FOUR PARAMETRES ARE ALWAYS IGNORED
+*     WHILE READING RPN/CMC FILES.
+*
+*     IF THE -def KEYWORD IS SPECIFIED ON THE COMMAND LINE WHILE WORKING
+*     WITH RPN/CMC FILES, solflux WILL ALSO TRY TO DETERMINE APPROPRIATE
+*     VALUES FOR DAY, GMT AND DELT FROM THE CONTENT OF INFILE.
+*
+*
+*     READ(5,5010) DAY,GMT,DELT,SMOOTH,INCDAY
+*    +             DTM,KHEM,PX,PY,D60,DGRW
+*5000 FORMAT(10X,2F5.0,F10.0,I2,1X,I2,I2,1X,I2,4F10.1)
+*
+*
+*    EXAMPLE OF INPUT CARD...
+*
+**SOLFLUX   182   12      1800 0  1 0  1      62.5     174.5   45000.0     343.0
+** PRECEDING DIRECTIVES ARE APPROPRIATE FOR THE RCM
+*
+**SOLFLUX   182   12      1800 0  1
+** PRECEDING DIRECTIVES ARE APPROPRIATE FOR THE GCM
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ INFILE
+*       2 UNABLE TO READ DIRECTIVES
+*       3 UNSUPPORTED GRID TYPE
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM solflux 
+*     PROGRAM SOLFLUX (INFILE,       FSO,       INPUT,       OUTPUT,       )
+*    1           TAPE2=INFILE, TAPE1=FSO, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     -----------------------------------------------------------
+*     $Log: solflux.ptn,v $
+*     Revision 4.15  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.14  2011/01/13 17:30:23  dugas
+*     - Ajouter le support des grilles Z a suport PS.
+*     - Correction a la formulation de l'angle de declinaison solaire.
+*     - Autres corrections liees a l'usage generalise des DATE-TIME-STAMPS.
+*
+*     Revision 4.13  2010/05/06 16:25:30  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*
+*     Revision 4.12  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.11  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2006/07/19 18:40:03  dugas
+*     - Expliciter l'usage de la cle -def par SOLFLUX.
+*     - S'assurer que cet usage est en accord avec
+*       ce qui est fait dans d'autres modules.
+*
+*     Revision 4.9  2005/07/05 20:08:54  dugas
+*     - Add native support for (A,B,G,L,N,S and Z) CMC/RPN grids.
+*     - Add SCON (defining the Solar Constant) and SMOOTH (accumulating
+*       results between sample times each DELT seconds) parametres.
+*     - Account for the dependance on the earth orbit excentricity in
+*       both the length of the time of day and the solar constant.
+*
+*     Revision 4.8  2001/03/17 21:44:33  armnrbd
+*     Remplacer GETPARI/GETPARC par GETHIGH/GETHIC.
+*
+*     Revision 4.7  1998/10/20 18:34:26  armnrbd
+*     Corriger la documentation.
+*
+*     Revision 4.6  1998/07/03  02:26:36  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1998/05/21  20:20:53  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.4  1997/09/26  17:39:17  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1997/05/30  17:51:48  armnrbd
+*     Modifier l'appel a JCLPNT.
+*
+*     Revision 4.2  1995/12/22  14:50:56  armnrbd
+*     Enlever trois declarations inutiles.
+*
+*     Revision 4.1  1995/12/20  15:54:33  armnrbd
+*     Implanter le support de RPBLOC.
+*     De plus, supporter les fichier SQI.
+*
+*     Revision 4.0  1995/11/24  20:37:34  armnrbd
+*     Version initiale.
+*
+
+*     NOV  1/93 - M. GIGUERE EXTENSION CARTE POUR GRILLE POLAIRE STEREO.
+*                            AVEC APPEL A CLATLON.
+*     JUL 13/92 - E. CHAN  (DIMENSION SELECTED VARIABLES AS REAL*8)
+*     JAN 29/92 - E. CHAN  (CONVERT HOLLERITH LITERALS TO ASCII)                
+*     MAY 13/83 - R.LAPRISE.                                                    
+
+*---------------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+
+      CHARACTER*20 CT1,CT2
+      CHARACTER*4 CFSO,NAME
+      LOGICAL     OK,ERR,DEFAUT
+      CHARACTER   LIGNE*80,GRTYP,ZTYP,
+     +            ASMOOTH*2,AINCDAY*2
+      INTEGER*8   IT1,IT2,ITC,DTM,NT1,
+     +            NT2,NT3,NTIME,LASTBUF2,DATE8
+      REAL*8      DEGRAD,PI,LAT1,RADL,RADLON,EOT,
+     +            OFFSET,DELTA,LATSPAN,SOLCONS,COSH,
+     +            RADDAY,RADYEAR,ALF,R0R,RDEC,COSD,SIND
+      REAL        S,COSMIN,DAY,GMT,GMT0,GMTM,GMTP,XPS,
+     +            PX,PY,D60,DGRW,DAYFIX,STEP,DELT,YPS,
+     +            GMTOLD,EPSILN,XLAT1,XLON1,XLAT2,
+     +            XLON2,LON0,LAT0,XLAT0,XLON0,DLAT0,
+     +            DLON0,OVSEND,SDAY,SGMT,SGMTOLD,SSTEP
+      INTEGER     NFF,JBUF(taille_entete),MAXW,LEN,
+     +            NWDS,JPAK,IER,IO,INCDAY,KHEM,ILG,
+     +            ILG1,ILAT,NSTEPS,NSIZE,ILATH,I,J,
+     +            NT,MONTH,N,DATE,ANNE,JOUR,MOIS,
+     +            JULI,IG1,IG2,IG3,IG4,ZIG1,
+     +            ZIG2,ZIG3,ZIG4,DIMX,DIMY,
+     +            SEND,K,SMOOTH,NPAS
+
+      REAL,       DIMENSION (:,:), ALLOCATABLE :: DEGLAT,DEGLON
+      REAL,       DIMENSION (:,:), ALLOCATABLE :: SINLAG,COSLAG
+      REAL*8,     DIMENSION (:),   ALLOCATABLE :: W,WOCS,RAD,SINL,COSL
+      REAL,       DIMENSION (:),   ALLOCATABLE :: ALON,ALAT,COSZ
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: FSO
+
+      LOGICAL     RPBLOC
+      INTEGER*8   NEWTIM,ADDTIM
+      INTEGER     GETSIZ,GETHIGH
+      CHARACTER*4 GETYP,PKTYP,GETHIC
+      EXTERNAL    RPBLOC,JCLPNT,GETLIGN,BURNF,XIT,GAUSSG,
+     +            TRIGL2,SDET,CLATLON,PUTFLD2,GETSIZ,
+     +            SUIVANT,GETYP,GETHIGH,GETHIC,CIGAXG,
+     +            JDATEC,NEWTIM,ADDTIM,SET_DTM
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        S      /  1367. /,
+     +            COSMIN / .00001 /,
+     +            DEFAUT / .TRUE. /,
+     +            CFSO   /  'FSO' /,
+     +            GRTYP  /   'G'  /,
+     +            SMOOTH /    1   /
+
+CCCC  FUNCTION FOR VARIATION OF SOLAR CONSTANT (borrowed from NEWRAD3;
+CCCC  also used in the CCCMARAD port of the Li Correlated-K code)
+
+      SOLCONS( ALF ) = 1.0
+     +   /( 1.0 - 9.464E-4 * SIN(      ALF) - 0.01671  * COS(      ALF)
+     +          - 1.489E-4 * COS(2.0 * ALF) - 2.917E-5 * SIN(3.0 * ALF)
+     +          - 3.438E-4 * COS(4.0 * ALF)
+     +    ) ** 2
+
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/solflux.ptn,v $'
+
+*-----------------------------------------------------------------------
+      NFF = 4 
+      CALL JCLPNT( NFF, 2,1, 5,6 )
+
+      PI     = 4.*ATAN(1.D0)
+      DEGRAD = PI/180.
+
+      PKTYP  = GETYP( 1 )
+      PKTYP  = PKTYP(1:2)
+
+      INCDAY = -1
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          DAY    = 0.0
+          GMT    = 0.0
+          DELT   = 0.0
+          DTM    = 0
+          KHEM   = 0
+          PX     = 0.0
+          PY     = 0.0
+          D60    = 0.0
+          DGRW   = 0.0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 20, END=901,ERR=901,IOSTAT=IO) DAY
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 20, END=901,ERR=901,IOSTAT=IO) GMT
+
+          OK = RPBLOC('DELT',LIGNE)
+          IF (OK) READ( LIGNE, 20, END=901,ERR=901,IOSTAT=IO) DELT
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ( LIGNE, 20, END=901,ERR=901,IOSTAT=IO) S
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ( LIGNE, 05, END=901,ERR=901,IOSTAT=IO) INCDAY
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) READ( LIGNE, 05, END=901,ERR=901,IOSTAT=IO) DTM
+
+          OK = RPBLOC('NHEM',LIGNE)
+          IF (OK) READ( LIGNE, 05, END=901,ERR=901,IOSTAT=IO) KHEM
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ( LIGNE, 20, END=901,ERR=901,IOSTAT=IO) PX
+
+          OK = RPBLOC('J',LIGNE)
+          IF (OK) READ( LIGNE, 20, END=901,ERR=901,IOSTAT=IO) PY
+
+          OK = RPBLOC('D60',LIGNE)
+          IF (OK) READ( LIGNE, 20, END=901,ERR=901,IOSTAT=IO) D60
+
+          OK = RPBLOC('DGRW',LIGNE)
+          IF (OK) READ( LIGNE, 20, END=901,ERR=901,IOSTAT=IO) DGRW
+
+          OK = RPBLOC('K',LIGNE)
+          IF (OK) READ( LIGNE, 05, END=901,ERR=901,IOSTAT=IO) SMOOTH
+
+          DEFAUT = .FALSE.
+          DEFAUT = RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        READ INPUT CARD.
+
+          CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE,5000, END=901,ERR=901,IOSTAT=IO )
+     +              DAY,GMT,DELT,ASMOOTH,AINCDAY,
+     +              DTM,KHEM,PX,PY,D60,DGRW
+              CALL BURNF
+          END IF
+
+          IF (ASMOOTH.NE.' ')
+     +    READ(ASMOOTH,0002,END=901,ERR=901,IOSTAT=IO ) SMOOTH
+
+          IF (AINCDAY.NE.' ')
+     +    READ(AINCDAY,0002,END=901,ERR=901,IOSTAT=IO ) INCDAY
+
+      END IF
+
+      WRITE(6,6350) S
+
+***    SCAN FILE INFILE TO DETERMINE WORKING SIZES.
+
+      MAXW = GETSIZ( 2, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                          XIT(' Solflux',-1 ) 
+
+      ALLOCATE( IBUF(LEN),FSO(NWDS) )
+
+      WRITE(NAME,0004) JBUF(3)
+
+      ILG1  = JBUF(5)
+      ILAT  = JBUF(6)
+      ILATH = ILAT/2
+      ILG   = ILG1-1
+
+      ALLOCATE( ALON(ILG1),ALAT(ILAT),COSZ(ILG1) )
+      ALLOCATE( DEGLAT(ILG1,ILAT),DEGLON(ILG1,ILAT) )
+      ALLOCATE( SINLAG(ILG1,ILAT),COSLAG(ILG1,ILAT) )
+      ALLOCATE( W(ILAT),WOCS(ILAT),RAD(ILAT),SINL(ILAT),COSL(ILAT) )
+
+      IF (DEFAUT .AND. PKTYP.EQ.'SQ')                          THEN
+
+***        DEFINE DEFAULT PARAMETER VALUES FOR CMC/RPN FILES.
+
+          IF (DELT.EQ.0.) NPAS = GETHIGH('NPAS',JBUF )
+          IF (DELT.EQ.0.) DELT = GETHIGH('DEET',JBUF )
+
+          DTM  = 3
+
+***        RECUPERER LES PARAMETRES TEMPORELS.
+
+          CALL STAMP2DATE( JBUF(2),DATE8 )
+          ANNE  = DATE8/1000000_8
+          DATE8 = DATE8-ANNE*1000000_8
+          MOIS  = DATE8/10000
+          DATE8 = DATE8-MOIS*10000
+          JOUR  = DATE8/100
+          GMT   = DATE8-JOUR*100
+
+***        TROUVER LE JOUR JULIEN CORRESPONDANT.
+
+          CALL JDATEC( JULI, ANNE,01  ,01    )
+          CALL JDATEC( DATE, ANNE,MOIS,JOUR  )
+
+          DAY    = DATE-JULI+1
+
+      END IF
+
+      CALL SET_DTM( DTM )
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+***        RETREIVE CMC/RPN FILES GRID DEFINITION PARAMETRES.
+
+          GRTYP = GETHIC('GRTYP',JBUF )
+
+          IG1   = GETHIGH('IG1',JBUF )
+          IG2   = GETHIGH('IG2',JBUF )
+          IG3   = GETHIGH('IG3',JBUF )
+          IG4   = GETHIGH('IG4',JBUF )
+
+          KHEM   = JBUF(7)
+
+      END IF
+
+      IF (GRTYP.NE.'B' .AND. MOD(ILG1,2).EQ.0)
+     +    ILG = ILG1
+
+      IF (GRTYP.EQ.'G')                                        THEN
+
+***        SET GAUSSIAN GRID PARAMETRES.
+
+          IF (KHEM.NE.0) ILATH = ILAT
+          CALL GAUSSG( ILATH,SINL,W,COSL,RAD,WOCS ) 
+          CALL TRIGL2( ILATH,SINL,W,COSL,RAD,WOCS, KHEM ) 
+
+      ELSE IF (GRTYP.EQ.'N' .OR. GRTYP.EQ.'S')                 THEN
+
+***        RECUPERER LES PARAMETRES GEOGRAPHIQUES
+***        POUR LES GRILLE POLAIRES-STEREOGRAPHIQUES.
+
+          IF (GRTYP.EQ.'N') KHEM = 1
+          IF (GRTYP.EQ.'S') KHEM = 2
+
+          CALL CIGAXG( GRTYP, PX,PY,D60,DGRW,
+     +                        IG1,IG2,IG3,IG4 )
+
+      ELSE IF (GRTYP.EQ.'A' .OR. GRTYP.EQ.'B')                 THEN
+
+***        DEFINE THE STARTING LATITUDE.
+
+          KHEM = JBUF(7)
+
+          IF (IG2.EQ.0)                                        THEN
+              IF (KHEM.EQ.0 .OR. KHEM.EQ.2)                    THEN
+                  LAT1 = -PI/2.0
+              ELSE IF (KHEM.EQ.1)                              THEN
+                  LAT1 =  0.0
+              END IF
+          ELSE IF (IG2.EQ.1)                                   THEN
+              IF (KHEM.EQ.0 .OR. KHEM.EQ.1)                    THEN
+                  LAT1 = +PI/2.0
+              ELSE IF (KHEM.EQ.2)                              THEN
+                  LAT1 =  0.0
+              END IF
+          END IF
+
+          IF (IG2.EQ.1) IG2 = -1
+          IF (IG2.EQ.0) IG2 = +1
+
+***        ACCOUNT FOR THE DIFFERENT 'A' AND 'B' GRID
+***        OFFSETS AND DEFINE THE LATITUDE DELTA.                      
+
+                         LATSPAN =     PI
+          IF (KHEM.NE.0) LATSPAN = 0.5*PI
+
+          IF (GRTYP.EQ.'A')                                    THEN
+              OFFSET = 0.5
+              DELTA  = LATSPAN/ILAT
+          ELSE IF (GRTYP.EQ.'B')                               THEN
+              OFFSET = 0.0
+              DELTA  = LATSPAN/(ILAT-1)
+          END IF
+
+***        DEFINE SIN( LAT ) AND COS( LAT ).
+
+          RADL        = LAT1 + OFFSET*IG2*DELTA
+          COSL(1)     = COS( RADL )
+          SINL(1)     = SIN( RADL )
+
+          DO  J=2,ILAT
+              RADL    = RADL + IG2*DELTA
+              COSL(J) = COS( RADL )
+              SINL(J) = SIN( RADL )
+          END DO
+                      
+      ELSE IF (GRTYP.EQ.'L')                                   THEN
+
+          CALL CIGAXG( GRTYP, XLAT0,XLON0,DLAT0,DLON0,
+     +                        IG1,  IG2,  IG3,  IG4  )
+
+      ELSE IF (GRTYP.EQ.'Z')                                   THEN
+
+***        Z-GRID INPUT.
+
+          CALL GETZREF( 2, '>>',ALON )
+          CALL GETZREF( 2, '^^',ALAT )
+
+***        RETREIVE/DECODE COORDINATE ROTATION INFORMATION.
+
+          CALL GETZDES( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, DIMX,DIMY )
+
+          IF (ZTYP == 'E')                                     THEN
+              CALL CIGAXG( ZTYP, XLAT1,XLON1, XLAT2,XLON2,
+     +                           ZIG1,ZIG2,ZIG3,ZIG4 )
+          ELSE IF (ZTYP == 'L')                                THEN
+              CALL CIGAXG( ZTYP, XLAT0,XLON0,DLAT0,DLON0,
+     +                           ZIG1, ZIG2, ZIG3, ZIG4  )
+          ELSE IF (ZTYP == 'N' .OR. ZTYP == 'S')               THEN
+              IF (ZTYP.EQ.'N') KHEM = 1
+              IF (ZTYP.EQ.'S') KHEM = 2
+              CALL CIGAXG( ZTYP, PX,  PY,  D60, DGRW,
+     +                           ZIG1,ZIG2,ZIG3,ZIG4 )
+          END IF
+
+
+      END IF
+
+      IF (PKTYP.NE.'SQ')                                       THEN
+
+***        ACCOUNT FOR CCC FILES WITH PS ARRAYS.
+
+          IF (KHEM.EQ.1) GRTYP = 'N'
+          IF (KHEM.EQ.2) GRTYP = 'S'
+
+      END IF
+
+      IF (SMOOTH.NE.0 .AND. DELT.NE.0.) WRITE(6,6400) DELT
+
+***    DEFINE DEGLAT,DEGLON FOR N,S,L AND Z GRIDS.
+
+      IF (GRTYP.EQ.'N' .OR. GRTYP.EQ.'S')                      THEN
+
+          DO  I=1,ILAT
+              CALL CLATLON( DEGLAT(1,I),DEGLON(1,I),
+     +                      I,PX,PY,D60,DGRW,KHEM,1,ILG1,ILG1 )
+          END DO
+
+      ELSE IF (ZTYP == 'N' .OR.  ZTYP == 'S')                  THEN
+
+          DO  J=1,ILAT
+              YPS = ALAT( J ) - PY
+              DO  I = 1,ILG1
+                  XPS = ALON( I ) - PX
+                  CALL LLFXY( DEGLAT(I,J),DEGLON(I,J),XPS,YPS,D60,DGRW,KHEM )
+                  IF (DEGLON(I,J) < 0.) DEGLON(I,J) = DEGLON(I,J) + 360.
+              END DO
+          END DO
+
+      ELSE IF (GRTYP.EQ.'L' .OR. ZTYP == 'L')                  THEN
+
+          DO  I=1,ILAT
+              DEGLAT(1,I) = XLAT0+(I-1)*DBLE( DLAT0 )
+          END DO
+
+          DO  J=1,ILG1
+              DEGLON(J,1) = XLON0+(J-1)*DBLE( DLON0 )
+              DEGLAT(J,:) = DEGLAT(1,:)
+          END DO
+
+          DO  I=1,ILAT
+              DEGLON(:,I) = DEGLON(:,1)
+          END DO
+
+      ELSE IF (ZTYP == 'E')                                    THEN
+       
+          CALL D_ROTA( DEGLON,DEGLAT, ALON,ALAT,
+     +                 XLON1,XLAT1,XLON2,XLAT2,
+     +                 LON0,LAT0, ILG1,ILAT )
+
+      END IF
+
+***    DEFINE LAT- AND LON-DEPENDANT VARIABLES
+***    REQUIRED IN THE SOLAR ZENITH ANGLE CALC.
+
+      IF (GRTYP.EQ.'N' .OR. GRTYP.EQ.'S' .OR.
+     +    GRTYP.EQ.'L' .OR. GRTYP.EQ.'Z')                      THEN
+
+          SINLAG = SIN( DEGLAT*DEGRAD )
+          COSLAG = COS( DEGLAT*DEGRAD )
+          DEGLON =      DEGLON*DEGRAD
+
+      ELSE IF (GRTYP.EQ.'A' .OR.
+     +         GRTYP.EQ.'B' .OR.
+     +         GRTYP.EQ.'G' )                                  THEN
+
+          RADLON  = 2.*PI/DBLE( ILG ) 
+
+          DO  J=1,ILG1
+              DEGLON(J,:) = (J-1)*RADLON
+          END DO
+
+          DO  I=1,ILAT
+              SINLAG(:,I) = SINL(I)
+              COSLAG(:,I) = COSL(I)
+          END DO
+
+      ELSE
+
+***        UN-SUPPORTED GRID TYPE.
+
+          WRITE(6,6003) GRTYP
+          CALL                                     XIT(' Solflux',-3 )
+
+      END IF
+
+      CALL STAMP2DATE( JBUF(2),IT1 )
+      NT1 = NEWTIM( IT1,DTM, OK )
+
+      LASTBUF2 = IT1
+
+***    SCAN INPUT FILE FOR TIMESTEP INFORMATIONp.
+***    IGNORE MULTIPLE LEVELS/VARIABLES.
+
+      NT3    = 1 
+      NSTEPS = 0
+  050 CALL SUIVANT( 2, IBUF, ERR,OK )
+          IF (.NOT.OK)                                         THEN 
+              IF (NSTEPS.EQ.0) CALL                XIT(' Solflux',-1 )
+              CALL STAMP2DATE( IBUF(2),IT2 )
+              NT2 = NEWTIM( IT2,DTM,OK )
+              GOTO 100 
+          END IF 
+          IF (ERR) CALL                            XIT(' Solflux',-1 )
+          CALL STAMP2DATE( IBUF(2),IT2 )
+          IF (NSTEPS >  0 .AND. LASTBUF2 == IT2) GOTO 050
+          IF (NSTEPS == 1) NT3 = NEWTIM( IT2,DTM,OK ) - NT1 
+          LASTBUF2 = IT2
+      NSTEPS = NSTEPS+1 
+      GOTO 050
+
+***    PREPARE TO COMPUTE INCIDENT FLUX. 
+
+  100 CONTINUE
+
+      GMT0     = GMT
+      DAYFIX   = DAY
+      NSIZE    = ILG1*ILAT 
+
+      IF (DTM.EQ.0)                                            THEN
+          STEP = DBLE( NT3 )*DELT/3600.D0
+      ELSE
+          STEP = NT3
+      END IF
+
+      IF (INCDAY.EQ.-1)                                        THEN
+          IF (DELT.NE.0. .AND. NT1.LT.NT2)                     THEN
+             INCDAY = 1
+          ELSE
+             INCDAY = 0
+          END IF
+      END IF
+
+      IF (KHEM.NE.2 .AND.
+     +    KHEM.NE.1 )                                          THEN      
+          KHEM  = 0
+          WRITE(6,6000) DAY,GMT,DELT,INCDAY,DTM
+      ELSE
+          WRITE(6,6300) DAY,GMT,DELT,INCDAY,DTM,KHEM,PX,PY,D60,DGRW 
+      END IF
+
+      RADDAY  = 2.*PI/24.
+      RADYEAR = 2.*PI/365.25
+
+      IF (SMOOTH.NE.0 .AND. DELT.NE.0.)                        THEN
+          SSTEP  = DELT/      3600D0
+          OVSEND = DELT/(STEP*3600D0)
+          SEND   = NINT( 1./OVSEND )
+      ELSE
+          SSTEP  = 0.
+          OVSEND = 1.
+          SEND   = 1
+      END IF
+
+      NT=0
+
+***    RESET IBUF TO THAT OF THE FIRST SAMPLE.
+
+      DO  I=1,HEAD
+          IBUF(I) = JBUF(I)
+      END DO
+
+      ITC = IT1
+
+      READ(CFSO,0004) IBUF(3)
+
+***   ** LOOP ON TIME. 
+
+      DO  NTIME=NT1,NT2,NT3 
+
+          DO  I=1,NSIZE
+              FSO(I) = 0. 
+          END DO
+
+          NT      = NT+1 
+
+          SDAY    = DAY
+          SGMT    = GMT
+
+          DO  K=1,SEND
+
+***            ADJUST TIMESTEP TIME.
+
+              SGMTOLD = SGMT+SSTEP 
+              SGMT    = MOD( SGMTOLD,24. )
+              SDAY    = SDAY+(SGMTOLD-SGMT)/24.
+              IF (INCDAY.EQ.0) SDAY = DAYFIX
+
+CCC           CALL SDET( COSD,SIND,MONTH,SDAY )
+
+***            Formulation de la declinasion solaire de Robertson
+***            et Russelo 1968 (suggeree par P.Vaillancourt, 2010).
+              ALF = SDAY * RADYEAR
+              RDEC = .3964 + 3.631*sin(   ALF) - 22.97*cos(   ALF)
+     +                     +.03838*sin(2.*ALF) -0.3885*cos(2.*ALF)
+     +                     +.07659*sin(3.*ALF) -0.1587*cos(3.*ALF)
+     +                     -.01021*cos(4.*ALF)
+CCC            Approximation (originale) qui suppose que l'orbite est circulaire.
+CCC           RDEC = -0.412*COS( (SDAY+10.)*RADYEAR )
+              SIND = SIN( RDEC )
+              COSD = COS( RDEC )
+
+***            CORRECTION FOR ORBIT ECCENTRICITY.
+
+              R0R = SOLCONS( ALF )
+
+***            Correction for "equation of time" (borrowed from SUNCOS).
+
+              EOT = .002733 -7.343 *sin(   ALF) +0.5519 *cos(   ALF)
+     +                      -9.47  *sin(2.*ALF) -3.02   *cos(2.*ALF)
+     +                      -0.3289*sin(3.*ALF) -0.07581*cos(3.*ALF)
+     +                      -0.1935*sin(4.*ALF) -0.1245 *cos(4.*ALF)
+
+***            And Express in a fraction of an hour.
+
+              EOT = EOT / 60.
+
+***            Finally, express in radians.
+
+              EOT = EOT * RADDAY
+
+***            LOOP ON LATITUDE. 
+
+              N = 0
+
+              DO  I=1,ILAT
+
+***                LOOP ON LONGITUDE.
+
+                  DO  J=1,ILG1
+
+                      N       = N+1
+
+                      COSH    =-COS( SGMT*RADDAY+EOT+DEGLON(J,I) )
+
+                      COSZ(J) = SINLAG(J,I)*SIND
+     +                        + COSLAG(J,I)*COSD*COSH
+
+                      FSO(N) = FSO(N) + R0R * S * MAX( COSZ(J),COSMIN )
+
+                  END DO
+
+              END DO
+
+          END DO
+
+          DO  I=1,NSIZE
+              FSO(I) = FSO(I)*OVSEND
+          END DO
+
+***       PUT DATA IN FILE "FSO". 
+
+          IF (SMOOTH /= 0 .AND. DELT /= 0.)                    THEN
+              ITC  = ADDTIM( ITC,NT3, DTM )
+              NPAS = NPAS+SEND
+              CALL PUTHIGH( NPAS,'NPAS',IBUF )
+              CALL DATE2STAMP( ITC,IBUF(2) )
+          END IF
+
+          CALL PUTFLD2( 1, FSO, IBUF,MAXW )
+
+          IF (NTIME.EQ.NT1 .OR.
+     +        NTIME.EQ.NT2) CALL PRTLAB( IBUF )
+
+          IF (SMOOTH == 0 .OR. DELT == 0.)                     THEN
+              ITC = ADDTIM( ITC,NT3, DTM )
+              CALL DATE2STAMP( ITC,IBUF(2) )
+          END IF
+
+***        ADJUST TIME.
+
+          GMTOLD = GMT+STEP 
+          GMT    = MOD(GMTOLD,24.)
+          DAY    = DAY+(GMTOLD-GMT)/24.
+          IF (INCDAY.EQ.0) DAY = DAYFIX
+
+      END DO
+
+      WRITE(6,6050) NSTEPS,NAME,NT
+      WRITE(6,6200) IT1,IT2,NT3
+      EPSILN = 0.1
+      GMTM   = GMT0-EPSILN
+      GMTP   = GMT0+EPSILN
+      WRITE(6,6150) DAYFIX,GMT0,DAY,GMT 
+      IF (GMT.LT.GMTM .OR.
+     +    GMT.GT.GMTP) WRITE(6,6100)
+
+      CALL                                         XIT(' Solflux', 0 )
+
+***    E.O.F. ON INPUT.
+
+  901 CALL                                         XIT(' Solflux',-2 ) 
+*-----------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0002 FORMAT(BN,I2)
+ 0005 FORMAT(BN,I5)
+ 0020 FORMAT(BN,E20.0)
+
+ 5000 FORMAT(10X,2F5.0,F10.0,A2,1X,A2,I2,1X,I2,4F10.1)
+
+ 6000 FORMAT(' DAY,GMT,DELT,INCDAY,DTM...',3F10.2,2I6)
+ 6003 FORMAT(' Found unsupported grid type ',A,', aborting...'/)
+
+ 6050 FORMAT(1X,I10,' input  records of ',A,/,
+     +       1X,I10,' output records of FSO')
+ 6100 FORMAT(1X,70('*'),/,5X,'This period is not a multiple of 24 hour',
+     +                    /,1X,70('*'))
+ 6150 FORMAT(' The period is from day ',F5.1,' - ',F4.0,'Z to day ',
+     + F5.1,' - ',F4.0,'Z')
+ 6200 FORMAT(' From NT1 =',I12,' to NT2 =',I12,
+     +       ' with increments of NT3=',I6,' hours.')
+ 6300 FORMAT(' DAY,GMT,DELT,INCDAY,DTM...',3F10.2,2I6/
+     +       ' KHEM,PX,PY,D60,DGRW...    ',I6,4F10.2)
+ 6350 FORMAT(' Using solar constant = ',F10.2,' W/M**2.')
+ 6400 FORMAT(' Calculation done every ',F6.0,' seconds.'/)
+
+      END 
+#     endif

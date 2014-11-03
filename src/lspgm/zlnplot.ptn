@@ -1,0 +1,1595 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      zlnplot ZXIN ZXU ZXW ZXIN2 INOUT OUTPUT
+*
+*
+*     DESCRIPTION...
+*      ZLNPLOT - CREATES NCAR PLOT VECTORS FOR ONE MERIDIONAL CROSS-SECTION 
+* 
+*
+*     AUTHOR  - M.SUTCLIFFE, JUL 01/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zlnplot.ptn,v 4.4 2014/09/25 20:20:56 dugas Exp $
+*
+* 
+*     PURPOSE - PLOTS LONGITUDE-PRESSURE FROM FILE ZXIN, AND POSSIBLY ZXIN2, 
+*               AND/OR MERIDIONALLY AVERAGED VECTOR COMPONENTS ZXU AND ZXW. 
+*
+*     NOTES: 1) ONE LEVEL CROSS-SECTIONS ARE ILLEGAL - PROGRAM STOPS. 
+*               2 OR 3 LEVEL PLOTS USE LINEAR INTERPOLATION. 
+*               4 OR MORE LEVELS ALLOWS OPTION OF CUBIC INTERPOLATION. 
+*            2) IF TWO SCALAR FIELDS ARE PLOTTED, THE SECOND FIELD 
+*               WILL BE CONTOURED WITH A DASHED LINE, AND A '+' WILL 
+*               MARK THE HIGHS AND LOWS. CROSS-SECTIONS CAN BE PLOTTED 
+*               WITH LON 0 OR 180 IN THE CENTRE WITH THE PLOT EXTENDIN 
+*               FROM PR(NLEV) TO PR(1) AT THE TOP, OR FROM DPR1 TO DPR 
+*               IF PLOTTING A SUBAREA, (SEE DOCUMENTATION BELOW). THE 
+*               VERTICAL AXIS CAN BE PRESSURE OR LOG(PRESSURE). 
+*            3) MAXIMUM INPUT LEVELS IS 20 AND MAXIMUM LATITUDES IS 20 
+* 
+*     INPUT FILES... 
+*      ZXIN  = FILE CONTAINING MERIDIONAL CROSS-SECTIONS TO BE PLOTTED. 
+*      ZXU   = ZONAL COMPONENT OF VECTOR FIELD. 
+*      ZXW   = VERTICAL COMPONENT OF VECTOR FIELD. 
+*      ZXIN2 = OPTIONAL FILE CONTAINING A SECOND MERIDONAL CROSS-SECTION 
+*              SCALAR FIELD TO BE PLOTTED. 
+* 
+*
+*     INPUT PARAMETERS...
+* 
+*      2 TO 11 CARDS ARE READ-IN. 
+* 
+*      FOR CROSS-SECTION MAP... 
+*      ===================== 
+*      CARD 1- 
+*      ------ 
+*  150 READ(5,5010,END=900)NAME,MOD,ICOSH1,ICOSH2,MS,LX,SCAL, 
+*     1                    FLO,HI,FINC,KAX,IOVRLY,KIND 
+* 5010 FORMAT(10X,1X,A4,I5,2I1,I3,I5,4E10.0,I5,1X,2I2) 
+* 
+*      NAME       NAME OF THE VARIABLE TO BE CONTOURED. 
+*      ABS(MOD)   =0, ONLY CONTOUR MAP (2 CARDS PER PLOT). 
+*                 =1, ONLY VECTOR PLOT (CARD 1 USED ONLY TO DEFINE MOD, 
+*                     AND LX, CARD 2 IS IGNORED, AND CARDS 3 AND 4 USED 
+*                     FOR VECTOR PLOT DIRECTIVES). 
+*                 =2, BOTH FUNCTIONS ARE PERFORMED (4 CARDS PER PLOT). 
+*                 =3, ONLY CONTOUR MAP (HIGHS/LOWS LABELLED). 
+*                 =4, TWO SCALAR FIELDS. 
+*                 =5, TWO SCALAR FIELDS AND A VECTOR FIELD. 
+*      MOD.GE.0   HIGHS/LOWS NOT LABELLED 
+*          LT.0   HIGHS/LOWS LABELLED 
+*      ICOSH1     CONTOUR/SHADING CONTROL FOR FIRST  SCALAR FIELD 
+*      ICOSH2     CONTOUR/SHADING CONTROL FOR SECOND SCALAR FIELD 
+*                 =0, CONTOUR LINES 
+*                 =1, CONTOUR LINES, NO ZERO LINE 
+*                 =2, CONTOUR LINES AND SHADING 
+*                 =3, CONTOUR LINE AND SHADING, NO ZERO LINE 
+*                 =4, SHADING ONLY 
+*                 NOTE - FOR THE NO ZERO LINE OPTION IT IS ASSUMED THAT 
+*                        (0.-FLO)/FINC RESULTS IN AN INTEGER DIVISIBLE B 
+*                        TWO, I.E. THE ZERO LINE WOULD HAVE BEEN CONTOUR 
+*                        AS A THICK, LABELLED LINE. ALSO, NEITHER HI OR 
+*                        FLO = 0. 
+*      MS         LINE PRINTER MAP SCALE FACTOR (NO MAP IF MS=0,-1) 
+*                 IF MS < 0 THEN MS=ABS(MS+1) AND THE PUBLICATION 
+*                 QUALITY OPTION IS SET. 
+*      ABS(LX)    <= 3 FINE GRID INTERPOLATION IS INDICATED WITH THE 
+*                      NUMBER OF LEVELS IN THE DISPLAY PLOT = 2*NLON/3. 
+*                      (NLON IS THE NUMBER OF LONGITUDINAL POINTS). 
+*                 OTHERWISE, A COARSE GRID INTERPOLATION IS INDICATED 
+*                            WITH ABS(LX) LEVELS IN THE DISPLAY PLOT. 
+*                 LX < 0, SUBAREA INDICATED WITH COORDINATES GIVEN ON CA 
+*      SCAL       SCALING FACTOR 
+*      FLO        LOWEST  VALUE TO BE CONTOURED 
+*      HI         HIGHEST VALUE TO BE CONTOURED 
+*      FINC       CONTOUR INTERVAL (A MAX. OF 40 CONTOURS IS PERMITTED) 
+*      KAX        =0, FOR VERTICAL AXIS OF PRESSURE, LON 0 IN THE MIDDLE 
+*                 =1, FOR VERTICAL AXIS OF LOG(PRESSURE), LON 0 IN MIDDL 
+*                 =2, FOR VERTICAL AXIS OF PRESSURE, LON 180 IN THE MIDD 
+*                 =3, FOR VERTICAL AXIS OF LOG(PRESSURE), LON 180 IN MID 
+*                 THIS IS FOR FULL (NO SUBAREA) PLOTS ONLY. IF DOING SUB 
+*                 THE CENTRE LONGITUDE IS DETERMINED BY DLON1 AND DLON2. 
+*      OVRLY      THIS FIELD IS IGNORED IF LX < 0; (SUBAREA INDICATED). 
+*                 =-1,PLOTTED AREA IS DEFINED BY THE FILE RANGE AND PLOT 
+*                     ON THE STANDARD LEVEL (1000,10) AND STANDARD LONGI 
+*                     (0,360) OR (-180,180) SCALES. SCREEN IS FILLED. 
+*                 = 0,PLOTTED AREA IS DEFINED BY THE FILE RANGE AND PLOT 
+*                     ON THE STANDARD LONGITUDE SCALES (0,360) OR (-180, 
+*                     AND ON A LEVEL SCALE WHOSE RANGE IS THAT OF THE FI 
+*                     LEVELS RANGE. SCREEN IS FILLED. 
+*                 = 1,PLOTTED AREA IS DEFINED BY THE FILE RANGE AND PLOT 
+*                     ON THE STANDARD LEVEL (1000,10) AND STANDARD LONGI 
+*                     (0,360) OR (-180,180) SCALES. WHAT APPEARS ON THE 
+*                     SCREEN IS JUST A PLOT HAVING THE SAME SIZE AS THAT 
+*                     SPANNED BY THE FILE RANGES ON THE STANDARD PLOT SC 
+*                     SCREEN MAY OR MAY NOT BE FILLED. 
+*      KIND       THIS IS A DUMMY FIELD. 
+*                 =1, FOR LINEAR VERTICAL INTERPOLATION FROM DATA TO DIS 
+*                 OTHERWISE CUBIC.(A LINE DEFAULTING KIND TO 1 IS INSERT 
+*                 BELOW JUST AFTER KIND IS READ, THIS FORCES THE PROGRAM 
+*                 PERFORM LINEAR VERTICAL INTERPOLATION ONLY. THE USER M 
+*                 MODIFY THAT LINE TO SPECIFY A VALUE DIFFERENT FROM 1 I 
+*                 HE/SHE WISHES TO APPLY CUBIC VERTICAL INTERPOLATION). 
+* 
+* 
+*      CARD 2- 
+*      ------ 
+*      READ(5,5012,END=902) LABEL 
+* 5012 FORMAT(10A8) 
+* 
+*      LABEL      80 CHARACTER LABEL FOR CONTOUR MAP. 
+*                 ABSENT IF NAME='SKIP'.
+* 
+*      SUBAREA SPECIFICATION CARD 
+*      ========================== 
+*      CARD 3- 
+*      ------- 
+*      READ(5,5018,END=903) DLON1,DLON2,DPR1,DPR2,IFLAG 
+* 5018 FORMAT(10X,4E10.0,I5) 
+* 
+*      DLON1      LEFT HAND LONGITUDE OF SUBAREA, (-360 <= DLON1 < 360). 
+*      DLON2      RIGHT HAND LONGITUDE OF SUBAREA. (-360 < DLON2 <= 360; 
+*                 DLON2 > DLON1 AND (DLON2-DLON1) <= 360). 
+*      DPR1       TOP PRESSURE LEVEL OF SUBAREA (LOWEST PRESSURE). 
+*      DPR2       BOTTOM PRESSURE LEVEL OF SUBAREA (HIGHEST PRESSURE) 
+*      IFLAG      =0,1,SUBAREA IS PLOTTED INSIDE A FRAME DEFINED BY THE 
+*                      SUBAREA COORDINATES, ON ONE OF THE FIVE STANDARD 
+*                      PLOT SCALES WITH LONGITUDINAL AXIS SCALE SPANNING 
+*                      (-360,0),(-270,90),(-180,180),(-90,270) AND (0,36 
+*                      IF SUBAREA DOES NOT FIT IN ONE OF THESE STANDARD 
+*                      FRAMES, THE PROGRAM ATTEMPTS TO PLOT SUBAREA CENT 
+*                      INSIDE A FRAME WITH 360 DEG. LONGITUDINAL AXIS SP 
+*                      SCREEN IS FILLED. 
+*                 = 2, SUBAREA IS PLOTTED INSIDE A FRAME DEFINED BY 
+*                      THE SUBAREA COORDINATES, TO FILL THE SCREEN. 
+*                 = 3, THE SUBAREA IS PLOTTED INSIDE A FRAME DEFINED BY 
+*                      SUBAREA COORDINATES, THE PLOT LOOKS EXACTLY THE S 
+*                      AS IF IT WAS PLOTTED ON ONE OF THE FIVE STANDARD 
+*                      PLOT SCALES WITH LONGITUDINAL AXIS SCALE SPANNING 
+*                      (-360,0),(-270,90),(-180,180),(-90,270) AND (0,36 
+*                      IF SUBAREA DOES NOT FIT IN ONE OF THESE STANDARD 
+*                      FRAMES, THE PROGRAM ATTEMPTS TO PLOT SUBAREA CENT 
+*                      INSIDE A FRAME WITH 360 DEG. LONGITUDINAL AXIS SP 
+*                      SCREEN MAY OR MAY NOT BE FILLED. 
+* 
+*      SHADING CONTROL CARDS FOR FIRST SCALAR FIELD 
+*      ============================================ 
+*      CARD 4- 
+*      ------- 
+*      READ(5,5014,END=904) NPAT,(IPAT(I),I=1,NPAT) 
+* 5014 FORMAT(10X,8I5) 
+* 
+*      NPAT       NUMBER OF DIFFERENT RANGES TO SHADE 
+*      IPAT       NPAT SHADING PATTERN CODES 
+* 
+*      CARD 5- 
+*      ------- 
+*      READ(5,5016,END=905) (ZLEV(I),I=1,NPAT) 
+* 5016 FORMAT(10X,8E10.0) 
+* 
+*      ZLEV       NPAT SCALAR FIELD VALUES TO DEFINE THE SHADED RANGES. 
+* 
+*      CARDS FOR SECOND SCALAR FIELD 
+*      ============================= 
+*      CARD 6- 
+*      ------ 
+*      READ(5,5010,END=906)NAME,II,JJ,KK,MS,N,SCAL,FLO,HI,FINC,NN,III,KI 
+* 5010 FORMAT(10X,1X,A4,I5,2I1,I3,I5,4E10.0,I5,1X,2I2) 
+* 
+*      VARIABLES IN () ARE NOT USED BUT MERELY KEEP PLACE. 
+*      NAME       NAME OF THE VARIABLE TO BE CONTOURED. 
+* II - MOD        = 0,  HIGHS,LOWS NOT LABELLED. 
+*                 =-1,  HIGHS,LOWS     LABELLED. 
+* JJ - (ICOSH1)   NOT USED, READ FROM CARD 1. 
+* KK - (ICOSH2)   NOT USED, READ FROM CARD 1. 
+*      MS         LINE PRINTER MAP SCALE FACTOR (NO MAP IF MS=0,-1) 
+* N  - (LX)       NOT USED, READ FROM CARD 1. 
+*      SCAL       SCALING FACTOR 
+*      FLO        LOWEST  VALUE TO BE CONTOURED 
+*      HI         HIGHEST VALUE TO BE CONTOURED 
+*      FINC       CONTOUR INTERVAL (A MAX. OF 40 CONTOURS IS PERMITTED) 
+* NN - (KAX)      NOT USED, READ FROM CARD 1. 
+* III- (OVRLY)    NOT USED, READ FROM CARD 1. 
+*      KIND       THIS IS A DUMMY FIELD. 
+*                 =1, FOR LINEAR VERTICAL INTERPOLATION FROM DATA TO DIS 
+*                 OTHERWISE CUBIC.(A LINE DEFAULTING KIND TO 1 IS INSERT 
+*                 BELOW JUST AFTER KIND IS READ, THIS FORCES THE PROGRAM 
+*                 PERFORM LINEAR VERTICAL INTERPOLATION ONLY. THE USER M 
+*                 MODIFY THAT LINE TO SPECIFY A VALUE DIFFERENT FROM 1 I 
+*                 HE/SHE WISHES TO APPLY CUBIC VERTICAL INTERPOLATION). 
+* 
+*      CARD 7- 
+*      ------ 
+*      READ(5,5012,END=907)LABEL 
+* 5012 FORMAT(10A8) 
+* 
+*      LABEL      80 CHARACTER LABEL. 
+* 
+*      SHADING CONTROL CARDS FOR SECOND SCALAR FIELD 
+*      ============================================ 
+*      CARD 8- 
+*      ------- 
+*      READ(5,5014,END=904) NPAT,(IPAT(I),I=1,NPAT) 
+* 5014 FORMAT(10X,8I5) 
+* 
+*      NPAT       NUMBER OF DIFFERENT RANGES TO SHADE 
+*      IPAT       NPAT SHADING PATTERN CODES 
+* 
+*      CARD 9- 
+*      ------- 
+*      READ(5,5016,END=905) (ZLEV(I),I=1,NPAT) 
+* 5016 FORMAT(10X,8E10.0) 
+* 
+*      ZLEV       NPAT SCALAR FIELD VALUES TO DEFINE THE SHADED RANGES. 
+* 
+*      FOR VECTOR PLOT... 
+*      =============== 
+*      CARD 10- 
+*      -------- 
+*  310 READ(5,5020,END=908) VSCAL,VLO,VI,INCX,INCZ 
+* 5020 FORMAT(10X,3E10.0,2I5) 
+* 
+*      VSCAL      SCALING FACTOR FOR VECTOR MAGNITUDE 
+*      VLO        LOWEST VECTOR MAGNITUDE TO BE PLOTTED 
+*      VI         VECTOR MAGNITUDE TO BE DRAWN AS ARROW OF LENGTH  DX 
+*      INCX       EVERY INCX GRID POINT VECTOR IS PLOTTED ALONG X AXIS 
+*      INCZ       EVERY INCZ GRID POINT VECTOR IS PLOTTED ALONG Z AXIS 
+* 
+*      CARD 11- 
+*      -------- 
+*      READ(5,5012,END=909) LABEL 
+* 5012 FORMAT(10A8) 
+* 
+*      LABEL      80 CHARACTER LABEL FOR VECTOR PLOT. 
+* 
+*EXAMPLE OF INPUT CARDS... 
+* 
+* 
+* ZLNPLOT. NEXT    504  0   -1       50.     -100.      100.        5. 
+* CONTOURED SUBAREA OF FIRST FIELD FROM -100 TO 100 BY 5. 
+*                -300.       30.       50.      700.    1 
+* ZLNPLOT. NEXT   -104  0    0       50.     -100.      100.        5. 
+* SHADED    SUBAREA OF SECOND FIELD WITH TWO SHADING LEVELS. 
+*               2    0   48 
+*                   0.      100. 
+*                   1.        0.       10.    3    3 
+* SUBAREA VECPLOT OF EVERY THIRD (U,W) VECTOR. 
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS, END OF DIRECTIVES
+*
+*     FATAL CONDITIONS...
+*       1 ZIN2 SCALAR FIELD HAS DIFFERENT SIZE THAN THAT IN ZXIN
+*       2 ZXW VECTOR FIELD HAS DIFFERENT SIZE THAN THAT IN ZXV
+*       3 ZXV VECTOR FIELD HAS DIFFERENT SIZE THAN THAT IN ZXIN
+*       4 VERTICAL LEVELS DO NOT VARY MONOTONICALLY
+*       5 INCONSISTANT GLOBAL GAUSSIAN GRID
+*       6 INCONSISTANT VERTICAL LEVELING OPTIONS
+*
+*      10 UNKNOWN (AND UNSUPPORTED) LEVEL TYPE
+*      11 PTOIT GREATER THAN TOP MODEL LEVEL (=ETA(TOP)*PREF) 
+*
+*     NON-FATAL CONDITIONS...
+*     101 FOR SUBAREA SPECIFICATION: DPR1.GE.DPR2 OR DLAT1.LE.DLAT2
+*     102 UNABLE TO FIND REQUESTED SCALAR ARRAY ZXIN
+*     103 SCALAR ARRAY ZXIN ONLY HAS ONE VERTICAL LEVEL
+*     105 UNABLE TO VERTICALLY FIT THE SCALAR PLOT 
+*     106 UNABLE TO FIND REQUESTED VECTOR ARRAY ZXV
+*     107 VECTOR ARRAY ZXV ONLY HAS ONE VERTICAL LEVEL
+*     108 UNABLE TO READ ARRAY ZXW
+*     109 VECTOR ARRAY ZXW ONLY HAS ONE VERTICAL LEVEL
+*     110 UNABLE TO VERTICALLY FIT THE VECTOR PLOT
+*     111 UNABLE TO DRAW THE FRAME AROUND THE PLOT
+*     112 PREMATURE EOF ON FILE ZXIN
+*     113 UNABLE TO READ INPUT CARD 2
+*     114 UNABLE TO READ INPUT CARD 3
+*     115 UNABLE TO READ INPUT CARD 4,8
+*     116 UNABLE TO READ INPUT CARD 5,9
+*     117 UNABLE TO READ INPUT CARD 6
+*     118 UNABLE TO READ INPUT CARD 7
+*     119 UNABLE TO READ INPUT CARD 10
+*     120 UNABLE TO READ INPUT CARD 11
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM zlnplot 
+*     PROGRAM ZLNPLOT (ZXIN,     ZXU,      ZXW,      ZXIN2,      INPUT, 
+*    1                                                           OUTPUT, 
+*    2          TAPE1=ZXIN,TAPE2=ZXU,TAPE3=ZXW,TAPE4=ZXIN2,TAPE5=INPUT, 
+*    3                                                     TAPE6=OUTPUT) 
+*     ------------------------------------------------------------------ 
+
+*     FEB 17/88 - F.MAJAESS   (ADD SHADING, SECOND SCALAR FIELD AND 
+*                              SUBAREA PLOT OPTIONS. ALSO, IMPLEMENT 
+*                              OVRLY SWITCH ALLOWING FINE AND COARSE 
+*                              GRID INTERPOLATION). 
+*     JUL 01/87 - M.SUTCLIFFE (ADAPT FROM ZXPLOT) 
+
+*----------------------------------------------------------------------- 
+
+      LOGICAL OK,REW,PB,SECOND,SUBAREA,LOVRLY,ADD1C,FLIP,STNDRD,ERR
+      CHARACTER*4 IPNT,NOM,LIGNE*80
+      INTEGER LEV(20) 
+      INTEGER LABEL(10) 
+      INTEGER IPAT(7) 
+      REAL PRX(400),UX(400),WX(400),YX(400) 
+      REAL DEN(4,17),PR(20),U(400),W(400),Y(400) 
+      REAL ZLEV(7) 
+      REAL SLONP(400),SLON(400) 
+ 
+      COMMON/ICOM/IBUF(8),ZXU(30000) 
+      COMMON/JCOM/JBUF(8),ZXW(30000) 
+ 
+      COMMON/GAUS/SL(200),CL(200),WL(200),WOSSL(200),RAD(200),ANG(200) 
+      COMMON /BLANCK/ XS(400,20),FXS(8000),F(8000) 
+      COMMON  /WINDS/ US(400,20),WS(400,20),UXS(8000),WXS(8000) 
+ 
+      DATA NPAT /7/ 
+      DATA IPAT /0,0,0,0,0,0,0/ 
+      DATA ZLEV /1.0E99,2.0E99,3.0E99,4.0E99,5.0E99,6.0E99,7.0E99/ 
+      DATA MAX/200/, MAXL/20/
+      DATA REW/.TRUE./ 
+*--------------------------------------------------------------------- 
+      NFF=6 
+      CALL JCLPNT( NFF, 1,2,3,4, 5,6 )
+      CALL SYSDAT 
+      CALL CONSET(6HNULBLL,1) 
+
+***    READ THE CONTROL CARDS. 
+***    CARD 1. 
+
+  150 CALL GETLIGN( 5, LIGNE,80, OK )
+        IF (.NOT.OK) THEN
+          GOTO 900
+        ELSE
+          READ(LIGNE,5010,END=900)NAME,MOD,ICOSH1,ICOSH2,MS,LX,SCAL, 
+     +                    FLO,HI,FINC,KAX,IOVRLY,KIND 
+        END IF
+
+***    ALLOW ONLY LINEAR INTERPOLATION TO BE PERFORMED BY SETTING 
+***    KIND TO 1. 
+
+      KIND = 1 
+      IMOD = IABS(MOD) 
+
+***    CHECK FOR PUBLICATION QUALITY OPTION. 
+
+      IF (MS.LT.0) THEN 
+        PB=.TRUE. 
+        MS=IABS(MS+1) 
+        CALL CONSET(6HINTMAJ,3) 
+        CALL CONSET(6HINTMIN,3) 
+        CALL CONSET(5HIOFFM,1) 
+        CALL CONSET(4HILAB,0) 
+      ELSE 
+        PB=.FALSE. 
+        CALL CONSET(6HINTMAJ,2) 
+        CALL CONSET(6HINTMIN,1) 
+        CALL CONSET(5HIOFFM,0) 
+        CALL CONSET(4HILAB,1) 
+      ENDIF 
+
+***    REWIND NECESSARY FILES (ONLY ONCE). 
+
+      IF (REW) THEN 
+        IF (IMOD.NE.1) REWIND 1 
+        IF (IMOD.EQ.1.OR.IMOD.EQ.2.OR.IMOD.EQ.5) THEN 
+          REWIND 2 
+          REWIND 3 
+        ENDIF 
+        IF (IMOD.GE.4) REWIND 4 
+        REW=.FALSE. 
+      ENDIF 
+      IF(NAME.EQ.'SKIP')THEN 
+        CALL SUIVANT( 1, IBUF, ERR,OK )
+        IF (.NOT.OK .OR. ERR) GOTO 901
+                              GO TO 150 
+      ENDIF 
+      WRITE(6,6020)NAME,MOD,ICOSH1,ICOSH2,MS,LX, 
+     1             SCAL,FLO,HI,FINC,KAX,IOVRLY,KIND 
+      SECOND = .FALSE. 
+      ADD1C = .FALSE. 
+      IF(KIND.NE.1) KIND=3 
+      NHI = 0 
+      IF(MOD.GE.0.AND.MOD.NE.3) NHI=-1 
+
+***    CARD 2. 
+
+      CALL GETLIGN( 5, LIGNE,80, OK )
+      IF (.NOT.OK) THEN
+        GOTO 902
+      ELSE
+        READ(LIGNE,5012,END=902) LABEL 
+      END IF
+
+***    READ SUBAREA CARD 3. 
+
+      IF (KAX.LE.1) THEN 
+        DLON1 =-180. 
+        DLON2 = 180. 
+        IFRM = 3 
+      ELSE 
+        DLON1 = 0. 
+        DLON2 = 360. 
+        IFRM = 1 
+      ENDIF 
+      DPR1 = 10. 
+      DPR2 = 1000. 
+      IFLAG = 0 
+      SUBAREA = .FALSE. 
+      LOVRLY = .TRUE. 
+      STNDRD = .TRUE. 
+      IF (LX.LT.0) THEN 
+        CALL GETLIGN( 5, LIGNE,80, OK )
+        IF (.NOT.OK) THEN
+          GOTO 903
+        ELSE
+          READ(LIGNE,5018,END=903) DLON1,DLON2,DPR1,DPR2,IFLAG 
+        END IF
+        IF (DPR1.GE.DPR2.OR.DLON1.GE.DLON2.OR. 
+     1     DLON1.GE.360..OR.DLON2.LE.-360.) THEN 
+          CALL BURNF 
+          CALL                                     XIT(' Zlnplot',-101) 
+        ENDIF 
+        LX = IABS(LX) 
+        SUBAREA = .TRUE. 
+        LOVRLY = .FALSE. 
+        IF (IFLAG.EQ.0) IFLAG = 1 
+        IF (DLON1.LT.-360.) DLON1 = -360. 
+        IF (DLON1.GE.-360.) IFRM = 5 
+        IF (DLON1.GE.-270.) IFRM = 4 
+        IF (DLON1.GE.-180.) IFRM = 3 
+        IF (DLON1.GE. -90.) IFRM = 2 
+        IF (DLON1.GE.   0.) IFRM = 1 
+        IF ((DLON2-DLON1).GT.360.) DLON2 = DLON1 + 360. 
+        IF (DLON2.GT.360.) DLON2 = 360. 
+        IF(((IFRM.EQ.2).AND.(DLON2.GT.270.)).OR. 
+     1     ((IFRM.EQ.3).AND.(DLON2.GT.180.)).OR. 
+     2     ((IFRM.EQ.4).AND.(DLON2.GT. 90.)).OR. 
+     3     ((IFRM.EQ.5).AND.(DLON2.GT.  0.))) STNDRD=.FALSE. 
+      ENDIF 
+
+      IF(IMOD.EQ.1) GO TO 310 
+
+C----------------------------------------------------------------------- 
+***    READ-IN SCALAR FIELD TO BE CONTOURED. 
+ 
+***    GET THE NEXT CROSS-SECTION. 
+
+  180 LU = 1 
+      IF (SECOND) LU = 4 
+      CALL GETSET2(LU,FXS,LEV,NLEV,IBUF,MAX,OK) 
+      IF(.NOT.OK) THEN 
+        WRITE(6,6010) NAME 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-102) 
+      ENDIF 
+      IF((NLEV.LE.1).OR.(NLEV.GT.MAXL)) THEN 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-103) 
+      ENDIF 
+
+***    KEEP IF NAME EQUALS IBUF(3) OR 4HNEXT. 
+
+      WRITE(NOM,4) IBUF(3)  
+      IF(NAME.EQ.'NEXT') GOTO 190 
+      IF(NAME.NE. NOM)   GOTO 180 
+
+***    PUT CROSS-SECTION INTO XS WITH LEVELS AND LATITUDES REVERSED. 
+
+  190 IF (SECOND) THEN 
+        IF (NLONT.NE.IBUF(5)) CALL                 XIT(' Zlnplot',-1 ) 
+      ELSE 
+        NLONT=IBUF(5) 
+        NLON=NLONT 
+      ENDIF 
+      DO 210 L=1,NLEV 
+        K=NLEV+1-L 
+        PR(L)=FLOAT(LEV(L)) 
+        IF((KAX.EQ.1).OR.(KAX.EQ.3)) PR(L)=ALOG(PR(L)) 
+        DO 210 J=1,NLONT 
+          N=(L-1)*NLONT+J 
+          XS(J,K)=FXS(N) 
+  210 CONTINUE 
+
+      IF (.NOT.SECOND) THEN 
+
+***      CALCULATE THE LONGITUDE GRID OF THE INPUT FILE. 
+
+        DY = 360./(NLONT-1) 
+        DY =1.E-10*ANINT(1.E10*DY) 
+        DO 212 J=1,NLONT 
+  212   SLON(J) =  (J-1)*DY 
+
+        IF (LOVRLY) THEN 
+          DPR1=FLOAT(LEV(1)) 
+          DPR2=FLOAT(LEV(NLEV)) 
+          IF (IOVRLY.LT.0) IFLAG=1 
+          IF (IOVRLY.EQ.0) IFLAG=2 
+          IF (IOVRLY.GT.0) IFLAG=3 
+          SUBAREA=.TRUE. 
+        ENDIF 
+
+***      RESTRICT SUBAREA PRESSURE TO PHYSICAL LIMITS (.001,1100). 
+
+        IF (DPR1.LT..001) DPR1 = .001 
+        IF (DPR2.GT.1100.) DPR2 = 1100. 
+        IF ((KAX.EQ.1).OR.(KAX.EQ.3))THEN 
+           DPR1 = ALOG(DPR1) 
+           DPR2 = ALOG(DPR2) 
+        ENDIF 
+
+***      SET THE COORDINATES OF THE FRAME 
+
+        IF (IFLAG.NE.2) THEN 
+          IF((KAX.EQ.1).OR.(KAX.EQ.3))THEN 
+            FYT = ALOG(10.) 
+            FYB = ALOG(1000.) 
+          ELSE 
+            FYT = 10. 
+            FYB = 1000. 
+          ENDIF 
+        ELSE 
+          FYT = DPR1 
+          FYB = DPR2 
+        ENDIF 
+        IF (((IFLAG.NE.2).OR.(LOVRLY)).AND.STNDRD) THEN 
+          IF(IFRM.EQ.1)THEN 
+            FXL = 0. 
+            FXR = 360. 
+          ENDIF 
+          IF(IFRM.EQ.2)THEN 
+            FXL = -90. 
+            FXR = 270. 
+          ENDIF 
+          IF(IFRM.EQ.3)THEN 
+            FXL = -180. 
+            FXR =  180. 
+          ENDIF 
+          IF(IFRM.EQ.4)THEN 
+            FXL = -270. 
+            FXR =   90. 
+          ENDIF 
+          IF(IFRM.EQ.5)THEN 
+            FXL = -360. 
+            FXR =    0. 
+          ENDIF 
+        ELSE 
+          IF (IFLAG.EQ.2) THEN 
+            FXL = DLON1 
+            FXR = DLON2 
+          ELSE 
+            DLONG=(360.-(DLON2-DLON1))/2. 
+            FXL = 1.0*INT(DLON1-DLONG) 
+            FXR = 1.0*INT(DLON2+DLONG+0.5) 
+            IF((FXR-FXL).GT.360.) FXR = FXL+360. 
+          ENDIF 
+        ENDIF 
+
+***      MAKE SURE THE COORDINATES ARE BOUNDED BY THE INPUT FILE RANGE. 
+
+        IF (DPR1.LT.PR(1)) DPR1 = PR(1) 
+        IF (DPR2.GT.PR(NLEV)) DPR2 = PR(NLEV) 
+
+***      SET THE COORDINATES OF THE PLOTTED AREA. 
+
+        PYT = DPR1 
+        PYB = DPR2 
+        IF(LOVRLY)THEN 
+          PXL = FXL 
+          PXR = FXR 
+        ELSE 
+          PXL = DLON1 
+          PXR = DLON2 
+        ENDIF 
+
+***      SET THE DIMENSIONS OF THE INTERPOLATED FIELD. 
+
+        IF (LX.GT.99) LX=99 
+        NLONP = INT(FLOAT(NLONT)*(PXR-PXL)/360. + .5) 
+        IF (NLONP.LT.6) NLONP = 6 
+        IF (NLONP.LT.100) NLONP = 100 
+        ISCLON=1 
+        LXP = LX 
+        ISCLX=1 
+        IF (LX .LT.4) THEN 
+          IF (NLONP.LE.24) ISCLON=4 
+          IF (NLONP.LE.33) ISCLON=3 
+          IF (NLONP.LE.48) ISCLON=2 
+          NLONP=ISCLON*NLONP 
+          LX = 2*NLONT/3 
+          LXP = 2*NLONP/3 
+          ISCLX = ISCLON 
+        ENDIF 
+
+***      SET THE POSITION OF THE FRAME ON THE PLOTTER PAGE. 
+
+        IF (IFLAG.EQ.2) THEN 
+          FHGT = .9*(FLOAT(LXP-1)*(FYB-FYT)/(FLOAT(NLONP-1)*(PYB-PYT))) 
+        ELSE 
+          DENOM = 1000.-10. 
+          IF ((KAX.EQ.1).OR.(KAX.EQ.3)) DENOM = ALOG(1000.)-ALOG(10.) 
+          FHGT=.9*FLOAT(LX-1)*(FYB-FYT)/(DENOM*FLOAT(NLONT-1)) 
+        ENDIF 
+        IF ((IFLAG.NE.2).OR.(LOVRLY)) THEN 
+          FWDTH = .9*(FXR-FXL)/360. 
+          FLEFT = (1.-FWDTH)/2. 
+        ELSE 
+          FWDTH = .9 
+          FLEFT = .05 
+        ENDIF 
+
+***      SET THE POSITION OF THE PLOTTED AREA ON THE PLOTTER PAGE. 
+
+        PHGT = FHGT*(PYB-PYT)/(FYB-FYT) 
+        PWDTH = FWDTH*(PXR-PXL)/(FXR-FXL) 
+        PLEFT = FLEFT + PWDTH*(PXL-FXL)/(PXR-PXL) 
+        PBOT = .05 + PHGT*(FYB-PYB)/(PYB-PYT) 
+        FBOT = .05 
+        IF (IFLAG.EQ.2) FBOT = PBOT 
+
+***    SET THE FRAMED AREA EQUAL TO THE PLOTTED AREA 
+
+        IF (IFLAG.EQ.3) THEN 
+          IF (.NOT.LOVRLY) THEN 
+            FXL = PXL 
+            FXR = PXR 
+            FWDTH = PWDTH 
+            FLEFT = PLEFT 
+          ENDIF 
+          FYB = PYB 
+          FYT = PYT 
+          FHGT = PHGT 
+          FBOT = PBOT 
+        ENDIF 
+
+***      IF THE PLOT IS TOO TALL, SCALE IT DOWN TO FIT THE PLOTTER PAGE 
+
+        IF ((FHGT+FBOT).GT..9.AND.IFLAG.EQ.2) THEN 
+          SCALE = .9/(FHGT+FBOT) 
+          PHGT = SCALE*PHGT 
+          PWDTH = SCALE*PWDTH 
+          FWDTH = SCALE*FWDTH 
+          FHGT = .9-FBOT 
+          PLEFT = SCALE*(PLEFT-FLEFT) + FLEFT 
+          PBOT = SCALE*(PBOT-FBOT) + FBOT 
+        ENDIF 
+        IF (ABS(PBOT-FBOT).LT..0001) THEN 
+          CALL CONSET(5HIOFFM,0) 
+        ELSE 
+          CALL CONSET(5HIOFFM,1) 
+        ENDIF 
+
+***      COMPUTE THE EQUALLY SPACED PRESSURE LEVELS AND LONGITUDES FOR 
+***      INTERPOLATION TO THE DISPLAY GRID. 
+
+        DY = (PXR-PXL)/FLOAT(NLONP-1) 
+        DO J=1,NLONP 
+          SLONP(J) = (J-1)*DY + PXL 
+        END DO
+        DP = (DPR2-DPR1)/FLOAT(LXP-1) 
+        DO L=1,LXP 
+          PRX(L)=(L-1)*DP+DPR1 
+        END DO
+
+***      REARRANGE THE LONGITUDES ARRAY "SLON" IF NECESSARY. 
+
+        FLIP=.TRUE. 
+        IF ((.NOT.LOVRLY.AND.(IFLAG.EQ.2)).OR..NOT.STNDRD) THEN 
+          IF (IFLAG.EQ.2) THEN 
+            TDLON=DLON1 
+          ELSE 
+            TDLON=FXL 
+          ENDIF 
+          IF (TDLON.LT.0.) TDLON=TDLON+360. 
+        ELSE 
+          IF(IFRM.EQ.1) THEN 
+            FLIP=.FALSE. 
+            GO TO 220 
+          ENDIF 
+          IF(IFRM.EQ.2) TDLON=270. 
+          IF(IFRM.EQ.3) TDLON=180. 
+          IF(IFRM.EQ.4) TDLON= 90. 
+          IF(IFRM.EQ.5) TDLON=  0. 
+        ENDIF 
+        IPTR=0 
+        DO I=1,(NLONT-1) 
+          IF((TDLON.GE.SLON(I)).AND.(TDLON.LE.SLON(I+1)))THEN 
+            IPTR=I 
+            IF(TDLON.EQ.SLON(I+1))IPTR=I+1 
+            GO TO 990 
+          ENDIF 
+        END DO
+  990   J=0 
+        DO I=IPTR,NLONT 
+          J=J+1 
+          Y(J)=SLON(I)-360. 
+        END DI
+        IF(IPTR.GE.2)THEN 
+          DO I=2,IPTR 
+            J=J+1 
+            Y(J)=SLON(I) 
+          END DO
+        ENDIF 
+        IF(TDLON.GT.Y(NLONT))THEN 
+          ADD1C=.TRUE. 
+          NLON=NLONT+1 
+          Y(NLON)=SLON(IPTR+1) 
+        ENDIF 
+        DO J=1,NLON 
+          SLON(J)=Y(J) 
+        END DO
+  220   CONTINUE 
+      ENDIF 
+
+***    REARRANGE THE 2-DIMENSIONAL TABLE "XS" IF NECESSARY. 
+
+      IF(FLIP) THEN
+        DO L=1,NLEV 
+          J=0 
+          DO I=IPTR,NLONT 
+            J=J+1 
+            Y(J)=XS(I,L) 
+          END DO
+          IF(IPTR.GE.2)THEN 
+            DO I=2,IPTR 
+              J=J+1 
+              Y(J)=XS(I,L) 
+            END DO
+          ENDIF 
+          IF (ADD1C) Y(NLON)=XS(IPTR+1,L) 
+          DO J=1,NLON 
+            XS(J,L)=Y(J) 
+          END DO
+        END DO
+      END IF
+
+***    PRECOMPUTE THE LAGRANGIAN DENOMINATORS IN DEN. 
+
+      IF(NLEV.LE.3) KIND=1 
+      IF(KIND.EQ.3) CALL LGRDC(DEN,PR,NLEV) 
+
+***    INTERPOLATE THE DISPLAY LEVELS ONE COLUMN AT A TIME. 
+
+      DO J=1,NLON 
+        DO L=1,NLEV 
+          K=NLEV+1-L 
+          Y(L)=XS(J,K) 
+        END DO
+        IF(KIND.EQ.1) CALL LINIL(YX,PRX,LXP,Y,PR,NLEV,0.,0.) 
+        IF(KIND.EQ.3) CALL LGRIC(YX,PRX,LXP,Y,PR,DEN,NLEV,0.,0.) 
+        DO L=1,LXP 
+          N=(L-1)*NLON+J 
+          K=LXP+1-L 
+          FXS(N)=YX(K) 
+        END DO
+       END DO
+
+***    INTERPOLATE HORIZONTALLY ONE LEVEL AT A TIME. 
+
+      DO L = 1,LXP 
+        DO J = 1,NLON 
+          WX(J) = FXS( (L-1)*NLON + J) 
+        END DO
+        CALL LINIL(YX,SLONP,NLONP,WX,SLON,NLON,0.,0.) 
+        DO J = 1,NLONP 
+          UXS( (L-1)*NLONP + J) = YX(J) 
+        END DO
+      END DO
+      NWDS=NLONP*LXP 
+      DO I = 1,NWDS 
+        FXS(I) = UXS(I) 
+      END DO
+
+***    SCALE THE CROSS-SECTION FIELD. 
+
+      DO I=1,NWDS 
+        F(I)=SCAL*FXS(I) 
+      END DO
+
+***    CONTOUR THE FIELD WITH OR WITHOUT THE ZERO LINE. 
+
+      IF (PBOT+PHGT.GT.1.) THEN 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-105) 
+      ENDIF 
+      XPOS = FLOAT(NLONP) 
+      YPOS = FLOAT(LXP) 
+      CALL SET(PLEFT,PLEFT+PWDTH,PBOT,PBOT+PHGT,1.,XPOS,1.,YPOS,1) 
+
+      ICOSH = ICOSH1 
+      IF (SECOND) ICOSH = ICOSH2 
+
+      IF ((ICOSH.NE.4).OR. 
+     1    ((.NOT.SECOND).AND.(ICOSH1.LE.1).AND.(ICOSH2.EQ.4)).OR. 
+     2    (SECOND.AND.(ICOSH1.EQ.4).AND.(ICOSH2.LE.1))) THEN 
+        NDOT=-1634B 
+        IF (IMOD.GE.4) THEN 
+          NDOT = 1777B 
+          IF (SECOND) NDOT = 1634B 
+        ENDIF 
+        IF (((.NOT.SECOND).AND.(ICOSH1.LE.1).AND.(ICOSH2.EQ.4)).OR. 
+     1      (SECOND.AND.(ICOSH1.EQ.4).AND.(ICOSH2.LE.1))) 
+     2       NDOT=-1634B 
+        CALL CONSET(6HCENTER,1H*) 
+        IF (SECOND) CALL CONSET(6HCENTER,1H+) 
+        CALL DASHS 
+
+        IF((ICOSH.EQ.1.OR.ICOSH.EQ.3).AND.FLO*HI.LT.0.) THEN 
+          FLO1 = FLO+FINC 
+          FLO3 = 2.*FINC 
+          HI2  = -2.*FINC 
+          FINC1= FINC*2. 
+          IF (.NOT.PB) THEN 
+            CALL CONGET(6HINTMIN,I) 
+            CALL CONGET(6HINTMAJ,J) 
+            CALL CONGET(4HILAB,K) 
+            CALL CONSET(6HINTMAJ,1) 
+            CALL CONSET(4HILAB,0) 
+          ENDIF 
+          CALL CONREC(F,NLONP,NLONP,LXP,FLO1,HI,FINC1,1,NHI,NDOT) 
+          IF (.NOT.PB) THEN 
+            CALL CONSET(6HINTMIN,2) 
+            CALL CONSET(6HINTMAJ,2) 
+            CALL CONSET(4HILAB,1) 
+            CALL CONSET(6HNULBLL,0) 
+          ENDIF 
+          CALL CONREC(F,NLONP,NLONP,LXP,FLO,HI2,FINC1,1,NHI,NDOT) 
+          CALL CONREC(F,NLONP,NLONP,LXP,FLO3,HI,FINC1,1,NHI,NDOT) 
+          IF (.NOT.PB) THEN 
+            CALL CONSET(6HINTMIN,I) 
+            CALL CONSET(6HINTMAJ,J) 
+            CALL CONSET(4HILAB,K) 
+            CALL CONSET(6HNULBLL,1) 
+          ENDIF 
+
+        ELSE 
+          CALL CONREC(F,NLONP,NLONP,LXP,FLO,  HI,FINC,1,NHI,NDOT) 
+
+        ENDIF 
+        CALL DASHN 
+
+      ENDIF 
+
+***    SHADE THE CROSS SECTION IF DESIRED. 
+
+      IF (ICOSH.GT.1) THEN 
+
+***      READ SHADING CARDS 4 AND 5 (OR 8 AND 9 FOR SECOND FIELD). 
+
+        CALL GETLIGN( 5, LIGNE,80, OK )
+        IF (.NOT.OK) THEN
+          GOTO 904
+        ELSE
+          READ(LIGNE,5014,END=904) NPAT,(IPAT(I),I=1,NPAT) 
+        END IF
+        CALL GETLIGN( 5, LIGNE,80, OK )
+        IF (.NOT.OK) THEN
+          GOTO 905
+        ELSE
+          READ(LIGNE,5016,END=905) (ZLEV(I),I=1,NPAT) 
+        END IF
+        CALL HAFLVS(NPAT,ZLEV,NPAT,IPAT) 
+        NPREM = -2 
+        IF (.NOT.PB) NPREM = -1 
+        CALL HAFTONP(F,NLONP,NLONP,LXP,0.,0.,0,1,NPREM,0,0.) 
+      ENDIF 
+
+***    MAP THE CROSS-SECTION ON LINE PRINTER (NO MAP IF MS=0). 
+
+      CALL FCONW2(FXS,FINC,SCAL,NLONP,LXP,1,1,NLONP,LXP,MS) 
+      WRITE(6,6040) LABEL 
+
+***    WRITE THE LABEL ABOVE THE CROSS-SECTION. 
+
+      CALL SET(.01,.99,.01,.99, .01,.99,.01,.99, 1) 
+      YPOS=FHGT+FBOT+.08 
+      IF (SECOND) YPOS = FHGT+FBOT+.06 
+      CALL PWRIT(FLEFT,YPOS,LABEL,80,1,0,0) 
+
+***    READ CARDS 6 AND 7 FOR SECOND SCALAR FIELD, THEN PLOT. 
+
+      IF (IMOD.GE.4.AND..NOT.SECOND) THEN 
+        SECOND = .TRUE. 
+        CALL GETLIGN( 5, LIGNE,80, OK )
+        IF (.NOT.OK) THEN
+          GOTO 906
+        ELSE
+          READ(LIGNE,5010,END=906) NAME,II,JJ,KK,MS,N,SCAL,
+     +                             FLO,HI,FINC,NN,III,KIND 
+        END IF
+        CALL GETLIGN( 5, LIGNE,80, OK )
+        IF (.NOT.OK) THEN
+          GOTO 907
+        ELSE
+          READ(LIGNE,5012,END=907)LABEL 
+        END IF
+
+***    ALLOW ONLY LINEAR INTERPOLATION TO BE PERFORMED BY SETTING 
+***    KIND TO 1. 
+
+        KIND = 1 
+CCC     IF (KIND.NE.1) KIND = 3 
+        NHI = 0 
+        IF (II.GE.0) NHI = -1 
+        IF (MS.LT.0) MS = IABS(MS+1) 
+        GO TO 180 
+      ENDIF 
+ 
+      IF(MOD.EQ.0.OR.MOD.EQ.3.OR.IMOD.EQ.4) GO TO 700 
+*----------------------------------------------------------------------- 
+***    BRING THE VECTOR FIELDS. 
+***    READ IN MERIDIONALLY AVERAGED U FIELD. 
+
+***    VECTOR CARDS 10 AND 11. 
+
+  310 CALL GETLIGN( 5, LIGNE,80, OK )
+      IF (.NOT.OK) THEN
+        GOTO 908
+      ELSE
+        READ(LIGNE,5020,END=908) VSCAL,VLO,VI,INCX,INCZ 
+      END IF
+      IF(VSCAL.EQ.0.) VSCAL=1. 
+      CALL GETLIGN( 5, LIGNE,80, OK )
+      IF (.NOT.OK) THEN
+        GOTO 909
+      ELSE
+        READ(LIGNE,5012,END=909) LABEL 
+      END IF
+
+      CALL GETSET2(2,UXS,LEV,NLEV,IBUF,MAX,OK) 
+      IF(.NOT.OK) THEN 
+        WRITE(6,6010) NAME 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-106) 
+      ENDIF 
+      IF(NLEV.EQ.1) THEN 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-107) 
+      ENDIF 
+
+***    READ IN ZONALLY AVERAGED W FIELD. 
+
+      CALL GETSET2(3,WXS,LEV,NLEV,JBUF,MAX,OK) 
+      IF(.NOT.OK) THEN 
+        WRITE(6,6010) NAME 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-108) 
+      ENDIF 
+      IF(NLEV.EQ.1) THEN 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-109) 
+      ENDIF 
+
+***    MAKE SURE THE 2 VECTOR FIELDS ARE THE SAME KIND AND SIZE. 
+
+      CALL CMPLBL(0,IBUF,0,JBUF,OK) 
+      IF(.NOT.OK)THEN 
+        CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+        CALL                                       XIT(' Zlnplot',-2 ) 
+      ENDIF 
+
+***    PUT CROSS-SECTIONS INTO US AND WS WITH LEVELS REVERSED. 
+***    VERTICAL VECTOR IS UNALTERED, SO THAT POSITIVE VALUES IMPLY UPWA 
+***    HENCE THIS FIELD MUST BE MODIFIED BEFORE RUNNING THE PROGRAM IF 
+***    AN "OMEGA-LIKE" VERTICAL MOTION FIELD. 
+ 
+      IF (IMOD.NE.1) THEN 
+        IF (NLONT.NE.IBUF(5)) CALL                 XIT(' Zlnplot',-3 ) 
+      ELSE 
+        NLONT=IBUF(5) 
+        NLON=NLONT 
+      ENDIF 
+
+      DO L=1,NLEV 
+        K=NLEV+1-L 
+        PR(L)=FLOAT(LEV(L)) 
+        IF((KAX.EQ.1).OR.(KAX.EQ.3)) PR(L)=ALOG(PR(L)) 
+        DO J=1,NLONT 
+          N=(L-1)*NLONT+J 
+          US(J,K)=UXS(N) 
+          WS(J,K)=WXS(N) 
+        END DO
+      END DO
+
+      IF (IMOD.EQ.1) THEN 
+
+***      CALCULATE THE LONGITUDE GRID OF THE INPUT FILE. 
+
+        DY = 360./(NLONT-1) 
+        DY = 1.E-10*ANINT(1.E10*DY) 
+        DO J=1,NLONT
+          SLON(J) =  (J-1)*DY 
+        END DO
+
+        IF (LOVRLY) THEN 
+          DPR1=FLOAT(LEV(1)) 
+          DPR2=FLOAT(LEV(NLEV)) 
+          IF (IOVRLY.LT.0) IFLAG=1 
+          IF (IOVRLY.EQ.0) IFLAG=2 
+          IF (IOVRLY.GT.0) IFLAG=3 
+          SUBAREA=.TRUE. 
+        ENDIF 
+
+***      RESTRICT SUBAREA PRESSURE TO PHYSICAL LIMITS (.001,1100). 
+
+        IF (DPR1.LT..001) DPR1 = .001 
+        IF (DPR2.GT.1100.) DPR2 = 1100. 
+        IF ((KAX.EQ.1).OR.(KAX.EQ.3))THEN 
+           DPR1 = ALOG(DPR1) 
+           DPR2 = ALOG(DPR2) 
+        ENDIF 
+
+***      SET THE COORDINATES OF THE FRAME 
+
+        IF (IFLAG.NE.2) THEN 
+          IF((KAX.EQ.1).OR.(KAX.EQ.3))THEN 
+            FYT = ALOG(10.) 
+            FYB = ALOG(1000.) 
+          ELSE 
+            FYT = 10. 
+            FYB = 1000. 
+          ENDIF 
+        ELSE 
+          FYT = DPR1 
+          FYB = DPR2 
+        ENDIF 
+        IF (((IFLAG.NE.2).OR.(LOVRLY)).AND.STNDRD) THEN 
+          IF(IFRM.EQ.1)THEN 
+            FXL = 0. 
+            FXR = 360. 
+          ENDIF 
+          IF(IFRM.EQ.2)THEN 
+            FXL = -90. 
+            FXR = 270. 
+          ENDIF 
+          IF(IFRM.EQ.3)THEN 
+            FXL = -180. 
+            FXR =  180. 
+          ENDIF 
+          IF(IFRM.EQ.4)THEN 
+            FXL = -270. 
+            FXR =   90. 
+          ENDIF 
+          IF(IFRM.EQ.5)THEN 
+            FXL = -360. 
+            FXR =    0. 
+          ENDIF 
+        ELSE 
+          IF (IFLAG.EQ.2) THEN 
+            FXL = DLON1 
+            FXR = DLON2 
+          ELSE 
+            DLONG=(360.-(DLON2-DLON1))/2. 
+            FXL = 1.0*INT(DLON1-DLONG) 
+            FXR = 1.0*INT(DLON2+DLONG+0.5) 
+            IF((FXR-FXL).GT.360.) FXR = FXL+360. 
+          ENDIF 
+        ENDIF 
+
+***      MAKE SURE THE COORDINATES ARE BOUNDED BY THE INPUT FILE RANGE. 
+
+        IF (DPR1.LT.PR(1)) DPR1 = PR(1) 
+        IF (DPR2.GT.PR(NLEV)) DPR2 = PR(NLEV) 
+
+***      SET THE COORDINATES OF THE PLOTTED AREA. 
+
+        PYT = DPR1 
+        PYB = DPR2 
+        IF(LOVRLY)THEN 
+          PXL = FXL 
+          PXR = FXR 
+        ELSE 
+          PXL = DLON1 
+          PXR = DLON2 
+        ENDIF 
+
+***      SET THE DIMENSIONS OF THE INTERPOLATED FIELD. 
+
+        IF (LX.GT.99) LX=99 
+        NLONP = INT(FLOAT(NLONT)*(PXR-PXL)/360. + .5) 
+        IF (NLONP.LT.6) NLONP = 6 
+        IF (NLONP.LT.100) NLONP = 100 
+        ISCLON=1 
+        LXP = LX 
+        ISCLX=1 
+        IF (LX .LT.4) THEN 
+          IF (NLONP.LE.24) ISCLON=4 
+          IF (NLONP.LE.33) ISCLON=3 
+          IF (NLONP.LE.48) ISCLON=2 
+          NLONP=ISCLON*NLONP 
+          LX = 2*NLONT/3 
+          LXP = 2*NLONP/3 
+          ISCLX = ISCLON 
+        ENDIF 
+
+***      SET THE POSITION OF THE FRAME ON THE PLOTTER PAGE. 
+
+        IF (IFLAG.EQ.2) THEN 
+          FHGT = .9*(FLOAT(LXP-1)*(FYB-FYT)/(FLOAT(NLONP-1)*(PYB-PYT))) 
+        ELSE 
+          DENOM = 1000.-10. 
+          IF ((KAX.EQ.1).OR.(KAX.EQ.3)) DENOM = ALOG(1000.)-ALOG(10.) 
+          FHGT=.9*FLOAT(LX-1)*(FYB-FYT)/(DENOM*FLOAT(NLONT-1)) 
+        ENDIF 
+        IF ((IFLAG.NE.2).OR.(LOVRLY)) THEN 
+          FWDTH = .9*(FXR-FXL)/360. 
+          FLEFT = (1.-FWDTH)/2. 
+        ELSE 
+          FWDTH = .9 
+          FLEFT = .05 
+        ENDIF 
+
+***      SET THE POSITION OF THE PLOTTED AREA ON THE PLOTTER PAGE. 
+
+        PHGT = FHGT*(PYB-PYT)/(FYB-FYT) 
+        PWDTH = FWDTH*(PXR-PXL)/(FXR-FXL) 
+        PLEFT = FLEFT + PWDTH*(PXL-FXL)/(PXR-PXL) 
+        PBOT = .05 + PHGT*(FYB-PYB)/(PYB-PYT) 
+        FBOT = .05 
+        IF (IFLAG.EQ.2) FBOT = PBOT 
+
+***    SET THE FRAMED AREA EQUAL TO THE PLOTTED AREA 
+
+        IF (IFLAG.EQ.3) THEN 
+          IF (.NOT.LOVRLY) THEN 
+            FXL = PXL 
+            FXR = PXR 
+            FWDTH = PWDTH 
+            FLEFT = PLEFT 
+          ENDIF 
+          FYB = PYB 
+          FYT = PYT 
+          FHGT = PHGT 
+          FBOT = PBOT 
+        ENDIF 
+
+***      IF THE PLOT IS TOO TALL, SCALE IT DOWN TO FIT THE PLOTTER PAGE 
+
+        IF ((FHGT+FBOT).GT..9.AND.IFLAG.EQ.2) THEN 
+          SCALE = .9/(FHGT+FBOT) 
+          PHGT = SCALE*PHGT 
+          PWDTH = SCALE*PWDTH 
+          FWDTH = SCALE*FWDTH 
+          FHGT = .9-FBOT 
+          PLEFT = SCALE*(PLEFT-FLEFT) + FLEFT 
+          PBOT = SCALE*(PBOT-FBOT) + FBOT 
+        ENDIF 
+        IF (ABS(PBOT-FBOT).LT..0001) THEN 
+          CALL CONSET(5HIOFFM,0) 
+        ELSE 
+          CALL CONSET(5HIOFFM,1) 
+        ENDIF 
+
+***      COMPUTE THE EQUALLY SPACED PRESSURE LEVELS AND LONGITUDES FOR 
+***      INTERPOLATION TO THE DISPLAY GRID. 
+
+        DY = (PXR-PXL)/FLOAT(NLONP-1) 
+        DO J=1,NLONP 
+          SLONP(J) = (J-1)*DY + PXL 
+        END DO
+        DP = (DPR2-DPR1)/FLOAT(LXP-1) 
+        DO L=1,LXP 
+          PRX(L)=(L-1)*DP+DPR1 
+        END DO
+
+***      REARRANGE THE LONGITUDES ARRAY "SLON" IF NECESSARY. 
+
+        FLIP=.TRUE. 
+        IF ((.NOT.LOVRLY.AND.(IFLAG.EQ.2)).OR..NOT.STNDRD) THEN 
+          IF (IFLAG.EQ.2) THEN 
+            TDLON=DLON1 
+          ELSE 
+            TDLON=FXL 
+          ENDIF 
+          IF (TDLON.LT.0.) TDLON=TDLON+360. 
+        ELSE 
+          IF(IFRM.EQ.1) THEN 
+            FLIP=.FALSE. 
+            GO TO 340 
+          ENDIF 
+          IF(IFRM.EQ.2) TDLON=270. 
+          IF(IFRM.EQ.3) TDLON=180. 
+          IF(IFRM.EQ.4) TDLON= 90. 
+          IF(IFRM.EQ.5) TDLON=  0. 
+        ENDIF 
+        IPTR=0 
+        DO I=1,(NLONT-1) 
+          IF((TDLON.GE.SLON(I)).AND.(TDLON.LE.SLON(I+1)))THEN 
+            IPTR=I 
+            IF(TDLON.EQ.SLON(I+1))IPTR=I+1 
+            GO TO 991 
+          ENDIF 
+        END DO
+  991   J=0 
+        DO I=IPTR,NLONT 
+          J=J+1 
+          Y(J)=SLON(I)-360. 
+        END DO
+        IF(IPTR.GE.2)THEN 
+          DO I=2,IPTR 
+            J=J+1 
+            Y(J)=SLON(I) 
+          END DO
+        ENDIF 
+        IF(TDLON.GT.Y(NLONT))THEN 
+          ADD1C=.TRUE. 
+          NLON=NLONT+1 
+          Y(NLON)=SLON(IPTR+1) 
+        ENDIF 
+        DO J=1,NLON 
+          SLON(J)=Y(J) 
+        END DO
+  340   CONTINUE 
+
+        IF (KIND.EQ.3) CALL LGRDC(DEN,PR,NLEV) 
+      ENDIF 
+
+***    REARRANGE THE 2-DIMENSIONAL TABLES "US" & "WS" IF NECESSARY. 
+
+      IF(FLIP) THEN
+        DO L=1,NLEV 
+          J=0 
+          DO I=IPTR,NLONT 
+            J=J+1 
+            U(J)=US(I,L) 
+            W(J)=WS(I,L) 
+          END DO
+          IF(IPTR.GE.2)THEN 
+            DO I=2,IPTR 
+              J=J+1 
+              U(J)=US(I,L) 
+              W(J)=WS(I,L) 
+            END DO
+          ENDIF 
+          IF (ADD1C) THEN 
+            U(NLON)=US(IPTR+1,L) 
+            W(NLON)=WS(IPTR+1,L) 
+          END IF 
+          DO J=1,NLON 
+            US(J,L)=U(J) 
+            WS(J,L)=W(J) 
+          END DO
+        END DO
+      END IF
+
+***    INTERPOLATE THE DISPLAY LEVELS ONE COLUMN AT A TIME. 
+
+      DO J=1,NLON 
+        DO L=1,NLEV 
+          K=NLEV+1-L 
+          U(L)=US(J,K) 
+          W(L)=WS(J,K) 
+        END DO
+        IF(KIND.EQ.1)THEN 
+          CALL LINIL(UX,PRX,LXP,U,PR,NLEV,0.,0.) 
+          CALL LINIL(WX,PRX,LXP,W,PR,NLEV,0.,0.) 
+        ENDIF 
+        IF(KIND.EQ.3)THEN 
+          CALL LGRIC(UX,PRX,LXP,U,PR,DEN,NLEV,0.,0.) 
+          CALL LGRIC(WX,PRX,LXP,W,PR,DEN,NLEV,0.,0.) 
+        ENDIF 
+        DO L=1,LXP 
+          N=(L-1)*NLON+J 
+          K=LXP+1-L 
+          UXS(N)=UX(K) 
+          WXS(N)=WX(K) 
+        END DO
+      END DO
+
+***    INTERPOLATE HORIZONTALLY 
+
+      DO L = 1,LXP 
+        DO J = 1,NLON 
+          UX(J) = UXS( (L-1)*NLON + J) 
+          WX(J) = WXS( (L-1)*NLON + J) 
+        END DO
+        CALL LINIL(YX,SLONP,NLONP,WX,SLON,NLON,0.,0.) 
+        CALL LINIL(PRX,SLONP,NLONP,UX,SLON,NLON,0.,0.) 
+        DO J = 1,NLONP 
+          ZXU( (L-1)*NLONP + J) = PRX(J) 
+          ZXW( (L-1)*NLONP + J) = YX(J) 
+        END DO
+      END DO
+      DO I = 1,LXP*NLONP 
+        WXS(I) = ZXW(I) 
+        UXS(I) = ZXU(I) 
+      END DO
+
+***    SKIP POINTS AND SCALE THE MERIDIONALLY AVERAGED U AND W FIELDS. 
+
+      INCX= ISCLON*INCX 
+      INCZ= ISCLX*INCZ 
+      LYR = NLONP 
+      LXR = LXP 
+      IF (INCX.GE.1 .AND. INCZ.GE.1) THEN 
+        LYR=(NLONP-1)/INCX+1 
+        LXR=(LXP-1)/INCZ+1 
+        DO J=1,LXR 
+          JJ=(J-1)*INCX+1 
+          DO I=1,LYR 
+            N=I +(J-1)*LYR 
+            NN=(I-1)*INCX+1 + (JJ-1)*NLONP 
+            ZXU(N)=UXS(NN)*VSCAL 
+            ZXW(N)=WXS(NN)*VSCAL 
+          END DO
+        END DO
+      ENDIF 
+
+***    COMPENSATE FOR SKIPPED POINTS AT TOP AND RIGHT OF FIELD 
+
+      NRIGHT = NLONP-(LYR-1)*INCX-1 
+      NTOP   = LXP-(LXR-1)*INCZ-1 
+      DRIGHT = FLOAT(NRIGHT)*PWDTH*DY/(PXR-PXL) 
+      DTOP   = FLOAT(NTOP)*PHGT *DP/(PYB-PYT) 
+
+***   DRAW THE VECTOR PLOT. 
+***    -------------------- 
+
+      IF (PBOT+PHGT.GT.1.) THEN 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-110) 
+      ENDIF 
+      XPOS = FLOAT(LYR) 
+      YPOS = FLOAT(LXR) 
+      PWDTH = PWDTH-DRIGHT 
+      PHGT  = PHGT -DTOP 
+      CALL SET(PLEFT,PLEFT+PWDTH,PBOT,PBOT+PHGT,1.,XPOS,1.,YPOS,1) 
+      IF (PB) CALL OPTN(5HTHICK,3) 
+      CALL VELVCT(ZXU,LYR,ZXW,LYR,LYR,LXR,VLO,VI,-1,0,SPV) 
+      IF (PB) CALL OPTN(5HTHICK,1) 
+
+***    WRITE LABEL FOR VECTOR PLOT 
+
+      CALL SET(.01,.99,.01,.99, .01,.99,.01,.99, 1) 
+      CALL PWRIT(FLEFT,FBOT+FHGT+.04,LABEL,80,1,0,0) 
+
+      WRITE(6,6050) LABEL 
+*----------------------------------------------------------------------- 
+
+  700 CONTINUE 
+
+***    LABEL THE LEFT-HAND AND RIGHT-HAND LONGITUDES OF THE FRAME. 
+
+      IF (.NOT.PB) THEN 
+        IF((INT(FXL).GE.0).AND.(INT(FXL).LE.9))THEN 
+          WRITE(IPNT,'(I1,X)') INT(FXL) 
+          CALL PWRIT(FLEFT,FBOT-.015,IPNT,1,0,0,0) 
+        ENDIF 
+        IF(((INT(FXL).GE.-9).AND.(INT(FXL).LE.-1)).OR. 
+     1     ((INT(FXL).GE.10).AND.(INT(FXL).LE.99)))THEN 
+          WRITE(IPNT,'(I2,X)') INT(FXL) 
+          CALL PWRIT(FLEFT-.003,FBOT-.015,IPNT,2,0,0,0) 
+        ENDIF 
+        IF(((INT(FXL).GE.-99).AND.(INT(FXL).LE.-10)).OR. 
+     1                            (INT(FXL).GE.100))THEN 
+          WRITE(IPNT,'(I3.1,X)') INT(FXL) 
+          CALL PWRIT(FLEFT-.005,FBOT-.015,IPNT,3,0,0,0) 
+        ENDIF 
+        IF(INT(FXL).LE.-100)THEN 
+          WRITE(IPNT,'(I4.1,X)') INT(FXL) 
+          CALL PWRIT(FLEFT-.0105,FBOT-.015,IPNT,4,0,0,0) 
+        ENDIF 
+        IF((INT(FXR).GE.0).AND.(INT(FXR).LE.9))THEN 
+          WRITE(IPNT,'(I1,X)') INT(FXR) 
+          CALL PWRIT(FLEFT+FWDTH,FBOT-.015,IPNT,1,0,0,0) 
+        ENDIF 
+        IF(((INT(FXR).GE.-9).AND.(INT(FXR).LE.-1)).OR. 
+     1     ((INT(FXR).GE.10).AND.(INT(FXR).LE.99)))THEN 
+          WRITE(IPNT,'(I2,X)') INT(FXR) 
+          CALL PWRIT(FLEFT+FWDTH-.003,FBOT-.015,IPNT,2,0,0,0) 
+        ENDIF 
+        IF(((INT(FXR).GE.-99).AND.(INT(FXR).LE.-10)).OR. 
+     1                            (INT(FXR).GE.100))THEN 
+          WRITE(IPNT,'(I3.1,X)') INT(FXR) 
+          CALL PWRIT(FLEFT+FWDTH-.005,FBOT-.015,IPNT,3,0,0,0) 
+        ENDIF 
+        IF(INT(FXR).LE.-100)THEN 
+          WRITE(IPNT,'(I4.1,X)') INT(FXR) 
+          CALL PWRIT(FLEFT+FWDTH-.0105,FBOT-.015,IPNT,4,0,0,0) 
+        ENDIF 
+        CALL FRSTPT(FLEFT,FBOT-.01) 
+        CALL VECTOR(FLEFT,FBOT) 
+        CALL FRSTPT(FLEFT+FWDTH,FBOT-.01) 
+        CALL VECTOR(FLEFT+FWDTH,FBOT) 
+      ENDIF 
+
+***    DETERMINE THE SPACING OF LON TICKS (INTT) AND LABELS (INTL). 
+
+      RANGE = FXR-FXL 
+      IF (RANGE.LE.10.) INTT = 1 
+      IF (RANGE.GT.10..AND.RANGE.LE.20.) INTT = 2 
+      IF (RANGE.GT.20..AND.RANGE.LE.50.) INTT = 5 
+      IF (RANGE.GT.50..AND.RANGE.LE.100.) INTT = 10 
+      IF (RANGE.GT.100..AND.RANGE.LT.180.) INTT = 15 
+      INTL = INTT 
+      IF (RANGE.GE.180.) INTL = 30 
+      IF (RANGE.EQ. 90.) INTL = 15 
+      IF (RANGE.GE.180.) INTT = 10 
+      IF (RANGE.EQ.90.) INTT = 5 
+
+***    WRITE LONGITUDES AT BOTTOM OF FRAME. 
+
+      DO I=0,360,INTL 
+        IF (FLOAT(I).GE.FXL.AND.FLOAT(I).LE.FXR) THEN 
+          XPOS = FLEFT + FWDTH*(FLOAT(I)-FXL)/(FXR-FXL) 
+          IF(PB.OR.(XPOS-FLEFT.GT..02.AND.FLEFT+FWDTH-XPOS.GT..02))THEN 
+            IF((I.GE.0).AND.(I.LE.9))THEN 
+              WRITE(IPNT,'(I1,X)') I 
+              CALL PWRIT(XPOS,FBOT-.015,IPNT,1,0,0,0) 
+            ENDIF 
+            IF((I.GE.10).AND.(I.LE.99))THEN 
+              WRITE(IPNT,'(I2,X)') I 
+              CALL PWRIT(XPOS-.003,FBOT-.015,IPNT,2,0,0,0) 
+            ENDIF 
+            IF(I.GE.100)THEN 
+              WRITE(IPNT,'(I3.1,X)') I 
+              CALL PWRIT(XPOS-.005,FBOT-.015,IPNT,3,0,0,0) 
+            ENDIF 
+          ENDIF 
+          IF((I.EQ.0).OR.(I.EQ.360)) 
+     1        CALL PWRIT(XPOS-.0035,FBOT+FHGT+.01,2HGM,2,0,0,0) 
+          IF(I.EQ.180) 
+     1        CALL PWRIT(XPOS-.0035,FBOT+FHGT+.01,2HID,2,0,0,0) 
+        ENDIF 
+        IF (FLOAT(-1*I).GE.FXL.AND.FLOAT(-1*I).LE.FXR.AND.I.NE.0) THEN 
+          XPOS = FLEFT + FWDTH*(FLOAT(-1*I)-FXL)/(FXR-FXL) 
+          IF(PB.OR.(XPOS-FLEFT.GT..02.AND.FLEFT+FWDTH-XPOS.GT..02))THEN 
+            IF((-1*I.GE.-9).AND.(-1*I.LE.-1))THEN 
+              WRITE(IPNT,'(I2,X)') -1*I 
+              CALL PWRIT(XPOS-.003,FBOT-.015,IPNT,2,0,0,0) 
+            ENDIF 
+            IF((-1*I.GE.-99).AND.(-1*I.LE.-10))THEN 
+              WRITE(IPNT,'(I3.1,X)') -1*I 
+              CALL PWRIT(XPOS-.005,FBOT-.015,IPNT,3,0,0,0) 
+            ENDIF 
+            IF(-1*I.LE.-100)THEN 
+              WRITE(IPNT,'(I4.1,X)') -1*I 
+              CALL PWRIT(XPOS-.0105,FBOT-.015,IPNT,4,0,0,0) 
+            ENDIF 
+          ENDIF 
+          IF(-1*I.EQ.-180) 
+     1        CALL PWRIT(XPOS-.0035,FBOT+FHGT+.01,2HID,2,0,0,0) 
+          IF(-1*I.EQ.-360) 
+     1        CALL PWRIT(XPOS-.0035,FBOT+FHGT+.01,2HGM,2,0,0,0) 
+        ENDIF 
+      END DO
+
+***    WRITE LON TICKS AT THE BOTTOM OF THE FRAME. 
+
+      DO I=0,360,INTT 
+        IF (FLOAT(I).GE.FXL.AND.FLOAT(I).LE.FXR) THEN 
+          XPOS = FLEFT + FWDTH*(FLOAT(I)-FXL)/(FXR-FXL) 
+          IF(PB.OR.(XPOS-FLEFT.GT..02.AND.FLEFT+FWDTH-XPOS.GT..02))THEN 
+            CALL FRSTPT(XPOS,FBOT-.01) 
+            CALL VECTOR(XPOS,FBOT) 
+          ENDIF 
+        ENDIF 
+        IF (FLOAT(-1*I).GE.FXL.AND.FLOAT(-1*I).LE.FXR.AND.I.NE.0) THEN 
+          XPOS = FLEFT + FWDTH*(FLOAT(-1*I)-FXL)/(FXR-FXL) 
+          IF(PB.OR.(XPOS-FLEFT.GT..02.AND.FLEFT+FWDTH-XPOS.GT..02))THEN 
+            CALL FRSTPT(XPOS,FBOT-.01) 
+            CALL VECTOR(XPOS,FBOT) 
+          ENDIF 
+        ENDIF 
+      END DO
+
+***    INSERT THE PRESSURE IN MB OF THE INPUT LEVELS. 
+
+      IF (.NOT.PB) THEN 
+        ITOP = INT(FYT+.5) 
+        IF ((KAX.EQ.1).OR.(KAX.EQ.3)) ITOP = INT(EXP(FYT)+.5) 
+        WRITE(IPNT,'(I4)') ITOP 
+        CALL PWRIT(FLEFT-.031,FBOT+FHGT,IPNT,4,0,0,0) 
+        CALL FRSTPT(FLEFT-.005,FBOT+FHGT) 
+        CALL VECTOR(FLEFT,FBOT+FHGT) 
+        CALL FRSTPT(FLEFT+FWDTH,FBOT+FHGT) 
+        CALL VECTOR(FLEFT+FWDTH+.005,FBOT+FHGT) 
+        IF (ICOSH1.LE.1.AND.ICOSH2.LE.1) 
+     1     CALL PWRIT(FLEFT+FWDTH+.006,FBOT+FHGT,IPNT,4,0,0,0) 
+      ENDIF 
+
+      DO L=1,NLEV 
+        IF (PR(L).LE.FYB .AND. PR(L).GE.FYT) THEN
+
+***        YPOS = SCREEN HEIGHT OF THE CURRENT PRESSURE LEVEL. 
+
+          YPOS=FBOT+FHGT*(PR(L)-FYB)/(FYT-FYB) 
+
+***        DRAW A TICK ON EACH SIDE OF THE PLOT. 
+
+          IF (PB.OR.(FHGT+FBOT-YPOS.GE..01)) THEN 
+            CALL FRSTPT(FLEFT-.005,YPOS) 
+            CALL VECTOR(FLEFT,YPOS) 
+            CALL FRSTPT(FLEFT+FWDTH,YPOS) 
+            CALL VECTOR(FLEFT+.005+FWDTH,YPOS) 
+
+***          SET IPNT TO THE FOUR DIGITS OF THE PRESSURE 
+***          AND WRITE BESIDE THE TICK ON EACH SIDE OF THE PLOT. 
+
+            WRITE(IPNT,'(I4)') LEV(L) 
+            CALL PWRIT(FLEFT-.031,YPOS,IPNT,4,0,0,0) 
+            IF (PB.OR.(ICOSH1.LE.1.AND.ICOSH2.LE.1)) 
+     1        CALL PWRIT(FWDTH+FLEFT+.006,YPOS,IPNT,4,0,0,0) 
+          END IF 
+        END IF
+      END DO
+
+***    DRAW THE FRAME AROUND THE PLOT 
+
+      IF (FBOT+FHGT.GT.1.) THEN 
+        CALL BURNF 
+        CALL                                       XIT(' Zlnplot',-111) 
+      ENDIF 
+      CALL SET(FLEFT,FLEFT+FWDTH,FBOT,FBOT+FHGT,.01,.99,.01,.99,1) 
+      CALL PERIM(1,1,1,1) 
+      CALL SET(.01,.99,.01,.99, .01,.99,.01,.99, 1) 
+
+***    THE LAST CHARACTER OF THE PLOT IS AN X IN THE UPPER RIGHT CORNER 
+
+      CALL PWRIT(.97,.97,1HX,1,0,0,0) 
+      CALL FRAME 
+      GO TO 150 
+ 
+***    E.O.F. ON INPUT. 
+ 
+  900 CALL                                         XIT(' Zlnplot', 0 ) 
+ 
+***    E.O.F. ON FILE Z. 
+ 
+  901 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-112) 
+ 
+***    OTHER IMPROPER EXITS. 
+ 
+  902 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-113) 
+  903 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-114) 
+  904 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-115) 
+  905 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-116) 
+  906 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-117) 
+  907 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-118) 
+  908 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-119) 
+  909 CALL BURNF 
+      CALL                                         XIT(' Zlnplot',-120) 
+
+C--------------------------------------------------------------------- 
+ 0004 FORMAT(A4)
+
+ 5010 FORMAT(10X,1X,A4,I5,2I1,I3,I5,4E10.0,I5,1X,2I2) 
+ 5012 FORMAT(10A8) 
+ 5014 FORMAT(10X,8I5) 
+ 5016 FORMAT(10X,8E10.0) 
+ 5018 FORMAT(10X,4E10.0,I5) 
+ 5020 FORMAT(10X,3E10.0,2I5) 
+ 6010 FORMAT(20H0..EOF LOOKING FOR  ,A4) 
+ 6020 FORMAT(50H0NAME,MOD,ICOSH1,ICOSH2,MS,LX,SCAL,FLO,HI,FINC,KAX, 
+     1 12H,IOVRLY,KIND,/,X,A4,X,I3,I6,I7,2I3,4(X,F9.3),X,3I2) 
+ 6040 FORMAT(18H0 CROSS-SECTION   ,10A8) 
+ 6050 FORMAT(18H  VECTOR PLOT     ,10A8) 
+
+      END 
+#     endif

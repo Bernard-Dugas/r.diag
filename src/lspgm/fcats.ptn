@@ -1,0 +1,545 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 200000
+#     endif
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 10000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      fcats  FCOEFS TSER INPUT OUTPUT [-lon VAL1]
+*
+* 
+*     AUTHORS  - F.Zwiers AND B.Dugas, AUG 26/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fcats.ptn,v 4.10 2014/09/25 20:20:47 dugas Exp $
+*
+* 
+*     PURPOSE -  COMPUTE ACTUAL TIME SERIES FROM TIME SERIES FOURIER 
+*                COEFFICIENTS. 
+*     NOTE    -  IF INPUT TYPE OF FCOEFS IS 'SPEC' THE DATA PACKING HAS
+*                TO BE OFF OR THE FIRST LM IMAGINARY COMPONENTS WILL BE
+*                LOST. IN THIS CASE THE PROGRAM WILL PRINT A WARNING.. 
+* 
+*
+*     INPUT FILE... 
+*      FCOEFS = A FILE OF TIME SERIES FOURIER COEFFICIENTS. 
+* 
+*     OUTPUT FILE...  
+*      TSER   = THE FINITE FOURIER TRANSFORMS OF FILE FCOEFS WITH ITS 
+*               RECORDS HAVING THE FOLLOWING LABEL: 
+* 
+*        IBUF(1) =  'GRID', 'CMPL', 'ZONL' OR 'COEF' DEPENDING ON THE INPUT
+*                   VALUE OF IBUF(1). IF THE INPUT VALUE OF IBUF(1) IS 'SPEC',
+*                   THE OUTPUT VALUE IS TO BE 'COEF'. IF THIS INPUT VALUE IS
+*                   'FOUR', THE OUTPUT VALUE WILL BE EITHER 'ZONL' OR 'GRID',
+*                   DEPENDING ON THE VALUE OF IBUF(7) = CCCRRRK.
+*        IBUF(2) =  IF KIND = 'ZONL', 'CMPL' OR 'GRID' THEN IT IS THE ORDINAL
+*                   OF THE LOCATION OF THE POINT IN THE ORIGINAL LATLON GRID.
+*                   IF KIND = 'COEF' THEN IT IS THE ORDINAL OF THE LOCATION
+*                   OF THE COEFFICIENT IN THE REAL LA*2 LENGTH VECTOR 
+*        IBUF(3) =  NAME . 
+*        IBUF(4) =  LEVEL . 
+*        IBUF(5) =  FOR ALL EXCEPT 'CMPL', 2*(LENGTH-1) WHERE LENGTH IS THE
+*                   LENGTH OF THE FOURIER COEFFICIENTS SERIES. THE LONGEST
+                    TIME SERIES THAT BE PROCESSED IS grille_maximale POINTS LONG. 
+*                =  FOR THE COMPLEX 'CMPL', LENGTH ITSELF.
+*        IBUF(6) =  1 
+*        IBUF(7) =  DIMENSIONS OF ARRAY KHEM (IN FORMAT CCCRRRK, WHERE CCC IS 
+*                   THE NUMBER OF LONGITUDES AND RRR IS THE NUMBER OF LATITUDES,
+*                   OR  LRLMT)
+*        IBUF(8) =  PACKING DENSITY 
+* 
+*
+*     INPUT PARAMETERS... 
+* 
+*        LENGTH = THE ACTUAL  LENGTH USED IN  THE  TRANSFORM. THIS NUMBER
+*        (lon)    SHOULD  BE EVEN.  IF IT IS'NT  THE PROGRAM WILL DISCARD
+*                 ONE POINT. THE REST (IF ANY) OF THE SERIES IS DICARDED.
+*                 IF THE INPUT VALUE OF LENGTH IS ZERO, THE PROGRAM WILL 
+*                 THE ACTUAL LENGTH OF THE FIRST INPUT SERIES TO DETERMI 
+*                 WHICH OF THE TWO PRECEEDING CASES HOLD. 
+*
+*      READ(5,5000) LENGTH
+*5000  FORMAT(10X,I10)
+*
+*
+*     EXAMPLE OF INPUT CARD... 
+* 
+* FCATS    9732 
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 ILLEGAL (NEGATIVE) LENGTH SPECIFIED
+*      2 ILLEGAL KIND OF DATA FOUND AT START OF FCOEFS
+*      3 UNABLE TO DETERMINE OUTPUT KIND FROM IBUF(7) OF FCOEFS
+*      4 FCOEFS TIME SERIES TOO LONG
+*      5 ILLEGAL DATA TYPE FOUND IN FCOEFS
+*      6 MORE THAN ONE SIZE IN FCOEFS
+*      7 PREMATURE END OF FILER ON INPUT
+*      8 PREMATURE END OF FILER ON FCOEFS
+*      9 UNABLE TO ALLOCATE WORKING MEMORY
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM FCATS 
+*     PROGRAM FCATS (FCOEFS,       TSER,       INPUT,       OUTPUT, 
+*    1         TAPE1=FCOEFS, TAPE2=TSER, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     ------------------------------------------------------------- 
+* 
+*     $Log: fcats.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2010/03/21 23:11:41  dugas
+*     Allocation de memoire ALLOCATE plutot que HPALLOC.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2006/07/04 19:07:05  dugas
+*     Corriger la definition initiale de LEN pour les grilles SUBA.
+*
+*     Revision 4.5  1999/05/07 00:39:20  armnrbd
+*     Version compatible avec les fichiers standards RPN.
+*
+*     Revision 4.4  1998/07/03  02:26:24  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1998/05/21  20:20:47  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.2  1996/01/29  17:21:15  armnrbd
+*     Utiliser la transformation de Stockham plutot que de Temperton.
+*
+*     Revision 4.1  1995/07/03  19:11:04  armnrbd
+*     Corriger le mauvais usage de NSET et NS dans la boucle principale.
+*
+*     Revision 4.0  1994/11/17  14:19:59  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:57  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/08/19  15:20:07  armnrbd
+*     Modifications cosmetiques.
+*     
+*     Revision 1.0  93/02/17  15:19:14  armnrbd
+*     Initial revision
+*      
+*     AUG 26/85 - F. ZWIERS, B.DUGAS. 
+* 
+*----------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+
+***    MAXL   = LONGEST TIME SERIES THAT CAN BE PROCESSED 
+***    MAXW   = IS LENGTH OF INPUT/OUTPUT BUFFER -- MUST BE AT LEAST 
+***             MAXL+2 
+***    MAXMEM = IS LENGTH OF MEMORY AVAILABLE FOR STORING TIME SERIES 
+***    MAXS   = MAXIMUM NUMBER OF TIME SERIES WHICH CAN BE PROCESSED IN 
+***             ONE BLOCK -- NOTE THAT IX MUST BE DIMENSIONED MAXS*8 
+
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale )
+      INTEGER     MAXMEM
+      PARAMETER ( MAXMEM = memoire_maximale )
+      INTEGER     MAXS
+      PARAMETER ( MAXS = 256 )
+      INTEGER     MAXL
+      PARAMETER ( MAXL = MAXW-2 )
+
+      REAL        C
+      CHARACTER   LIGNE*80
+      LOGICAL     OK,RPBLOC
+      CHARACTER*4 TYPE,COUT,FFT,PKTYP
+      INTEGER     ADD,BASE,IB,RRR,CCC,
+     +            NF,LENGTH,LEN,LENB2P1,IO,
+     +            JUMP,NSET,KIND,NOUT,NBLOCK,MEM,
+     +            I,J,N,NS,IER,CMPL,NBW
+
+      POINTER   ( XP,C(2,1) )
+
+      REAL,       ALLOCATABLE, DIMENSION(:) :: X
+      INTEGER,    ALLOCATABLE, DIMENSION(:) :: IX,IBUF
+
+#     include    "machtype.cdk"
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      CHARACTER   GETYP*4
+      EXTERNAL    GETYP,JCLPNT,RPBLOC,GETLIGN,BURNF,XIT,GETBUF2,
+     +            GETFLD2,VFFT2,PUTFLD2,PUTHIC
+
+      DATA        FFT  / 'STOC' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/fcats.ptn,v $'
+
+*---------------------------------------------------------------------
+***   ***************************************************************** 
+***   ***  IF INPUT TYPE OF FCOEFS IS 'SPEC' THE DATA PACKING HAS  **** 
+***   ***  TO BE OFF OR THE FIRST LM IMAGINARY COMPONENTS WILL BE  **** 
+***   ***  LOST. IN THIS CASE THE PROGRAM WILL PRINT A WARNING ... **** 
+***   ***************************************************************** 
+*---------------------------------------------------------------------
+
+      ALLOCATE( IBUF(HEAD+MAXW),IX(HEAD*MAXS) )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    VERIFIER LA TAILLE DES MOTS.
+ 
+      NBW = 32
+
+      IF ((MACHINE.EQ.2 .AND. PKTYP.EQ.'  ') .OR.
+     +     MACHINE.EQ.1)
+     +     NBW = 64
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          LENGTH = 0
+
+          OK = RPBLOC('LON',LIGNE)  
+          IF (OK) READ(LIGNE,'(BN,I10)',ERR=9000,END=9000,IOSTAT=IO) 
+     +                                  LENGTH
+
+      ELSE
+
+***        READ UNIT 5 FOR LENGTH. 
+ 
+          CALL GETLIGN( 5, LIGNE, 80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 9000
+          ELSE
+              READ( LIGNE, 5000,ERR=9000,END=9000,IOSTAT=IO ) LENGTH
+              CALL BURNF
+          END IF
+
+      END IF
+ 
+      IF (LENGTH.LT.0)                                         THEN
+          WRITE(6,6005) LENGTH 
+          CALL                                     XIT('  Fcats ',-1 ) 
+      ENDIF 
+ 
+***    GET LABEL OF THE FIRST RECORD. 
+ 
+      CALL GETBUF2( -1, IBUF,HEAD,OK )
+      IF (.NOT.OK) GOTO 9010
+      CALL PRTLAB( IBUF )
+
+      KIND = IBUF(1)
+      WRITE(TYPE,0004) KIND
+
+***    THE UNPACKING OF SPECTRAL DATA RESETS CERTAIN 
+***    IMAGINARY COEFFICIENTS TO ZERO. KIND = 'SPEC' SHOULD 
+***    NOT BE PACKED. PROGRAM ADVISES USER OF THIS FACT... 
+ 
+      IF (TYPE   .EQ.'SPEC'.AND.
+     +    IBUF(8).NE.  0   .AND.
+     +    IBUF(8).NE.  1   .AND.
+     +    IBUF(8).NE.-NBW  .AND.
+     +    IBUF(8).NE.-NBW*MACHINE  )    WRITE(6,6090) 
+ 
+***    DOES THE INPUT HAVE THE RIGHT TYPE OF LABEL ? 
+ 
+      IF (IBUF(6).NE.  1   .OR. 
+     +   (TYPE   .NE.'CMPL'.AND.
+     +    TYPE   .NE.'FOUR'.AND.
+     +    TYPE   .NE.'SPEC'.AND.
+     +    TYPE   .NE.'SUBA')   )                               THEN
+          WRITE(6,6030) 
+          CALL                                     XIT('  Fcats ',-2 ) 
+      END IF
+ 
+***    WHAT IS THE VALUE OF KIND FOR THE OUTPUT SERIES ? 
+ 
+      CMPL = 1
+      IB   = IBUF(7) 
+
+      IF (TYPE.EQ.'FOUR')                                      THEN
+          CCC =  IB/10000
+          RRR = (IB-(IB/10000)*10000)/10 
+          IF (CCC.GT.1)                                        THEN
+              COUT = 'GRID'
+          ELSE IF (CCC.EQ.1)                                   THEN
+              COUT = 'ZONL' 
+          ELSE 
+              CALL                                 XIT('  Fcats ',-3 ) 
+          ENDIF 
+      ELSE IF (TYPE.EQ.'SUBA')                                 THEN
+          COUT = TYPE
+      ELSE IF (TYPE.EQ.'CMPL')                                 THEN
+          COUT = TYPE
+          CMPL = 2
+      ELSE IF (MOD(IB,2).EQ.0 .AND. IB.GT.1)                   THEN
+          COUT = 'COEF' 
+      ELSE 
+          CALL                                     XIT('  Fcats ',-3 ) 
+      END IF 
+ 
+      READ(COUT,0004) NOUT
+
+***    LENGTH HAS TO BE EVEN. IF EQUAL TO ZERO, RESET TO LEN. 
+***    IF LENGTH IS TOO SMALL FOR IBUF(5), TRUNCATE INPUT FIELD 
+***    TO ACCOMODATE IT. 
+ 
+      LENB2P1 = IBUF(5) 
+      IF (CMPL.EQ.1)                                           THEN
+          LENGTH  = (LENGTH/2)*2
+          IF (TYPE.NE.'SUBA')                                  THEN
+              LEN = LENB2P1*2
+          ELSE
+              LEN = LENB2P1
+          END IF
+          LEN     = LEN-2
+      ELSE
+          LEN     = LENB2P1
+      END IF
+
+      IF (LENGTH.LT.LEN .AND. LENGTH.NE.0)                     THEN
+          LEN     = LENGTH 
+          IF (CMPL.EQ.1)                                       THEN
+              WRITE(6,6045) LEN/2+1 
+          ELSE
+              WRITE(6,6045) LEN
+          END IF
+      ELSE IF (LENGTH.EQ.0)                                    THEN
+          LENGTH  = LEN 
+          IF (CMPL.EQ.1)                                       THEN
+              WRITE(6,6035) LENGTH
+          ELSE
+              WRITE(6,6036) LENGTH
+          END IF
+      ENDIF 
+ 
+***    IS LENGTH TOO BIG ? 
+ 
+      IF (LENGTH.GT.MAXL)                                      THEN
+          WRITE(6,6040) 
+          CALL                                     XIT('  Fcats ',-4 ) 
+      ENDIF 
+ 
+      JUMP    = LENGTH+2 
+      NSET    = 0
+ 
+***    TIME SERIES WILL BE PROCESSED IN GROUPS OF NBLOCK AT A 
+***    TIME TO TAKE ADVANTAGE OF THE VECTORIZATION OF THE FFT. 
+ 
+      NBLOCK = MIN0( (MAXMEM-2*LENB2P1)/(CMPL*JUMP)+1, MAXS/CMPL ) 
+      MEM    = NBLOCK*JUMP*CMPL
+
+      ALLOCATE( X(MEM),STAT=IER )
+      IF (IER /= 0) CALL                           XIT('  Fcats ',-9 )
+
+      XP = LOC( X(1) )
+
+*----------------------------------------------------------------------- 
+***    MAIN EVENT LOOP 
+ 
+ 1000 CONTINUE
+ 
+***        LOAD A BLOCK OF TIME SERIES 
+
+          NS = 0
+          DO 1050 N=1,NBLOCK
+
+              ADD = (N-1)*JUMP + 1 
+
+              IF (CMPL.EQ.1)                                   THEN
+             CALL GETFLD2( 1, X(  ADD), '    ',-1,' ',-1, IBUF,MAXW,OK ) 
+              ELSE
+             CALL GETFLD2( 1, C(1,ADD), 'CMPL',-1,' ',-1, IBUF,MAXW,OK ) 
+              END IF
+
+              IF (.NOT.OK) GOTO 1100 
+ 
+              NS = NS+1
+
+              WRITE(TYPE,0004) IBUF(1)
+
+              IF (IBUF(6).NE.  1   .OR.
+     +           (TYPE   .NE.'CMPL'.AND.
+     +            TYPE   .NE.'FOUR'.AND.
+     +            TYPE   .NE.'SPEC'.AND.
+     +            TYPE   .NE.'SUBA')   )                       THEN
+                  WRITE(6,6050) NSET*NBLOCK + N 
+                  CALL PRTLAB( IBUF )
+                  WRITE(6,6060) 
+                  CALL                             XIT('  Fcats ',-5 ) 
+              END IF
+ 
+              IF (IBUF(5).NE.LENB2P1)                          THEN 
+                  WRITE(6,6050) NSET*NBLOCK + N 
+                  CALL PRTLAB( IBUF )
+                  WRITE(6,6070) 
+                  CALL                             XIT('  Fcats ',-6 ) 
+              END IF 
+ 
+              BASE=(N-1)*HEAD 
+              DO  J=1,HEAD
+                  IX(BASE+J) = IBUF(J)
+              END DO
+
+              IF (TYPE.EQ.'SUBA') X(ADD+1) = 0.0
+
+              IF (TYPE.EQ.'FOUR' .AND.
+     +            PKTYP.EQ.'SQ') CALL PUTHIC( 'G','GRTYP',IX(BASE+1) )
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  IF (TYPE.EQ.'FOUR')                          THEN
+                      CALL PUTHIC( 'G','GRTYP',IX(BASE+1) )
+                  ELSE IF (TYPE.EQ.'COEF')                     THEN
+                      CALL PUTHIC( '*','GRTYP',IX(BASE+1) )
+                  END IF
+              END IF
+
+ 1050     CONTINUE 
+ 
+***        PROCESS THIS BLOCK OF TIME SERIES -- THE 
+***        CURRENT BLOCK CONTAINS NS TIME SERIES. 
+ 
+ 1100     CONTINUE 
+ 
+          IF (NS.EQ.0) GOTO 2000 
+ 
+***        PAD THE END OF THE COEFFICIENTS WITH ZEROS. 
+ 
+          DO  1150 N=1,NS 
+              ADD = (N-1)*JUMP 
+              IF (CMPL.EQ.1)                                   THEN
+                  DO  I=LEN+3,JUMP 
+                      X(ADD+I) = 0.0 
+                  END DO
+              ELSE
+                  DO  I=LEN+3,JUMP 
+                      C(1,ADD+I) = 0.0 
+                      C(2,ADD+I) = 0.0 
+                  END DO
+              END IF
+ 1150     CONTINUE 
+ 
+***        FFT THE BLOCK 
+ 
+          IF (CMPL.EQ.1)                                       THEN
+              CALL VFFT2( X, 1,JUMP,LENGTH,NS,+1, FFT,IER ) 
+          ELSE
+              CALL CSFFT( C, JUMP,LENGTH,NS, +1 )
+          END IF
+ 
+***        OUTPUT THE BLOCK 
+
+          IBUF(1) = NOUT 
+          DO 1200 N=1,NS 
+              BASE = (N-1)*HEAD 
+              DO  J=2,HEAD
+                  IBUF(J) = IX(BASE+J) 
+              END DO
+
+              IBUF(5) = LENGTH 
+              ADD     = (N-1)*JUMP+1 
+
+              IF (CMPL.EQ.1)                                   THEN
+                  CALL PUTFLD2( 2, X(  ADD), IBUF,MAXW ) 
+              ELSE
+                  CALL PUTFLD2( 2, C(1,ADD), IBUF,MAXW ) 
+              END IF
+
+ 1200     CONTINUE 
+
+      IF (NS.EQ.NBLOCK)                                        THEN
+          NSET = NSET+1 
+          GOTO 1000 
+      END IF
+*----------------------------------------------------------------------- 
+ 
+ 2000 CONTINUE 
+ 
+***    ALL DONE. 
+ 
+      IF (NS.EQ.0)                                             THEN
+          BASE        = (NBLOCK-1)*HEAD
+      ELSE
+          BASE        = (NS-1)*HEAD
+      END IF
+
+      IX(BASE+1)      = NOUT
+      IX(BASE+5)      = LENGTH 
+
+      CALL PRTLAB( IX(BASE+1) )
+      WRITE(6,6080) NSET*NBLOCK+NS 
+
+      CALL                                         XIT('  Fcats ', 0 ) 
+ 
+***    PREMATURE EOF ON UNIT 1. 
+ 
+ 9000 WRITE(6,6000) 
+      CALL                                         XIT('  Fcats ',-7 ) 
+ 
+***    PREMATURE EOF ON UNIT 1. 
+ 
+ 9010 WRITE(6,6010) 
+      CALL                                         XIT('  Fcats ',-8 )
+*----------------------------------------------------------------------- 
+
+ 0004 FORMAT(A4)
+
+ 5000 FORMAT(10X,I5) 
+
+ 6000 FORMAT('0Input file is empty.') 
+ 6005 FORMAT('0Length is ',I6) 
+ 6010 FORMAT('0Input file of fourier coefficients is empty.') 
+ 6030 FORMAT('0First record in input file of fourier coefficients', 
+     +      ' does not have a fourier like label.') 
+ 6035 FORMAT('0Length set to 2*(ibuf(5)-1) =',I5) 
+ 6036 FORMAT('0Length set to ibuf(5) =',I5) 
+ 6040 FORMAT('0A record in the input file is too long.') 
+ 6045 FORMAT('0Only ',I5,' coefficients will be used in expansion.') 
+ 6050 FORMAT('0Label for record ',I5,':') 
+ 6060 FORMAT(11X,'is not a fourier coefficients label.') 
+ 6070 FORMAT('0Change of length detected in the input series.') 
+ 6080 FORMAT('0Processed ',I10,' records.') 
+ 6090 FORMAT('0Input spectral field is packed and will loose data') 
+
+      END 
+#     endif

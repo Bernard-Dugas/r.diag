@@ -1,0 +1,907 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      subarea  XIN XOUT INPUT OUTPUT (TAPE45=pltinfo)
+*              [ -dlat1 VAL1  -dlon1  VAL2  -dlat2 VAL3  -dlon2 VAL4
+*                -dgrw  VAL5  -lx     VAL6  -nhem  VAL7  -kind  VAL8
+*               -nintyp VAL9  -noutyp VAL10 ]
+*
+*
+*     DESCRIPTION...
+*      subarea - CONVERTS A GLOBAL OR HEMISPHERIC CARTESIAN GRID
+*                TO A SMALLER AREA
+* 
+*
+*     AUTHORS - M.Sutcliffe, R.Daley AND M.Lazare  AUG 10/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/subarea.ptn,v 4.12 2014/09/25 20:20:54 dugas Exp $
+*
+* 
+*     PURPOSE - CONVERTS A FILE OF GAUSSIAN OR LAT-LON GRIDS TO A FILE OF POLAR
+*               STEREOGRAPHIC, GAUSSIAN OR LAT-LON GRIDS REPRESENTATIVE OF A 
+*               SUB-AREA OF THE GLOBE, BY LINEAR OR CUBIC INTERPOLATION. 
+*
+*     NOTE (which applies only to CCCma files...)
+*             - IN ADDITION TO XOUT AND THE OUTPUT FILE, SUBAREA ALSO 
+*               WRITES CO-ORDINATE INFORMATION TO "pltinfo" FILE 
+*               (UNIT 45) TO BE SUBSEQUENTLY USED BY GGPLOT. THIS
+*               NAME CANNOT BE REASSIGNED AND WILL RESIDE ON CURRENT
+*               DIRECTORY.
+*
+*          ***  THE USER SHOULD CALL GGPLOT IMMEDIATELY AFTER SUBAREA 
+*               AND BEFORE CALLING SUBAREA AGAIN, (EXCEPT WHEN PLOTTIN 
+*               MULTIPLE FIELDS WITH A SINGLE CALL TO GGPLOT). 
+*
+* 
+*     INPUT FILE...
+*      XIN  = FILE CONTAINING GAUSSIAN-GRID OR LAT-LONG FIELDS. 
+* 
+*
+*     OUTPUT FILE...
+*      XOUT = FILE CONTAINING POLAR-STEREOGRAPHIC OR CARTESIAN FIELDS 
+*             REPRESENTING A SUB-AREA OF THE GLOBE. 
+*
+*
+*     PARAMETERS... 
+* 
+*      DLAT1,DLON1 = CARTESIAN COORDINATE IN DEGREES OF LOWER LEFT CORNER
+*                    OF PLOT. LATITUDES RANGE FROM -90 TO +90, FOR THE 
+*                    SOUTH AND NORTH POLES RESPECTIVELY. LONGITUDES RANGING
+*                    FROM -180 TO +180, WITH GREENWHICH MERIDIAN AT 0. 
+*      DLAT2,DLON2 = CARTESIAN COORDINATE IN DEGREES OF UPPER RIGHT CORNER
+*                    OF PLOT. COORDINATES NOT USED FOR DEFAULT P-S OUTPUT
+*      DGRW        = ANGLE OF GREENWHICH MERIDIAN OFF HORIZONTAL, 
+*                    NON-DEFAULT P-S OUTPUT ONLY. 
+*      LX          > 0, THE RESOLUTION OF THE INTERPOLATED P-S OUTPUT FILE
+*                       LX GRID POINTS ARE USED ALONG THE X-AXIS, WITH THE
+*                       SAME RESOLUTION USED ALONG Y-AXIS. 
+*                       VALUES OF 30 TO 110 ARE SUGGESTED. 
+*                  <=0, CHOOSES ONE OF THE DEFAULT P-S PROJECTIONS BELOW 
+*                  = 0, STANDARD POLAR STEREOGRAPHIC PROJECTION OVER N OR
+*                       S POLE BASED ON CHOICE FOR NHEM. 
+*                  =-1, DEFAULT NORTH AMERICAN      P-S SUB-AREA. 
+*                  =-2, DEFAULT ASIAN               P-S SUB-AREA. 
+*                  =-3, DEFAULT EUROPEAN            P-S SUB-AREA. 
+*                  =-4, DEFAULT AUSTRALIAN          P-S SUB-AREA. 
+*                  =-5, DEFAULT ARCTIC OR ANTARCTIC P-S SUB-AREA, BASED 
+*                       CHOICE FOR NHEM. 
+*                  USED ONLY FOR P-S GRID OUTPUT. 
+*      NHEM        =0,1 PLOT NORTH HEMISPHERE. 
+*                  = 2  PLOT SOUTH HEMISPHERE. 
+*                  USED FOR NON-DEFAULT P-S OUTPUT, AND WHEN LX= 0 OR -5 
+*                  IF XIN CONTAINS HEMISPHERIC DATA, THE DEFAULT NHEM
+*                  VALUE IS THEN THAT OF THE FIRST GRID IN XIN
+*      KIND        = 1,       USE LINEAR INTERPOLATION, 
+*                    2,       USE NEAREST NEIGHBORS (RPN/CMC FILES ONLY)
+*                  OTHERWISE, USE CUBIC INTERPOLATION (DEFAULT).
+*                  THIS PARAMETRE IS USED ONLY FOR P-S OUTPUT. 
+*      NINTYP      = 0,       INPUT FILE IS GAUSSIAN GRID, 
+*                  = 1,       INPUT FILE IS "B" LAT-LON  GRID,
+*                  = 2,       INPUT FILE IS "A" LAT-LON  GRID.
+*                  THIS PARAMETRE IS IGNORED FOR RPN/CMC FILES.
+*      NOUTYP      = 0, OUTPUT FILE IS ON A SUBSET OF THE INPUT CARTESIAN
+*                       GRID. CHOSEN COORDINATES ARE ADJUSTED TO THE 
+*                       NEAREST COORDINATES ON THE INPUT GRID. THE
+*                       OUTPUT THEN IS KNOWN AS A L-TYPE GRID.
+*                  OTHERWISE, OUTPUT FILE IS INTERPOLATED TO A P-S 
+*                       PROJECTION WITH RESOLUTION LX. 
+* 
+*     READ(5,5010) DLAT1,DLON1,DLAT2,DLON2,DGRW,LX,NHEM,KIND, 
+*    1             NINTYP,NOUTYP 
+*5010 FORMAT(10X,5E10.0,3I5,1X,2I2) 
+*
+*
+*     EXAMPLE OF INPUT CARD... 
+* 
+* SUBAREA.      -80.        5.       80.      179.      -10.    0    1 
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR READING FIRST ARRAY IN XIN
+*       2 MISMATCH BETWEEN NHEM AND IBUF(7)
+*       3 ENCOUNTERED ILLEGAL NEGATIVE LX VALUE
+*       4 BAD POLAR STEREOGRAPHIC GRID SPECIFICATION
+*       5 BAD LATITUDE-LONGITUDE GRID SPECIFICATION
+*       6 ERROR READING INPUT PARAMETERS
+*       7 PROBLEMS READING FILE PLTINFO
+*       8 MORE THAN ONE SIZE IN XIN
+*       9 UNSUPPORTED INPUT ARRAY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM subarea 
+*     PROGRAM SUBAREA (XIN,       XOUT,       INPUT,       OUTPUT, 
+*    1           TAPE1=XIN, TAPE2=XOUT, TAPE5=INPUT, TAPE6=OUTPUT, 
+*    2          TAPE45=PLTINFO                                   ) 
+*     ------------------------------------------------------------ 
+
+*     $Log: subarea.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2004/11/26 16:16:39  dugas
+*     Utiliser explicitement les interpolateurs EZSCINT plutot
+*      que leur mode de compatibilite arriere avec FSCINT lors
+*      des interpolations vers des grilles PS (fichiers CMC/RPN).
+*
+*     Revision 4.7  2004/11/22 21:00:18  dugas
+*     Corriger le support des grilles de type A et B
+*      et ajouter le support des grilles de type L.
+*
+*     Revision 4.6  2003/12/24 16:35:39  dugas
+*     Ajouter le support explicite des grilles de type A et B en entree
+*
+*     Revision 4.5  2001/11/21 16:03:07  armnrbd
+*     Remplacer GETPARC/PUTPARC/PUTXGI par GETHIC/PUTHIC/PUTHIGH/CXGAIG.
+*
+*     Revision 4.4  2000/03/24 19:05:50  armnrbd
+*     Enlever le "!" dans le format 6035.
+*
+*     Revision 4.3  1998/07/03 02:26:42  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1997/09/26  17:39:24  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1995/11/02  01:17:21  armnrbd
+*     Remplacer GGIPS2 par GGIPS3.
+*     Allouer la memoire de travail avec HPALLOC plutot que MEMOIR.
+*
+*     Revision 4.0  1994/11/17  14:22:05  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/08/13  21:35:49  armnrbd
+*     Ajouter le support de grilles d'entrees hemispheriques.
+*     
+*     Revision 3.2  94/08/13  21:09:14  armnrbd
+*     Ajouter le support de grilles d'entrees hemispheriques.
+*     
+*     Revision 3.1  93/11/19  12:50:50  armnrbd
+*     Modifications cosmetiques.
+*     
+*     Revision 3.0  93/10/13  13:57:12  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  92/12/02  16:27:37  armnrbd
+*     Premiere version fonctionnelle du programme.
+*     
+*     Revision 1.0  92/12/01  20:57:44  armnrbd
+*     Initial revision
+*     
+***    HISTORIQUES DES MODIFICATIONS:
+
+*     AUG 13/90 - F. MAJAESS (ADD "SLON" ARRAY, MODIFY "LLCAL" CALL) 
+*     JUL 04/90 - F. MAJAESS (IMPLEMENT ISSUING A WARNING WHEN SUB-AREA 
+*                                 COORDINATES IN "PLTINFO" GET CHANGED) 
+*     FEB 28/90 - F. MAJAESS  (CORRECT D60 VALUE (=3.81E5)) 
+*     OCT 30/89 - F. MAJAESS  (CORRECT LAT/LON VALUES FOR P.S. PLOT) 
+*     AUG 10/87 - M.SUTCLIFFE, M.LAZARE, R.DALEY 
+
+*----------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+
+      INTEGER,    PARAMETER :: MAXI = longitude_maximale
+      INTEGER,    PARAMETER :: MAXJ = latitude_maximale
+
+      LOGICAL     OK,EX
+      REAL*8      HOLD,DX,DY
+      CHARACTER*4 TYPE,PKTYP
+      CHARACTER   LIGNE*80,VALEUR*10,GRTYP,ITYPE
+      REAL*8      RAD(MAXJ),ANG(MAXJ),WOSSL(MAXJ),
+     +            SL(MAXJ),CL(MAXJ),WL(MAXJ),RAD2DEG
+      REAL        SLAT(MAXJ),SLON(MAXI),PI,PJ,X,y,
+     +            DLAT1,DLON1,DLAT2,DLON2,DGRW,RY,ZERO,
+     +            DLAT1P,DLAT2P,DLON1P,DLON2P,DGRWP,D60,RX
+      INTEGER     JPAK,MAXW,NWDS,LEN,NFF,LX,IP,JP,NHEM,
+     +            KIND, NINTYP,NOUTYP,NLAT,ILATH,I,J,IO,NR,
+     +            ILG1,ILAT,IHEM,INTERP,LY,I1,I2,J1,J2,LENOUT,
+     +            NBADLL,NBADPS,NHEMP,NOUTYPP,NDFLT,NWDOUT,IER,
+     +            IG1,IG2,IG3,IG4,IIG1,IIG2,IIG3,IIG4,NLG,
+     +            JBUF(HEAD),KBUF(HEAD),IJ,IJIN,IJOUT,
+     +            IGID,OGID
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: GG,GPS
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER(4),EXTERNAL :: GETYP,GETHIC
+      INTEGER,    EXTERNAL :: GETSIZ,GETHIGH,EZQKDEF,EZDEFSET,EZSINT
+
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,
+     +            GAUSSG,TRIGL2,GETFLD2,PUTFLD2,XIT,
+     +            PSCAL,LLCAL,GGIPS3,GGILL,SETLAB,LBLCHK,
+     +            PUTHIC,PUTHIGH,CXGAIG,
+     +            CIGAXG,EZSETOPT
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/subarea.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF=4 
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    CARTESIAN COORDINATES OF LOWER LEFT AND UPPER RIGHT POINTS, 
+***    DEFINED BY (DLAT1,DLON1) AND (DLAT2,DLON2), RESPECTIVELY, YIELD 
+***    POLAR STEREOGRAPHIC GRID SIZE (LX,LY) WITH POLE AT (PI,PJ). 
+***    GRID SIZE IS D60(M) AND ORIENTATION IS DGRW (DEG). 
+***    OR, IF LAT-LON OUTPUT IS CHOSEN, THESE CO-ORDINATES YIELD 
+***    LAT-LON GRID INDICES (I1,J1), (I2,J2). 
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          DLAT1  = 0.0
+          DLON1  = 0.0
+          DLAT2  = 0.0
+          DLON1  = 0.0
+          DGRW   = 0.0
+          LX     = 0
+          NHEM   = 0
+          KIND   = 0
+          NINTYP = 0
+          NOUTYP = 0
+
+          OK = RPBLOC('DLAT1',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=900,IOSTAT=IO) DLAT1
+
+          OK = RPBLOC('DLON1',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=900,IOSTAT=IO) DLON1
+
+          OK = RPBLOC('DLAT2',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=900,IOSTAT=IO) DLAT2
+
+          OK = RPBLOC('DLON2',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=900,IOSTAT=IO) DLON2
+
+          OK = RPBLOC('DGRW',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=900,IOSTAT=IO) DGRW
+
+          OK = RPBLOC('LX',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',  ERR=900,IOSTAT=IO) LX
+
+          OK = RPBLOC('NHEM',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',  ERR=900,IOSTAT=IO) NHEM
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',  ERR=900,IOSTAT=IO) KIND
+
+          OK = RPBLOC('NINTYP',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',  ERR=900,IOSTAT=IO) NINTYP
+
+          OK = RPBLOC('NOUTYP',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',  ERR=900,IOSTAT=IO) NOUTYP
+
+      ELSE
+
+***        READ PARAMETRES FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              GOTO 902
+
+          ELSE
+
+              READ(LIGNE, 5010,ERR=900,END=902,IOSTAT=IO)
+     +                    DLAT1,DLON1,DLAT2,DLON2,DGRW,LX,NHEM,KIND, 
+     +                    NINTYP,NOUTYP 
+              CALL BURNF 
+
+          END IF
+
+      END IF
+
+                    INTERP = 3 
+      IF(KIND.EQ.2) INTERP = 2 
+      IF(KIND.EQ.1) INTERP = 1 
+
+***    SET INTERPOLATION TYPE FOR RPN FILES.
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          IF      (INTERP.EQ.1)                                THEN
+              CALL    EZSETOPT( 'DEGRE_INTERP','LINEAR'  )
+          ELSE IF (INTERP.EQ.2)                                THEN
+              CALL    EZSETOPT( 'DEGRE_INTERP','NEAREST' )
+          ELSE IF (INTERP.EQ.3)                                THEN
+              CALL    EZSETOPT( 'DEGRE_INTERP','CUBIC'   )
+          END IF
+      END IF
+
+      WRITE(6,6005) INTERP 
+
+***    GET GRID SIZE FROM FIRST FIELD IN THE FILE. 
+
+      MAXW = GETSIZ( 1, KBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                          XIT(' Subarea',-1 ) 
+
+      WRITE(TYPE,4) KBUF(1)
+
+      CALL PRTLAB( KBUF )
+      ILG1 = KBUF(5) 
+      ILAT = KBUF(6) 
+      IHEM = KBUF(7)
+
+      IF (NHEM.EQ.0 .AND. IHEM.EQ.0)                           THEN
+          NHEM = 1
+      ELSE IF (NHEM.EQ.0)                                      THEN
+          NHEM = IHEM
+      ELSE IF (NHEM.NE.IHEM .AND. IHEM.NE.0)                   THEN
+          CALL                                     XIT(' Subarea',-2 )
+      END IF
+
+      WRITE(6,6010) LX,DLAT1,DLON1,DLAT2,DLON2,
+     +              DGRW,NHEM,NINTYP,NOUTYP 
+
+***    CHECK THE INPUT GRID TYPE IN THE CASE OF RPN TYPE FILES.
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+          ITYPE = GETHIC('GRTYP',KBUF )
+          IIG1  = GETHIGH( 'IG1',KBUF )
+          IIG2  = GETHIGH( 'IG2',KBUF )
+          IIG3  = GETHIGH( 'IG3',KBUF )
+          IIG4  = GETHIGH( 'IG4',KBUF )
+
+          IGID = EZQKDEF( ILG1,ILAT,
+     +                    ITYPE,IIG1,IIG2,IIG3,IIG4, 1 )
+
+          IF      (ITYPE.EQ.'G')                               THEN
+                                 NINTYP = 0
+          ELSE IF (ITYPE.EQ.'B')                               THEN
+                                 NINTYP = 1
+          ELSE IF (ITYPE.EQ.'A')                               THEN
+                                 NINTYP = 2
+          ELSE IF (ITYPE.EQ.'L')                               THEN
+                                 NINTYP = 3
+          ELSE
+                                 NINTYP = 999
+          END IF
+
+          IF (IIG2 .NE. 0 .AND.
+     +       (ITYPE.EQ.'A'.OR.
+     +        ITYPE.EQ.'B'.OR.
+     +        ITYPE.EQ.'G' ) ) CALL                XIT(' Subarea',-9 ) 
+
+      ELSE
+
+          IF (NINTYP.LT.0 .OR.
+     +        NINTYP.GT.2 ) CALL                   XIT(' Subarea',-9 ) 
+
+      END IF
+
+                       NLG = ILG1 - 1
+      IF (NINTYP.NE.1) NLG = ILG1 - MOD( ILG1,2 )
+
+***    COMPUTE LATITUDES OF INPUT FILE IN DEGREES FROM THE SOUTH POLE.
+
+      IF (NINTYP.EQ.0)                                         THEN
+
+***        COMPUTE GAUSSIAN GRID COORDINATES.
+
+          ILATH = ILAT/2 
+          IF (IHEM.NE.0) ILATH = ILAT
+          CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL ) 
+          CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL,IHEM ) 
+
+          RAD2DEG = 45./ATAN(1.0D0)
+
+          DO I=1,ILAT 
+              ANG(I)  = RAD(I)*RAD2DEG
+              SLAT(I) = ANG(I)+90. 
+          END DO
+
+          DX   = 360D0/NLG
+          DX   = 1D-5*NINT(1D5*DX) 
+
+          SLON(1) = 0.
+
+      ELSE
+
+          SLON(1) = 0.
+          SLAT(1) = 0.
+          DX      = 1.
+          DY      = 1.
+
+          IF (NINTYP.EQ.1 .OR. NINTYP.EQ.2)                    THEN 
+
+***            COMPUTE A OU B GRID COORDINATES.
+
+              RX     = 360D0/NLG
+
+                               NLAT = ILAT-1 
+              IF (NINTYP.EQ.2) NLAT = ILAT
+
+              IF (IHEM.EQ.0)                                       THEN
+                  DY = 180D0/NLAT
+              ELSE
+                  DY =  90D0/NLAT
+              END IF
+
+              DX     = 1D-5*NINT(1D5*DX) 
+              DY     = 1D-5*NINT(1D5*DY) 
+
+              IF (IHEM.NE.1)                                       THEN
+                SLAT(1) =  0.
+              ELSE
+                SLAT(1) = 90.
+              END IF
+
+              IF (NINTYP.EQ.2) SLAT(1) = SLAT(1) + ( RY / 2. )
+
+              SLON(1)   = 0.
+
+          ELSE IF (NINTYP.EQ.3)                                    THEN
+
+***            COMPUTE L GRID COORDINATES.
+
+              CALL CIGAXG( ITYPE, SLAT(1),SLON(1),RY,RX,
+     +                            IIG1,IIG2,IIG3,IIG4 )
+
+              SLAT(1) = SLAT(1)+90.
+
+              DY      = 1D-5*NINT( 1D5*RY ) 
+              DX      = 1D-5*NINT( 1E5*RX ) 
+
+              SLAT(1) = 1D-5*NINT( 1D5*SLAT(1) )
+              SLON(1) = 1D-5*NINT( 1D5*SLON(1) )
+
+          END IF
+
+          HOLD = SLAT(1)
+          DO  J=1,ILAT
+              SLAT(J) = HOLD
+              HOLD    = HOLD + DY
+              SLAT(J) = 1D-5*NINT( 1D5*SLAT(J) )           
+          END DO
+
+      END IF 
+
+***    COMPUTE LONGITUDES OF INPUT FILE IN DEGREES.
+
+      HOLD = SLON(1)
+      DO  I=1,ILG1
+          SLON(I) = HOLD
+          HOLD    = HOLD + DX
+          SLON(I) = 1D-5*NINT( 1D5*SLON(I) )           
+      END DO
+
+      DO  I=1,ILG1
+          IF (SLON(I).LT.  0.) SLON(I) = SLON(I)+360.
+          IF (SLON(I).GT.360.) SLON(I) = SLON(I)-360.
+      END DO
+
+***    SET INPUT/OUTPUT COORDINATES FOR POLAR STEREOGRAPHIC OR LAT-LON 
+
+      IF (NOUTYP.NE.0)                                         THEN 
+
+***        POLAR-STEREOGRAPHIC OUTPUT CASE 
+
+          IF (LX.EQ.-1)                                        THEN 
+              LX    = 100 
+              DLAT1 =  15. 
+              DLON1 =-115. 
+              DLAT2 =  70. 
+              DLON2 =   1. 
+              DGRW  =- 10. 
+              NHEM  =   1 
+
+              WRITE(6,6012) 
+
+          ELSE IF (LX.EQ.-2)                                   THEN 
+              LX    = 100 
+              DLAT1 =- 10.
+              DLON1 =  63. 
+              DLAT2 =  45. 
+              DLON2 = 179. 
+              DGRW  =-180. 
+              NHEM  =   1 
+
+              WRITE(6,6015) 
+ 
+          ELSE IF (LX.EQ.-3)                                   THEN 
+              LX    = 100 
+              DLAT1 =  26. 
+              DLON1 =-  7. 
+              DLAT2 =  70. 
+              DLON2 =  90. 
+              DGRW  =-115. 
+              NHEM  =   1 
+
+              WRITE(6,6016) 
+ 
+          ELSE IF (LX.EQ.-4)                                   THEN 
+              LX    = 100 
+              DLAT1 =- 40. 
+              DLON1 =  84. 
+              DLAT2 =   2. 
+              DLON2 = 156. 
+              DGRW  =-135. 
+              NHEM  =   2 
+
+              WRITE(6,6017) 
+
+          ELSE IF (LX.EQ.-5)                                   THEN 
+
+              LX=100 
+
+              IF (NHEM.EQ.1)                                   THEN 
+                  DLAT1 =  45. 
+                  DLON1 =-122. 
+                  DLAT2 =  45. 
+                  DLON2 =  57.4 
+
+                  WRITE(6,6018) 
+
+              ELSE 
+                  DLAT1 = -45. 
+                  DLON1 = 122. 
+                  DLAT2 =- 45. 
+                  DLON2 =- 57.4 
+
+
+                  WRITE(6,6019) 
+
+              END IF 
+
+              DGRW = 350. 
+
+          ELSE IF (LX.LT.0)                                    THEN 
+
+              WRITE(6,6011) 
+              CALL                                 XIT(' Subarea',-3 ) 
+
+          END IF 
+
+          IF (LX.GT.0)                                         THEN 
+
+              NDFLT=1
+              WRITE(6,6023) DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM 
+
+              CALL PSCAL( LY,IP,JP,D60,LX,DGRW,DLAT1,DLON1,
+     +                     DLAT2,DLON2, NHEM,NDFLT,NBADPS ) 
+
+              IF (NBADPS.NE.0)                                 THEN 
+                  WRITE(6,6026) NBADPS 
+                  CALL                             XIT(' Subarea',-4 ) 
+              END IF 
+
+              PI = IP
+              PJ = JP
+
+          ELSE 
+
+              IF (NHEM.EQ.1)                                   THEN 
+                  DLAT1 = -  9.4 
+                  DLON1 = -122.8 
+                  DLAT2 = -  9.4 
+                  DLON2 =   57.2 
+              ELSE 
+                  DLAT1 =    9.4 
+                  DLON1 =  122.8 
+                  DLAT2 =    9.4 
+                  DLON2 = - 57.2 
+              END IF 
+
+              NDFLT =    0 
+              LX    =   51 
+              LY    =   55 
+              PI    =   26. 
+              PJ    =   28. 
+              D60   =    3.81E5 
+              DGRW  =  350. 
+
+              WRITE(6,6014) 
+              WRITE(6,6023) DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM 
+
+          END IF 
+
+          WRITE(6,6020) LX,LY,PI,PJ,D60 
+          WRITE(6,6022) DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM 
+
+          IF (DGRW.LT.0.0) DGRW = DGRW+360.
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+
+              IF (NHEM.EQ.1) GRTYP = 'N'
+              IF (NHEM.EQ.2) GRTYP = 'S'
+
+              DO  J=1,LY
+                  Y  =  J-PJ
+                  IJ = (J-1)*LX
+                  DO  I=1,LX
+                      X  = I-PI
+                      IJ = IJ+1
+                      CALL LLFXY( SLAT(IJ),SLON(IJ),
+     +                            X,Y,D60,DGRW,NHEM )
+                      IF (SLON(IJ).LT.0.)
+     +                    SLON(IJ) = 360.+SLON(IJ)
+                          SLON(IJ) = AMOD( SLON(IJ),360. )
+                  END DO
+
+              END DO
+
+              CALL cxgaig( GRTYP, IG1, IG2, IG3, IG4,
+     +                            PI , PJ , D60, DGRW )
+
+              OGID = EZQKDEF( LX,LY,GRTYP,IG1,IG2,IG3,IG4, 0 )
+              IER  = EZDEFSET( OGID,IGID )
+
+          END IF
+
+      ELSE 
+
+***        CARTESIAN GRID OUTPUT CASE.
+
+          WRITE(6,6023) DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM 
+          CALL LLCAL(   DLAT1,DLON1,DLAT2,DLON2,DGRW,I1,J1,
+     +                  I2,J2,SLAT,SLON,ILG1,ILAT,NBADLL ) 
+
+          IF (NBADLL.NE.0)                                     THEN 
+              WRITE(6,6026) NBADLL 
+              CALL                                 XIT(' Subarea',-5 ) 
+          END IF 
+
+          WRITE(6,6021) J1,I1,J2,I2 
+          WRITE(6,6022) DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM 
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              GRTYP = 'L'
+              CALL cxgaig( GRTYP,   IG1,     IG2,IG3,IG4,
+     +                     SLAT(J1)-90.,SLON(I1), RY, RX )
+          END IF
+
+      END IF 
+
+***    ALLOCATE MEMORY FOR GRIDS.
+
+      DO  J=1,HEAD
+          JBUF(J) = KBUF(J)
+      END DO
+
+      IF (NOUTYP.NE.0)                                         THEN
+
+          JBUF(10) = 0
+          CALL SETLAB( JBUF,' ',-1,' ',-1,LX,LY,NHEM,-16 )
+          CALL LBLCHK( LENOUT,NWDOUT,JPAK, JBUF )
+
+          LEN  = MAX(  LEN, LENOUT   )
+          MAXW = MAX( MAXW, LEN-HEAD )
+          NWDS = MAX( NWDS, NWDOUT   )
+
+      END IF
+
+      ALLOCATE( IBUF(LEN),GG(2*NWDS),GPS(NWDS) )
+
+      IF (PKTYP.NE.'SQ')                                       THEN
+
+***        CHECK AND WRITE CO-ORDINATE INFORMATION OUT FOR GGPLOT 
+
+          INQUIRE( FILE='pltinfo',ERR=999,IOSTAT=IO, EXIST=EX )
+
+          IF (EX)                                              THEN 
+
+              OPEN( 45, FILE='pltinfo',STATUS='OLD',ERR=999,
+     +                                 ACCESS='SEQUENTIAL',
+     +                                 FORM='UNFORMATTED')
+
+              READ( 45, END=120) DLAT1P,DLON1P,DLAT2P,DLON2P,DGRWP, 
+     +                           NHEMP,NOUTYPP 
+
+              OK = (DLAT1P.EQ.DLAT1) .AND. (DLON1P  .EQ.DLON1  ) .AND. 
+     1             (DLAT2P.EQ.DLAT2) .AND. (DLON2P  .EQ.DLON2  ) .AND. 
+     2             (DGRWP .EQ.DGRW ) .AND. (NHEMP   .EQ.NHEM   ) .AND. 
+     3                                     (NOUTYPP .EQ.NOUTYP) 
+
+              PRINT *,' P=',DLAT1P,DLON1P,DLAT2P,DLON2P,
+     +                      DGRWP,NHEMP,NOUTYPP            
+              PRINT *,' O=',DLAT1,DLON1,DLAT2,DLON2,
+     +                      DGRW,NHEM,NOUTYP 
+
+              IF (OK)                                          THEN 
+                  GOTO 140 
+              ELSE 
+                  WRITE(6,6040) DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM,NOUTYP
+                  GOTO 130 
+              END IF 
+
+  120         WRITE(6,6035) 
+  130         REWIND 45
+
+          ELSE
+
+              OPEN( 45, FILE='pltinfo',STATUS='NEW',ERR=999,
+     +                                 ACCESS='SEQUENTIAL',
+     +                                 FORM='UNFORMATTED')
+
+          END IF 
+
+          WRITE( 45 ) DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM,NOUTYP 
+          CLOSE( 45 )
+
+      END IF
+
+***    PRODUCE THE STEREOGRAPHIC OR LAT-LON SUB-PLOT(S) FOR GGPLOT 
+
+  140 NR=0 
+  150 CALL GETFLD2( 1, GG, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6030) NR 
+              CALL                                 XIT(' Subarea', 0 ) 
+          END IF 
+
+***        CHECK INPUT GRID SIZES FOR CONSISTENCY.
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+
+          OK = ( OK .AND. (ITYPE.EQ.GETHIC('GRTYP',IBUF )) )
+
+          IF (.NOT.OK) CALL                        XIT(' Subarea',-8 ) 
+
+***        CONVERT FIELD TO LAT-LON OR P.S. GRID 
+
+          IF (NOUTYP.EQ.0)                                     THEN 
+
+***            EXTRACT LL SUB-GRID.
+
+              LX   = ILG1
+
+***            GGILL ACCOUNTS FOR REPEATING THE GREENWITCH MERIDIAN
+***            BY ALWAYS REMOVING THE LAST LONGITUDE. THE FOLLOWING
+***            ADDS ONE REPEAT LONGITUDE IF NEED BE.
+
+              IF (NINTYP.EQ.0 .OR. NINTYP.EQ.2)                THEN
+                  LX = LX + MOD( LX+1,2 )
+              ELSE IF (NINTYP.EQ.3)                            THEN
+                  HOLD = ABS( SLON(1)-SLON(ILG1) )
+                  IF (HOLD.GT.     DX/10 .AND.
+     +                HOLD.LT. 360-DX/10 )     
+     +                LX = LX + 1
+              ELSE IF (NINTYP.NE.1)                            THEN
+                  CALL                             XIT(' Subarea',-9 )
+              END IF
+
+              IF (LX.GT.ILG1)                                  THEN
+                  DO  J=ILAT,1,-1
+                      IJIN  = (J-1)*ILG1
+                      IJOUT = (J-1)*LX
+                      GG(IJOUT+LX) = GG(IJIN+1)
+                      DO  I=ILG1,1,-1
+                          GG(IJOUT+I) = GG(IJIN+I)
+                      END DO
+                  END DO
+              END IF
+
+              NHEM = 0
+
+              CALL GGILL( GPS,GG, I1,I2,J1,J2, LX,LY ) 
+
+          ELSE IF (PKTYP.NE.'SQ')                              THEN
+
+***            CCCma FILES USE OLD-STYLE INTERPOLATIONS.
+
+              CALL GGIPS3( GPS, LX,LY, PI,PJ,D60,DGRW,NHEM, 
+     +                     GG,  ILG1,ILAT,SLAT, INTERP ) 
+
+          ELSE
+
+***            RPN/CMC FILES USE EZ INTERPOLATION PACKAGE.
+
+              IER = EZSINT( GPS,GG )
+
+          END IF
+
+***        SAVE THE GRIDS. PACKING IS 16 BITS/WORD. 
+
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              CALL PUTHIC ( GRTYP,'GRTYP',IBUF )
+              CALL PUTHIGH( IG1  ,'IG1'  ,IBUF )
+              CALL PUTHIGH( IG2  ,'IG2'  ,IBUF )
+              CALL PUTHIGH( IG3  ,'IG3'  ,IBUF )
+              CALL PUTHIGH( IG4  ,'IG4'  ,IBUF )
+          END IF
+
+          CALL SETLAB( IBUF, 'SUBA',-1,' ',-1, LX,LY,NHEM, -1 ) 
+          CALL PUTFLD2( 2, GPS, IBUF,MAXW ) 
+          IF(NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1 
+      GOTO 150 
+
+
+***    E.O.F. ON INPUT. 
+
+  900 IF (IO.NE.0) WRITE(6,6100) IO
+  902 CALL                                         XIT(' Subarea',-6 ) 
+
+***    I/O ERROR WITH UNIT 45 (PLTINFO).
+
+  999 CALL                                         XIT(' Subarea',-7 ) 
+*----------------------------------------------------------------------- 
+
+    4 FORMAT(A4)
+
+ 5010 FORMAT(10X,5E10.0,3I5,1X,2I2) 
+
+ 6005 FORMAT('0Interp = ',I5) 
+ 6010 FORMAT('0LX,DLAT1,DLON1,DLAT2,DLON2,DGRW,IHEM,NINTYP,NOUTYP =',I4, 
+     1        5(1X,E12.4),3I3) 
+ 6011 FORMAT('0Value of LX invalid, aborting...') 
+ 6012 FORMAT('0Standard north american polar-stereographic grid chosen')
+ 6014 FORMAT('0Standard polar-stereographic grid chosen.') 
+ 6015 FORMAT('0Standard asian polar-stereographic grid chosen.') 
+ 6016 FORMAT('0Standard european polar-stereographic grid chosen.') 
+ 6017 FORMAT('0Standard australian polar-stereographic grid chosen.') 
+ 6018 FORMAT('0Standard arctic polar-stereopraphic grid chosen.') 
+ 6019 FORMAT('0Standard ANTARCTIC POLAR-STEREOGRAPHIC GRID CHOSEN.') 
+ 6020 FORMAT('0Resulting LX,LY,PI,PJ,D60 =',2I5,2F8.2,E12.4) 
+ 6021 FORMAT('0Resulting J1,I1,J2,I2 = ',4I5) 
+ 6022 FORMAT('0Adjusted DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM = ',5E12.4,I5) 
+ 6023 FORMAT('0Chosen DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM = ',5E12.4,I5) 
+ 6026 FORMAT(1X,'Error : sub-area co-ordinates invalid. code ',I5) 
+ 6030 FORMAT('0',I6,' records read.') 
+ 6035 FORMAT(/' ** pltinfo "FT45" file exists and is empty.'/) 
+ 6040 FORMAT(/, 
+     1       ' **  WARNING   ** Sub-area coordinates changed in', 
+     2       ' pltinfo "FT45" file for ggplot.'/ 
+     3       ' **  REMINDER  ** Normal procedure is to plot', 
+     4       ' previously "subareaed" fields by ggplot before '/ 
+     5       '                  proceeding with another set of', 
+     6       ' fields having different sub-area coordinates.'// 
+     7       ' ** NEW VALUES ** DLAT1,DLON1,DLAT2,DLON2,DGRW,NHEM,', 
+     8       'NOUTYP=',5E12.4,2I5/) 
+ 6100 FORMAT(' Subarea reports I/O error number ',I3,' on unit 5.')
+
+      END 
+#     endif

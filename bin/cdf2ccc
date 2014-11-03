@@ -1,0 +1,54 @@
+#!/bin/bash
+print_usage() {
+  echo "
+    ${0##*/} [-h|--help] [--doc] [--src] [--versions] [--man]
+                                ** OR **
+    ${0##*/} -cdf fichier_netcdf -ccc fichier_cccma [-dir] -attr [fichier_attributs_netcdf] [-autres_arguments]
+       "
+}
+Location=${DIAGNOSTIQUE}
+case ${1:-*} in
+--help | -h )
+  print_usage
+  exit 0
+  ;;
+--man )
+  cd ${Location}/man/pdoc
+  [[ -f cdf2ccc.txt ]] && ${PAGER:-less} cdf2ccc.txt
+  exit $?
+  ;;
+--doc )
+  echo ${Location}/man/pdoc
+  exit 0
+  ;;
+--versions )
+  cd ${Location}/bin/${BASE_ARCH}/
+  ls ${0##*/}_*.*.*
+  exit 0
+  ;;
+--src )
+  echo ${Location}/src
+  exit 0
+  ;;
+* )
+  CDF2CCC=${CDF2CCC:-${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.cdf2ccc}
+  if [ `echo ${CDF2CCC} | cut -c1` != "/" ]; then CDF2CCC=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/${CDF2CCC} ; fi
+  if [[ -x ${CDF2CCC} ]] ; then
+    if [ ! "${launched_by_cdf2ccc_script}" ]; then
+      export launched_by_cdf2ccc_script=YES
+      ${CDF2CCC} "$@"
+      exit $?
+    else
+      echo "
+       Recursion detected. PLS re-define your \${CDF2CCC} variable...
+       Current value is ${CDF2CCC}
+       "
+      exit 99
+    fi
+  else
+    ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.cdf2ccc "$@"
+    exit $?
+  fi
+  ;;
+esac
+exit

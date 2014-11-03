@@ -1,0 +1,385 @@
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 10000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      templat  EOFIN PCIN EOFOUT PCOUT OUTPUT        \
+*              [ -a VAL1 -b VAL2 -c VAL3 -d VAL4 -i VAL5  \
+*                -j VAL6 -k VAL7 -l VAL8 -m VAL9 -n VAL10 ]
+*
+*
+*     AUTHOR - B.Dugas, octobre 17/94.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/templat.ptn,v 4.5 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      ...
+*
+*
+*     FICHIERS D'ENTREE...
+*      EOFIN  = Fichier de eof complexes
+*      PCIN   = Fichier de composantes principales correpondants a EOFIN
+*
+*     FICHIERS DE SORTIE...
+*      EOFOUT = Fichier de eof complexes
+*      PCOUT  = Fichier de composantes principales correpondants a EOFOUT
+*
+*      NOTE: ...
+*
+*
+*     PARAMETRES...
+*       a,b,c,d     = Parametres reels
+*       i,j,k,l,m,n = Parametres entiers
+*
+*     NOTE:  CES PARAMETRES DOIVENT ETRE SPECIFIE A L'APPEL
+*            ET NON PAS EN LECTURE DE CARTES
+*
+*
+*    EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST COLUMN IN EOFIN
+*       2 INPUT FILE TYPE IS NOT COMPLEX
+*       3 UNABLE TO READ FIRST COLUMN IN PCIN
+*       4 UNABLE TO ALLOCATE ENOUGH MEMORY
+*       5 PROBLEMS READING EOFIN
+*       6 MORE THAN ONE SIZE OR TYPE IN EOFIN
+*       7 PROBLEMS READING PCIN
+*       8 MORE THAN ONE SIZE OR TYPE IN EOFIN
+*       9 ERROR READING I/O PARAMETRES
+*      10 ERROR ALLOCATING MEMORY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM meofvec
+*    1             (      EOFIN,       PCIN,       EOFOUT,       PCOUT,
+*    2              TAPE1=EOFIN, TAPE2=PCIN, TAPE3=EOFOUT, TAPE4=PCOUT,
+*    3                    OUTPUT,TAPE6=OUTPUT)
+
+*     $Log: templat.ptn,v $
+*     Revision 4.5  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.4  2010/02/15 22:51:49  dugas
+*     Mise-a-jour avec ALLOCATE + PRTLAB2.
+*
+*     Revision 4.3  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.2  1998/07/03 02:26:42  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:56  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1997/09/25  20:11:08  armnrbd
+*     Version initiale.
+*
+*     
+*
+***   Premiere version: 31 mars 1994 - B. Dugas. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXMEM
+      PARAMETER ( MAXMEM = memoire_maximale )
+      INTEGER     MAXVAR
+      PARAMETER ( MAXVAR = 256 )
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      LOGICAL     OK,ERROR
+      CHARACTER   VALEUR*10
+      REAL        A,B,C,D
+      CHARACTER*4 TYPE,VARIAB(MAXVAR)
+      INTEGER     KBUF(HEAD),LBUF(HEAD),MBUF(HEAD),MEM,
+     +            NWDS,NWDS2,LEV(MAXLEV),STEP(MAXVAR),KPAK,
+     +            LPAK,LEN,LEN2,LIGNE,COL,M,WHERE,I,J,MAXM,
+     +            MAXW,MAXW2,NV,NVAR,NLEV,IO,ERR,TIME,NF,
+     +            IPARM,JPARM,KPARM,LPARM,MPARM,NPARM
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ,GETSIZ3
+      EXTERNAL    GETSIZ,GETSIZ3,RPBLOC,SUIVANT,PRECEDE,
+     +            JCLPNT,HPALLOC,XIT,GETMSET,PUTMSET,
+     +            GETFLD2,PUTFLD2,SETLAB
+
+      REAL,       DIMENSION(:,:),ALLOCATABLE :: X
+      REAL(8),    DIMENSION(:,:),ALLOCATABLE :: EOFI,PCI,EOFO,PCO
+      INTEGER,    DIMENSION(:),  ALLOCATABLE :: IBUF,JBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/templat.ptn,v $'
+
+*---------------------------------------------------------------------
+***    PHASE PREPARATOIRE. 
+ 
+      NF = 5
+      CALL JCLPNT( NF, 1,2,3,4, 6 )
+
+      A = 0.0
+      B = 0.0
+      C = 0.0
+      D = 0.0
+
+      IPARM = 0
+      JPARM = 0
+      KPARM = 0
+      LPARM = 0
+      MPARM = 0
+      NPARM = 0
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('A',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=999,END=999,IOSTAT=IO) A
+
+          OK = RPBLOC('B',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=999,END=999,IOSTAT=IO) B
+
+          OK = RPBLOC('C',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=999,END=999,IOSTAT=IO) C
+
+          OK = RPBLOC('D',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,E10.0)',ERR=999,END=999,IOSTAT=IO) D
+
+          OK = RPBLOC('I',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) IPARM
+
+          OK = RPBLOC('J',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) JPARM
+
+          OK = RPBLOC('K',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) KPARM
+
+          OK = RPBLOC('L',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) LPARM
+
+          OK = RPBLOC('M',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) MPARM
+
+          OK = RPBLOC('N',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=999,END=999,IOSTAT=IO) NPARM
+
+      END IF
+*---------------------------------------------------------------------
+
+***    DETERMINER LA TAILLE DES COLONNES DE LA MATRICE EOFI.
+
+      MAXW = GETSIZ3( 1, KBUF, LEN,NWDS,KPAK, .TRUE.,
+     +                   LEV,NLEV, VARIAB,NVAR, MAXVAR )
+
+      IF (MAXW .LE. 0) CALL                        XIT('Template',-1 )
+
+      WRITE(6,6150) 'EOFIN' ; CALL PRTLAB( KBUF )
+
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.NE.'CMPL') CALL                     XIT('Template',-2 )
+
+***    DETERMINER LA TAILLE DES COLONNES DE LA MATRICE PCI.
+***    PCI NE DEVRAIT CONTENIR QU'UNE SEULE VARIABLE A UN SEUL NIVEAU.
+
+      MAXW2 = GETSIZ( 2, LBUF, LEN2,NWDS2,LPAK )
+
+      IF (MAXW2 .LE. 0) CALL                       XIT('Template',-3 )
+
+      WRITE(6,6150) ' PCIN' ; CALL PRTLAB( LBUF )
+
+      WRITE(TYPE,4) LBUF(1)
+      IF (TYPE.NE.'CMPL') CALL                     XIT('Template',-2 )
+
+      NWDS  = NWDS/2
+      NWDS2 = NWDS2/2
+
+      NV    = NLEV*NVAR
+      LIGNE = NV*NWDS
+      COL   =    NWDS2
+
+      MAXW  = MAX( LIGNE,COL )*2
+
+***    LE NOMBRE DE COLONNE DE EOFI ET PCI DEVRAIT
+***    ETRE IDENTIQUE. ON SUPPOSE QU'IL LE SONT...
+
+      M    =  0 
+      TIME = -1
+  050 CALL SUIVANT( 2, MBUF, ERROR,OK )
+
+          IF ((M.EQ.0 .AND. .NOT.OK) .OR. ERROR)               THEN
+              WRITE(6,6007) M+1
+              CALL                                 XIT('Template',-7 )
+          ELSE IF (.NOT.OK)                                    THEN
+              GOTO 100
+          END IF
+
+          IF (MBUF(2).NE.TIME .AND.
+     +        M      .LT.MAXM )                                THEN
+              COL        = M+1 
+              TIME       = MBUF(2)
+          END IF
+
+      GOTO 050 
+ 
+  100 CALL PRECEDE( 2,-1 )
+ 
+***    DETERMINONS LA MEMOIRE DONT ON A BESOIN POUR
+***    LES CHAMPS COMPLEXES EOFI, EOFO, PCI ET PCO.
+
+      MEM = ( LIGNE * M * 8 ) + ( COL * M * 8 ) + MAXW + ( LEN + 4 ) * 2
+
+      IF (MEM.GT.MAXMEM)                                       THEN 
+          WRITE(6,6004) MEM,MAXMEM
+          CALL                                     XIT('Template',-4 )
+      END IF 
+ 
+***    ... ET DEMANDONS-LA.
+
+      ALLOCATE( PCI(2,  COL*M), PCO(2,  COL*M), IBUF(LEN+4),
+     +         EOFI(2,LIGNE*M),EOFO(2,LIGNE*M), JBUF(LEN+4), 
+     +            X(2,   MAXW),   STAT=ERR )
+
+      IF (ERR /= 0) CALL                           XIT('Template',-10)
+
+*---------------------------------------------------------------------- 
+***    CONTRUIRE LA MATRICE EOFI.
+ 
+      DO  J=1,M
+ 
+***        LIRE LA J-IEME COLONNE DE EOFI
+ 
+          CALL GETMSET( 1, X, LEV,NLEV, STEP,.TRUE.,
+     +                     VARIAB,NVAR, IBUF,MAXW,OK )
+ 
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6005) J 
+              CALL                                 XIT('Template',-5 ) 
+          END IF 
+
+***        S'ASSURER DE LA CONSISTANCE DES DIMENSIONS DE EOFI.
+
+          CALL CMPLBL( 0,KBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6006) 'EOFIN',(KBUF(I),I=1,8),IBUF
+              CALL                                 XIT('Template',-6 )
+          END IF
+
+          WHERE = (J-1)*LIGNE
+          DO  I=1,LIGNE
+              EOFI(1,WHERE+I) = X(1,I)
+              EOFI(2,WHERE+I) = X(2,I)
+          END DO
+
+      END DO
+
+***    CONTRUIRE LA MATRICE PCI.
+ 
+      DO  J=1,M 
+ 
+***        LIRE LA J-IEME COLONNE DE PCI.
+ 
+          CALL GETFLD2( 2, X, 'CMPL',-1,' ', JBUF,MAXW,OK )
+ 
+          IF (.NOT.OK)                                         THEN 
+              WRITE(6,6007) J 
+              CALL                                 XIT('Template',-7 ) 
+          END IF 
+
+***        S'ASSURER DE LA CONSISTANCE DES DIMENSIONS DE PCI.
+
+          CALL CMPLBL( 0,LBUF, 0,JBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6006) ' PCIN',(LBUF(I),I=1,8),JBUF
+              CALL                                 XIT('Template',-8 )
+          END IF
+
+          WHERE = (J-1)*COL
+          DO  I=1,COL
+              PCI(1,WHERE+I) = X(1,I)
+              PCI(2,WHERE+I) = X(2,I)
+          END DO
+
+      END DO
+*---------------------------------------------------------------------- 
+
+***    FAIRE LE TRAVAIL DESIRE ICI.
+
+*---------------------------------------------------------------------- 
+***    SAUVER LES RESULTATS DANS LES FICHIERS EOFO ET PCO.
+
+      DO  J=1,M
+          
+          WHERE = (J-1)*LIGNE
+          DO  I=1,LIGNE
+              X(1,I) = EOFO(1,WHERE+I)
+              X(2,I) = EOFO(2,WHERE+I)
+          END DO
+          
+          IBUF(2) = J
+          CALL PUTMSET( 3, X, LEV,NLEV, 
+     +                  VARIAB,NVAR, IBUF,MAXW )
+
+      END DO
+
+      DO  J=1,M
+          
+          WHERE = (J-1)*COL
+          DO  I=1,LIGNE
+              X(1,I) = PCO(1,WHERE+I)
+              X(2,I) = PCO(2,WHERE+I)
+          END DO
+          
+          JBUF(2) = J
+          CALL PUTFLD2( 4, X, JBUF,MAXW )
+
+      END DO
+*---------------------------------------------------------------------- 
+
+***    FIN NORMALE. 
+ 
+      CALL                                         XIT('Template', 0 ) 
+ 
+***    ERREUR DE LECTURE DES PARAMETRES.
+
+  999 IF (IO.NE.0) WRITE(6,6009) IO
+      CALL                                         XIT('Template',-9 ) 
+
+*---------------------------------------------------------------------- 
+    4 FORMAT(A4) 
+
+ 6004 FORMAT(/' Required and available memory  = ',2I8,' (words).')
+ 6005 FORMAT(/' Error reading EOFI after ',I4,'record(s).'/) 
+ 6006 FORMAT(/' More than one size in file ',A5,'. '/
+     +        ' First IBUF : ',A4,I12,1X,A4,5I9/
+     +        ' Last  IBUF : ',A4,I12,1X,A4,5I9/)
+ 6007 FORMAT(/' Error reading PCI after ',I5,'record(s).'/) 
+ 6009 FORMAT(/' Templat reports I/O error number ',I3)
+
+ 6150 FORMAT(/' First record in ',A5,':')
+
+      END 
+#     endif

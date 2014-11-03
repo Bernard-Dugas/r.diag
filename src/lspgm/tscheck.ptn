@@ -1,0 +1,369 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     tscheck  IN1 [ IN2 [ IN3 [ IN4 ] ] ] OUTPUT [ -kind VAL1 ]
+*
+*
+*     DESCRIPTION...
+*     tscheck - PRODUCE A SUMMARY OF THE CONTENTS OF FILES
+*
+*
+*     AUTHOR  -  F.Zwiers, FEB 16/88.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/tscheck.ptn,v 4.11 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     PURPOSE - PRODUCE A SUMMARY OUTPUT OF THE CONTENTS OF FILES "INx".
+*
+*               THIS SUMMARY OUTPUT WILL CONSIST OF:
+*
+*               1) ALL SUPERLABELS
+*               2) LABEL OF FIRST RECORD IN EACH SUPERLABELED FILE
+*               3) LABEL OF EACH RECORD (OR MULTILEVEL SET) AT
+*                  WHICH THE SAVING INTERVAL (IN TIME STEPS) CHANGES
+*               4) LABEL OF THE LAST RECORD IN EACH SUPERLABELED FILE
+*
+*
+*     INPUT FILES...
+*      IN1 to IN4 = ANY DATA FILE
+*
+*
+*     (COMMAND LINE ONLY) INPUT PARAMETER...
+*
+*      KIND = 1, THE TIMESTEP IS ASSUMED TO BE OF THE FORM YYYYMMDDHH.
+*                ANY OTHER VALUE INDICATES THAT THE TIMESTEP IS INDEED
+*                JUST THAT, WHICH IS THE DEFAULT ASSUMPTION.
+*
+*      NOTE THAT RPN STANDARD FILES DO NOT USE THIS PARAMETER.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ KIND
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM tscheck
+*    +              (IN1,       IN2,       IN3,       IN4,       OUTPUT,
+*    +         TAPE1=IN1, TAPE2=IN2, TAPE3=IN3, TAPE4=IN4, TAPE6=OUTPUT)
+*     ----------------------------------
+
+*     $Log: tscheck.ptn,v $
+*     Revision 4.11  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.7  1999/04/08 22:04:14  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.6  1998/10/20 18:34:26  armnrbd
+*     Corriger la documentation.
+*
+*     Revision 4.5  1998/07/03  02:26:44  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1998/06/10  21:31:45  armnrbd
+*     Ajouter le parametre KIND pour les fichiers CCC.
+*
+*     Revision 4.3  1998/06/10  20:19:07  armnrbd
+*     Corriger la documentation interne.
+*
+*     Revision 4.2  1998/06/10  20:15:59  armnrbd
+*     Tenir compte des fichiers standards RPN.
+*
+*     Revision 4.1  1998/06/09  20:18:24  armnrbd
+*     Premiere version UNIX/RPN.
+*
+***   FEB 16/88 - F. ZWIERS
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXC
+      PARAMETER  ( MAXC = 32 )
+
+      REAL*8       HEURE
+      LOGICAL      OK,FIRST
+      CHARACTER*8  CHAINE(MAXC)
+      CHARACTER*80 NEWETIK,OLDETIK,VALEUR
+      CHARACTER*4  LABL,TYPE,PKTYP
+      INTEGER      IPAK, NFF,NR, NW,LR,LF, NIO,IER
+      INTEGER      I,HEAD,JBUF(taille_entete),JPAK, LEN,NWDS
+      INTEGER      MAXW, ZERO, DTNEW,DTOLD,ITNEW,ITOLD,IO
+      INTEGER      NPAS,DATEO,DEET,TCFLAG,NSEC1,NSEC2
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+
+      LOGICAL      RPBLOC
+      CHARACTER*4  GETYP,GETHIC
+      INTEGER      GETSIZ,GETHIGH
+      EXTERNAL     GETSIZ,GETYP,GETHIC,MACSPE,JCLPNT,
+     +             XIT,RECGET,LBLCHK,GETHIGH,INCDATR,
+     +             DIFDATR,RPBLOC,TIMEDC
+
+#     include     "machtype.cdk"
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         LABL  / 'LABL'/
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/tscheck.ptn,v $'
+
+*--------------------------------------------------------------------
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ASIGN I/O UNITS.
+
+      NFF = 5
+      CALL JCLPNT( NFF, 1,2,3,4, 6 )
+
+      NIO = 1
+
+      NR  = 0
+      NW  = 0
+
+      FIRST   =.TRUE.
+      PKTYP   = GETYP( 1 )
+      PKTYP   = PKTYP(1:2)
+      OLDETIK = ' '
+
+      TCFLAG  = 0
+
+      IF (PKTYP.NE.'SQ' .AND. RPBLOC( ' ',VALEUR ))            THEN
+
+          OK = RPBLOC('KIND', VALEUR)
+          IF (OK) READ( VALEUR,0005, ERR=900,IOSTAT=IO ) TCFLAG
+
+      END IF
+
+***    ASK FOR WORKING MEMORY. CHECK FIRST DATA BUFFER.
+
+  100 MAXW = GETSIZ( NIO, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) CALL                          XIT(' Invntry',-101 )
+
+      ALLOCATE( IBUF(LEN) )
+
+***    READ NEXT BLOCK.
+
+  200 CALL RECGET( NIO, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+
+                  DEALLOCATE( IBUF )
+                  GOTO 100
+
+              ELSE IF (NIO.LT.NFF)                             THEN
+
+                  WRITE(6,6005) NIO,NW 
+
+                  NIO = NIO+1
+
+                  FIRST   =.TRUE.
+                  OLDETIK = ' '
+
+                  NR  = 0
+                  NW  = 0
+
+                  GOTO 200
+
+              ELSE
+
+                  WRITE(6,6002) NR
+                  CALL PRTLAB( JBUF ) ; WRITE(6,6102)
+                  CALL                            XIT(' Tscheck', 0 )
+
+              END IF
+
+          END IF
+
+          NR = NR+1
+
+          CALL LBLCHK( LR,NWDS,IPAK,IBUF )
+          WRITE(TYPE,0004) IBUF(1)
+
+          LR = GETHIGH('LEN',IBUF )
+          LF = LR-HEAD/(MOD( MACHINE,2 )+1)
+          NW = NW+LR
+
+          IF (TYPE.EQ.LABL)                                    THEN
+
+              LEN = MIN( MAXC, IBUF(5)*IBUF(6) )
+              CALL GETLAB( 0, CHAINE, IBUF,LEN, OK )
+
+              IF (NR.NE.1)                                     THEN
+                  WRITE(6,6002) NR-1
+                  CALL PRTLAB( JBUF ) ; WRITE(6,6102)
+              END IF
+
+              WRITE(6,6012) NR
+              CALL PRTLAB( IBUF )
+              WRITE(6,6112) (CHAINE(I),I=1,LEN)
+
+              FIRST =.TRUE.
+
+          ELSE
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+                  NEWETIK        = ' '
+                  NEWETIK( 1: 4) = GETHIC( 'ETIK1',IBUF )
+                  NEWETIK( 5: 8) = GETHIC( 'ETIK2',IBUF )
+                  NEWETIK( 9:12) = GETHIC( 'ETIK3',IBUF )
+                  NEWETIK(13:16) = GETHIC( 'ETIK4',IBUF )
+
+                  IF (NEWETIK.NE.OLDETIK)                      THEN
+
+                      OLDETIK =  NEWETIK
+
+                      IF (NR.NE.1)                             THEN
+                          WRITE(6,6002) NR-1
+                          CALL PRTLAB( JBUF ) ; WRITE(6,6102)
+                      END IF
+                      WRITE(6,6011) NEWETIK
+
+                      FIRST =.TRUE.
+
+                  END IF
+
+              END IF
+
+              IF (FIRST)                                       THEN
+
+                  IF (PKTYP.NE.'SQ')                           THEN
+
+                      ITOLD = IBUF(2)
+                      IF (TCFLAG.NE.0) CALL TIMEDC( NSEC1,ITOLD )
+
+                  ELSE
+
+                      NPAS  = GETHIGH('NPAS',IBUF )
+                      DEET  = GETHIGH('DEET',IBUF )
+                      DATEO = GETHIGH('DATEO',IBUF )
+
+                      IF (DEET.NE.0)                           THEN
+                          HEURE = (NPAS*(DBLE( DEET )/60.))/60.
+                          CALL INCDATR( ITOLD,DATEO,HEURE )
+                      ELSE
+                          ITOLD = DATEO
+                      END IF
+
+                  END IF
+
+                  DTOLD = 0
+
+                  WRITE(6,6002) NR
+                  CALL PRTLAB( IBUF ) ; WRITE(6,6013)
+
+              ELSE
+
+                  IF (PKTYP.NE.'SQ')                           THEN
+
+                      ITNEW = IBUF(2)
+
+                      IF (ITNEW.NE.ITOLD)                      THEN
+
+                          IF (TCFLAG.EQ.0)                     THEN
+                              DTNEW = ITNEW-ITOLD
+                          ELSE
+                              CALL TIMEDC( NSEC2,ITNEW )
+                              DTNEW = NSEC2-NSEC1
+                              NSEC1 = NSEC2
+                          END IF
+
+                      END IF
+
+                  ELSE
+
+                      NPAS  = GETHIGH('NPAS',IBUF )
+                      DEET  = GETHIGH('DEET',IBUF )
+                      DATEO = GETHIGH('DATEO',IBUF )
+
+                      IF (DEET.NE.0)                           THEN
+                          HEURE = (NPAS*(DBLE( DEET )/60.))/60.
+                          CALL INCDATR( ITNEW,DATEO,HEURE )
+                      ELSE
+                          ITNEW = DATEO
+                      END IF
+
+                      IF (ITNEW.NE.ITOLD)                      THEN
+                          CALL DIFDATR( ITNEW,ITOLD,HEURE )
+                          DTNEW = HEURE*3600
+                      END IF
+
+                  END IF
+
+                  IF (DTNEW.NE.DTOLD)                          THEN
+                      DTOLD = DTNEW
+                      WRITE(6,6012) NR-1
+                      CALL PRTLAB( JBUF )
+                      WRITE(6,6015) DTNEW
+                  END IF
+
+                  ITOLD = ITNEW
+
+              END IF
+
+              DO  I=1,HEAD
+                  JBUF(I)=IBUF(I)
+              END DO
+
+              FIRST =.FALSE.
+
+          END IF
+
+      GOTO 200
+
+  900 IF (IO.NE.0) WRITE(6,6001) IO
+      CALL                                         XIT(' Tscheck',-1 )
+*--------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+
+ 6001 FORMAT(' Tscheck reports I/O error number ',I3,' reading KIND.')
+
+ 6002 FORMAT(/1X,'Record #',I5)
+ 6102 FORMAT(60X,' -------- Last record'/
+     1       ' ---------------------------------------',
+     2       '--------------------------------------'//)
+
+ 6005 FORMAT('0File No. ',I2.2,' length (including labels)',
+     +       ' is',I9,' words.') 
+
+ 6011 FORMAT(15X,'... =',A80)
+ 6012 FORMAT(1X,'Record #',I5)
+ 6112 FORMAT(15x,'... =',14A8)
+ 6013 FORMAT(59X,' -------- First record'/)
+ 6015 FORMAT(58X,' Save interval:',I8)
+
+      END
+#     endif

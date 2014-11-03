@@ -1,0 +1,96 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+<!-- This document was created from RTF source by rtftohtml version
+2.7.5 -->
+  <title>R.DIAG Model and Analysis Diagnostic Toolkit</title>
+
+  
+</head><body>
+<big><big style="font-family: Helvetica,Arial,sans-serif;"><tit><b>R.DIAG
+Model and Analysis Diagnostic Toolkit</b></tit></big><br style="font-family: Helvetica,Arial,sans-serif;">
+<br style="font-family: Helvetica,Arial,sans-serif;">
+<span style="font-family: Helvetica,Arial,sans-serif;">An extensive
+toolkit is available to users wanting to manipulate
+2D and 3D meteorological data, as produced either by the Environment
+Canada (EC) GEM forecast model of the EC CCCma General Circulation
+Model (GCM). The CMC/RPN GEM file formats and two
+flavors of the GCM's binary sequential format are supported. The
+toolkit is built in
+the </span><b style="font-family: Helvetica,Arial,sans-serif;">r.diag</b><span style="font-family: Helvetica,Arial,sans-serif;"> executable. The
+toolkit commands can be grouped under several themes or section.</span><br style="font-family: Helvetica,Arial,sans-serif;">
+<br style="font-family: Helvetica,Arial,sans-serif;">
+<span style="font-family: Helvetica,Arial,sans-serif;"> Available
+sections:</span><br style="font-family: Helvetica,Arial,sans-serif;">
+</big>
+<ol style="list-style-type: upper-alpha; font-family: Helvetica,Arial,sans-serif;">
+
+  <li><big><a href="lspgm_a.html">Display programs</a></big></li>
+  <li><big><a href="lspgm_b.html">File/label/record manipulation
+programs</a><span style="text-decoration: underline;"></span></big></li>
+  <li><big><span style="text-decoration: underline;"></span><a href="lspgm_c.html">General computation programs</a></big></li>
+  <li><big><a href="lspgm_d.html">Grid programs</a>&nbsp;</big></li>
+  <li><big><a href="lspgm_e.html">Spherical harmonic and fourier
+programs</a></big></li>
+  <li><big><a href="lspgm_f.html">Zonal cross-section programs</a><span style="text-decoration: underline;"></span></big></li>
+  <li><big><span style="text-decoration: underline;"></span><a href="lspgm_g.html">Time-series analysis and matrix operations programs</a></big></li>
+</ol>
+
+<big><br style="font-family: Helvetica,Arial,sans-serif;">
+<span style="font-family: Helvetica,Arial,sans-serif;">Up to four
+characters follow each description...
+</span><br style="font-family: Helvetica,Arial,sans-serif;">
+</big>
+<ol style="font-family: Helvetica,Arial,sans-serif;">
+
+  <li><big>Number of input files (excluding stdin)</big></li>
+  <li><big>Number of output files (excluding stdout)</big></li>
+  <li><big>C if the program reads stdin</big></li>
+  <li><big>G if the program is restricted to global fields</big></li>
+</ol>
+
+<big><br style="font-family: Helvetica,Arial,sans-serif;">
+<span style="font-family: Helvetica,Arial,sans-serif;">In addition, </span><b style="font-family: Helvetica,Arial,sans-serif;">r.diag</b><span style="font-family: Helvetica,Arial,sans-serif;">
+can be configured with several environment variables and/or command
+line keys. An up to date description of these keys and variables is
+available in the </span><a style="font-family: Helvetica,Arial,sans-serif;" href="Diag_Config.html">Diag_Config</a><span style="font-family: Helvetica,Arial,sans-serif;">
+document. </span></big><big><span style="font-family: Helvetica,Arial,sans-serif;">One of the </span></big><big><span style="font-family: Helvetica,Arial,sans-serif;"></span><b style="font-family: Helvetica,Arial,sans-serif;">$TMPDIR</b><span style="font-family: Helvetica,Arial,sans-serif;"> or <span style="font-weight: bold;">$BIG_TMPDIR</span> local variables have to be defined as they are
+heavily used by </span><span style="font-family: Helvetica,Arial,sans-serif;"></span></big><big><span style="font-family: Helvetica,Arial,sans-serif;"></span><b style="font-family: Helvetica,Arial,sans-serif;">r.diag</b><span style="font-family: Helvetica,Arial,sans-serif;">. A set of scripts
+has been made available to facilitate this. These accessory scripts</span><span style="font-family: Helvetica,Arial,sans-serif;"> are&nbsp;documented </span><a style="font-family: Helvetica,Arial,sans-serif;" href="Tmpdir.html">here</a><span style="font-family: Helvetica,Arial,sans-serif;">.</span></big><big><span style="font-family: Helvetica,Arial,sans-serif;"></span><span style="font-weight: bold; font-family: Helvetica,Arial,sans-serif;"></span><b style="font-family: Helvetica,Arial,sans-serif;"><br>
+<br>
+r.diag</b><span style="font-family: Helvetica,Arial,sans-serif;">
+is
+derived from an early 1990s version of the CCCma (then know as CCRN)
+diagnostic package but it has since undergone
+extensive re-writing. It includes most of the modules in the original
+package as well as several new commands. Most of the extensions to
+initial commands have to&nbsp;do with providing greater ease in
+interactive usage, such as implementing command line keys and defining
+default
+parametre&nbsp;values. The program also fully supports and makes
+extensive use of the capabilities inherent in the CMC/RPN standard file
+formats. It still supports its native CCCma file formats.<br style="font-family: Helvetica,Arial,sans-serif;">
+</span>
+<br style="font-family: Helvetica,Arial,sans-serif;">
+</big><big><span style="font-family: Helvetica,Arial,sans-serif;"></span><span style="font-family: Helvetica,Arial,sans-serif;"></span></big><big><br style="font-family: Helvetica,Arial,sans-serif;">
+<span style="font-family: Helvetica,Arial,sans-serif;"> Currently,
+there are versions of </span><b style="font-family: Helvetica,Arial,sans-serif;">r.diag</b><span style="font-family: Helvetica,Arial,sans-serif;">
+that run under LINUX
+(32 and 64 bits, Debian and above) on several sites and under IBM's AIX
+on the EC/CMC's
+Powerpc clusters.</span><br style="font-family: Helvetica,Arial,sans-serif;">
+<br style="font-family: Helvetica,Arial,sans-serif;">
+<span style="font-family: Helvetica,Arial,sans-serif;"> The
+modification history of </span><b style="font-family: Helvetica,Arial,sans-serif;">r.diag</b><span style="font-family: Helvetica,Arial,sans-serif;"> is available </span><a style="font-family: Helvetica,Arial,sans-serif;" href="Change_Log.html">here</a><span style="font-family: Helvetica,Arial,sans-serif;">. Subroutine </span><a style="font-family: Helvetica,Arial,sans-serif;" href="Error_messages.html">error message</a><span style="font-family: Helvetica,Arial,sans-serif;"> descriptions are
+also available.<br>
+<br>
+</span></big><big><span style="font-family: Helvetica,Arial,sans-serif;">As
+of 2014, the <span style="font-weight: bold;">r.diag</span> source
+code is made available under a LGPL licence on the <a href="https://github.com/Bernard-Dugas/r.diag">github site</a>.</span></big><big><span style="font-family: Helvetica,Arial,sans-serif;"></span><br style="font-family: Helvetica,Arial,sans-serif;">
+<br style="font-family: Helvetica,Arial,sans-serif;">
+<span style="font-family: Helvetica,Arial,sans-serif;"></span></big><big><span style="font-family: Helvetica,Arial,sans-serif;">Contact </span><span style="font-family: Helvetica,Arial,sans-serif;">:
+Dugas.Bernard@uqam.ca<br>
+</span></big><big><span style="font-family: Helvetica,Arial,sans-serif;">Last revision :
+October, 2014</span><br style="font-family: Helvetica,Arial,sans-serif;"><span style="font-family: Helvetica,Arial,sans-serif;"></span><span style="font-family: Helvetica,Arial,sans-serif;"></span><br style="font-family: Helvetica,Arial,sans-serif;">
+</big><br>
+
+</body></html>

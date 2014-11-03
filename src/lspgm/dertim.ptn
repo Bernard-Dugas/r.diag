@@ -1,0 +1,273 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     dertim  XIN XOUT OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, novembre 1992.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/dertim.ptn,v 4.15 2014/09/25 20:20:47 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A CCC FILE ARITHMETIC PROGRAM WHICH...
+*
+*      ... PRODUCES FILE XOUT(T) = XIN(T)-XIN(T-1)
+*      
+*      NOTES - 1) DERTIM MAKES MINIMAL USE OF XIN'S TIME INFORMATION.
+*                 THE FIRST SAMPLE TIME IS SIMPLY ASSIGNED T=0,
+*                 THE NEXT ONE IS T=1, AND SO ON.
+*              2) XOUT(T=0) = XIN(T=0) 
+*              3) XIN CAN BE MULTI-LEVEL, MULTI-VARIABLE.
+*                 IN THIS CASE, THE FILE IS SUPPOSED TO BE
+*                 SORTED ACCORDING TO TIMESTEP/NAME/LEVEL,
+*                 FROM MOST TO LEAST SIGNIFICANT
+*     
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ FIRST SET
+*       2 MORE THAN ONE SIZE IN XIN
+*       3 UNABLE TO ALLOCATE ENOUGH WORKING MEMORY
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM dertim
+*    +                    ( XIN,        XOUT,      OUTPUT,
+*    +               TAPE1= XIN, TAPE2= XOUT,TAPE6=OUTPUT)
+ 
+*     $Log: dertim.ptn,v $
+*     Revision 4.15  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.14  2013/10/16 21:10:53  bernard
+*     Remplacer MAXLEV par MAXSTEP (=9999 plutot 1999).
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.11  2003/10/02 16:22:48  dugas
+*     Corriger le traitement des erreurs de type 1
+*
+*     Revision 4.10  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.9  2001/10/11 11:15:05  armnrbd
+*     Les noms lus par GETSIZ4 et ecrits par PUTMSET2 contiennent
+*     maintenant les etiquettes des enregistrements (RPN STD).
+*
+*     Revision 4.8  2001/09/24 14:58:16  armnrbd
+*     Implanter GETSIZ4 et GET/PUT(MSET2).
+*
+*     Revision 4.7  2000/04/07 20:19:48  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.6  1998/07/03 02:26:23  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:38:50  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1996/11/27  15:10:45  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.3  1996/01/26  21:40:20  armnrbd
+*     Modifier la sortie du premier tampon d'information.
+*
+*     Revision 4.2  1995/10/26  17:44:07  armnrbd
+*     Ajouter de la decumentation sur le mode de fonctionnement multi-variable.
+*
+*     Revision 4.1  1995/07/07  03:04:10  armnrbd
+*     Implanter un mode de travail a multi-variables.
+*
+*     Revision 4.0  1994/11/17  14:19:48  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:00:48  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:55:50  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/01/14  15:43:18  armnrbd
+*     Corriger le comportement lorsque MAXW=0.
+*     
+*     Revision 1.0  92/11/25  17:17:10  armnrbd
+*     Initial revision
+*     
+***    NOVEMBRE 25/92 - B.DUGAS, RPN.
+
+*-------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER, PARAMETER :: MAXSTEP = 9999
+
+      LOGICAL     OK
+      REAL        GT,ZERO
+      CHARACTER*4 TYPE,VARIAB(MAXSTEP)*20
+      INTEGER     HEAD,JBUF(taille_entete),JPAK,LEV(MAXSTEP,2),
+     +            SET(0:MAXSTEP),NSET,MAXW,LEN,NWDS,NLEV,NF,NR,
+     +            STEP(MAXSTEP),I,IER,NLEVAR
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: G,H
+
+#     include "machtype.cdk" 
+
+      INTEGER     GETSIZ4
+      EXTERNAL    GETSIZ4,MACSPE,JCLPNT,
+     +            GETMSET2,XIT,PUTMSET2,PRECEDE,
+     +            WRITLEV2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/dertim.ptn,v $'
+
+*-------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      CALL JCLPNT( NF, 1,2, 6 )
+
+      NR = 0
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  050 MAXW = GETSIZ4( 1, JBUF,LEN,NWDS,JPAK,
+     +                   SET,NSET, LEV,VARIAB, MAXSTEP )
+
+      IF (    NSET .EQ.0) GOTO 901
+      IF (SET(NSET).EQ.0) GOTO 901
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      NLEVAR = SET(NSET)
+
+      IF (NR.EQ.0)                                             THEN
+
+          CALL PRTLAB( JBUF )
+          WRITE(6,6050) (VARIAB(SET(I))(1:4),I=1,NSET)
+
+          NLEV = SET(NSET)/NSET
+
+          IF (NLEV*NSET.EQ.SET(NSET))                          THEN
+              CALL WRITLEV2( LEV,NLEV, JBUF )
+          ELSE
+              WRITE(6,6100) NSET,SET(NSET)
+          END IF
+
+      END IF
+
+      ALLOCATE( IBUF(LEN),G(NWDS*NLEVAR),H(NWDS*NLEVAR), STAT=IER )
+
+      IF (IER.NE.0)                                            THEN
+          WRITE(6,6003) 4*(LEN+2*NWDS*NLEVAR)*(MOD( MACHINE,2 )+1)
+          CALL                                     XIT(' Dertim ' ,-3 )
+      END IF
+
+***    READ FIRST SET OF GRIDS FROM FILE XIN.
+
+      IF (NR.NE.0) CALL PRECEDE( 1, 2*NLEV )
+
+      CALL GETMSET2( 1, H, SET,NSET, LEV,VARIAB,STEP, IBUF,MAXW,OK )
+     +                     
+
+      IF (.NOT.OK)                                             THEN
+
+          CALL PRTLAB( IBUF )
+          CALL                                     XIT(' Dertim ',-1 ) 
+
+      END IF
+
+      IF (NR.EQ.0)                                             THEN
+
+***        WRITE THE FIRST SET AS IS.
+
+          CALL PUTMSET2( 2, H, SET,NSET, LEV,VARIAB,MAXSTEP, IBUF,MAXW )
+
+          NR = NLEVAR
+
+      END IF
+
+***    READ THE NEXT SET OF GRIDS FROM FILE XIN. 
+
+  100 CALL GETMSET2( 1, G, SET,NSET, LEV,VARIAB,STEP, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,G,H )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB( IBUF )
+              WRITE(6,6010) NR
+              CALL                                 XIT(' Dertim ', 0 ) 
+
+          END IF
+
+***        SET G = G - H AND TRANSFER ORIGINAL G
+***        TO H, TO BE USED IN NEXT ITERATION.
+
+          DO  I=1,NLEVAR*NWDS
+              GT   = G(I)
+              G(I) = G(I) - H(I)
+              H(I) = GT
+          END DO
+ 
+***        SAVE G ON FILE XOUT.
+
+          CALL PUTMSET2( 2, G, SET,NSET, LEV,VARIAB,MAXSTEP, IBUF,MAXW )
+
+      NR = NR+NLEVAR
+      GOTO 100 
+
+***   E.O.F. ON UNIT #1.
+
+  901 CALL                                         XIT(' Dertim ',-1 )
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6003 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' characters.')
+
+ 6010 FORMAT('0 Dertim read',I6,' records.')
+ 6050 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6100 FORMAT(/' Each set will contain ',I3,' variables distributed',
+     +        ' over ',I3,' horizontal records.'/)
+
+      END 
+#     endif

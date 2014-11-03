@@ -1,0 +1,614 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      xMplot  xin input output [-t1   VAL1 -name  VAL2 -lv1 VAL3 \ 
+*                                -a    VAL4 -b     VAL5 -n   VAL6 \ 
+*                                -kind VAL7 -label VAL8]
+*
+*
+*     DESCRIPTION...
+*      PLOT UP TO 50 SINGLE LEVEL ZONAL/MERIDIONAL CROSS SECTION CURVES
+*
+*
+*     AUTHOR  - F. Zwiers, 06 November 1986.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/xmplot.ptn,v 4.9 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     PURPOSE - PLOTS UP TO 50 GLOBAL ZONALLY/MERIDIONALLY AVERAGED SINGLE LEVEL
+*               FIELDS VERSUS LATITUDE/LONGITUDE.
+*
+*     INPUT FILE...
+*      XIN = FILE CONTAINING CURVES TO BE PLOTTED.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NSTEP (t1)     = TIMESTEP NUMBER
+*      NAME           = NAME OF VARIABLE TO BE PLOTTED
+*                       THE NAMES blank, 'NEXT' AND 'SKIP' ARE RECOGNIZED BUT
+*                       FILE XIN IS REWOUND BEFORE EACH SEARCH.  THIS ALLOWS
+*                       FIELDS TO BE IN ANY ORDER ON THE FILE, BUT BLANK OR
+*                       'NEXT' ALWAYS SELECTS THE FIRST FIELD AND 'SKIP' IS
+*                       A NULL OPERATION. THE DEFAULT IS 'ALL', WHICH
+*                       IMPLIES PLOTTING ALL RECORDS.
+*      LEVEL   (lv1)  = LEVEL NUMBER
+*      YLO,YHI (a,b)  = LOWER,UPPER LIMITS OF VERTICAL Y-AXIS.
+*                       TICK MARKS DIVIDE THE Y-AXIS INTO 10 DIVISIONS BETWEEN
+*                       YLO AND YHI. A SOLID LINE IS DRAWN AT Y=0 IF YLO.LT.0.
+*                       AND YHI.GT.0.,  BUT AT YLO OTHERWISE. IF YLO=YHI, THE
+*                       PROGRAMS USES AUTOMATICALLY DETERMINED VALUES.
+*      MS             = PRINTER PLOT PARAMETER (NOW IGNORED).
+*      NC      (n)    = NUMBER OF CURVES/PLOT (DEFAULT = 1, MAX = 50)
+*      NZMS    (kind) = 0/1 FOR ZONAL/MERIDIONAL PLOT.
+*
+*      LABEL   = 80 CHARACTER LABEL PRINTED ABOVE PLOT.
+*
+*     READ(5,5010,END=900) NSTEP,NAME,LEVEL,YLO,YHI,MS,NC,NZMS
+*     READ(5,5012,END=902) LABEL
+*5010 FORMAT(10X,I10,1X,A4,I5,2E10.0,I5,E10.0,2I5)
+*5012 FORMAT(A80)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*  XMPLOT         -1 NEXT  500    -1000.     1500.    0   20    0
+*  FJ - JAN Z(500) - 12W TO 21W
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 UNABLE TO READ DIRECTIVES CARD
+*       2 UNABLE TO READ LABEL CARD
+*       3 UNABLE TO READ XIN
+*       4 MORE THAN ONE SIZE IN XIN
+*
+*     NON-FATAL CONDITION...
+*     101 FINISHED READING XIN
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM XMPLOT
+*     PROGRAM XMPLOT (XIN,       INPUT,       OUTPUT,
+*    1          TAPE1=XIN, TAPE5=INPUT, TAPE6=OUTPUT,
+*    2                                  TAPE8       )
+*     -----------------------------------------------
+*
+*     $Log: xmplot.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2010/05/06 16:25:30  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*     - La routine PDATE est utilisee pour generer une date imprimable.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2008/04/25 21:10:56  dugas
+*     Toujours utiliser GET_IP1_STRING avant d'imprimer un niveau vertical.
+*
+*     Revision 4.5  2007/12/20 20:57:11  dugas
+*     - Corriger l'appel a ANOTAT.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/10/02 16:21:12  dugas
+*     Ajouter le support de donnees hemispheriques
+*
+*     Revision 4.3  2001/03/16 22:07:02  armnrbd
+*     Utiliser GETHIC/GETHIGH plutot que GETPARC/GETPARI.
+*
+*     Revision 4.2  1998/10/19 18:46:59  armnrbd
+*     Modifier la documentation.
+*     Appeller la fonction Y2KDAT.
+*     Implanter un bloc de parametre RPBLOC.
+*     Implanter un mode automatique.
+*
+*     Revision 4.1  1998/05/21  20:20:57  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:22:45  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:29  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/06/10  16:48:15  armnrbd
+*     Deplacer l'ecriture des etiquettes au debut du programme.
+*     
+*     Revision 1.0  93/06/10  16:06:54  armnrbd
+*     Initial revision
+*     
+***    HISTORIQUES DES MODIFICATIONS:
+
+*     SEP 21/89 - F.MAJAESS (MODIFIED TO HANDLE BOTH ZONAL AND MERIDIONAL)
+*     NOV 06/86 - F.ZWIERS
+*
+*-----------------------------------------------------------------------
+      IMPLICIT   none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXCRV
+      PARAMETER ( MAXCRV = 50 )
+
+      LOGICAL     OK,ALL
+      INTEGER*8   NSTEP
+      REAL        DX,SCAL,YLOI,YHII,PR,
+     +            YLO,YHI,XX,YY,YZ,YB,YE,FINC,FMISS
+      CHARACTER   IFMTY*7,LABEL*88 ,ETIKET*12,CLEV*10,
+     +            IFMTX*7,LABELI*88,LNIVEAU*12,SLEV*15,LTEMPS*20
+      CHARACTER*4 LATGL(7),LATGN(7),LATGS(7),LONGL(13),NAME,PNAME
+      INTEGER     I,J,K,L,ICHARS,NCRV,NFF,MAXW,
+     +            NPLOT,STAMP,NPTS,NC,LEVEL,NZMS,MS,NCI,IO,
+     +            ISIZ,IOR,MAJRX,MINRX,MAJRY,MINRY,HEM,
+     +            IXLAB,IYLAB,IGPH,BASE,IER,LEN,
+     +            JBUF(HEAD),NWDS,JPAK,VKIND
+ 
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: BUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: X,Y
+ 
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC
+      INTEGER*8   Y2KDAT8
+      CHARACTER*4 GETHIC,GETYP,PKTYP
+      INTEGER     GETHIGH,GETSIZ,GETKIND
+      EXTERNAL    JCLPNT,SYSDAT,DISPLA,GETLIGN,XIT,
+     +            GETFLD2,SET,PWRIT,LABMOD,GRIDAL,LINE,
+     +            BURNF,FRSTPT,VECTOR,FRAME,OPNSET,GETSIZ,
+     +            Y2KDAT8,RPBLOC,GETYP,GETHIC,GETKIND,
+     +            GETHIGH,PRECON3,DATE2STAMP,PDATE
+
+      DATA   LATGL / '90N','60','30','0' ,'30','60','90S' /
+      DATA   LATGN / '90N','75','60','45','30','15','0'   /
+      DATA   LATGS / '0'  ,'15','30','45','60','75','90S' /
+      DATA   LONGL / '0','30','60','90','120','150','180',
+     +               '210','240','270','300','330','360E' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xmplot.ptn,v $'
+
+*-----------------------------------------------------------------------
+      NFF = 3
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  025 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                           XIT(' Xmplot ',-3 )
+
+      ALLOCATE( BUF(LEN),X(MAXW),Y(MAXCRV*MAXW) )
+
+      VKIND = GETKIND( )
+
+      CALL SYSDAT
+      CALL DISPLA( 2,0,1 )
+      CALL OPNSET( 'CASE',4,1 )
+
+      FMISS = -36.E36
+
+      NPLOT = 0 
+
+  050 CONTINUE
+
+      IF (RPBLOC( ' ',LABEL ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NSTEP  = -1
+          NAME   ='ALL'
+          CLEV   = ' '
+          YLOI   = 0.0
+          YHII   = 0.0
+          MS     =  0
+          NCI    =  1
+          NZMS   =  0
+          LABELI ='AUTOMATIC'
+
+          ALL = RPBLOC('DEFAUT',LABEL)
+
+          OK = RPBLOC('T1',LABEL)
+          IF (OK) READ( LABEL,20, END=900,ERR=900,IOSTAT=IO ) NSTEP
+
+          OK = RPBLOC('NAME',LABEL)
+          IF (OK) NAME = LABEL
+
+          OK = RPBLOC('LV1',LABEL)
+          IF (OK) CLEV = LABEL
+
+          OK = RPBLOC('A',LABEL)
+          IF (OK) READ( LABEL,15, END=900,ERR=900,IOSTAT=IO ) YLOI
+
+          OK = RPBLOC('B',LABEL)
+          IF (OK) READ( LABEL,15, END=900,ERR=900,IOSTAT=IO ) YHII
+
+          OK = RPBLOC('C',LABEL)
+          IF (OK) READ( LABEL,15, END=900,ERR=900,IOSTAT=IO ) FMISS
+
+          OK = RPBLOC('N',LABEL)
+          IF (OK) READ( LABEL,05, END=900,ERR=900,IOSTAT=IO ) NCI
+
+          OK = RPBLOC('KIND',LABEL)
+          IF (OK) READ( LABEL,05, END=900,ERR=900,IOSTAT=IO ) NZMS
+
+          OK = RPBLOC('LABEL',LABEL)
+          IF (OK) LABELI = LABEL
+
+      ELSE
+
+***        READ THE CONTROL CARDS.
+ 
+          CALL GETLIGN( 5,LABELI,80, OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LABELI, 5010, ERR=900,END=900,IOSTAT=IO ) 
+     +        NSTEP,NAME,CLEV,YLOI,YHII,MS,NCI,NZMS
+          END IF
+ 
+          CALL GETLIGN( 5,LABELI,80,OK )
+          IF (.NOT.OK) GOTO 902
+
+      END IF
+
+      IF (NCI.LE.  0   ) NCI = 1
+      IF (NCI.GT.MAXCRV) NCI = MAXCRV
+
+      NSTEP = Y2KDAT8( NSTEP ) ; CALL DATE2STAMP( NSTEP,STAMP )
+
+      IF (CLEV  .EQ.' ')                                       THEN
+
+          CLEV    = '-1'
+          LEVEL   =  -1
+          LNIVEAU = '          -1'
+
+      ELSE
+
+          CALL LEADBLK( CLEV )
+
+          IF (INDEX( CLEV,'.' ).EQ.0)                          THEN
+              READ( CLEV, 10, ERR=900,END=900,IOSTAT=IO ) LEVEL
+              CALL CONVPR( LEVEL, PR, VKIND, -2 )
+              IF (PKTYP.EQ.'SQ') CALL CONVPR( LEVEL, PR, VKIND, +2 )
+          ELSE
+              READ( CLEV, 15, ERR=900,END=900,IOSTAT=IO ) PR
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL CONVPR( LEVEL, PR, VKIND,  +2 )
+              ELSE
+                  CALL LVCODE( LEVEL, PR/1000.,1 ) 
+              ENDIF
+         ENDIF
+
+          CALL GET_IP1_STRING( LEVEL,LNIVEAU )
+          CALL LEADBLK( LNIVEAU )
+
+      END IF
+
+***    CONSIDER 'ALL' MODE.
+
+      IF (NAME.NE.'  ') CALL LEADBLK( NAME )
+      IF (NAME.EQ.'-1') NAME = ' '
+
+      IF (NAME.EQ.'   '  .OR.
+     +    NAME.EQ.'ALL')  ALL  = .TRUE.
+      IF (NAME.EQ.'ALL'  .OR.
+     +    NAME.EQ.'NEXT') NAME = ' '
+
+  100 NPLOT = NPLOT+1
+ 
+          IF (YLOI.LT.YHII)                                    THEN
+              WRITE(6,6100) NPLOT,NSTEP,NAME,LNIVEAU,YLOI,YHII,
+     +                      NCI,NZMS,LABELI
+          ELSE
+              WRITE(6,6101) NPLOT,NSTEP,NAME,LNIVEAU,
+     +                      NCI,NZMS,LABELI
+          END IF
+
+***        GET THE FIELD INTO X.
+
+          BASE = 0
+          DO 150 I=1,NCI
+
+              CALL GETFLD2( 1, X, 'ZONL',STAMP,NAME,LEVEL, BUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  IF (I.EQ.1)                                  THEN
+                      SLEV = ' -1'
+                      CALL PDATE( LTEMPS,STAMP )
+                      IF (LEVEL.NE.-1)
+     +                CALL GET_IP1_STRING( LEVEL,SLEV )
+                      WRITE(6,6010) NAME,TRIM( LTEMPS ),TRIM( SLEV )
+                      CALL BURNF
+                      CALL                          XIT(' Xmplot ',-101)
+                  ELSE
+                      NCRV = I-1
+                      GOTO 200
+                  END IF
+              END IF
+ 
+              IF (BASE.EQ.    0  ) NPTS = BUF(5)
+              IF (NPTS.NE.BUF(5) ) CALL             XIT(' Xmplot ',-4 )
+
+              CALL PRTLAB2(' Found: ', BUF )
+
+***            CHECK FOR HEMISPHERIC DATA. THE LAST FIELD READ
+***            DETERMINES THIS. NO CHECK IS OTHERWISE DONE.
+
+              IF (BASE.EQ.    0  )             HEM  = BUF(7)
+              IF (HEM .LT.    0 .OR. HEM.GT.2) HEM = 0
+
+              IF (HEM .NE.BUF(7) ) CALL             XIT(' Xmplot ',-4 )
+
+***            COPY IT INTO ARRAY Y (REVERSING ARRAY ELEMENTS FOR LATITUDES).
+ 
+              IF (NZMS.EQ.0)                                       THEN
+                  DO  J=1,NPTS
+                      Y(BASE+J) = X(NPTS-J+1)
+                  END DO
+              ELSE
+                  DO  J=1,NPTS
+                      Y(BASE+J) = X(J)
+                  END DO
+              END IF
+              BASE = BASE + NPTS
+              NCRV  = I
+
+  150     CONTINUE
+
+  200     NC = NCRV
+
+          CALL SET(.01,.99,.01,.99,.01,.99,.01,.99,1)
+          XX   = 0.05
+          YY   = 0.9
+          ISIZ = 1
+          IOR  = 0
+ 
+***        PRINT HEADING.
+
+          LABEL = LABELI
+
+          IF (ALL)                                             THEN
+
+              CALL PDATE( LTEMPS,BUF(2) )
+              CALL LEADBLK( LTEMPS )
+              WRITE(PNAME,4) BUF(3)
+
+              call get_ip1_string( buf(4),LNIVEAU )
+              call leadblk( LNIVEAU )
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  ETIKET(1:4)  = GETHIC ( 'ETIK1',BUF )
+                  ETIKET(5:8)  = GETHIC ( 'ETIK2',BUF )
+                  ETIKET(9:12) = GETHIC ( 'ETIK3',BUF )
+              ELSE
+                  ETIKET   = ' '
+              END IF
+
+              DO  L=80,1,-1
+                  IF (LABEL(L:L).NE.' ') GOTO 250
+              END DO
+  250         IF (L.LE.42)                                     THEN
+                  WRITE(LABEL(L+1:L+46),40) NPLOT,PNAME
+                  LABEL =      TRIM( LABEL   )//
+     +                    ' '//TRIM( LNIVEAU )//
+     +                    ' '//TRIM( LTEMPS  )//
+     +                    ' '//TRIM( ETIKET  )
+              END IF
+
+          END IF
+
+          CALL LOW2UP( LABEL,LABEL )
+
+          CALL PWRIT( XX,YY,'@4'//LABEL,82,ISIZ,IOR,0 )
+ 
+***        LABEL X-AXIS.
+ 
+          IF (NZMS.EQ.0)                                       THEN
+
+              DO  K=1,7
+
+                                        ICHARS = 2
+                  IF (K.EQ.1.OR.K.EQ.7) ICHARS = 3
+
+                  XX= FLOAT( K-1 )*(.7/6.)+.14
+
+                  IF (HEM.EQ.0)                                 THEN
+                      IF (K.EQ.4) ICHARS = 1
+                      CALL PWRIT(XX,.035,'@4'//LATGL(K),ICHARS+2,1,0,0 )
+                  ELSE IF (HEM.EQ.1)                            THEN
+                      IF (K.EQ.7) ICHARS = 1
+                      CALL PWRIT(XX,.035,'@4'//LATGN(K),ICHARS+2,1,0,0 )
+                  ELSE IF (HEM.EQ.2)                            THEN
+                      IF (K.EQ.1) ICHARS = 1
+                      CALL PWRIT(XX,.035,'@4'//LATGS(K),ICHARS+2,1,0,0 )
+                  END IF
+
+              END DO
+
+          ELSE
+
+              DO  K=1,13
+
+                                         ICHARS = 3
+                  IF (K.EQ.1)            ICHARS = 1
+                  IF (K.GE.2.AND.K.LE.4) ICHARS = 2
+                  IF (K.EQ.13)           ICHARS = 4
+
+                  XX= FLOAT( K-1 )*(.7/12.)+.14
+                  CALL PWRIT( XX,.035,'@4'//LONGL(K),ICHARS+2,1,0,0 )
+
+              END DO
+
+          END IF
+ 
+          IF (YLOI.GE.YHII)                                    THEN
+
+***            DETERMINE APPROPRIATE VALUES FOR YLO,YHI.
+
+              CALL PRECON3( YLO,YHI,FINC,SCAL,Y,NPTS*NC,1,10,FMISS )
+
+              IF (YHI.NE.0.0) YHI = MAX( YHI,YLO+10.*FINC )
+              IF (YLO.NE.0.0) YLO = YLO-FINC
+
+              YLO = YLO/SCAL
+              YHI = YHI/SCAL
+
+              WRITE(6,6020) YLO,YHI
+
+          ELSE
+
+              YLO = YLOI
+              YHI = YHII
+              
+          END IF
+
+***        DRAW GRID OUTLINES.
+ 
+          CALL SET( .15,.85,.05,.85,.15,.85,YLO,YHI,1 )
+ 
+          IF (NZMS.EQ.0)                                       THEN
+              MAJRX = 6
+          ELSE
+              MAJRX = 12
+          END IF
+
+          MINRX =  2
+          MAJRY = 10
+          MINRY =  0
+          IXLAB =  0
+          IYLAB =  1
+          IGPH  =  9
+ 
+          IFMTY ='(E10.3)'
+          IFMTX ='(E10.3)'
+          CALL LABMOD( IFMTX,IFMTY,10,10,0,1,0,0,0 )
+          CALL GRIDAL( MAJRX,MINRX,MAJRY,MINRY,
+     +                 IXLAB,IYLAB,IGPH,.15,YLO )
+ 
+***        DRAW ZERO LINE (IF NEEDED).
+ 
+          IF (YLO*YHI.LT.0.0)                                  THEN
+
+              YZ = 0.0
+              CALL LINE( .15,YZ,.85,YZ )
+
+              IF (NZMS.EQ.0)                                   THEN
+
+                  DO  I=20,160,20
+                      XX = FLOAT( I )*(.7/180)+.15
+                      YB = YZ
+                      YE = YZ+(YHI-YLO)*.01
+                      CALL LINE( XX,YB,XX,YE )
+                  END DO
+
+              ELSE
+
+                  DO  I=20,340,20
+                      XX = FLOAT( I )*(.7/360)+.15
+                      YB = YZ
+                      YE = YZ+(YHI-YLO)*.01
+                      CALL LINE( XX,YB,XX,YE )
+                  END DO
+
+              END IF
+
+          ELSE
+
+              YZ=YLO
+
+          END IF
+
+***        PLOT CURVE.
+ 
+          DX = 0.7/FLOAT( NPTS+1 )
+          DO  I=1,NPTS
+              X(I)=.15+FLOAT(I)*DX
+          END DO
+
+          CALL ANOTAT(' $',' $',4,4,0,0,'$$')
+          CALL EZMXY( X,Y,NPTS,NC,NPTS,' $' )
+ 
+***        PRINT X IN UPPER RIGHT HAND CORNER AND FINISH PLOT.
+ 
+          CALL SET(.01,.99,.01,.99,.01,.99,.01,.99,1)
+          CALL PWRIT(.97,.97,'@4X',3,0,0,0)
+          CALL FRAME
+
+      IF (ALL)                                                 THEN
+          GOTO 100
+      ELSE
+          GOTO 050
+      END IF
+ 
+***    E.O.F. ON INPUT.
+ 
+  900 IF (NPLOT.EQ.0) CALL                         XIT(' Xmplot ',-1 )
+      CALL                                         XIT(' Xmplot ', 0 )
+  902 CALL                                         XIT(' Xmplot ',-2 )
+*-----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0015 FORMAT(BN,E10.0)
+ 0020 FORMAT(BN,I20)
+
+ 0040 FORMAT(1X,I3.3,1X,A4)
+
+ 5010 FORMAT(10X,I10,1X,A4,A5,2E10.0,3I5)
+ 6010 FORMAT(' Unable to find-',A4,' at timestep-',I10,' and level-',A)
+ 6020 FORMAT(' YLO= ',G12.4,', YHI= ',G12.4)
+ 6100 FORMAT(/' For plot no. ',I3,', requesting...'//
+     +7X,'NSTEP NAME',8X,'LEVL        YLO        YHI   NC NZMS'/
+     +     I12,1X,A4,       A12,           2E11.4,      I5,  I5 /
+     +    '     and LABEL = "',A80,'"'/)
+ 6101 FORMAT(/' For plot no. ',I3,', requesting...'//
+     +         7X,'NSTEP NAME',8X,'LEVL   NC NZMS'/
+     +             I12,1X,A4,        A12,  I5,  I5 /
+     +    '     and LABEL = "',A80,'"'/)
+
+      END
+#     endif

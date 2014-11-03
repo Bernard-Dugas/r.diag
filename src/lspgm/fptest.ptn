@@ -1,0 +1,80 @@
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+        PROGRAM fptest
+
+*     $Log: fptest.ptn,v $
+*     Revision 4.1  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.0  1994/11/17 14:20:04  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:59  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  92/02/24  14:41:42  armnrbd
+*     Initial revision
+*     
+
+	integer y(2),w
+	real x,z
+        equivalence (w,x)
+
+	x=1.e5
+	call encodr(x,y)
+        write(*,1001) x,y(1),y(2)
+	call decodr(z,y)
+	write(*,1002) x,z,x-z,w
+
+	x=-1.e-5
+	call encodr(x,y)
+	write(*,1001) x,y(1),y(2)
+	call decodr(z,y)
+	write(*,1002) x,z,x-z,w
+
+	x=1.9375e5
+	call encodr(x,y)
+ 	write(*,1001) x,y(1),y(2)
+	call decodr(z,y)
+	write(*,1002) x,z,x-z,w
+
+	x=-1.9375e-5
+	call encodr(x,y)
+	write(*,1001) x,y(2),y(1)
+	call decodr(z,y)
+	write(*,1002) x,z,x-z,w
+
+  100	write(*,1003)
+  200	read(*,2000,end=200) x
+            call encodr(x,y)
+	    write(*,1001) x,y(1),y(2)
+	    call decodr(z,y)
+	    write(*,1002) x,z,x-z,w
+            if (x.eq.0.d0) stop ' '
+	goto 100
+
+ 1001	format(/1x,e20.12,'=',z8.8,1x,z8.8,' (apres ENCODR)')
+ 1002	format( 1x,3e20.12,' (apres DECODR)'/
+     +          ' w =',z8.8)
+ 1003	format(/' Selectionnez une valeur reelle ... ',$)
+ 2000	format(bz,e10.0)
+
+	end

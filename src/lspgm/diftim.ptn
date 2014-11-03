@@ -1,0 +1,504 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     diftim  XIN XOUT INPUT OUTPUT [-name "VAL1" -t1 VAL2   -t2 VAl3
+*                                                 -t3 VAL4 -kind VAL5 ]
+*
+*
+*     DESCRIPTION...
+*     diftim  - DIFFERENCE OF TWO SETS IN THE SAME FILE (CAN DIV BY DT)
+*
+*
+*     AUTHOR  - J.D.Henderson, 1981.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/diftim.ptn,v 4.12 2014/09/25 20:20:47 dugas Exp $
+*
+*
+*     PURPOSE - SUBTRACTS TWO SETS IN A FILE XIN AS SELECTED ON A CARD AND
+*               OPTIONALLY DIVIDES BY THE TIME DIFFERENCE BETWEEN THEM.
+*
+*
+*     INPUT FILE...
+*      XIN = FILE OF MULTI-LEVEL SETS (REAL OR COMPLEX)
+*
+*     OUTPUT FILE...
+*      XOUT = ONE SET WHICH IS THE DIFFERENCE BETWEEN THE TWO SPECIFIED
+*             INPUT SETS.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NAME    = NAME OF THE FIELDS. IF NONE IS SPECIFIED, 
+*                THE FIRST ONE FOUND IS USED.
+*      NT1,NT2 = FIRST AND SECOND TIMESTEP NUMBERS.
+*      (t1,t2)   DATA AT TIME NT1 IS SUBTRACTED FROM TIME NT2.
+*                A) NT2 MAY BE LESS THAN NT1 IF REQUIRED.
+*                B) WHEN NT1 OR NT2 ARE NOT TIMESTEPS NUMBER OF
+*                   THE FILE,  THE NEAREST TIMESTEPS WITHIN THE PERIOD
+*                   NT1 TO NT2 ARE USED.
+*                C) WHEN 'NT1.LT.0', ALL TIMESTEPS ARE CONSIDERED AND
+*                   NT2 IS DISREGARDED.
+*                D) WHEN BOTH NT1,NT2 = 0, ALL TIMESTEPS ARE CONSIDERED
+*      DT      = NUMBER OF SECONDS BETWEEN SUCESSIVE TIMESTEPS IN THE FI
+*      (t3)      (IF DT=0. NO TIME DIFFERENCE DIVISION IS DONE)
+*      TCFLAG  = > 0, CCCma TIME CODE FLAG: IF TCFLAG=1, THE TIMESTEP IS
+*      (kind)         ASSUMED TO BE OF THE FORM YYYYMMDDHH, ANY OTHER VALUE
+*                     INDICATES THAT THE TIMESTEP IS INDEED JUST THAT.
+*                     NOTE THAT A RPN STANDARD FILE DOES NOT NORMALLY USE
+*                     THE NT1,NT2 AND DT VALUES, AS THESE ARE INCLUDED
+*                     IN THE FILE ITSELF. NTI AND NT2 ARE THEN THE EARLIEST
+*                     AND LATEST TIMES IN THE FILE.
+*                < 0, INDICATES THAT RPN FILES WILL USE THE NT1,NT2 AND
+*                     DT VALUES, AS WELL AS THE ABSOLUTE VALUE OF TCFLAG.
+*                
+*
+*      READ( 5,5010 ) NAME,NT1,NT2,DT,TCFLAG
+* 5010 FORMAT(10X,1X,A4,2I10,2F10.0)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* DIFTIM    PCP         0        72     1800.
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEMS READING FIRST SET AT OR AFTER NT1
+*       2 FIRST SET SEEMS INCOMPLETE
+*       3 PROBLEMS READING LAST SET AT OR BEFORE NT2
+*       4 ERROR ABORT READING INPUT
+*       5 MORE THAN ONE TYPE OF DATA IN XIN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM diftim
+*    +               (XIN,       XOUT,       INPUT,       OUTPUT,
+*    +          TAPE1=XIN, TAPE2=XOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -----------------------------------------------------------
+
+*     $Log: diftim.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2005/04/14 18:15:49  dugas
+*     Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.7  2001/03/17 21:43:26  armnrbd
+*     Remplacer GETPARI/PUTPARI par GETHIGH/PUTHIGH.
+*
+*     Revision 4.6  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.5  1998/07/03  02:26:23  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1998/06/10  21:23:53  armnrbd
+*     Enlever les routines TIMEDC et TDIGITS.
+*
+*     Revision 4.3  1998/06/08  02:16:14  armnrbd
+*     Utiliser HPALLOC pour allouer la memoire dynamique.
+*     Implanter un mode non-CCCma pour les fichiers RPN.
+*
+*     Revision 4.2  1997/09/26  17:38:50  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1995/08/31  21:56:58  armnrbd
+*     Enlever toutes references au fichier SCRATCH (unit=3).
+*
+*     Revision 4.0  1994/11/17  14:19:49  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  93/11/11  14:51:10  armnrbd
+*     Ne plus utiliser d'unite scratch #3.
+*     
+*     Revision 3.0  93/10/13  13:55:51  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  92/12/21  14:07:21  armnrbd
+*     Permettre que le premier champs lu soit retenu (BugFix).
+*     
+*     Revision 1.4  92/12/16  17:24:49  armnrbd
+*     Ajouter le traitement par RPBLOC.
+*     
+*     Revision 1.3  92/11/09  22:39:59  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/03/17  11:29:19  armnrbd
+*     Ajouter codes EXIT dans documentation.
+*     
+*     Revision 1.1  92/03/10  12:10:20  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:39  armnrbd
+*     Initial revision
+*     
+
+*     SEPT 25/91 - B.DUGAS. (CY920 IRIX/f77 version; newnam=diftim)
+*     MAY  06/83 - R.LAPRISE.
+
+*----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      REAL*8      HEURE
+      CHARACTER*4 KIND,NOM,LIGNE*80
+      LOGICAL     OK,ALLSTP,RPBLOC,CCCMOD
+      INTEGER*8   NT, NT1,NT2, NTPREV, NTHOLD
+      REAL        ZERO, DT,TCFLAG, CONST,SIGN,TIME,STEPS
+      INTEGER     LEV(MAXLEV),NLEV,NLEV0, NFF, HEAD,JBUF(taille_entete),JPAK,
+     +            LEN,NWDS,MAXW, NAME,STAMP, IO,I, IER,
+     +            DEET,NPAS, STAMP1,STAMP2,STAMPREV,
+     +            IDNT, NSEC1,NSEC2
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: G1,G2
+
+#     include "zlabel.cdk"
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER*8   Y2KDAT8
+      INTEGER     GETSIZ2,GETHIGH
+      CHARACTER*4 GETYP,PKTYP,SETNAM
+      EXTERNAL    GETYP,MACSPE,JCLPNT,RPBLOC,GETSIZ2,HPALLOC,XIT,
+     +            Y2KDAT8,PRECEDE,GETSET2,PUTSET2,TIMEDC, RECGET,
+     +            GETHIGH,PUTHIGH, INCDATR,DIFDATR, SETNAM,LEADBLK,
+     +            DATE2STAMP,STAMP2DATE
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/diftim.ptn,v $'
+
+*--------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+      NFF=4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NOM    = ' '    
+          NT1    =  0
+          NT2    =  0
+          DT     = 0.0
+          TCFLAG = 0.0
+
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NOM = LIGNE(1:4)
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ( LIGNE, 0020, ERR=900,END=900,IOSTAT=IO ) NT1
+
+          OK = RPBLOC('T2',LIGNE)
+          IF (OK) READ( LIGNE, 0020, ERR=900,END=900,IOSTAT=IO ) NT2
+
+          OK = RPBLOC('T3',LIGNE)
+          IF (OK) READ( LIGNE, 0011, ERR=900,END=900,IOSTAT=IO ) DT
+ 
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK)
+     +        READ( LIGNE, 0011, ERR=900,END=900,IOSTAT=IO ) TCFLAG
+ 
+      ELSE
+
+***        READ A CARD IDENTIFYING THE SETS TO BE SUBTRACTED.
+***        DIFFERENCE IS TAKEN BETWEEN TIMESTEPS NT1 AND NT2.
+***        DT IS THE LENGTH OF A TIMESTEP IN SECONDS.
+***        IF TCFLAG IS NON-ZERO, NT1 AND NT2 CONTAIN TIME CODE,
+***        ASSUMED TO BE IN DESCENDING ORDER, SUCH AS YYMMDDHH.
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010, ERR=900,END=900,IOSTAT=IO ) 
+     +                           NOM,NT1,NT2,DT,TCFLAG
+              CALL BURNF
+          END IF  
+
+      END IF
+
+      IF (PKTYP(1:2).EQ.'SQ' .AND. TCFLAG.GE.0)                THEN
+          CCCMOD = .FALSE.
+      ELSE
+          CCCMOD = .TRUE.
+          ALLSTP = .FALSE.
+      END IF
+      
+      TCFLAG = ABS( TCFLAG )
+
+      READ(NOM,4) NAME
+
+***    CHECK THAT THE DATE FORMAT HAS
+***    FOUR DIGITS FOR THE YEAR.
+
+      NT1 = Y2KDAT8( NT1 )
+      NT2 = Y2KDAT8( NT2 )
+
+      IF (CCCMOD)                                              THEN
+          WRITE(6,6005) NOM,NT1,NT2,DT,TCFLAG
+      ELSE
+          WRITE(6,6006) NOM
+      END IF
+
+***    ENSURE SEQUENCE OF TIMESTEPS.
+
+      SIGN = +1.
+
+      IF (NT2.LT.NT1 .AND. CCCMOD)                             THEN
+
+          NTHOLD = NT2
+          NT2    = NT1 
+          NT1    = NTHOLD
+          SIGN   =-1.
+
+      ELSE IF (NT1.LT.0 .OR. .NOT.CCCMOD
+     + .OR.   (NT1.EQ.0 .AND. NT2.EQ.0))                       THEN
+
+          ALLSTP = .TRUE.
+          WRITE(6,6035)
+
+      END IF
+
+      CALL DATE2STAMP( NT1,STAMP1 )
+      CALL DATE2STAMP( NT2,STAMP2 )
+
+***    ALLOCATE WORKING MEMORY.
+***    FIND THE NUMBER OF LEVELS AND TYPE OF FIELD.
+
+      MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.EQ.0) CALL                          XIT(' Diftim ',-1 )
+
+      IF (KIND.EQ.'ZONL') NWDS = JBUF(5)
+      IF (NOM .EQ.' '   ) NAME = JBUF(3)
+
+      WRITE(KIND,4) JBUF(1)
+      WRITE(NOM, 4) NAME
+
+      IF (NOM.NE.' ') CALL LEADBLK( NOM )
+      IF (NOM.NE.' ') NOM = SETNAM( 1,NOM )
+
+***    LA VARIABLE ZNAME EST UTILISEE POUR
+***    CHERCHER DANS LES FICHIERS STANDARDS.
+
+      ZNAME  = NOM
+      ZLABEL = ' '
+
+      IF (PKTYP(1:2).EQ.'SQ') NOM = ' '
+
+      ALLOCATE( IBUF(LEN),G1(NWDS*NLEV),G2(NWDS*NLEV) )
+
+***    FIND THE FIRST SET AT OR AFTER NT1, SAVE IT IN G1.
+
+  100 CALL RECGET( 1, ' ',-1,NOM,-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6010)
+              CALL                                 XIT(' Diftim ',-1 )
+          END IF
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Diftim ',-5 )
+
+          CALL STAMP2DATE( IBUF(2),NT ) 
+
+      IF (NT >= NT1 .OR. ALLSTP)                               THEN
+          NT1 = NT ; STAMP1 = IBUF(2)
+          CALL PRECEDE( 1,1 )
+      ELSE
+          GOTO 100
+      END IF
+
+      CALL GETSET2( 1, G1, LEV,NLEV0, IBUF,MAXW,OK )
+
+      IF (.NOT.OK .OR. NLEV.NE.NLEV0)                          THEN
+          CALL PRTLAB( IBUF )
+          WRITE(6,6010) NLEV,NLEV0
+          CALL                                     XIT(' Diftim ',-2 )
+      END IF
+
+      CALL PRTLAB( IBUF )
+
+***    FIND THE LAST TIMESTEP AT OR BEFORE NT2.
+
+      NTPREV = NT1 ; STAMPREV = STAMP1
+
+  150 CALL RECGET( 1, ' ',-1,NOM,-1, IBUF,MAXW,OK )
+
+      IF (OK)                                                  THEN
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Diftim ',-5 )
+
+          CALL  STAMP2DATE( IBUF(2),NT ) 
+
+          IF (NT <= NT2 .OR. ALLSTP)                           THEN
+              NTPREV=NT ; STAMPREV = IBUF(2)
+              GOTO 150
+          END IF
+
+      END IF
+
+***    WHEN ONE GETS HERE,  NT2 HAS JUST BEEN EXCEEDED, OR EOF REACHED.
+***    GO BACK TO PREVIOUS TIMESTEP NTPREV TO GET THE FIELD.
+
+      NT2 = NTPREV ; STAMP2 = STAMPREV
+      CALL PRECEDE( 1,NLEV )
+
+***    DETERMINE THE TIME INTERVAL...
+
+      CONST = 1.
+
+      IF (CCCMOD)                                              THEN
+
+***        A) IF DT=0. OR NT2-NT1=0 JUST COMPUTE AN ORDINARY DIFFERENCE.
+***        B) IF THE TIME CODE FLAG TCFLAG IS SET, INTERPRET NT1 AND NT2 
+***           IN THE FORM YYMMDDHH AND DIVIDE THE DIFFERENCE OF THE SETS
+***           BY THE TIME DIFFERENCE IN SECONDS.
+
+          IF (TCFLAG .EQ. 0.)                                  THEN
+
+              IDNT  = NT2-NT1
+              STEPS = FLOAT( IDNT )
+              TIME  = DT*STEPS
+
+                              CONST = 1.
+              IF (TIME.NE.0.) CONST = 1./TIME
+
+          ELSE
+
+              CALL TIMEDC( NSEC1,NT1 )
+              CALL TIMEDC( NSEC2,NT2 )
+
+              IDNT = NSEC2-NSEC1
+              TIME = FLOAT( IDNT )
+
+              IF (TIME.NE.0. .AND.
+     +            DT  .NE.0  )
+     +            CONST = 1./TIME
+
+          END IF
+
+      ELSE
+
+***        SET THE TIME TO THE MID-POINT OF THE INTERVAL.
+
+          CALL DIFDATR( STAMP2,STAMP1,HEURE )
+          IF (DEET .EQ. 0 ) DEET  = 3600
+          IF (HEURE.NE.0.0) CONST = 1./(3600.*HEURE)
+
+          IDNT = NINT( HEURE/(2*DEET/3600D0) )
+
+          IF (HEURE < 0.0)                                     THEN
+              IDNT   = -IDNT
+              NT1    = NT2
+              STAMP1 = STAMP2
+          END IF
+
+      END IF
+
+***   DO CALCULATION.
+
+      CALL GETSET2( 1, G2, LEV,NLEV0, IBUF,MAXW,OK )
+
+      IF (.NOT.OK .OR. NLEV.NE.NLEV0)                          THEN
+          CALL PRTLAB( IBUF )
+          WRITE(6,6010) NLEV,NLEV0
+          CALL                                     XIT(' Diftim ',-3 )
+      END IF
+
+      CALL PRTLAB( IBUF )
+
+      IBUF(2) = IDNT
+
+***    SUBTRACT THE FIRST TIMESTEP FROM THE SECOND.
+***    DIVIDE BY TIME DIFFERENCE AND PUT ON FILE 2.
+
+      DO 200 I=1,NWDS*NLEV
+          G2(I) = SIGN*( G2(I)-G1(I) )*CONST
+  200 CONTINUE
+
+      IF (.NOT.CCCMOD)                                         THEN
+          CALL PUTHIGH( IDNT  ,'NPAS' ,IBUF )
+          CALL PUTHIGH( STAMP1,'DATEO',IBUF )
+          CALL PUTHIGH( DEET  ,'DEET' ,IBUF )
+      END IF
+
+      CALL PUTSET2( 2, G2, LEV,NLEV, IBUF,MAXW )
+
+      CALL PRTLAB( IBUF )
+      WRITE(6,6030) NLEV
+
+      CALL                                         XIT(' Diftim ', 0 )
+
+***    PREMATURE E.O.F. ON INPUT.
+
+  900 CALL                                         XIT(' Diftim ',-4 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+ 0020 FORMAT(BN,I20)
+
+ 5010 FORMAT(10X,1X,A4,2I10,2F10.0)
+ 6005 FORMAT('0 Diftim on name=',A4,', t1,t2=',2I16,
+     +       ', dt,tcflag=',2F10.0)
+ 6006 FORMAT('0 Diftim on name=',A4)
+ 6010 FORMAT('0 Diftim input field not found or nlev/nlev0=',2I5)
+ 6030 FORMAT('  Last of ',I5,' levels.')
+ 6035 FORMAT('  Diftim will output differences between last/first',
+     +       ' timesteps in first file.')
+
+      END
+#     endif

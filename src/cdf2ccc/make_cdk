@@ -1,0 +1,56 @@
+
+SHELL = /bin/sh
+
+.DEFAULT:
+	co $@
+
+HDECKS= \
+	cdf2ccc.h	 dimmem.h	 format.h	 ibufmem.h \
+	infomem.h	 specmem.h	 varmem.h	 workmem.h \
+	ztypmem.h
+
+
+cdf2ccc.ah: cdf2ccc.h	affecte_attr.f 	affecte_coord.f 	affecte_dim.f 	affecte_var.f \
+	attr_value.f 	attribut_coord.f 	attribut_var.f 	auxiliary_coordinate.f \
+	cal_date.f 	cdf2ccc.f 	combline.f 	conv_unit.f \
+	decodate.ftn 	def_cccma.f 	def_dim_coord.f \
+	def_level.f 	def_spectral_truncation.f 	define_list.f 	define_netcdf.f \
+	define_var.f 	encodate.ftn 	enleve_bissextile2.ftn 	eval_lonlat.f \
+	eval_xcyc.f 	get_attr.f 	get_attribut.f 	get_coord2.f \
+	get_coordonne.f 	get_dim.f 	get_topo.f 	get_var.f \
+	hybrid_vertical_coordinate.f 	init_dim.f \
+	initialise.f 	inq_file.f 	lire_arg.f 	lire_cccvar.f \
+	possibilite.f 	put_attribut.f 	put_var.f 	rdlatlon2.f \
+	rdspec2.f 	scanfile.f	trier.f 	valide_range.f \
+ 	vers_cccma.f	vers_netcdf.f 	wrfile.f 	wrlalo.f 
+dimmem.ah: dimmem.h	affecte_dim.f 	attribut_coord.f 	attribut_var.f 	def_dim_coord.f \
+	def_level.f 	define_netcdf.f 	define_var.f 	eval_lonlat.f \
+	get_coord2.f 	get_coordonne.f 	get_dim.f 	get_topo.f \
+	hybrid_vertical_coordinate.f 	init_dim.f 	lire_cccvar.f 	rdlatlon2.f \
+	rdspec2.f 	trier.f 	vers_cccma.f 	vers_netcdf.f \
+	wrfile.f 	wrlalo.f 
+format.ah: format.h	attribut_coord.f 	enleve_bissextile2.f 	scanfile.f 
+ibufmem.ah: ibufmem.h	rdlatlon2.f 	rdspec2.f 	vers_cccma.f 	vers_netcdf.f \
+	wrfile.f 	wrlalo.f 
+infomem.ah: infomem.h	affecte_coord.f 	affecte_var.f 	attribut_coord.f 	attribut_var.f \
+	auxiliary_coordinate.f 	conv_unit.f 	def_dim_coord.f 	def_level.f \
+	def_spectral_truncation.f 	define_list.f 	define_netcdf.f 	define_var.f \
+	eval_lonlat.f 	eval_xcyc.f 	get_coord2.f 	get_coordonne.f \
+	hybrid_vertical_coordinate.f 	init_dim.f 	initialise.f 	lire_cccvar.f \
+	rdlatlon2.f 	rdspec2.f 	trier.f 	valide_range.f \
+	vers_cccma.f 	vers_netcdf.f 	wrfile.f 	wrlalo.f 
+specmem.ah: specmem.h	rdspec2.f 	trier.f 	vers_cccma.f 	vers_netcdf.f 
+varmem.ah: varmem.h	attribut_coord.f 	attribut_var.f 	auxiliary_coordinate.f 	def_dim_coord.f \
+	def_level.f 	eval_lonlat.f 	eval_xcyc.f 	get_coord2.f \
+	get_coordonne.f 	get_topo.f 	hybrid_vertical_coordinate.f 	lire_cccvar.f \
+	rdlatlon2.f 	rdspec2.f 	vers_cccma.f 	vers_netcdf.f \
+	wrfile.f 	wrlalo.f 
+workmem.ah: workmem.h	affecte_attr.f 	attribut_coord.f 	def_dim_coord.f 	def_level.f \
+	get_attr.f 	get_attribut.f 	get_topo.f 	get_var.f \
+	lire_cccvar.f 	put_attribut.f	put_var.f 	rdlatlon2.f \
+	rdspec2.f 	scanfile.f 	wrfile.f \
+	wrlalo.f 
+ztypmem.ah: auxiliary_coordinate.f	def_attr_projection.f 	eval_lonlat.f \
+	inq_file.f 	lire_arg.f 	rdlatlon2.f 	trier.f \
+	vers_cccma.f 	vers_netcdf.f
+

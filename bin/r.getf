@@ -1,0 +1,128 @@
+#! /bin/ksh
+#
+zxzxzx=${DIAGNOSTIC_EXIT:=DIAGNOSTIC_EXIT}
+if [ -s "${zxzxzx}" ]; then exit 0 ; fi
+#
+TMPDIRN=`r.which_tmpdir`
+LANGUE=${CMCLNG:-english}
+#
+cclargs 0$                              "[creer une copie locale d'un fichier permanent]"\
+        -dn  "aucun_nom_local"  ",,,,"  "[nom du fichier local]"\
+        -pdn "nil"              "nil"   "[nom permanent du fichier]"\
+        -own "nil"              "$HOME" "[repertoire de residence du fichier permanent]"\
+        -na  "non"              "oui"   "[ne pas generer de codes d'erreurs]"\
+        ++ $* > ${TMPDIRN}/cclargs_r.accessf.out$$
+#
+. ${TMPDIRN}/cclargs_r.accessf.out$$ && /bin/rm -f ${TMPDIRN}/cclargs_r.accessf.out$$
+# 
+# usage: r.getf/r.accessf -dn Local_Filename [-pdn [Permanent_Filename]]
+#                              [-own [Alternate_Directory]] [-na]
+#
+# notes: 1) le nom Local_Filename correspond a une copie du fichier 
+#           permanent dans le repertoire $TMPDIR.
+#        2) le parametre pdn prend par defaut la valeur de dn.
+#
+# auteur:   B. Dugas, RPN/13 avril 1992.
+#
+# modifications: 1) tenir compte de la variable ECHO_COMMAND_LINE.
+#                   (BD - 03 juin 1993)
+#                2) ajouter le support de DIAGNOSTIC_EXIT.
+#                   (BD - 30 juin 1993)
+#                3) reviser l'utilisation des codes d'erreurs et creer
+#                   une version conjointe de r.getf et r.accessf.
+#                   (BD - janvier 1999)
+#                4) corriger la definition de ${verbe}.
+#                   (BD - fevrier 1999)
+#                5) utiliser r.which_tmpdir pour trouver le tmpdir
+#                   (BD - mai 1999)
+#                6) modifier l'appel a cclargs (enlever eval)
+#                   (BD - juin 2003)
+#
+verb=`basename $0`
+if [ ${verb} = r.accessf ]; then
+     verbe="ln -s "
+elif [ ${verb} = r.getf ]; then
+     verbe="cp "
+fi
+#
+if [ "${dn}" = aucun_nom_local ]; then
+     echo " "
+     echo " usage: $0 -dn Local_Name [-pdn [Permanent_Filename]]"
+     echo "                [-own [Alternate_Directory]] [-na]"
+     echo " "
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "no specified value for argument dn in $0" > ${zxzxzx}
+          fi
+          exit 1
+     else
+          exit 0
+     fi
+fi
+#
+if [ "${ECHO_COMMAND_LINE:-PAS_DEFINI}" != "PAS_DEFINI" ]; then
+     echo "$0 -dn ${dn} -pdn ${pdn} -own ${own} -na ${na}"
+fi
+#
+if [ "${own}" = nil ]; then  own=`pwd` ; fi
+#
+if [ ! -d "${own}" ]; then
+     if [ ${LANGUE} = english  ]; then echo "directory ${own} does not exit" ; fi
+     if [ ${LANGUE} = francais ]; then echo "repertoire ${own} n'existe pas" ; fi
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "directory ${own} does not exit in $0" > ${zxzxzx}
+          fi
+          exit 2
+     else
+          exit 0
+     fi
+fi
+#
+own=`true_path ${own}`
+#
+if [ "${pdn}" = nil ]; then
+     pdn=${own}/${dn}
+else
+     pdn=${own}/${pdn}
+fi
+#
+if [ ! -f ${pdn} ]; then
+     if [ ${LANGUE} = english  ]; then echo "file ${pdn} does not exist" ; fi
+     if [ ${LANGUE} = francais ]; then echo "fichier ${pdn} n'existe pas" ; fi
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "file ${pdn} does not exist in $0" > ${zxzxzx}
+          fi
+          exit 3
+     else
+          exit 0
+     fi
+fi
+#
+DN=${TMPDIRN}/${dn}
+#
+if [ -f "${DN}" -o -h "${DN}" ]; then
+     if [ ${LANGUE} = english  ]; then echo "file ${dn} is already local" ; fi
+     if [ ${LANGUE} = francais ]; then echo "fichier ${dn} est deja local" ; fi
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "file ${dn} is already local in $0" > ${zxzxzx}
+          fi
+          exit 4
+     else
+          exit 0
+     fi
+fi
+#
+${verbe} ${pdn} ${DN}
+if [ $? != 0 -a "${na}" = non ]; then
+     if [ ${LANGUE} = english  ]; then echo "unable to create local file ${dn}" ; fi
+     if [ ${LANGUE} = francais ]; then echo "incapable de creer fichier local ${dn}" ; fi
+     if [ -f ${zxzxzx} ]; then
+          echo "$0 is unable to create local file ${dn}" > ${zxzxzx}
+     fi
+     exit 5
+fi
+#
+exit 0

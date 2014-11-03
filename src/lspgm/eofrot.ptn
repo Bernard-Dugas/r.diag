@@ -1,0 +1,692 @@
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 15000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      eofrot  EOF ROEF VAL RMAT INPUT OUTPUT [ -m VAL1 -n VAL2 ]
+*
+*
+*     AUTHOR - B.Dugas, AVRIL 20/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/eofrot.ptn,v 4.8 2014/10/10 19:52:03 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*       Calcul des eofs transformees par la methode varimax de rotation.
+*       La methode de rotation promax (oblique) n'est plus supportee.
+*       Le fichier eof contient les  elements de la  matrice des facteurs
+*       des facteurs. La dimension maximale de cette matrice est :
+*
+*       NWDS( dans un enregistrement du fichier EOF ) X #( rec dans EOF )
+*
+*
+*     PARAMETRES...
+*      M           = NOMBRE DE FACTEURS QU'IL FAUDRA LIRE DE L'UNITE 1.
+*                 .EQ. 0 ==> IL EST DETERMINE PAR LE NOMBRE D'INTERVAL
+*                        TEMPORELS DIFFERENTS DANS LE FICHIER EOF.
+*      MATRIC (n) .NE. 0 ==> ON IMPRIME LA MATRICE DES ROTATION.
+*
+*      READ( 5,5000 ) M,MATRIC
+*5000  FORMAT(10X,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* EOFROT      0    1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 BAD NUMBER OF EOFS SPECIFIED
+*       2 NO ENOUGH RECORDS ON FILE EOF
+*       3 PREMATURE END OF FILE ON EOF
+*       4 DATA TYPE IS COMPLEX
+*       5 UNABLE TO ALLOCATE MEMORY
+*       6 INCOMPLETE VECTOR SET
+*       7 PROBLEM DETERMINING M FROM EOF FILE
+*       8 ERROR READING INPUT PARAMETERS
+#endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM EOFROT
+*    1              (      EOF,         ROEF,         VAL,       RMAT,
+*    2               TAPE1=EOF,   TAPE2=ROEF,   TAPE3=VAL, TAPE4=RMAT,
+*    3                     INPUT,       OUTPUT,
+*    4               TAPE5=INPUT, TAPE6=OUTPUT)
+ 
+*     $Log: eofrot.ptn,v $
+*     Revision 4.8  2014/10/10 19:52:03  dugas
+*     Correction a la sequence d'appel a VARIMAX.
+*
+*     Revision 4.7  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2014/02/06 18:21:07  dugas
+*     Re-ecriture sans la rotation oblique PROMAX.
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 20:56:10  dugas
+*     Enlever la definition du macro taille_entete.
+*
+*     Revision 4.3  2006/04/26 22:33:45  dugas
+*     Ajouter le support des parametres sur la ligne de commande.
+*
+*     Revision 4.2  1999/05/04 16:35:15  armnrbd
+*     Ajouter les routines secondaires qui manquaient.
+*
+*     Revision 4.1  1998/05/21 20:20:47  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:19:56  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:55  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  92/11/08  20:02:52  armnrbd
+*     Initial revision
+*     
+ 
+***    NOVEMBRE 23/87 - M=MIN (#REC DS UNIT 1, M LU SUR UNIT 5)
+***    JANVIER  31/88 - AJOUTER ECRITURE DE KAISER NU (VOIR HOREL,
+***                     JAM, 23, 1660-1673, EQ19, 1984).
+***    FEVRIER  22/88 - SAUVER LA MATRICE DES ROTATIONS ET CONSIDERER
+***                     L'OPTION D'UNE ROTATION OBLIQUE (PROMAX, K=2).
+***    MARS     10/88 - ROTATION PROMAX, K=2, 3, 4, .....
+***    JUIN     29/88 - CORRIGER LA VALEUR DU POINTEUR JBF.
+***    NOVEMBRE 09/88 - MODIFIER LE FORMAT D'IMPRESSION DES MATRICES.
+***    AVRIL    06/89 - MODIFIER LE FORMAT DE SORTIE DE LA MATRICE DE
+***                     ROTATION (MODE COLONNES)
+***    MAI      01/89 - ... ET UNE DEUXIEME ITERATION POUR CE FORMAT.
+ 
+*-------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXLEV = 999 , HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXMEM = memoire_maximale
+
+      CHARACTER*4 TYPE
+      CHARACTER   LIGNE*80 
+      LOGICAL     OK,ERR,OBLIQ
+      REAL*8      DELTA,EPS,SUMV
+      INTEGER     UN,DEUX,TROIS,QUATRE,OBLIC,WHERE,MAXIT,
+     +            DIMCOV,NLEV,NLEVA,LEV(MAXLEV),IBUF(HEAD),
+     +            I,IO,J,K,KJ,L,M,N,NM,MATRIC,MOLD,LAST,LEN,NEXT,
+     +            NF,KIND,NWDS,MAXW,M2,MJB,IERR,IER(10),KNU,IIN,
+     +            IINK,IOUT,IIN1,IIN2,IJIN,IJOUT1,IJOUT2,
+     +            IPAK,MEM,R8SIZE
+ 
+      REAL(8),    ALLOCATABLE,DIMENSION(:) :: MAT,WRK,VAL,VEC,FCOR,PRIM,TARG
+      INTEGER,    ALLOCATABLE,DIMENSION(:) :: NDEX,JBUF
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL,    EXTERNAL :: SETIO64,RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ2,QQQR8SZ
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,XIT,SUIVANT,
+     +            GETFLD2,VARIMAX,CSORTD,SETLAB,PUTFLD2
+
+      DATA         UN,    DEUX,   TROIS,  QUATRE   /
+     +             1,       2,      3,      4      /
+      DATA        MAXIT,   EPS,   DELTA /
+     +             30,    .0001,   .001 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/eofrot.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 6
+      CALL JCLPNT( NF, 1,2,3,4, 5,6 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    LECTURE DES PARAMETRES D'EXECUTION.
+ 
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          M      = 0
+          MATRIC = 0
+          OBLIC  = 0
+
+          OK = RPBLOC('M',LIGNE)
+          IF (OK) READ( LIGNE,0005,ERR=999,END=999,IOSTAT=IO ) M
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ( LIGNE,0005,ERR=999,END=999,IOSTAT=IO ) MATRIC
+
+          OK = RPBLOC('K',LIGNE)
+          IF (OK) READ( LIGNE,0005,ERR=999,END=999,IOSTAT=IO ) OBLIC
+
+      ELSE
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 999
+          ELSE
+              READ( LIGNE, 5000,ERR=999,END=999,IOSTAT=IO )
+     +                          M, MATRIC, OBLIC
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (OBLIC.NE.0)                                          THEN
+          OBLIQ = .TRUE.
+          IF (OBLIC.LT.2) OBLIC = 2
+      ELSE
+          OBLIQ = .FALSE.
+      END IF
+ 
+      IF (M.LT.2 .AND. M.NE.0)                                 THEN
+ 
+          WRITE(6,6001) M
+          CALL                                     XIT(' Eofrot ',-1 )
+ 
+      ELSE
+ 
+          LEN = HEAD
+
+***        SAUVER LA VALEUR TRANSMISE DE M.
+ 
+          IF (M.NE.0)                                          THEN
+              MOLD = M
+              M    = 0
+          ELSE
+              MOLD = -UN
+          END IF
+ 
+***        LIRE UNIT 1 JUSQU'AU BOUT POUR DETERMINER M.
+ 
+          LAST = -UN
+  100     CALL SUIVANT( UN, IBUF,ERR, OK )
+              IF (.NOT.OK ) GOTO 150
+              IF (     ERR) GOTO 998
+              NEXT = IBUF(DEUX)
+              IF (NEXT.GT.LAST)                                THEN
+                  M = M+UN
+                  LAST = NEXT
+              END IF
+          GOTO 100
+  150     IF (M.LT.DEUX)                                       THEN
+              WRITE(6,6002)
+              IF (M.EQ.UN)                                     THEN
+                  CALL                             XIT(' Eofrot ',-101)
+              ELSE
+                  CALL                             XIT(' Eofrot ',-2 )
+              END IF
+          END IF
+          CALL PRECEDE(  UN,-1 )
+ 
+***        PRENDRE LE PLUS PETIT DU M PASSE EN PARAMETRE OU
+***        DU M DETERMINE PAR LE NOMBRE DE VECTEURS.
+ 
+          IF (MOLD.NE.-UN) M = MIN(MOLD,M)
+ 
+      END IF
+ 
+***    DETERMINER LA DIMENSION DU PROBLEME.
+ 
+      MAXW = GETSIZ2( UN, IBUF,LEN,NWDS,IPAK, LEV,NLEV )
+      IF (NLEV.LE.0 .OR. NLEV.GT.MAXLEV) CALL      XIT(' Eofrot ',-3 )
+ 
+      KIND = IBUF(UN)
+      WRITE(TYPE,'(A4)') KIND
+      DIMCOV = NWDS*NLEV
+ 
+      IF (TYPE.EQ.'SPEC'  .OR. 
+     +    TYPE.EQ.'FOUR' ) CALL                    XIT(' Eofrot ',-4 )
+ 
+      WRITE(6,6100) M, DIMCOV
+ 
+***    DEMANDONS LA MEMOIRE DONT ON A BESOIN.
+ 
+      M2  = (M*(M+UN))/DEUX
+      MJB = MAX(M*M,DIMCOV)
+
+      R8SIZE = QQQR8SZ() ; IER(:) = 0
+
+      MEM = R8SIZE*(M*M+M*(MJB+M+1))+LEN
+!     MEM = R8SIZE*(M*M+M*(MJB+M+1)+MAX(M2+M*DIMCOV+M,257))+LEN
+!     IF (OBLIQ) MEM = MEM+R8SIZE*(3*M*DIMCOV)
+
+      IF (MEM.GT.MAXMEM)                                       THEN
+          WRITE(6,6005) MEM-MAXMEM
+          CALL                                     XIT(' Eofrot ',-5 )
+      END IF
+
+      ALLOCATE( MAT(M*M),   STAT=IER(1) )
+      ALLOCATE( JBUF(LEN),  STAT=IER(4) )
+      ALLOCATE( VEC(M*MJB), STAT=IER(5) )
+      ALLOCATE( VAL(M),     STAT=IER(6) )
+      ALLOCATE( NDEX(M*M),  STAT=IER(7) )
+
+!     ALLOCATE( WRK(MAX(M2+M*DIMCOV+M,257)) , STAT=IER(2)
+!     IF (OBLIQ)                                               THEN
+!         ALLOCATE( TARG(M*DIMCOV), STAT=IER(8) )
+!         ALLOCATE( PRIM(M*DIMCOV), STAT=IER(9) )
+!         ALLOCATE( FCOR(M*DIMCOV), STAT=IER(10 )
+!     END IF
+
+      IF (IER(1).NE.0 .OR. IER(2).NE.0 .OR.
+     +    IER(3).NE.0 .OR. IER(4).NE.0 .OR.
+     +    IER(5).NE.0 .OR. IER(6).NE.0 .OR.
+     +    IER(7).NE.0 .OR. IER(8).NE.0 .OR.
+     +    IER(9).NE.0 .or. IER(10).NE.0 )                      THEN
+          DO I=1,10
+              IF (IER(I).NE.0) WRITE(6,6105) I,IER(I)
+          END DO
+          CALL                                     XIT(' Eofrot ',-5 )
+      END IF
+ 
+***    LECTURE DES DONNEES.
+ 
+      DO  N=1,M
+
+          WHERE = (N-UN)*DIMCOV+UN
+
+          CALL GETSET2( 1, VEC(WHERE),LEV,NLEVA, JBUF,MAXW,OK )
+
+          IF (.NOT.OK .OR. NLEVA.NE.NLEV)                      THEN
+              WRITE(6,6006) N, NLEVA
+              CALL                                 XIT(' Eofrot ',-6 )
+          END IF
+ 
+      END DO
+ 
+!     IF (.NOT.OBLIQ)                                          THEN
+ 
+***    ROTATION VARIMAX DE LA MATRICE VEC.
+ 
+      CALL VARIMAX( VEC,DIMCOV,M,EPS,DELTA,KNU,MAXIT,IERR )
+!         CALL OFROT( VEC,DIMCOV,DIMCOV,M,MAXIT,EPS,
+!    +                DELTA,VEC,DIMCOV,MAT,M,VAL,WRK,KNU, IERR )
+!
+!     ELSE
+!
+!**        ROTATION PROMAX (OBLIQUE) AVEC TARGET VARIMAX.
+!
+!         CALL OFPROM( VEC,DIMCOV,DIMCOV,M,MAXIT,EPS,DELTA,OBLIC,
+!    +                 VAL,TARG,DIMCOV,PRIM,DIMCOV,MAT,M,FCOR,WRK,
+!    +                 KNU, IERR )
+!
+!     END IF
+ 
+***    TRI SELON L'ORDRE CROISSANT DES VAL.
+ 
+      DO  I=1,M
+          NDEX(I) = I
+      END DO
+
+      CALL CSORTD( VAL,NDEX,M )
+
+***    TRI DES COLONNES DE VEC SELON L'ORDRE INVERSE DES VALS.
+
+      SUMV = 0.0
+      DO  I=1,M
+
+          IIN    = NDEX(M-I+1)
+          IINK   = (IIN-1)*DIMCOV
+          IOUT   = (I-1)*DIMCOV+M
+
+          WRK(I) = VAL(IIN)
+
+          SUMV   = SUMV+VAL(IIN)
+          DO K=1,DIMCOV
+             WRK(IOUT+K) = VEC(K+IINK)
+          END DO
+
+      END DO
+      DO  I=1,M
+
+          IIN1   = (I-UN)*DIMCOV
+          IIN2   = IIN1+M
+
+          VAL(I) = WRK(I)
+          DO  K=1,DIMCOV
+             VEC(IIN1+K) = WRK(IIN2+K)
+          END DO
+
+      END DO
+ 
+***    ON ECRIT LES RESULTATS.
+ 
+!     IF (OBLIQ)                                               THEN
+!         WRITE(6,6140) M, OBLIC, (I, VAL(I), I=1,M)
+!     ELSE
+          WRITE(6,6110) KNU, M, (I, VAL(I), I=1,M)
+!     END IF
+ 
+      WRITE(6,6150) SUMV
+ 
+      DO  N=1,M
+          JBUF(2) = N
+          DO  L=1,NLEV
+
+              WHERE = DIMCOV*(N-UN)+NWDS*(L-UN)+UN
+
+              JBUF(4) = LEV(L)
+              CALL PUTFLD2( DEUX, VEC(WHERE), JBUF,MJB )
+
+          END DO
+      END DO
+ 
+      CALL SETLAB( JBUF,'ZONL',0,'EIVA',1,M,1,-1,-32 )
+      CALL PUTFLD2( TROIS, VAL, JBUF,MJB )
+ 
+      IF (MATRIC.NE.0)                                         THEN
+ 
+***        PUISQUE VECROT = VEC*T, LES COLONNES DE T SONT TRIEES DE
+***        LA MEME FACON QUE LES  COLONNES DE VECROT. LES LIGNES ET
+***        LES COLONNES DE FCOR DOIVENT ETRE TRIEES.
+ 
+          WRITE(6,6120) M, M
+          WRITE(6,6101) (N, N=1,M)
+          DO  J=1,M
+              WRITE(6,6130) J, (MAT((NDEX(M-J+1)-1)*M+I), I=1,M)
+          END DO
+
+!         IF (OBLIQ)                                           THEN
+!
+!**            FCOR EST EN MODE D'ENTREPOSAGE SYMETRIQUE D'IMSL.
+!**            PASSER AU MODE NORMAL.
+!
+!             DO  400 I=1,M
+!                 IJIN = (I*(I-UN))/DEUX
+!
+!                 DO J=1,I
+!                    IJOUT1      = (J-1)*M+I
+!                    IJOUT2      = (I-1)*M+J
+!
+!                    VEC(IJOUT1) = FCOR(IJIN+J)
+!                    VEC(IJOUT2) = FCOR(IJIN+J)
+!                 END DO
+!
+! 400         CONTINUE
+!
+!**            ON PEUT MAINTENANT TRIER ET ECRIRE.
+!
+!             WRITE(6,6160)
+!             WRITE(6,6101) (N, N=M,1,-1)
+!             DO  J=1,M
+!                 WRITE(6,6130) J,
+!    +           (VEC((NDEX(M-J+1)-1)*M+NDEX(M-I+1)), I=M,J,-1)
+!             END DO
+!
+!         END IF
+
+      END IF
+ 
+      KJ = 1
+      DO  J=1,M
+          DO  K=1,M
+              VEC(KJ) = MAT((NDEX(M-J+1)-1)*M+K)
+              KJ      = KJ+1
+          END DO
+      END DO
+ 
+***    LA MATRICE DE ROTATION EST SAUVEE EN MODE COLONNES.
+ 
+      CALL SETLAB( JBUF, 'GRID',-1,'RMAT',1,M,1,0,-64 )
+      DO 600 N=1,M
+
+          JBUF(2) = 1000+N
+          NM      = (N-UN)*M+UN
+
+          CALL PUTFLD2( QUATRE, VEC(NM), JBUF,MJB )
+
+  600 CONTINUE
+ 
+***    FIN NORMALE DES CALCULS.
+ 
+      CALL                                         XIT(' Eofrot ', 0 )
+
+***    ERREUR DE LECTURE SUR UNITE UN. 
+
+  998 CALL                                         XIT(' Eofrot ',-7 )
+
+***    FIN PREMATUREE DE L'INFORMATION SUR UNIT 5.
+ 
+  999 CALL                                         XIT(' Eofrot ',-8 )
+*----------------------------------------------------------------------
+ 0005 FORMAT(BN,I5)
+ 5000 FORMAT(10X,3I5)
+
+ 6001 FORMAT(' Input dimension illegal i.e. = ',I10)
+ 6002 FORMAT(' Not enough records on unit 1. Output file left empty.')
+ 6005 FORMAT(' Problem too large, missing ',I10,' memory words.')
+ 6105 FORMAT(' Memory allocation problem with block no.',I1,' ERR=',I5)
+ 6006 FORMAT(' Read error on unit 1 for level no ',I5,' of eof no ',I5)
+
+ 6100 FORMAT(' Eofrot working with a problem of size :',I5,' X',I5)
+ 6101 FORMAT(4X,I3,7X,I3,7X,I3,7X,I3,7X,I3,7X,I3,
+     1       7X,I3,7X,I3,7X,I3,7X,I3,7X,I3,7X,I3)
+ 6110 FORMAT('1The varimax efficiency criterion is : ',I3/
+     1       ' the',I4,' (orthogonally) rotated eigenvalues are :'/
+     2         (4X,I5,1X,E13.7,I5,1X,E13.7,I5,1X,E13.7,I5,1X,E13.7))
+ 6120 FORMAT('0The ',I3,' X ',I3,' rotation matrix is given by :'/)
+ 6130 FORMAT(/' Column ',I3/(1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,
+     1       1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3,1X,E9.3))
+ 6140 FORMAT('1The ',I4,' PROMAX (K=',I3,') rotated variances are : '/
+     2         (4X,I5,1X,E13.7,I5,1X,E13.7,I5,1X,E13.7,I5,1X,E13.7))
+ 6150 FORMAT(' Their sum is :',E13.7)
+ 6160 FORMAT(/' The lower half of the symmetric primary',
+     1       ' factor correlation matrix is given by :'/)
+ 
+      END
+
+! Original Varimax EOF/PC code used at NASA GSFC and retreived from U.Arizona at
+! http://www.atmo.arizona.edu/students/courselinks/fall09/atmo529/Tutorialcodes/svd_varimax.f
+
+! Modified by B.Dugas (2014) - Add output of Kaiser Nu (see Horel, 1984)
+!                            - Add EPS,DELT,MAXIT,IERR, remove Y,K,NM arguments
+!                            - Explicit REAL(8) calculations
+
+      subroutine varimax( X,M,NF,EPS,DELT,KNU,MAXIT,IERR )
+
+!  THIS SUBROUTINE ROTATES THE VECTORS X USING THE VARIMAX CRITERION. 
+!  ON INPUT,  X CONTAINS THE NF EIGENVECTORS, EACH OF LENGTH M, TO BE ROTATED. 
+!  ON OUTPUT, X CONTAINS THE ROTATED SYSTEM.
+
+!  EPS is the angle convergence criteria
+!  DELT is the criterion function convergence criteria
+!  KNU is the Kaiser NU (relates to the actual convergence value)
+!  MAXIT is the maximum interation count
+!  IERR is an error indicator (=0 when the calculation succeeds)
+
+      IMPLICIT none
+
+! Arguments
+
+      INTEGER  M,NF,KNU,MAXIT,IERR
+      REAL(8)  X(M,NF),EPS,DELT
+
+! Local variables
+
+      REAL(8), ALLOCATABLE,DIMENSION(:) :: H,U,V
+      REAL(8)  A,B,C,D,VVOLD,VVNEW
+      REAL(8)  PHI,COSPHI,SINPHI
+      REAL(8)  SUMTERM,SUMTERM2,SUMTERM3,HOLD,EPS4
+      INTEGER  I,L,LC,NF2,P,Q
+
+      if (M <= 2 .OR. NF < 2) then
+         print *,'In VARIMAX, illegal M,NF values = ',M,NF
+         IERR=1 ; return
+      endif
+
+      allocate( H(M),U(M),V(M), stat=IERR )
+
+      if (IERR /= 0) then
+         print *,'In VARIMAX, unable to allocate 3*M words, M = ',M
+         IERR = 2 ; return
+      endif
+
+      IERR = 0 ; EPS4 = EPS/4. ; NF2=(NF*(NF-1))/2 ; LC=0
+
+!  Normalize components
+
+      do P=1,M
+        SUMTERM=0
+        do Q=1,NF
+          SUMTERM=X(P,Q)**2+SUMTERM
+        end do
+        H(P)=sqrt(SUMTERM)
+      end do
+
+      do Q=1,NF
+        do P=1,M
+          if(H(P).ne.0) then
+            X(P,Q)=X(P,Q)/H(P)
+          end if
+        end do
+      end do
+
+! Varimax iteration for all pairs of vectors
+
+      SUMTERM=0
+      SUMTERM2=0
+      SUMTERM3=0
+      do Q=1,NF
+        do P=1,M
+          HOLD=X(P,Q)**2
+          SUMTERM2=HOLD+SUMTERM2
+          SUMTERM=HOLD*HOLD+SUMTERM
+        end do
+        SUMTERM3=SUMTERM2**2+SUMTERM3
+        SUMTERM2=0
+      end do
+
+      VVOLD= M*SUMTERM-SUMTERM3
+
+      do L=1,MAXIT
+
+        step1 : do P=NF,2,-1
+          step2 : do Q=P-1,1,-1
+            
+             do I=1,M
+               U(I)=X(I,P)**2-X(I,Q)**2
+               V(I)=2*X(I,P)*X(I,Q)
+             end do
+           
+             SUMTERM=0
+             SUMTERM2=0
+             do I=1,M
+               A=U(I)+SUMTERM
+               B=V(I)+SUMTERM2
+             end do
+
+             SUMTERM=0
+             SUMTERM2=0
+             do I=1,M
+               SUMTERM=U(I)*U(I)-V(I)*V(I)+SUMTERM
+               SUMTERM2=U(I)*V(I)+SUMTERM2
+             end do
+
+             C=SUMTERM-(A*A-B*B)/FLOAT(M)
+             D=2*(SUMTERM2-A*B/FLOAT(M))
+
+             if (abs(C)+abs(D) > EPS) then
+                PHI=.25*dble((atan2(D,C)))
+                if (abs(PHI) < EPS4) then ! Angle is too small
+                   LC=LC+1
+                   if (LC < NF2) exit step2
+                   goto 50
+                endif
+             else
+                LC=LC+1
+                if (LC < NF2) exit step2
+                goto 50
+             endif
+
+             COSPHI=dble(cos(PHI))
+             SINPHI=dble(sin(PHI))
+             
+             do I=1,M
+               U(I)=X(I,P)*COSPHI+X(I,Q)*SINPHI
+               X(I,Q)=-X(I,P)*SINPHI+X(I,Q)*COSPHI
+               X(I,P)=U(I)
+             end do
+  
+          end do step2
+        end do step1
+
+        SUMTERM=0
+        SUMTERM2=0
+        SUMTERM3=0
+        do Q=1,NF
+          do P=1,M
+            HOLD=X(P,Q)**2
+            SUMTERM2=HOLD+SUMTERM2
+            SUMTERM=HOLD*HOLD+SUMTERM
+          end do
+          SUMTERM3=SUMTERM2**2+SUMTERM3
+          SUMTERM2=0
+        end do
+
+        VVNEW= M*SUMTERM-SUMTERM3    
+
+
+        if((VVNEW-VVOLD)/VVNEW < DELT) goto 50
+          
+        if (L == MAXIT) then
+          print*, 'In VARIMAX, rotation iteration did not coverge'
+          IERR = 3
+          goto 50
+        endif
+
+        VVOLD=VVNEW
+      
+      end do
+
+! Rescale rotated components
+
+50    do Q=1,NF
+         do P=1,M
+            X(P,Q)=X(P,Q)*H(P)
+         end do
+      end do
+
+! Output the Kaiser NU criterion
+ 
+      if (IERR == 0) then
+         HOLD = dble( NF )
+         KNU = int( 100.0*VVNEW*HOLD/(HOLD-1.0) )
+      else
+         KNU = -1
+      end if
+
+      deallocate( H,U,V )
+
+      return
+      END
+#     endif

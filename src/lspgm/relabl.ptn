@@ -1,0 +1,641 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      relabl  OLD NEW INPUT OUTPUT [ -kind JBUF1 KBUF1 -t1  JBUF2 KBUF2
+*                                     -name JBUF3 KBUF3 -lv1 JBUF4 KBUF4
+*                                     -lon  JBUF5 KBUF5 -lat JBUF6 KBUF6 
+*                                     -nhem JBUF7 KBUF7 -npg JBUF8 KBUF8
+*                                   [ -plv  InVertLevType [OutVertLevType] ] ]
+*
+*
+*     DESCRIPTION...
+*      relabl - CHANGES COMPLETE LABELS IN A FILE
+*
+*
+*     AUTHOR  - N.Sargent, JUN 06/81.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/relabl.ptn,v 4.16 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     PURPOSE - COPIES A FILE CHANGING LABELS WHERE INDICATED.
+*     NOTE    - ANY PART OF THE LABEL CAN BE CHANGED AND CHANGING
+*                 THE PACKING DENSITY CAUSES THE FIELD TO BE REPACKED.
+*
+*
+*     INPUT FILE...
+*      OLD = INPUT FILE TO BE CHANGED.
+*
+*     OUTPUT FILE...
+*      NEW = COPY OF FILE OLD WITH SOME OF THE LABELS CHANGED.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      JBUF = LABEL TYPE(S) TO BE CHANGED. BLANK SUBFIELDS ARE IGNORED
+*             AND A BLANK CARD CAUSES ALL THE RECORD LABELS IN THE INPUT
+*             FILE TO BE CHANGED ACCORDING TO KBUF CARD SUBFIELD VALUES,
+*            (PROVIDED THE KBUF CARD IS NOT BLANK).
+*      KBUF = VALUES TO WHICH LABELS ARE TO BE CHANGED.
+*             NOTE THAT BLANK SUBFIELDS ARE NOT CHANGED.
+*
+*      PLV  = VERTICAL LEVEL TYPE. ONLY USE THIS WITH RPN STD FILES AND
+*             WHEN JBUF4 AND KBUF4 CONTAIN DECODED VALUES. FURTHERMORE,
+*             THIS PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*             THE CURRENTLY SUPPORTED VALUES ARE:
+*
+*              'HAUTEUR'   , heights (m) with respect to sea level
+*              'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*              'ETA'       , first version of the GEM ETA coordinate
+*              'PRESSION'  , pressure (mb)
+*              'ARBITRAIRE', arbitrary level (no units apply)
+*              'HAUTEURS'  , heights (M) with respect to the surface
+*              'HYBRIDE'   , hybrid GEM coordinate
+*              'THETA'     , potential temperature coordinate
+*              'GALCHEN'   , GalChen generalized coordinate
+*
+*             ONE OR TWO VALUES CAN BE SPECIFIED HERE. WHEN ONLY ONE IS
+*             DEFINED, IT SPECIFIES THE VERTICAL LEVEL TYPE OF THE FOURTH
+*             ELEMENTS OF JBUF AND KBUF VECTORS. WHEN TWO VALUES ARE GIVEN,
+*             THE FIRST IS APPLIED TO THE INPUT AND THE SECOND IS THE TYPE
+*             OF THE OUTPUT VERTICAL COORDINATE. 
+*
+*             
+*      NOTES - 1) INPUT FILE RECORD LABELS REMAIN UNCHANGED IF ANY SUBFIELD
+*                 IN JBUF CARD DOES NOT MATCH THE CORRESPONDING SUBFIELD
+*                 READ OR IF THE KBUF CARD IS BLANK.
+*              2) LABELS ARE READ WITH ALPHANUMERIC FORMAT BUT CHANGED 
+*                 INTERNALLY TO THE NORMAL FORM OF (1X,A4,I10,1X,A4,5I8),
+*                 EXCEPT FOR THE VERTICAL LEVELS WHICH ARE FIRST CONVERTED
+*                 TO THEIR REAL UNCODED VALUES WITH A E10.0 FORMAT.
+*              3) KEYWORD INPUT IS AVAILABLE BY SPECIFYING THE JBUF AND 
+*                 KBUF VALUES IN SEQUENCE FOR THE REQUIRED KEYS. NO KEY
+*                 IS REQUIRED, BUT TWO VALUES ARE REQUIRED FOR EACH 
+*                 SPECIFIED KEY. QUOTED BLANK VALUES ARE LEGAL.
+*                 THE DEFAULT IN THIS MODE IS TO DO NOTHING.
+*
+*      READ( 5,5010 ) JBUF
+*      READ( 5,5010 ) KBUF
+*5010  FORMAT(11X,A4, I10,1X,A4,3I5,I10,I5)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+*   RELABL GRID           VORT
+*                          DIV                      -16
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*  THIS CHANGES ALL GRIDS WITH NAME VORT TO DIV AND REPACKS THEM.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON FILE OLD
+*       2 ERROR READING FIRST INPUT LINE
+*       3 ERROR READING SECOND INPUT LINE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM relabl
+*    +               (OLD,       NEW,       INPUT,       OUTPUT,
+*    +          TAPE1=OLD, TAPE2=NEW, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ----------------------------------------------------------
+
+*     $Log: relabl.ptn,v $
+*     Revision 4.16  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.15  2011/06/06 18:38:28  dugas
+*     Ne plus mettre NPAS a zero dans IBUF lorsqu'on modifie IBUF(2).
+*
+*     Revision 4.14  2010/10/23 16:55:19  dugas
+*     Effacer l'ancien NPAS lorsqu'on change IBUF(2).
+*
+*     Revision 4.13  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.12  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.11  2008/04/25 21:28:48  dugas
+*     Corriger les definitions de CHECK_VKIND?.
+*
+*     Revision 4.10  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.9  2006/12/18 12:43:37  dugas
+*     Permettre de changer VKIND pour les fichiers CMC/RPN.
+*
+*     Revision 4.8  2004/05/10 15:31:43  dugas
+*     Supporter toutes les coordonnees verticales de CONVPR.
+*
+*     Revision 4.7  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.6  2001/04/09 17:16:12  armnrbd
+*     Implanter le support du code RECABT.
+*
+*     Revision 4.5  1998/10/20 18:32:34  armnrbd
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.4  1998/07/03  02:13:29  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1998/05/28  19:59:39  armnrbd
+*     Travailler en mode 64 bits (calculs et I/O).
+*
+*     Revision 4.2  1998/02/18  16:45:51  armnrbd
+*     Verifier les niveaux input avec CHKLVLC.
+*
+*     Revision 4.1  1997/09/26  17:39:14  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:25  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/06/28  22:57:09  armnrbd
+*     Allocation de memoire avec HPALLOC.
+*     
+*     Revision 3.1  94/05/31  08:49:12  armnrbd
+*     Implanter le support de RPBLOC.
+*     
+*     Revision 3.0  93/10/13  13:56:46  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     JUN 20/83 - R.LAPRISE.
+*     JUN 06/81 - N.E. SARGENT, J.R. GILLESPIE.
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER*8    JBUF(8), KBUF(8),  IBUF8(8)
+      REAL         RJBUF4,  RKBUF4,   RLV1, RLV2, HOLD4
+      LOGICAL      OK,CHECK_VKIND1,   CHECK_VKIND2
+      INTEGER      JN,I,IO, KN,       NFF,  IRECS,NMODS,
+     +             JNOTB(8),KNOTB(8), MAXW, LEN,
+     +             JBUF4,   KBUF4,    JILG, JLAT, JPAK,
+     +             IER,     NWDS,     KILG, KLAT, KPAK,
+     +             LPAK,    VKIND,    LBUF(taille_entete), 
+     +             VKIND0,  VKIND1,   VKIND2
+      CHARACTER*4  M999,    JTYP,JNAM,
+     +             PKTYP,   KTYP,KNAM,
+     +                      TYPE,NAME
+      CHARACTER*20 CKIND1,  KTIM,KLEV,KHEM,
+     +             CKIND2,  JTIM,JLEV,JHEM,
+     +             VALEUR,  LIGNE*80
+
+      REAL*8,  DIMENSION(:), ALLOCATABLE :: G
+      INTEGER, DIMENSION(:), ALLOCATABLE :: IBUF
+
+      CHARACTER*4  GETYP
+      integer*8    Y2KDAT8
+      LOGICAL      RPBLOC,SETIO64
+      INTEGER      GETSIZ,GETKIND
+      EXTERNAL     RPBLOC,JCLPNT,GETLIGN,BURNF,GETFLD2,XIT,
+     +             PUTFLD2, GETSIZ,SETIO64,Y2KDAT8,GETKIND,
+     +             SETKIND,CONVPR,PUTHIGH,GETYP,DATE2STAMP,
+     +             STAMP2DATE
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         M999 / '-999' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/relabl.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF =  4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64( .TRUE. )
+
+      CKIND1 = ' '
+      CKIND2 = ' '
+      VKIND1 = -1
+      VKIND2 = -2
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      CHECK_VKIND1 = .FALSE.
+      CHECK_VKIND2 = .FALSE.
+
+***    ALLOCATE WORKING MEMORY.
+
+      MAXW = GETSIZ( 1,LBUF,LEN,NWDS,LPAK )
+      IF (MAXW.EQ.0) CALL                          XIT(' Relabl ',-1 )
+
+      VKIND0 = GETKIND( )
+      VKIND1 = VKIND0
+      VKIND2 = VKIND1
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          JTYP = ' '
+          JTIM = ' '
+          JNAM = ' '
+          JLEV = ' '
+          JILG =  0
+          JLAT =  0
+          JHEM = ' '
+          JPAK =  0
+
+          KTYP = ' '
+          KTIM = ' '
+          KNAM = ' '
+          KLEV = ' '
+          KILG =  0
+          KLAT =  0
+          KHEM = ' '
+          KPAK =  0
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) JTYP = VALEUR
+
+          OK = RPBLOC('KIND2',VALEUR)
+          IF (OK) KTYP = VALEUR
+
+          OK = RPBLOC('T1',VALEUR)
+          IF (OK) JTIM = VALEUR
+
+          OK = RPBLOC('T12',VALEUR)
+          IF (OK) KTIM = VALEUR
+
+          OK = RPBLOC('NAME',VALEUR)
+          IF (OK) JNAM = VALEUR
+
+          OK = RPBLOC('NAME2',VALEUR)
+          IF (OK) KNAM = VALEUR
+
+          OK = RPBLOC('LV1', VALEUR)
+          IF (OK) JLEV = VALEUR
+
+          OK = RPBLOC('LV12', VALEUR)
+          IF (OK) KLEV = VALEUR
+
+          OK = RPBLOC('PLV',VALEUR)
+          IF (OK) CKIND1 = VALEUR
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND1.NE.' ')               THEN
+              WRITE(6,6200) 'INPUT',CKIND1
+              CALL SETKIND( CKIND1 )
+              VKIND1 = GETKIND( )
+          ENDIF
+
+          OK = RPBLOC('PLV2',VALEUR)
+          IF (OK) CKIND2 = VALEUR
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND2.NE.' ')               THEN
+              WRITE(6,6200) 'OUTPUT',CKIND2
+              CALL SETKIND( CKIND2 )
+              VKIND2 = GETKIND( )
+          ENDIF
+
+          OK = RPBLOC('LON', VALEUR)
+          IF (OK .AND. VALEUR.EQ.' ') VALEUR = '0'
+          IF (OK) READ(VALEUR,5, ERR=902,END=902,IOSTAT=IO) JILG
+
+          OK = RPBLOC('LON2', VALEUR)
+          IF (OK .AND. VALEUR.EQ.' ') VALEUR = '0'
+          IF (OK) READ(VALEUR,5, ERR=903,END=903,IOSTAT=IO) KILG
+
+          OK = RPBLOC('LAT', VALEUR)
+          IF (OK .AND. VALEUR.EQ.' ') VALEUR = '0'
+          IF (OK) READ(VALEUR,5, ERR=902,END=902,IOSTAT=IO) JLAT
+
+          OK = RPBLOC('LAT2', VALEUR)
+          IF (OK .AND. VALEUR.EQ.' ') VALEUR = '0'
+          IF (OK) READ(VALEUR,5, ERR=903,END=903,IOSTAT=IO) KLAT
+
+          OK = RPBLOC('NHEM', VALEUR)
+          IF (OK) JHEM = VALEUR
+
+          OK = RPBLOC('NHEM2', VALEUR)
+          IF (OK) KHEM = VALEUR
+
+          OK = RPBLOC('NPG', VALEUR)
+          IF (OK .AND. VALEUR.EQ.' ') VALEUR = '0'
+          IF (OK) READ(VALEUR,5, ERR=902,END=902,IOSTAT=IO) JPAK
+
+          OK = RPBLOC('NPG2', VALEUR)
+          IF (OK .AND. VALEUR.EQ.' ') VALEUR = '0'
+          IF (OK) READ(VALEUR,5, ERR=903,END=903,IOSTAT=IO) KPAK
+
+      ELSE
+
+***        READ IDENTIFIERS LABELS JBUF TO BE CHANGED TO KBUF.
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5010, ERR=902,END=902,IOSTAT=IO )
+     +                     JTYP,JTIM,JNAM,JLEV,JILG,JLAT,JHEM,JPAK
+          END IF  
+
+          CALL GETLIGN( 5, LIGNE,80, OK)
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 903
+          ELSE
+              READ( LIGNE, 5010, ERR=903,END=903,IOSTAT=IO )
+     +                     KTYP,KTIM,KNAM,KLEV,KILG,KLAT,KHEM,KPAK
+              CALL BURNF
+          END IF  
+
+      END IF
+
+      DO  I=2,8
+          JBUF(I) = -999
+          KBUF(I) = -999
+      END DO
+
+      IF (JNAM.NE.' ') CALL LEADBLK( JNAM )
+      IF (KNAM.NE.' ') CALL LEADBLK( KNAM )
+
+      READ(M999,4) JBUF(1)
+      READ(M999,4) JBUF(3)
+      READ(M999,4) KBUF(1)
+      READ(M999,4) KBUF(3)
+
+      JN = 0
+      KN = 0
+
+***    CHECK VERTICAL LEVEL TYPE (WITH OPTIONAL CONVERSION)
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          IF (CKIND1.NE.' ')                                   THEN
+              IF (CKIND2.EQ.' ')                              THEN
+                  VKIND2 = VKIND1
+                  CKIND2 = CKIND1
+              ELSE
+                  CHECK_VKIND1 = .TRUE.
+                  CHECK_VKIND2 = .TRUE.
+              END IF
+          ELSE IF (CKIND2.NE.' ')                              THEN
+              CHECK_VKIND2 = .TRUE.
+          END IF
+      END IF
+
+***    CHECK EACH FIELD FOR BLANK INPUT FIELDS.
+
+      IF (JTYP.NE.' ')                                         THEN
+          JN        = 1+JN
+          JNOTB(JN) = 1
+          READ( JTYP, 4 ) JBUF(1)
+      END IF
+      IF (JTIM.NE.' ')                                         THEN
+          JN        = 1+JN
+          JNOTB(JN) = 2
+          READ( JTIM,20 ) JBUF(2)
+      END IF
+      IF (JNAM.NE.' ')                                         THEN
+          JN        = 1+JN
+          JNOTB(JN) = 3
+          READ( JNAM, 4 ) JBUF(3)
+      END IF
+      IF (JLEV.NE.' ')                                         THEN
+          JN        = 1+JN
+          JNOTB(JN) = 4
+          IF (INDEX( JLEV,'.' ).EQ.0 .AND. CKIND1.EQ.' ')      THEN
+              READ( JLEV, 10 ) JBUF4
+              CALL CONVPR( JBUF4, RJBUF4, VKIND1, -2 )
+              IF (PKTYP.EQ.'SQ') CALL CONVPR( JBUF4,RJBUF4,VKIND1,+2 )
+          ELSE
+              READ( JLEV, 11 ) RJBUF4
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL CONVPR( JBUF4, RJBUF4, VKIND1, +2 )
+              ELSE
+                  CALL LVCODE( JBUF4, RJBUF4/1000.,1 ) 
+              ENDIF
+         ENDIF
+         JBUF(4) = JBUF4
+      END IF
+      IF (JILG.NE. 0 )                                         THEN
+          JN        = 1+JN
+          JNOTB(JN) = 5
+          JBUF(5)   = JILG
+      END IF
+      IF (JLAT.NE. 0 )                                         THEN
+          JN        = 1+JN
+          JNOTB(JN) = 6
+          JBUF(6)   = JLAT
+      END IF
+      IF (JHEM.NE.' ')                                         THEN
+          JN        = 1+JN
+          JNOTB(JN) = 7
+          READ( JHEM,10 ) JBUF(7)
+      END IF
+      IF (JPAK.NE. 0 )                                         THEN
+          JN        = 1+JN
+          JNOTB(JN) = 8
+          JBUF(8)   = JPAK
+      END IF
+
+      IF (KTYP.NE.' ')                                         THEN
+          KN        = 1+KN
+          KNOTB(KN) = 1
+          READ( KTYP, 4 ) KBUF(1)
+      END IF
+      IF (KTIM.NE.' ')                                         THEN
+          KN        = 1+KN
+          KNOTB(KN) = 2
+          READ( KTIM,20 ) KBUF(2)
+      END IF
+      IF (KNAM.NE.' ')                                         THEN
+          KN        = 1+KN
+          KNOTB(KN) = 3
+          READ( KNAM, 4 ) KBUF(3)
+      END IF
+      IF (KLEV.NE.' ')                                         THEN
+          KN        = 1+KN
+          KNOTB(KN) = 4
+          IF (INDEX( KLEV,'.' ).EQ.0 .AND. CKIND2.EQ.' ')      THEN
+              READ( KLEV, 10 ) KBUF4
+              CALL CONVPR( KBUF4, RKBUF4, VKIND2, -2 )
+              IF (PKTYP.EQ.'SQ') CALL CONVPR( KBUF4,RKBUF4,VKIND2,+2 )
+          ELSE
+              READ( KLEV, 11 ) RKBUF4
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  CALL CONVPR( KBUF4, RKBUF4, VKIND2, +2 )
+              ELSE
+                  CALL LVCODE( KBUF4, RKBUF4/1000.,1 ) 
+              ENDIF
+          ENDIF
+          KBUF(4) = KBUF4
+      END IF
+      IF (KILG.NE. 0 )                                         THEN
+          KN        = 1+KN
+          KNOTB(KN) = 5
+          KBUF(5)   = KILG
+      END IF
+      IF (KLAT.NE. 0 )                                         THEN
+          KN        = 1+KN
+          KNOTB(KN) = 6
+          KBUF(6)   = KLAT
+      END IF
+      IF (KHEM.NE.' ')                                         THEN
+          KN        = 1+KN
+          KNOTB(KN) = 7
+          READ( KHEM,10 ) KBUF(7)
+      END IF
+      IF (KPAK.NE. 0 )                                         THEN
+          KN        = 1+KN
+          KNOTB(KN) = 8
+          KBUF(8)   = KPAK
+      END IF
+
+      WRITE(6,6011) JBUF
+      WRITE(6,6012) KBUF
+
+      JBUF(2) = Y2KDAT8( JBUF(2) )
+      KBUF(2) = Y2KDAT8( KBUF(2) )
+
+      NMODS = 0
+      IRECS = 0
+
+***    ALLOCATE WORKING MEMORY.
+
+  100 IF (IRECS.NE.0)                                          THEN
+          MAXW = GETSIZ( 1,LBUF,LEN,NWDS,LPAK )
+          IF (MAXW.EQ.0) CALL                      XIT(' Relabl ',-1 )
+      END IF
+
+      ALLOCATE( G(NWDS),IBUF(2*LEN) )
+
+***    READ THE NEXT RECORD ON FILE OLD.
+
+  150 CALL GETFLD2( 1, G, ' ',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( G,IBUF )
+                  GOTO 100
+              END IF
+              WRITE(6,6150) IRECS,NMODS
+              IF (IRECS.EQ.0) CALL                 XIT(' Relabl ',-1 )
+              CALL                                 XIT(' Relabl ', 0 )
+          END IF
+
+          WRITE(TYPE,4) IBUF(1)
+          WRITE(NAME,4) IBUF(3)
+
+***        BYPASS ANY LEVEL INFO RECORDS.
+
+          IF (TYPE.EQ.'ZONL' .AND. NAME.EQ.'++')               THEN
+              CALL PUTFLD2( 2, G, IBUF,MAXW )
+              GOTO 150
+          END IF
+
+          IRECS = IRECS+1
+
+***        CHECK IF LABEL IS TO BE CHANGED.
+
+          IBUF8(1:8) = IBUF(1:8)
+          CALL STAMP2DATE( IBUF(2),IBUF8(2) )
+          READ(TYPE,4) IBUF8(1) ; READ(NAME,4) IBUF8(3)
+
+          DO  I=1,JN
+              IF (IBUF8(JNOTB(I)) /= JBUF(JNOTB(I))) GOTO 200
+          END DO
+
+          IF (CHECK_VKIND1)                                    THEN
+              VKIND = GETKIND( )
+              IF (VKIND .NE. VKIND1) GOTO 200
+          END IF
+
+***        CHANGE LABEL.
+
+          IF (KN /= 0)                                         THEN
+              IF (NMODS == 0) CALL PRTLAB2(' First in : ',IBUF )
+              DO  I=1,KN
+                  IF      (KNOTB(I) == 1)                      THEN
+                      READ( KTYP, 4 ) IBUF(1)
+                  ELSE IF (KNOTB(I) == 2)                      THEN
+                      CALL DATE2STAMP( KBUF(KNOTB(I)),IBUF(2) )
+!!!                   CALL PUTHIGH( 0, 'NPAS', IBUF )
+                  ELSE IF (KNOTB(I) == 3)                      THEN
+                      READ( KNAM, 4 ) IBUF(3)
+                  ELSE
+                      IBUF(KNOTB(I)) = KBUF(KNOTB(I))
+                  END IF
+              END DO
+              IF (NMODS == 0) CALL PRTLAB2(' First out: ',IBUF )
+              NMODS = NMODS+1
+          END IF
+
+          IF (CHECK_VKIND2)                                    THEN
+              CALL CONVPR ( IBUF(4), HOLD4, VKIND,  -2 )
+              CALL CONVPR ( IBUF(4), HOLD4, VKIND2, +2 )
+              CALL PUTHIGH( IBUF(4),  'IP1',  IBUF )
+              IF (CKIND2.NE.' ') CALL SETKIND( CKIND2 )
+              IF (KN.EQ.0) NMODS = NMODS+1
+          END IF
+              
+  200     CALL PUTFLD2( 2, G, IBUF,MAXW )
+
+      GOTO 150
+
+***    E.O.F. ON INPUT.
+
+  902 CALL                                         XIT(' Relabl ',-2 )
+  903 CALL                                         XIT(' Relabl ',-3 )
+
+*-----------------------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+   10 FORMAT(BN,I10)
+   11 FORMAT(BN,E10.0)
+   20 FORMAT(BN,I20)
+
+ 5010 FORMAT(11X,A4,A10,1X,A4,A5,2I5,A10,I5)
+
+ 6011 FORMAT('0JBUF:      ',A4,I16,1X,A4,1X,I10,2I6,2I8)
+ 6012 FORMAT('0KBUF:      ',A4,I16,1X,A4,1X,I10,2I6,2I8)
+
+ 6150 FORMAT('0 Records read =',I6,'  records modified =',I6)
+ 6200 FORMAT(' Vertical levels (on ',A,') are of type ',A)
+
+      END
+#     endif

@@ -1,0 +1,754 @@
+#     if !defined (pression_au_toit)
+#         define   pression_au_toit 1000.
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      gpdpd  HUM TEMP ES [SP] OUTPUT \ 
+*             [ -kind VAL1 -c VAL2 -d VAL3 -i VAL4 -def [VAL5] ]
+*
+*
+*     DESCRIPTION...
+*      gpdpd  - COMPUTES DEW POINT DEPRESSION FROM T,SHUM OR RHUM
+*
+*
+*     AUTHOR  - J.D.Henderson, DEC 04/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gpdpd.ptn,v 4.25 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE - CONVERTS PRESSURE LEVEL GRID FILES OF TEMPERATURE AND
+*               SPECIFIC OR RELATIVE HUMIDITY TO DEW POINT DEPRESSION.
+*
+*
+*     INPUT FILES...
+*      HUM  = SPECIFIC OR RELATIVE HUMIDITY ARRAY.
+*      TEMP = TEMPERATURE OR VIRTUAL TEMPERATURE ARRAY.
+*     [SP   = SURFACE PRESSURE (MB), ONLY USED WHEN COORD .NE. 'PRES'.
+*             NOTE THAT ITS ACCEPTED VARIABLE NAMES ARE 'P0' OR 'PS']
+*
+*     OUTPUT FILE...
+*      ES   = DEW POINT DEPRESSION ARRAYS.
+*
+*
+*     NOTES:  - 1) WATER AND ICE PHASES ARE CONSIDERED IN THE CONVERSION
+*                  WHEN THE COMMAND LINE PARAMETER "-def" IS SPECIFIED.
+*                  OTHERWISE, ONLY WATER PHASE IS CONSIDERED.
+*               2) CALCULATIONS ARE DONE WITH THE RPN PHYSIC'S SET
+*                  OF THERMODYNAMIC CONVERSION FUNCTIONS (I.E. FINTERN)
+*               3) IF TEMP CONTAINS VIRTUAL TEMPERATURES (I.E. 'VT'),
+*                  HUM MUST CONTAIN SPECIFIC HUMIDITIES.
+*               4) THE ASSUMED UNITS FOR 'VT' ARE EITHER CENTIGRADES
+*                  (FOR RPN/CMC FILES) OR KELVINS (FOR CCCma FILES).
+*
+*
+*     (COMMAND-LINE) INPUT PARAMETERS...
+*
+*      COORD (kind) = 'SIG'/'GEM'/'GEM2'/'GEM3'/'PRES'.
+*      PTOIT (c)    = CONSTANT PRESSURE (PA) AT THE LID OF MODEL WHEN
+*                     (COORD.NE.'PRES') (DEF = pression_au_toit).
+*
+*      The next two parametres are only used when COORD='GEM2' or 'GEM3'.
+*
+*      PREF  (d)    = REF PRESSURE (DEF 80000 PA).
+*      R     (i)    = REFERENCE EXPONENT (DEF 1.0)
+*
+*      Notes: 1) 'GEM' is the original gem eta coordinate, while 'GEM2' is
+*                the first gem hybrid coordinate as implemented by Edouard
+*                & Gravel in GEM/DM v2.2.0. 'GEM3' is the normalized version
+*                that was implemented in the v2.3.1 GEM/DM.
+*             2) The default value of COORD is determined by the file type
+*                and the program will also try to determine it by the
+*                (internal) coding used for the coordinate itself.
+*             3) Specifying "-def AABB" will force the attempt to read
+*                a text file called aabb.nml, containing a FORTRAN
+*                namelist AABB_NML, which in turns will hold two arrays,
+*                A and B such that the local pressure at level K, PL(K),
+*                can be calculated as "A(K)+B(K)*PS". This then by-passes
+*                all of the normal COORD-related calculations for PL(K).
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ HUMIDITY FILE
+*       2 FOUND DATA OTHER THAN TYPE 'GRID' OR 'SUBA'
+*       3 HUMIDITY FILE IS NOT SHUM OR RHUM
+*       4 PREMATURE EOF ON HUMIDITY FILE 
+*       5 PREMATURE EOF ON TEMPERATURE FILE 
+*       6 HUMIDITY AND TEMPERATURE ARRAYS NOT THE SAME SIZE
+*       7 VIRTUAL TEMPERATURE NOT SUPPORTED WITH RELATIVE HUMIDITY
+*       8 INPUT FILE AND "COORD" MISMATCH
+*       9 PREMATURE EOF ON SURFACE PRESSURE FILE
+*      10 SURFACE PRESSURE AND TEMPERATURE ARRAYS NOT THE SAME SIZE
+*      11 UNSUPPORTED TYPE OF VERTICAL COORDINATE
+*      12 PROBLEM READING COMMAND-LINE PARAMETRE
+*      13 UNSUPPORTED VERTICAL COORDINATE FOUND IN GPHUM
+*      14 UNABLE TO READ AABB NAMELIST
+*      15 SP DOES NOT CONTAIN SURFACE PRESSURES FOR EARTH
+*      16 WRONG NUMBER OF A,B IN AABB
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM gpdpd
+*     PROGRAM GPDPD (GPHUM,       GPTEMP,       GPES,      INPUT,
+*    1                                                     OUTPUT,
+*    2        TAPE11=GPHUM,TAPE12=GPTEMP,TAPE13=GPES,TAPE5=INPUT,
+*    3                                               TAPE6=OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: gpdpd.ptn,v $
+*     Revision 4.25  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.24  2014/09/02 22:29:03  dugas
+*     Verifier que le nombre de parametres lus dans aabb.nml est correct.
+*
+*     Revision 4.23  2013/12/18 21:56:33  bernard
+*      - Modifier le traitement des erreurs associees a la lecture du fichier
+*        namelist aabb.nml.
+*
+*     Revision 4.22  2013/10/16 18:53:48  bernard
+*     Ajouter des details au format d'erreur 6014.
+*
+*     Revision 4.21  2012/05/17 21:12:12  dugas
+*     - Nouveaux code d'erreurs.
+*     - Verification que la pression de surface est appropriee pour notre terre.
+*     - Utiliser ALLOCATE plutot que HPALLOC pour la memoire de travail.
+*     - Lecture du fichier namelist aabb.nml. Celui-ci doit contenir le
+*       namelist FORTRAN AABB_NML, qui contient a son tour les deux
+*       vecteurs verticaux A et B. Ces derniers sont utilises dans
+*       dans le calcul de la pression locale (PL=A+B*PS).
+*
+*     Revision 4.20  2011/09/16 17:54:03  dugas
+*     Ajouter la coordonnee ET16.
+*
+*     Revision 4.19  2009/09/08 20:46:22  dugas
+*     Initialiser PR(NLEV)=1.0 si NLEV=1 (pour fichiers SQ).
+*
+*     Revision 4.18  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.17  2008/04/28 15:41:58  dugas
+*     Ne plus tenir compte du cas non-SQ98.
+*
+*     Revision 4.16  2007/12/20 21:10:29  dugas
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.15  2005/04/14 16:56:20  dugas
+*     Proteger PTOIT,PREF,R lors de l'appel a LIRPT.
+*
+*     Revision 4.14  2004/12/10 00:41:05  dugas
+*     Conversion des unites de VT.
+*
+*     Revision 4.13  2002/09/17 17:54:59  dugas
+*     Modifier/simplifier le traitement des coordonnees verticales hybrides
+*      de GEM (v2.2.0 et v2.3.1). Utilisation systematique de GETKIND et
+*      definition du type de coordonnee par defaut selon le genre de
+*      fichier rencontre (CCC ou RPN).
+*
+*     Revision 4.12  2002/02/02 00:58:05  dugas
+*     Les coordonnees verticales de type SIG et ETxx du GCM/CCCma,
+*      de meme que les coordonnees GEM2 (v2.2.1) et GEM3 (v2.3.1)
+*      sont maintenant supportees.
+*
+*     Revision 4.11  2002/01/14 15:33:53  dugas
+*     Ajouter le support de la coordonnee verticale GEM3 (v2.3.1).
+*
+*     Revision 4.10  2001/03/16 21:58:15  armnrbd
+*     Ajouter le support de la coordonnee GEM2 (hybride Edouard-Gravel).
+*
+*     Revision 4.9  2000/04/07 18:57:54  armnrbd
+*     Ajouter le support des coordonnes 'SIG', et 'GEM'.
+*
+*     Revision 4.8  1999/03/16 18:19:30  armnrbd
+*     Modifier selon la routine mhuaes (FINTERN).
+*
+*     Revision 4.7  1998/07/03 02:26:28  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.6  1998/05/21  20:20:49  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.5  1997/09/26  17:38:58  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1997/09/04  19:39:24  armnrbd
+*     Utiliser GETSIZ2 pour determiner la taille du probleme.
+*
+*     Revision 4.3  1997/05/30  18:24:56  armnrbd
+*     Utiliser le common EPS pour les valeurs de A,B,EPS1 et EPS2.
+*
+*     Revision 4.2  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.1  1995/05/31  14:08:08  armnrbd
+*     Convertir TT en degres Kelvin (fichiers SQI).
+*
+*     Revision 4.0  1994/11/17  14:20:32  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:17  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  93/06/08  21:56:13  armnrbd
+*     Implanter le support de RHUM (en plus de celui de SHUM).
+*     
+*     Revision 1.1  92/11/09  19:42:20  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.0  92/04/29  01:28:08  armnrbd
+*     Initial revision
+*     
+*     MAY 11/83 - R.LAPRISE.
+*     DEC 04/80 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      REAL        PTMIN
+      PARAMETER ( PTMIN = pression_au_toit )
+
+      LOGICAL     OK,OK2,SHUM,SPWH,MODETA,AABB
+      REAL        C,E,PRES,T,Q,TD,SATQ,VT,PREF,PREF0,R,R0,
+     +            PTOIT,PTOIT0, AMIN,AMAX,AMEAN, BIGBIN
+      INTEGER     I,L,LL,IER,TYPE,NFF,NRECS,NWDS,IO,IUN,
+     +            LEV(MAXLEV),NLEV,NLEV2,MAX1,MAX2,MAX3,LEN1,
+     +            LEN2,LEN3,HUM,MAXW,KBUF(taille_entete),LBUF(taille_entete),
+     +            MBUF(taille_entete),KPAK,LPAK,MPAK,VKIND,NSL
+      CHARACTER*4 KIND,NAME,ES,NOMT,NOMP,COORD,CHECK*2
+      CHARACTER   VALEUR*10,VKINDC*16,PKTYP*2
+
+      REAL,       DIMENSION(:),POINTER :: PR
+      REAL,       DIMENSION(:),ALLOCATABLE,TARGET :: ETA
+
+      REAL        A(MAXLEV+1), B(MAXLEV+1)
+      NAMELIST   /AABB_NML/ A,B
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE        :: IBUF,JBUF
+      REAL,       DIMENSION(:), ALLOCATABLE        :: F,G, PS
+
+      CHARACTER*4,EXTERNAL :: GETYP
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ,GETSIZ2,GETKIND
+      EXTERNAL    JCLPNT,CONVPR,XIT,LIRPT,GETPT,
+     +            SETPT,GETFLD2,CMPLBL,PUTFLD2,
+     +            INCTDIA,WRITLEV,GENAB,
+     +            SETKIND,FMMM2
+
+      INTEGER,    EXTERNAL :: FCLOS,FNOM
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+#     include "consdia.cdk"
+#     include "dintern.cdk"
+#     include "fintern.cdk"
+      DATA        CHECK/  ' '    /
+      DATA        ES   /  'ES'   /
+      DATA        SPWH / .FALSE. /,MODETA/  .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gpdpd.ptn,v $'
+
+*---------------------------------------------------------------------
+      ALLOCATE( ETA(MAXLEV) )
+      PR => ETA ! PR and ETA are equivalent.
+
+      NFF = 5
+      CALL JCLPNT( NFF, 11,12,13,14, 6 )
+      CALL INCTDIA
+
+      PKTYP = GETYP( 11 )
+
+      COORD ='DEF'
+      PTOIT = PTMIN
+      PREF  = 80000.
+      R     = 1.0
+      AABB  =.FALSE.
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) COORD = VALEUR
+
+          OK = RPBLOC('C',VALEUR)
+          IF (OK) READ(VALEUR,0010,END=912,ERR=912,IOSTAT=IO) PTOIT
+
+          OK = RPBLOC('D',VALEUR)
+          IF (OK) READ(VALEUR,0010,END=912,ERR=912,IOSTAT=IO) PREF
+
+          OK = RPBLOC('I',VALEUR)
+          IF (OK) READ(VALEUR,0010,END=912,ERR=912,IOSTAT=IO) R
+
+          SPWH = RPBLOC('DEFAUT',VALEUR)
+
+          IF (SPWH) WRITE(6,6000)
+          IF (SPWH .AND. VALEUR == 'AABB') AABB = .TRUE.
+
+      END IF
+
+      IF (COORD.NE.' ') CALL LEADBLK( COORD )
+      IF (COORD.EQ.' ') COORD = 'DEF'
+
+      IF (AABB .AND. COORD == 'DEF') COORD = 'GEM'
+
+      IF (COORD     .NE.'DEF'  .AND.
+     +    COORD     .NE.'SIG'  .AND.
+     +    COORD     .NE.'ETA ' .AND.
+     +    COORD     .NE.'ET10' .AND.
+     +    COORD     .NE.'ET15' .AND.
+     +    COORD     .NE.'ET16' .AND.
+     +    COORD(1:3).NE.'GEM'  .AND.
+     +    COORD     .NE.'PRES' )                               THEN
+              WRITE(6,6011) COORD
+              CALL                                 XIT('  Gpdpd ',-11 ) 
+      ELSE
+     +IF (PKTYP.EQ.'SQ'   .AND.
+     +   (COORD.EQ.'DEF'  .OR.
+     +    COORD.EQ.'GEM2' .OR.
+     +    COORD.EQ.'GEM3' ))                                   THEN
+          CALL SETPT( PTOIT,PREF,R )
+      END IF
+
+***    GET SIZES FROM HUM AND TEMP FILES. STOP IF NOT GRID/SUBA.
+
+      MAX1 = GETSIZ2( 11, KBUF,LEN1,NWDS,KPAK, LEV,NLEV )
+      MAX2 = GETSIZ2( 12, LBUF,LEN2,NWDS,LPAK, LEV,NLEV2 )
+
+      MAXW = MAX( MAX1,MAX2 )
+
+      IF (PKTYP.EQ.'SQ' .AND. .NOT.AABB)                       THEN
+
+          VKIND = GETKIND()
+
+          IF (VKIND.NE.1 .AND.
+     +        VKIND.NE.2 .AND.
+     +        VKIND.NE.5)                                      THEN
+              CALL                                 XIT('  Gpdpd ',-13)
+          ELSE IF (VKIND.EQ.1)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM3'
+              IF (COORD.EQ.'PRES') CALL            XIT('  Gpdpd ',-8 )
+              VKINDC = 'ETA'
+          ELSE IF (VKIND.EQ.2)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'PRES'
+              IF (COORD.NE.'PRES') CALL            XIT('  Gpdpd ',-8 )
+              VKINDC = 'PRESSION'
+          ELSE IF (VKIND.EQ.5)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM2'
+              IF (COORD.NE.'GEM2') CALL            XIT('  Gpdpd ',-8 )
+              VKINDC = 'HYBRIDE'
+          END IF
+
+      ELSE IF (COORD.EQ.'DEF')                                 THEN
+
+          COORD  = 'PRES' 
+
+      END IF
+
+      NSL = NLEV
+
+      DO  L=1,NLEV
+          CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+          IF (COORD.NE.'PRES' .AND. VKIND.EQ.2) PR(L) = 0.001 * PR(L)
+      END DO
+
+      IF (PKTYP     /= 'SQ'   .AND.
+     +    COORD     /= 'PRES' .AND.
+     +    LEV(NLEV) ==  1   ) PR(NLEV) = 1.0
+
+      IF (COORD.NE.'GEM2' .AND. COORD.NE.'GEM3')               THEN
+          WRITE(6,6020) PTOIT
+      END IF
+ 
+      CALL WRITLEV( PR,NLEV,COORD )
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
+
+      IF ((COORD.NE.'PRES' .AND. NFF.NE.4) .OR.
+     +    (COORD.EQ.'PRES' .AND. NFF.NE.3) )                   THEN
+          WRITE(6,6008)
+          CALL                                     XIT('  Gpdpd ',-8 )
+      END IF
+
+      IF (COORD.NE.'PRES')                                     THEN
+
+***        GET SIZE OF SURFACE PRESSURE FILE.
+
+          MAX3 = GETSIZ ( 14, MBUF,LEN3,NWDS,MPAK )
+          MAXW = MAX( MAXW,MAX3 )
+
+          CALL CMPLBL( 0,KBUF, 0,MBUF, OK2 )
+
+          OK = (OK .AND. OK2)
+
+      END IF
+
+      IF (NLEV.LT.1 .OR. NLEV.NE.NLEV2  .OR.                           
+     +    .NOT.OK   .OR. NLEV.GT.MAXLEV .OR.
+     +    MAX1.EQ.0 .OR. MAX2.EQ.0      ) CALL     XIT('  Gpdpd ',-1 )
+
+      IF (AABB)                                                THEN
+
+***        A and B are read form namelist file 'aabb.nml'.
+
+          IUN = 0 ; IO = 0
+          IF (FNOM( IUN, 'aabb.nml', 'SQE+OLD', 0 ) == 0)      THEN
+
+***            A and B are read form namelist file 'aabb.nml'.
+
+              BIGBIN = -524288. ! -(2^^9)
+              ! BIGBIN = BIGBIN*BIGBIN*BIGBIN
+              A(:) = BIGBIN ; B(:) = BIGBIN
+
+              READ( IUN, NML=AABB_NML, END=914,ERR=914, IOSTAT=IO )
+              IER = FCLOS( IUN )
+
+              LL = 0 ; DO  L=1,MAXLEV+1
+                  IF (A(L) == BIGBIN .OR. B(L) == BIGBIN) EXIT
+                  LL = LL+1
+              END DO
+
+              ! Check the number of valid (A,B) pairs.
+
+              IF (LL /= NSL .AND. LL /= NSL-1)                 THEN
+                  WRITE(6,6016) NSL,LL
+                  CALL                         XIT(' Gpdpd  ',-16) 
+              ELSE IF (LL == NSL-1)                            THEN
+                  A(LL+1) = 0. ; B(LL+1) = 1.0 ! Add surface values.
+              END IF
+
+              WRITE(6,6110)
+
+          ELSE
+              GOTO 0914
+          END IF
+
+      ELSE IF (COORD.NE.'PRES')                                THEN
+
+          IF (COORD.EQ.'SIG') PTOIT = 0.0
+
+          IF (COORD(1:2).EQ.'ET')                              THEN
+
+***            EVALUATE THE PARAMETERS OF THE
+***            ETA VERTICAL DISCRETIZATION.
+
+              CALL COORDAB( A,B, NSL,ETA, COORD,PTOIT )
+
+          ELSE IF (COORD.EQ.'GEM2' .OR.
+     +             COORD.EQ.'GEM3')                            THEN
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+***                CHECK IF GPHUM HOLDS OTHER
+***                VALUES OF PTOIT,PREF AND R.
+
+                  CALL LIRPT( 11 )
+                  CALL GETPT( 11 , PTOIT0,PREF0,R0 )
+
+                  IF (PTOIT0.NE.-1.)                           THEN
+                      PTOIT = PTOIT0
+                      PREF  = PREF0
+                      R     = R0
+                  END IF
+                  
+              END IF
+
+              IF (.NOT.MODETA .AND. COORD.EQ.'GEM3')           THEN
+
+                  MODETA =.TRUE.
+
+                  ETA(1:NSL) = ETA(1:NSL)
+     +                       + ( 1.0 - ETA(1:NSL) ) * PTOIT / PREF
+
+              END IF
+
+              WRITE(6,6020) PTOIT
+              WRITE(6,6021) PREF,R
+
+              CALL GENAB( A,B, ETA, PTOIT,PREF,R, NSL )
+
+          ELSE IF (COORD.EQ.'GEM')                             THEN
+              
+***            For GEM, PRLOC = PTOIT + ETA(:) * ( PS(:) - PTOIT )
+
+              A(1:NSL) = PTOIT*(1.0-ETA(1:NSL))
+              B(1:NSL) = ETA(1:NSL)
+
+          END IF
+
+      ELSE
+
+***        CONVERT PR TO PASCAL.
+
+          PR(1:NLEV) = 100. * PR(1:NLEV)
+
+      END IF
+
+      TYPE = KBUF(1)
+      HUM  = KBUF(3)
+      WRITE(KIND,4) TYPE
+      WRITE(NAME,4) HUM
+
+      IF (KIND.NE.'GRID' .AND.
+     +    KIND.NE.'SUBA') CALL                     XIT('  Gpdpd ',-2 )
+
+***    ALLOCATE WORK SPACE.
+
+      ALLOCATE( IBUF(HEAD+MAXW),JBUF(HEAD+MAXW), STAT=IER )
+      ALLOCATE( F(MAXW),G(MAXW),                 STAT=IER )
+      IF (COORD /= 'PRES') ALLOCATE( PS(MAXW),   STAT=IER )
+
+***    CHECK THAT THE MOISTURE VARIABLE IS SUPPORTED.
+
+      IF (NAME.EQ.'SHUM' .OR. NAME.EQ.'HU')                    THEN
+          SHUM = .TRUE.
+      ELSE IF (NAME.EQ.'RHUM' .OR. NAME.EQ.'HR')               THEN
+          SHUM = .FALSE.
+      ELSE
+          CALL                                     XIT('  Gpdpd ',-3 )
+      END IF
+
+***    LEVEL LOOP OVER ALL MOISTURE LEVELS.
+
+      NRECS = 0
+  100 CONTINUE
+
+          DO 300 L=1,NLEV
+
+***            GET THE NEXT PAIR OF HUM,T FIELDS.
+
+  125         CALL GETFLD2( 11, F, 'GRID'//'SUBA',-1,' ',LEV(L), 
+     +                             IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6010) NRECS
+                  IF (NRECS.EQ.0)                              THEN
+                      CALL                         XIT('  Gpdpd ',-4 )
+                  ELSE
+                      CALL                         XIT('  Gpdpd ', 0 )
+                  END IF
+              ELSE
+
+                  WRITE(NAME,4) IBUF(3)
+
+                  IF (     SHUM .AND. NAME.NE.'SHUM'
+     +                          .AND. NAME.NE.'HU'  ) GOTO 125
+                  IF (.NOT.SHUM .AND. NAME.NE.'RHUM'
+     +                          .AND. NAME.NE.'HR'  ) GOTO 125
+
+              END IF
+
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+  150         CALL GETFLD2( 12, G, 'GRID'//'SUBA',IBUF(2),' ',LEV(L), 
+     +                             JBUF,MAXW,OK )
+
+                  IF (.NOT.OK)                                 THEN
+                      WRITE(6,6010) NRECS
+                      CALL                         XIT('  Gpdpd ',-5 )
+                  END IF
+
+                  WRITE(NOMT,4) JBUF(3)
+
+              IF (NOMT.NE.'VT' .AND. NOMT.NE.'TT'
+     +                         .AND. NOMT.NE.'TEMP') GOTO 150
+
+              IF (NRECS.EQ.0) CALL PRTLAB( JBUF )
+
+***            CHECK THAT FIELDS ARE SAME SIZE.
+
+              CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+              IF (.NOT.OK)                                     THEN
+                  CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+                  CALL                             XIT('  Gpdpd ',-6 )
+              END IF
+
+***            WE HAVE NO FUNCTION THAT USES RELATIVE HUMIDITY
+***            AND VIRTUAL TEMPERATURE TO DO THE CONVERSION.
+
+              IF (.NOT.SHUM .AND. NOMT.EQ.'VT')
+     +            CALL                             XIT('  Gpdpd ',-7 )
+                  
+***            ACCOUNT FOR TEMPERATURES IN DEGREES C.
+
+              IF (NOMT.EQ.'TT' .OR.
+     +           (NOMT.EQ.'VT' .AND. PKTYP.EQ.'SQ'))           THEN
+                  DO  I=1,NWDS
+                      G(I) = G(I)+TCDK
+                  END DO
+              END IF
+
+              IF (COORD.NE.'PRES' .AND. L.EQ.1)                THEN
+
+***                READ THE CORRESPONDING SURFACE PRESSURE FIELD.
+
+  175             CALL GETFLD2( 14, PS, 'GRID'//'SUBA',IBUF(2),' ',-1,
+     +                                  JBUF,MAXW,OK )
+
+                  IF (.NOT.OK)                                 THEN
+                      WRITE(6,6010) NRECS
+                      CALL                         XIT('  Gpdpd ',-9 )
+                  ELSE
+                      WRITE(NOMP,4) JBUF(3)
+                      IF (NOMP.NE.'P0' .AND. NOMP.NE.'PS') GOTO 175
+                  END IF
+
+                  IF (NRECS.EQ.0) CALL PRTLAB( JBUF )
+
+***                CHECK THAT FIELDS STILL ARE THE SAME SIZE.
+
+                  CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+                  IF (.NOT.OK)                                 THEN
+                      CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+                      CALL                         XIT('  Gpdpd ',-10 )
+                  END IF
+
+***                CONVERT PS TO PASCAL.
+
+                  DO  I=1,NWDS
+                      PS(I) = 100.* PS(I)
+                  END DO
+
+***                Check that PS really contains earth surface pressures in Pascals. 
+
+                  IF (CHECK.EQ.' ')                            THEN
+                     CALL FMMM2( AMIN,AMAX,AMEAN, PS,NWDS )
+                     IF (AMIN <  33000. .OR.
+     +                   AMAX > 121200.) CALL      XIT('  Gsapl ',-15)
+                     CHECK = 'OK'
+                  END IF
+
+              END IF
+
+***            IF MOISTURE FILE IS RHUM, CONVERT TO SHUM. 
+***            SATURATION VAPOR CONTENT IS THEN CALCULATED
+
+***            USING SATQ = FOQSA( T,PRES )    *** OR ***
+***                         FOQST( T,PRES ) (DEPENDING ON SPWH)
+***                  Q    = RHUM*SATQ
+              
+***            COMPUTE DEW POINT DEPRESSION FROM THE SPECIFIC
+***            HUMIDITY Q (NOTE: IF Q IS GREATER OR EQUAL 1.E-9)
+
+***            USING E    = FOEFQ( Q,PRES )
+***            AND THE INVERSE OF FOEWA, WHICH STATES THAT
+***              LN(E/E0) = 17.269*(TD-TRPL)/(TD-35.86)
+
+***            IF SPWH IS TRUE AND THE VALUE OF TD OBTAINED WITH
+***            THE ABOVE APPROACH IS LESS THAN TRPL, WE INVERT
+***              LN(E/E0) = 21.875*(TD-TRPL)/(TD-7.66)
+
+***            WHERE E0 = 610.78 Pa, TRPL = 273.16 K,
+***                  E IS THE VAPOR PRESSURE CORRESPONDING TO Q
+***                  AND TD IS THE SATURATION TEMPERATURE.
+
+              PRES = PR(L)
+
+              DO 200 I=1,NWDS
+
+                  IF (COORD.EQ.'SIG' )                         THEN
+                      PRES       = PTOIT + ETA(L) * ( PS(I) - PTOIT )
+                  ELSE IF (COORD.NE.'PRES')                    THEN
+                      PRES       = A(L) + B(L) * PS(I)
+                  END IF
+   
+                  IF      (SHUM .AND. NOMT.NE.'VT')            THEN
+                      Q          = F(I)
+                      T          = G(I)
+                  ELSE IF (SHUM .AND. NOMT.EQ.'VT')            THEN
+                      Q          = F(I)
+                      VT         = G(I)
+                      T          = FOTTV( VT,Q )
+                  ELSE
+                      T          = G(I)
+                      IF (SPWH)                                THEN
+                          SATQ   = FOQST( T,PRES )
+                      ELSE
+                          SATQ   = FOQSA( T,PRES )
+                      END IF
+                      Q          = SATQ*F(I)
+                  END IF
+
+                  E              = FOEFQ( MAX( 1.E-9, Q ),PRES )
+
+                  C              = LOG( E/610.78 )
+                  TD             = (35.86*C - 17.269*TRPL)
+     +                           /       (C - 17.269)
+
+                  IF (SPWH .AND. TD.LT.TRPL)
+     +                TD         = ( 7.66*C - 21.875*TRPL)
+     +                           /       (C - 21.875)
+
+                  F(I)           = T-TD
+
+  200         CONTINUE
+
+              CALL SETKIND( VKINDC )
+
+***            SAVE DEW POINT DEPRESSION ON FILE ES.
+
+              READ(ES,4) IBUF(3)
+              CALL PUTFLD2( 13, F, IBUF,MAXW )
+              IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+              NRECS = NRECS+1
+
+  300     CONTINUE
+
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+
+ 0912 CALL                                         XIT(' Gsaptp ',-12 )
+
+ 0914 IF (IO.NE.0) WRITE(6,6014) IO
+      CALL                                         XIT('  Gsapl ',-14 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0010 FORMAT(BN,E10.0)
+
+ 6000 FORMAT(' Water and ice phases are considered.'/)
+ 6008 FORMAT(" File SP should be specified when coord not equal 'PRES'")
+ 6010 FORMAT(1X,I6,' records read.')
+ 6011 FORMAT(' Unsupported type of vertical coordinate ',A)
+ 6014 FORMAT(' Unable to read A,B in aabb.nml namelist file,',
+     +       ' error no.',I5/)
+ 6016 FORMAT(' Wrong number of A,B entries in AABB namelist.',
+     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+
+ 6020 FORMAT(' P.LID (PA)=',E10.3)
+ 6021 FORMAT(' P.REF=',F10.3,', R=',F10.3/)
+
+ 6110 FORMAT(' Using A and B from file aabb.nml'/)
+
+      END
+#     endif

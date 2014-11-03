@@ -1,0 +1,370 @@
+#     if !defined (pression_au_toit)
+#         define   pression_au_toit 0.01
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      veint    XIN XOUT INPUT OUTPUT \
+*            [ -kind VAL1 [ VAL2 ] -scal VAL3 -l VAL4 -a VAL5 -c VAL6 ]
+*
+*
+*     DESCRIPTION...
+*      veint  - VERTICAL ETA INTEGRAL FOR DATA ON ETA COORDINATES
+*
+*
+*     AUTHOR  - D. LIU (BASED ON VSINTH BY R. LAPRISE), Dec 06/1993.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/veint.ptn,v 4.9 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES THE VERTICAL ETA INTEGRAL FOR DATA ON ETA
+*               COORDINATES.
+*
+*     NOTE    - SPECTRAL FIELDS CAN NOT BE HANDLED IN ETA COORD.
+*
+*
+*     INPUT FILE...
+*      XIN    = INPUT SERIES OF ETA LEVEL GRID FIELDS .
+*
+*
+*     OUTPUT FILE...
+*      XOUT   = OUTPUT SERIES OF VERTICAL ETA INTEGRALS OF XIN.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      COORD  (kind 1) = 'ETA' OR BLANK FOR ETA LEVELS OF INPUT FIELDS
+*      LEVTYP (kind 2) = FULL FOR MOMENTUM VARIABLE, AND
+*                        HALF FOR THERMODYNAMIC ONE.
+*      CONST  (scal)   = SCALES THE OUTPUT FIELD.
+*      LAY    (l)      = DEFINES THE POSITION OF LAYER INTERFACES IN
+*                        RELATION TO LAYER CENTRES (SEE BASCAL; ZERO
+*                        DEFAULTS TO THE FORMER STAGGERING CONVENTION).
+*      SIGTOP (a)      = KEPT FOR BACKWARD COMPATIBILITY (NO LONGER USED).
+*      PTOIT  (c)      = PRESSURE (PA) OF THE RIGID LID OF THE MODEL.
+*
+*      Notes:   1) LAY and LEVTYP define the type of levelling
+*                  for the variable.
+*               2) The defaults are as specified in the example below.
+*
+*      READ(5,5010) LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT
+*5010  FORMAT(11X,A4,E10.0,I5,1X,A4,E5.0,E10.0)
+*
+*
+*EXAMPLE OF INPUT CARD...
+*
+ *VEINT    HALF 10.197671    3  ETA-1.00      pression_au_toit
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNSUPPORTED VERTICAL COORDINATE
+*       2 NOT ENOUGH OR TOO MANY LEVELS IN FIRST
+*         SET OF XIN; OR PREMATURE EOF ON XIN
+*       3 CANNOT TREAT SPECTRAL ETA LEVELS    
+*       4 UNSUPPORTED LEVEL TYPE
+*       5 UNABLE TO READ XIN SET
+*       6 MORE THAN ONE SIZE IN XIN
+*       7 PREMATURE EOF ON INPUT
+*       8 XIN DOES NOT CONTAIN ETA LEVELS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM veint
+*     PROGRAM VEINT (XIN,      XOUT,      INPUT,      OUTPUT, 
+*    1         TAPE1=XIN,TAPE2=XOUT,TAPE5=INPUT,TAPE6=OUTPUT)
+*     -------------------------------------------------------
+*     $Log: veint.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2011/09/16 17:54:03  dugas
+*     Ajouter la coordonnee ET16.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.5  2005/04/14 17:43:42  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*     - Corriger une erreur dans la definition initiale de KIND.
+*
+*     Revision 4.4  1998/10/20 17:28:14  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.3  1998/07/03  02:26:45  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1998/07/03  01:18:35  armnrbd
+*     Ignorer les espaces dans le parametres d'entree COORD.
+*
+*     Revision 4.1  1997/09/26  17:39:28  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1995/11/20  19:32:46  armnrbd
+*     Version initiale.
+*
+*     DEC 06/93 - D. LIU
+
+*------------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+      REAL        PTMIN
+      PARAMETER ( PTMIN = pression_au_toit )
+      REAL        P0
+      PARAMETER ( P0    = 101320. ) 
+ 
+      CHARACTER   LIGNE*80
+      LOGICAL     OK,SPEC,LEVOK
+      CHARACTER*4 KIND,LEVTYP,COORD
+      INTEGER     LEV(MAXLEV),LEVA(MAXLEV),JBUF(taille_entete),
+     +            IER,MAXW,JPAK,LEN,NWDS,ILEV,ILEVA,VKIND,
+     +            I,L,IL,NFIL,IO,LAY,NSETS,LOW,HIGH,KEEP
+      REAL        ETA(MAXLEV),ETAB(MAXLEV),E(2),
+     +            CONST,SIGTOP,PTOIT
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: GG,ACC
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ2
+      CHARACTER   GETYP*4,PKTYP*2
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,GETSIZ2,CMPLBL,GETSET2,
+     +            PUTFLD2,CONVPR,WRITLEV2,BASCAL,XIT,LEADBLK,
+     +            RPBLOC,GETYP
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/veint.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NSETS = 0
+      NFIL  = 4
+
+      CALL JCLPNT( NFIL, 1,2, 5,6 )
+
+***    GET PACKING TYPE.
+
+      PKTYP = GETYP( 1 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          COORD  = 'ETA'
+          LEVTYP = 'HALF'
+          CONST  =  10.197671
+          LAY    =   3
+          SIGTOP = -1.0
+          PTOIT  = PTMIN
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) COORD = LIGNE
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) LEVTYP = LIGNE
+
+          OK = RPBLOC('SCAL',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=900,ERR=900,IOSTAT=IO) CONST
+
+          OK = RPBLOC('L',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=900,ERR=900,IOSTAT=IO) LAY
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=900,ERR=900,IOSTAT=IO) SIGTOP
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ(LIGNE,0010,END=900,ERR=900,IOSTAT=IO) PTOIT
+
+      ELSE
+
+***        READ CONTROL DIRECTIVES.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010, ERR=900,END=900,IOSTAT=IO )
+     +                           LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF (COORD.NE.' ') CALL LEADBLK( COORD )
+      IF (COORD.EQ.' ') COORD = 'ETA'
+
+      PTOIT = MAX( PTOIT,PTMIN )
+
+      WRITE(6,6005) LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT
+
+***    ONLY ETA-LIKE COORDINATES ARE SUPPORTED.AT
+***    THIS POINT, THIS INLUDES ET10, ET15, ET16 AND ETA.
+
+      IF (COORD(1:2).NE.'ET') CALL                 XIT('  Veint ',-1 )
+
+***    GET ETA VALUES OF LAYER CENTRES FROM XIN
+***    AND, AT THE SAME TIME, DETERMINE FIELD SIZES.
+
+      MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,ILEV )
+
+      IF (MAXW.LE.0 .OR. 
+     +    ILEV.LT.1 .OR. ILEV.GT.MAXLEV) CALL      XIT('  Veint ',-2 )
+
+      WRITE(KIND,0004) JBUF(1)
+
+      SPEC = (KIND.EQ.'SPEC' .OR. KIND.EQ.'FOUR')
+      IF (SPEC) CALL                               XIT('  Veint ',-3 )
+
+      DO  L=1,ILEV
+          CALL CONVPR( LEV(L), ETA(L), VKIND, -2 )
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              IF (VKIND.NE.1) CALL                 XIT('  Veint ',-8 ) 
+          ELSE IF (VKIND.EQ.2)                                 THEN
+              ETA(L) = ETA(L)*.001
+          END IF
+      END DO
+
+      CALL WRITLEV2( LEV,ILEV,JBUF )
+
+      IF (KIND.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(LEN),GG(MAX( MAXW,ILEV*NWDS )),ACC(NWDS) )
+      
+***    EVALUATE LAYER INTERFACES FROM LEVTYP AND LAY.
+
+      IF (LEVTYP.EQ.'FULL')                                    THEN
+          CALL BASCAL( ETAB, IBUF, ETA,ETA,ILEV,LAY )
+      ELSE IF (LEVTYP.EQ.'HALF')                               THEN
+          CALL BASCAL( IBUF, ETAB, ETA,ETA,ILEV,LAY )
+      ELSE
+          CALL                                     XIT('  Veint ',-4 )
+      END IF
+*---------------------------------------------------------------------
+
+  100 CONTINUE
+
+***        INITIALIZE THE CUMULATIVE ARRAY.
+
+          DO  I=1,NWDS
+              ACC(I) = 0.
+          END DO
+
+          HIGH    = 1
+          LOW     = 2
+          E(HIGH) = PTOIT/P0
+      
+***        PROCESS ALL LEVELS AND ACCUMULATE ETA VERTICAL INTEGRAL.
+
+  150     CALL GETSET2( 1, GG, LEVA,ILEVA, IBUF,MAXW,OK )
+      
+          IF (.NOT.OK)                                         THEN
+              IF (NSETS.GT.0)                                  THEN
+                  CALL PRTLAB( IBUF )
+                  WRITE(6,6020) NSETS
+                  CALL                             XIT('  Veint ', 0 )
+              ELSE
+                  CALL                             XIT('  Veint ',-5 )
+              END IF
+          END IF
+
+          WRITE(KIND,0004) IBUF(1)
+          IF (KIND.EQ.'LABL' .OR. KIND.EQ.'CHAR') GOTO 150
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+***        CHECK THAT WE HAVE SAME SIZE AND VERTICAL LEVELS.
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+          IF (ILEV.NE.ILEVA)                                   THEN
+              LEVOK = .FALSE.
+          ELSE
+              LEVOK = .TRUE.
+              DO  L=1,ILEV
+                  IF (LEVA(L).NE.LEV(L))                       THEN
+                      LEVOK = .FALSE.
+                      GOTO 200
+                  END IF
+              END DO
+          END IF
+
+  200     IF (.NOT.(OK.AND.LEVOK)) CALL            XIT('  Veint ',-6 )
+
+***        DO THE INTEGRAL.
+
+          DO  300 L=1,ILEV
+
+              E(LOW) = ETAB(L)
+              IL     = (L-1)*NWDS
+
+              DO  I=1,NWDS
+                  ACC(I) = ACC(I) + GG(IL+I)*CONST*(E(LOW)-E(HIGH))
+              END DO
+
+              KEEP = LOW
+              LOW  = HIGH
+              HIGH = KEEP
+
+
+  300     CONTINUE
+
+***        PUT THE RESULT ONTO FILE XOUT.
+
+          IF (KIND.EQ.'ZONL')
+     +    IBUF(6) = 1
+          IBUF(4) = 1
+
+          CALL PUTFLD2( 2, ACC, IBUF,MAXW )
+
+      NSETS = NSETS+1
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  900 CALL                                         XIT('  Veint ',-7 )
+
+*---------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(11X,A4,E10.0,I5,1X,A4,E5.0,E10.0)
+
+ 6005 FORMAT('  LEVTYP = ',A4,', CONST = ',1P,E12.4,
+     +       ', LAY = ',0P,I5,', COORD=',1X,A4,', SIGTOP =',F15.10,
+     +       ', P.LID (PA)=',F10.3)
+ 6020 FORMAT('0',I6,' SETS WERE PROCESSED')
+
+      END
+#     endif

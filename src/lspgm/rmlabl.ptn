@@ -1,0 +1,212 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      rmlabl  IN OUT OUTPUT
+*
+*
+*     AUTHOR - B.Dugas, 23 OCTOBRE 1990.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/rmlabl.ptn,v 4.8 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      A CCC FILE MANIPULATION PROGRAM WHICH...
+*
+*      ... COPIES ALL NON LABL-TYPE RECORDS FROM IN TO OUT
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NO RECORDS READ FROM IN
+*       2 NO RECORDS SAVED TO OUT
+*       3 PREMATURE EOF ON FILE IN
+*       4 CANNOT CHANGE PACKING TYPE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM rmlabl
+*    +    (      IN,       OUT,       OUTPUT,
+*    +     TAPE1=IN, TAPE2=OUT, TAPE6=OUTPUT) 
+  
+*     $Log: rmlabl.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.5  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.4  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  1998/02/17 21:32:39  armnrbd
+*     Seconde iteration des modifs associes a la cle OPKTYP.
+*
+*     Revision 4.2  1997/12/10  18:14:59  armnrbd
+*     Avertir si la cle OPKTYP ne peut etre satisfaite.
+*
+*     Revision 4.1  1997/09/26  17:39:14  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:28  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:06:13  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:48  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  92/11/06  11:42:35  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/10/13  15:57:18  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.1  92/04/29  01:34:09  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:53  armnrbd
+*     Initial revision
+*     
+***    23 Octobre 90 - B.Dugas, RPN.
+
+***    Historique des Modifications:
+***    ... 15 novembre 1990, B.Dugas, RPN:
+***        - Passer au compacteur de simple precision.
+***    ... 03 janvier 1991, B.Dugas, RPN:
+***        - Utiliser l'allocation de memoire dynamique "MEMOIR".
+***    ... 20 fevrier 1991, B.Dugas, RPN :
+***        - Version 2 de l'allocation memoire dynamique.
+***    ... 05 mars 1991, B.Dugas, RPN :
+***        - Implanter l'option RECABT de recget.
+
+*---------------------------------------------------------------------
+      IMPLICIT     none
+
+      CHARACTER*4  TYPE
+      LOGICAL      OK,CHNGTYP
+      INTEGER      KBUF(taille_entete),KPAK, NF,NREC,NRECS,
+     +             LA,LEN,NWDS, HEAD,ZERO,IER
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: BUF
+
+      INTEGER      GETSIZ
+      CHARACTER*4  GETYP,PKTYP,PKTYP1,OUTTYP
+      EXTERNAL     GETYP,MACSPE,JCLPNT,GETSIZ,
+     +             XIT,RECGET,RECPUT,PUTYP,
+     +             TYPSET
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/rmlabl.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3
+      CALL JCLPNT( NF, 1,2, 6 )
+
+      NREC  = 0
+      NRECS = 0
+
+      OUTTYP = GETYP( 0 )
+      PKTYP1 = GETYP( 1 )
+      PKTYP  = PKTYP1(1:2)
+
+      IF (PKTYP1.NE.OUTTYP .AND.
+     +    PKTYP .NE.'SQ'   )                                   THEN
+          CALL TYPSET( CHNGTYP )
+          IF (CHNGTYP)                                         THEN
+              WRITE(6,6015) 
+              CALL                                 XIT(' Rmlabl ',-4 )
+          ELSE
+              CALL PUTYP( 0, PKTYP1 )
+          END IF
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST DATA INFO BUFFER.
+
+  100 LA = GETSIZ( 1, KBUF,LEN,NWDS,KPAK )
+      IF (LA.EQ.0) GOTO 900
+
+      ALLOCATE( BUF(LEN) )
+
+***    READ ONE RECORD FROM FILE 1. STOP AT EOF.
+ 
+  200 CALL RECGET( 1, ' ',-1,' ',-1, BUF,LA,OK ) 
+
+          IF (.NOT.OK)                                         THEN
+
+                                DEALLOCATE( BUF )
+              IF (LA.EQ.0)      GOTO 100
+
+                                WRITE(6,6100) NREC, NRECS
+
+              IF (NREC .EQ. 0 ) CALL XIT (' Rmlabl ',-1 ) 
+              IF (NRECS.EQ. 0 ) CALL XIT (' Rmlabl ',-2 )
+                                CALL XIT (' Rmlabl ', 0 ) 
+
+          END IF
+
+          NREC = NREC+1 
+
+***        VERIFY ARRAY TYPE.
+
+          WRITE(TYPE,4) BUF(1)
+          IF (TYPE.NE.'LABL')                                  THEN
+
+***            IF THE TYPE IS NOT 'LABL' WRITE ON FILE 2. 
+ 
+              CALL RECPUT( 2,BUF )
+              NRECS = NRECS+1 
+ 
+          END IF
+
+***    GO READ NEXT RECORD.
+
+      GOTO 200 
+ 
+***    PREMATURE E.O.F. ON UNIT #1.
+
+ 900  CALL XIT(' Rmlabl ',-3)
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+
+ 6015 FORMAT(' Rmlabl cannot change packing type.')
+ 6100 FORMAT('0Records IN =',I6,'  records OUT =',I6)
+
+      END 
+#     endif

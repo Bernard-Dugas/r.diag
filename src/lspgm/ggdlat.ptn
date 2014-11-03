@@ -1,0 +1,535 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      ggdlat  GGIN GGOUT [LOLA] OUTPUT [ -a VAL1 -kind VAL2 ]
+*
+*
+*     DESCRIPTION...
+*      ggdlat  - LATITUDE DERIVATIVE OF A GRID SET
+*
+*
+*     AUTHOR  - J.D.Henderson, NOV 07/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggdlat.ptn,v 4.12 2014/09/25 20:20:48 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES THE LATITUDE DERIVATIVES OF LAT-LON OR GAUSSIAN
+*               GRIDS IN FILE GGIN USING FINITE DIFFERENCES AND STORES
+*               THE RESULT ON FILE GGOUT.
+*
+*     NOTES: 1) THE INPUT GRID TYPE IS ALWAYS ASSUMED TO BE GAUSSIAN
+*               WHEN DEALING WITH CCCma FILES.
+*            2) FOR RPN/CMC STANDARD FILES, THE SUPPORTED INPUT GRID
+*               TYPES ARE G (GAUSSIAN), A (LAT-LONG), B (LAT-LONG WITH
+*               POLES AND EQUATOR), L (GENERALIZED LAT-LONG) AND
+*               ROTATED, Z (VARIABLE-RESOLUTION LAT-LONG).
+*
+*     NOTES CONCERNING THE USE OF FILE LOLA...
+*            1) THE COORDINATES IN LOLA WILL GENERALLY REFER TO A
+*               NON-ROTATED STANDARD GEOGRAPHICAL FRAME OF REFERENCE.
+*            2) THE FILE SHOULD HOLD 2D 'LO' AND 'LA' VARIABLES, BOTH
+*               IN UNITS OF DEGREES.
+*            3) THIS FILE CAN ONLY BE USED WITH 'Z' GRID TYPES. IF IT
+*               IS NOT PROVIDED, OPERATIONS ON A 'Z' GRID WILL BE DONE
+*               IN THE GRID'S OWN FRAME OF REFERENCE.
+*
+*
+*     INPUT FILE...
+*      GGIN  = GLOBAL OR HEMISPHERIC GRIDS
+*      LOLA  = [OPTIONAL] 2D GRID POINT LONGITUDES AND LATITUDES.
+*
+*
+*     OUTPUT FILE...
+*      GGOUT = LATITUDE DERIVATIVES.
+*
+*
+*     INPUT PARAMETERS (ONLY USED WHEN FILE LOLA IS SPECIFIED)...
+*
+*      A     = DELTA LATITUDE VALUE TO BE USED IN DERIVATIVE (IN DEGREES).
+*              THE FORWARD AND BACKWARD FINITE DIFFERENCE POINTS WILL BE
+*              INTERPOLATED FROM THEIR (LON,LAT) POSITION TO (LON,LAT+A)
+*              AND (LON,LAT-A) POSITIONS.
+*      KIND >= 0; INTERPOLATION TYPE
+*              1 FOR LINEAR,
+*              2 FOR NEAREST NEIGHBOR (only RPN/CMC Standard files)
+*                OTHERWISE CUBIC
+*           <  0 INTERPOLATION IS LINEAR
+*
+*     
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ABORT ERROR READING GGIN
+*       2 UNSUPPORTED GRID TYPE
+*       3 ABORT ERROR READING LOLA
+*       4 LOLA AND GGIN ARRAYS DIFFER IN SIZE
+*       5 UNABLE TO READ LONGITUDE FROM LOLA
+*       6 UNABLE TO READ LATITUDE FROM LOLA
+*       7 ERROR READING A AND/OR KIND PARAMS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ggdlat
+*     PROGRAM GGDLAT (GGIN,       GGOUT,       LOLA,       OUTPUT,
+*    1          TAPE1=GGIN, TAPE2=GGOUT, TAPE3=LOLA, TAPE6=OUTPUT)
+*     ------------------------------------------------
+
+*     $Log: ggdlat.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:48  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2011/11/22 19:32:31  dugas
+*     Corriger le message d'erreur -3 et remplacer HPALLOC par ALLOCATE.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2006/01/04 17:41:55  dugas
+*     Mode LOLA actif seulement pour grilles de type Z
+*
+*     Revision 4.7  2004/11/12 16:50:02  dugas
+*     - Augmenter la taille maximale des grilles.
+*     - Ajouter le support des grilles de type L.
+*
+*     Revision 4.6  2004/08/20 17:24:43  dugas
+*     Ajouter un message d'erreur pour les coupes zonales
+*
+*     Revision 4.5  2003/09/15 16:02:41  dugas
+*     Modifier le support des gilles de type Z
+*
+*     Revision 4.4  2003/05/23 21:10:03  dugas
+*     Ajouter le support des grilles de type Z.
+*
+*     Revision 4.3  2001/06/14 19:38:32  armnrbd
+*     Add support for 'A' and 'B' grids.
+*
+*     Revision 4.2  1998/07/03 02:26:26  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:48  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:20:19  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/13  22:16:29  armnrbd
+*     Utiliser TRIGL2 pour les latitudes hemispheriques.
+*     
+*     Revision 3.0  93/10/13  13:56:09  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  92/08/25  16:10:14  16:10:14  armnrbd (Bernard Dugas)
+*     Permettre le traitement de grilles hemispheriques.
+*     
+*     Revision 1.0  92/04/29  01:27:48  armnrbd
+*     Initial revision
+*     
+*     MAY 20/83 - R.LAPRISE.
+*     NOV 07/80 - J.D.HENDERSON
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXI = longitude_maximale
+      INTEGER,    PARAMETER :: MAXJ = latitude_maximale
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+
+      INTEGER,    PARAMETER :: M1=-1
+
+      LOGICAL     OK,NEW,LOLA
+      CHARACTER   GRTYP,GRTYPI,RTYP
+      CHARACTER*4 VALEUR*10,PKTYP,TYPE
+      REAL        ALON(MAXI),ALAT(MAXJ),OV2DELT,
+     +            A,XLAT0,XLON0,DLAT0,DLON0 
+      REAL*8      SL(MAXJ),CL(MAXJ),CO,
+     +            OFFSET,DELTA,DELTAR,
+     +            WL(MAXJ),WOSSL(MAXJ),
+     +            LATSPAN,PI,LAT1,RAD(MAXJ)
+      INTEGER     NFF,NWDS,NR,NLON,NLAT,NIR,
+     +            ILATH,NHEM,J,MAXW,IER,NJR,
+     +            JBUF(HEAD),LEN,JPAK,KIND,
+     +            KBUF(HEAD),KPAK,INTERP,
+     +            IG1R,IG2R,IG3R,IG4R,I,
+     +            IG1,IG2,IG3,IG4,IJ
+
+      integer, allocatable,dimension(:) :: IBUF
+      real,    allocatable,dimension(:) :: D,DM,LO,LA
+      real,    pointer,dimension(:)     :: DLAT,DP
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL     RPBLOC
+      CHARACTER*4 GETHIC,GETYP
+      INTEGER     GETHIGH,GETSIZ
+      EXTERNAL    JCLPNT,GETFLD2,GAUSSG,TRIGL2,
+     +            GGDY2,PUTFLD2,XIT,CIGAXG,
+     +            GETHIC,GETHIGH,GETYP,
+     +            GETSIZ,RPBLOC
+
+      DATA        NHEM,NLAT,NLON / -1,-1,-1 /,
+     +            GRTYPI / ' ' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggdlat.ptn,v $'
+
+*---------------------------------------------------------------------
+      NFF = 3
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+                    LOLA = .FALSE.
+      IF (NFF.EQ.3) LOLA = .TRUE.
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      PI = 4.0 * ATAN( 1.D0 )
+      CO = PI  / 180.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) CALL                          XIT(' Ggdlat ',-1 )
+
+      WRITE(TYPE,'(A4)') JBUF(1)
+
+      IF ((PKTYP.NE.'SQ' .AND. TYPE.NE.'GRID') .OR.
+     +    (PKTYP.EQ.'SQ' .AND. TYPE.NE.'GRID'
+     +                   .AND. TYPE.NE.'SUBA'))                THEN
+
+          IF (TYPE.NE.'ZONL')                                  THEN
+              WRITE(6,6002) TYPE
+          ELSE
+              WRITE(6,6022)
+          END IF
+          
+          CALL                                     XIT(' Ggdlat ',-2 )
+
+      END IF
+
+      allocate( IBUF(HEAD+MAXW),D(MAXW),DP(MAXW), stat=ier )
+      DLAT => DP
+
+      IF (LOLA)                                                THEN
+
+***        ALLOCATE AND READ LOLA FILE ONCE AND FOR ALL.
+
+          MAXW = GETSIZ( 3, KBUF,LEN,NWDS,KPAK )
+
+          IF (MAXW.EQ.0) CALL                      XIT(' Ggdlat ',-3 )
+
+          CALL CMPLBL( 0,JBUF, 0,KBUF, OK ) 
+
+          IF (OK)                                              THEN
+
+            ! Allocate  LA, LA+ and LA-,      LO,      DM
+              allocate( LA(JBUF(5)*JBUF(6)*3),LO(MAXW),DM(MAXW), stat=ier )
+
+          ELSE
+
+             CALL                                  XIT(' Ggdlat ',-4 )
+
+          END IF
+
+***        READ LONGITUDE.
+
+          CALL GETFLD2( 3, LO, 'GRID'//'SUBA',M1,'LO',M1, IBUF,MAXW,OK )
+          IF (.NOT.OK) CALL                        XIT(' Ggdlat ',-5 )
+
+          CALL PRECEDE( 3,M1 )
+
+***        READ LATITUDE.
+
+          CALL GETFLD2( 3, LA, 'GRID'//'SUBA',M1,'LA',M1, IBUF,MAXW,OK )
+          IF (.NOT.OK) CALL                        XIT(' Ggdlat ',-6 )
+
+          DELTA = 0.0
+          KIND  =  0
+
+          IF (RPBLOC( ' ',VALEUR ))                            THEN
+
+***            CHECK PARAMETRE BLOCK.
+
+              OK = RPBLOC('A',VALEUR)
+              IF (OK) READ(VALEUR,'(E10.0)',ERR=900,END=900) DELTA
+
+              OK = RPBLOC('KIND',VALEUR)
+              IF (OK) READ(VALEUR,'(BN,I5)',ERR=900,END=900) KIND
+
+          END IF
+          
+          IF (DELTA.LE.0.0) CALL                   XIT(' Ggdlat ',-7 )
+
+          DELTAR  = DELTA * CO
+          OV2DELT = 1.0 / ( 2.0 * DELTAR )
+
+          IF (KIND.NE.1 .AND.
+     +        KIND.NE.2)                                       THEN
+              INTERP =  3
+          ELSE
+             INTERP =  KIND
+          END IF
+
+***        SET INTERPOLATION TYPE FOR RPN FILES.
+
+          IF (INTERP.EQ.1 .OR. INTERP.EQ.3)                    THEN
+              CALL EZ_RGOPTI('INTERP',INTERP,.TRUE.)
+          ELSE IF (INTERP.EQ.2)                                THEN
+              CALL EZ_RGOPTC('INTERP','VOISIN',.TRUE.)
+          END IF
+
+***        DEFINE THE LA+ AND LA- ARRAYS, RESPECTIVELY.
+
+          DO J=1,NWDS
+                               A = LA(J)+DELTA
+              IF (A .GT.  90.) A = 90.
+              IF (A .LT. -90.) A =-90.
+              LA(J+  MAXW)  =  A
+                               A = LA(J)-DELTA
+              IF (A .GT.  90.) A = 90.
+              IF (A .LT. -90.) A =-90.
+              LA(J+2*MAXW)  =  A
+
+          END DO
+
+      END IF
+
+***    READ THE NEXT GRID FROM FILE GGIN.
+
+      NR = 0
+  100 CALL GETFLD2( 1, D, 'GRID'//'SUBA',M1,' ',M1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6100) NR
+              IF (NR.EQ.0)                                     THEN
+                  CALL                             XIT(' Ggdlat ',-1 )
+              ELSE
+                  CALL                             XIT(' Ggdlat ', 0 )
+              END IF
+          END IF
+
+                             GRTYP = 'G'
+          IF (PKTYP.EQ.'SQ') GRTYP = GETHIC('GRTYP',IBUF )
+
+          IF (GRTYP.NE.'Z')  LOLA  = .FALSE.
+
+          IF (LOLA) CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+
+          IF (.NOT.OK) CALL                        XIT(' Ggdlat ',-4 )
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - --
+
+          IF (NEW              .OR. 
+     +        GRTYPI .NE.GRTYP .OR.
+     +        IBUF(7).NE.NHEM  .OR.
+     +        IBUF(6).NE.NLAT  .OR.
+     +        IBUF(5).NE.NLON  )                               THEN
+
+***            FIRST RECORD ONLY... GAUSSG COMPUTES GAUSSIAN LATITUDES,
+***            COSINES, ETC.(NORTH HEMISPHERE, N TO S). TRIGL2 CONVERTS
+***            THESE VECTORS TO GLOBAL OR HEMISPHERIC (S TO N).
+
+              NEW   = .FALSE.
+              GRTYPI =  GRTYP
+
+              NLON  = IBUF(5)
+              NLAT  = IBUF(6)
+              NHEM  = IBUF(7)
+              NWDS  = NLAT*NLON
+
+
+              IF (GRTYP.EQ.' ' .OR.
+     +            GRTYP.EQ.'G' )                               THEN
+
+***                FIRST RECORD ONLY... GAUSSG COMPUTES GAUSSIAN LATITUDES,
+***                COSINES, ETC.(NORTH HEMISPHERE, N TO S). TRIGL2 CONVERTS
+***                THESE VECTORS TO GLOBAL OR HEMISPHERIC (S TO N).
+
+                  ILATH = NLAT/2
+                  IF (NHEM.NE.0) ILATH = NLAT
+                  CALL GAUSSG( ILATH, SL,WL,CL,RAD,WOSSL )
+                  CALL TRIGL2( ILATH, SL,WL,CL,RAD,WOSSL,NHEM )
+
+              ELSE IF (GRTYP.EQ.'A' .OR. GRTYP.EQ.'B')         THEN
+
+                  IG2    = GETHIGH('IG2',IBUF )
+
+***                DEFINE THE STARTING LATITUDE.
+
+                  IF (IG2.EQ.0)                                THEN
+                      IF (NHEM.EQ.0 .OR. NHEM.EQ.2)            THEN
+                          LAT1 = -PI/2.0
+                      ELSE IF (NHEM.EQ.1)                      THEN
+                          LAT1 =  0.0
+                      END IF
+                  ELSE IF (IG2.EQ.1)                           THEN
+                      IF (NHEM.EQ.0 .OR. NHEM.EQ.1)            THEN
+                          LAT1 = +PI/2.0
+                      ELSE IF (NHEM.EQ.2)                      THEN
+                          LAT1 =  0.0
+                      END IF
+                  END IF
+
+                  IF (IG2.EQ.1) IG2 = -1
+                  IF (IG2.EQ.0) IG2 = +1
+                      
+***                ACCOUNT FOR THE DIFFERENT 'A' AND 'B' GRID
+***                OFFSETS AND DEFINE THE LATITUDE DELTA.                      
+
+                                 LATSPAN =     PI
+                  IF (NHEM.NE.0) LATSPAN = 0.5*PI
+
+                  IF (GRTYP.EQ.'A')                            THEN
+                      OFFSET = 0.5
+                      DELTA  = LATSPAN/NLAT
+                  ELSE IF (GRTYP.EQ.'B')                       THEN
+                      OFFSET = 0.0
+                      DELTA  = LATSPAN/(NLAT-1)
+                  END IF
+
+***                DEFINE THE LATITUDES IN RADIANS.
+
+                  RAD(1)     = LAT1 + OFFSET*IG2*DELTA
+
+                  DO  J=2,NLAT
+                      RAD(J) = RAD(J-1) + IG2*DELTA
+                  END DO
+                      
+              ELSE IF (GRTYP.EQ.'L')                           THEN
+
+                  IG1    = GETHIGH('IG2',IBUF )
+                  IG2    = GETHIGH('IG2',IBUF )
+                  IG3    = GETHIGH('IG3',IBUF )
+                  IG4    = GETHIGH('IG4',IBUF )
+
+                  CALL CIGAXG( GRTYP, XLAT0,XLON0,DLAT0,DLON0,
+     +                                IG1,  IG2,  IG3,  IG4  )
+
+                  DO  J=1,NLAT
+                      RAD(J) = (XLAT0+(J-1)*DBLE( DLAT0 ))*CO
+                  END DO
+
+              ELSE IF (GRTYP.EQ.'Z')                           THEN
+
+***                RETRIEVE THE X- AND Y-DIRECTIONAL INFO.
+
+                  CALL GETZREF( 1, '>>',ALON )
+                  CALL GETZREF( 1, '^^',ALAT )
+
+***                RETRIEVE ASSOCIATED ROTATION AND POLE INFO.
+
+                  CALL GETZDES( RTYP, IG1R,IG2R,IG3R,IG4R, NIR,NJR )
+
+                  IF (.NOT.LOLA)                               THEN
+                      DO  J=1,NLAT
+                          RAD(J) = ALAT(J)*CO
+                      END DO
+                  END IF
+                  
+              ELSE
+
+***                GRID TYPE NOT RECOGNIZED.
+
+                  IF (GRTYP.EQ.'Z')                            THEN
+                      WRITE(6,6012)
+                  ELSE
+                      WRITE(6,6002) GRTYP
+                  END IF
+
+                  CALL                             XIT(' Ggdlat ',-2 )
+
+              END IF
+
+          END IF
+
+* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - --
+***        COMPUTE THE  LATITUDE DERIVATIVES. SAVE ON FILE GGOUT.
+
+          IF (.NOT.LOLA .OR. GRTYP.NE.'Z')                     THEN
+
+              CALL GGDY2( DLAT,D, NLON,NLAT, RAD )
+
+          ELSE
+
+***            INTERPOLATE TO DOWNSTREAM POINT.
+
+              CALL EZ_IGSCINT( DP, NLON,NLAT, LA(MAXW+1),LO, 
+     +                         D  ,NLON,NLAT, GRTYP, 
+     +                         RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                        .TRUE., ALON,ALAT )
+
+***            INTERPOLATE TO UPSTREAM POINT.
+
+              CALL EZ_IGSCINT( DM, NLON,NLAT, LA(2*MAXW+1),LO, 
+     +                         D  ,NLON,NLAT, GRTYP, 
+     +                         RTYP,IG1R,IG2R,IG3R,IG4R,
+     +                        .TRUE., ALON,ALAT )
+
+***            INTERIOR POINTS USE CENTERED DIFFERENCES.
+
+              DO  J=2,NLAT-1
+                  IJ = (J-1)*NLON+1
+                  DO  I=1,NLON
+                      DLAT(IJ) = ( DP(IJ) - DM(IJ) ) * OV2DELT
+                           IJ  =      IJ  + 1
+                  END DO
+              END DO
+
+***            FIRST AND LAST ROWS USE ONE-SIDED DIFFERENCES AS IN GGDY2.
+
+              IJ = (NLAT-1)*NLON+1
+              DO  I=1,NLON
+                  DLAT(I ) = ( DP(I ) - D (I)       ) / DELTAR
+                  DLAT(IJ) = ( D (IJ) - DM(IJ-NLON) ) / DELTAR
+                       IJ  =      IJ  + 1
+              END DO
+
+          END IF
+
+          CALL PUTFLD2( 2, DLAT, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1
+      GOTO 100
+
+***    ERROR EXIT WHILE READING DELTA AND INTERPOLATION TYPE.
+
+  900 CALL                                         XIT(' Ggdlat ',-7 )
+
+*---------------------------------------------------------------------
+
+ 6002 FORMAT(' Unsupported grid type ',A)
+ 6012 FORMAT(' Longitude/Latitude file is required with Z-type grids.')
+ 6022 FORMAT(' Please use ZXDLAT or ZXDLATF for ZONL arrays...')
+
+ 6100 FORMAT(1X,I6,' records read.')
+
+      END
+#     endif

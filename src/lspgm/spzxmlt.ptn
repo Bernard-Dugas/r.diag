@@ -1,0 +1,247 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spzmlt  SPIN ZXIN SPOUT OUTPUT
+*
+*
+*     DESCRIPTION...
+*      spzxmlt - MULTIPLY SPECTRAL FILE BY CROSS-SECTION FILE
+*
+*
+*     AUTHORS  - T.Shepherd AND J.D.Henderson, JUL 18/79.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spzxmlt.ptn,v 4.7 2014/09/25 20:20:54 dugas Exp $
+*
+*
+*     PURPOSE - MULTIPLIES A COMPLEX-VALUED SPECTRAL COEFFICIENT 
+*               FILE (SPIN)BY A GLOBALLY-AVERAGED ZONAL CROSS-SECTION
+*               FILE (ZXIN) WITH THE SAME VERTICAL LEVEL STRUCTURE. 
+*               ZXIN FILE SHOULD BE CONSTANT BY LEVEL, AS ONLY THE
+*               FIRST VALUE OF EACH IS USED.
+*
+*     NOTE    - FOR EXAMPLE, THE FILES COULD BE ON PRESSURE LEVELS, AND
+*               THE ZONAL FILE COULD BE THE GLOBAL AVERAGE OF DEL-HAT.
+*
+*
+*     INPUT FILES...
+*      SPIN  = SPECTRAL MULTI-LEVEL FILE.
+*      ZXIN  = GLOBAL AVERAGE CROSS-SECTION FILE CORRESPONDING TO SPIN.
+*
+*     OUTPUT FILE...
+*      SPOUT = SPECTRAL FILE OF SPIN MULTIPLIED BY ZXIN.
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 SPIN,ZXIN FILE PROBLEMS
+*      2 PROBLEMS READING ZXIN
+*      3 DIFFERENT VERTICAL LEVELS IN SPIN,ZXIN 
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM SPZXMLT
+*     PROGRAM SPZXMLT (SPIN,       ZXIN,       SPOUT,       OUTPUT,
+*    +           TAPE1=SPIN, TAPE2=ZXIN, TAPE3=SPOUT, TAPE6=OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: spzxmlt.ptn,v $
+*     Revision 4.7  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/09/15 15:49:33  dugas
+*     Enlever toutes references a MEMOIR.
+*
+*     Revision 4.3  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.2  1998/07/03 02:26:41  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:22  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:22:02  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:06:25  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:10  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  93/08/19  15:20:25  armnrbd
+*     Modifications cosmetiques.
+*     
+*     Revision 1.4  93/06/10  14:19:27  armnrbd
+*     Corriger la definition du pointeur FOM dans la boucle 200.
+*     
+*     Revision 1.3  93/06/09  17:04:34  armnrbd
+*     Corriger l'appel a PUTSET2.
+*     
+*     Revision 1.2  92/11/23  13:50:51  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/04/29  15:08:36  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/03/04  21:02:03  armnrbd
+*     Initial revision
+*     
+*     MAY 14/83 - R.LAPRISE.
+*     DEC 04/80 - J.D.HENDERSON
+*     JUL 18/79 - TED SHEPHERD.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      LOGICAL     OK
+      CHARACTER*4 KIND
+      REAL        ZERO,G0
+      INTEGER     FOM,LEV(MAXLEV),NLEV,NLEV1,NLEV2,
+     +            NWDS,LEN,KBUF(taille_entete),KPAK,
+     +            LBUF(taille_entete),LPAK,LEN1,LEN2,NWDS2,MAXW,
+     +            MAXW1,MAXW2,ILAT,HEAD,NFF,NR,I,L,IER
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: F,G
+
+      INTEGER     GETSIZ2
+      EXTERNAL    MACSPE,JCLPNT,FILEV,XIT,PRECEDE,
+     +            GETSET2,GETZX2,PUTSET2,GETSIZ2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spzxmlt.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+      NR = 0
+
+***    ALLOCATE WORKING MEMORY.
+
+  050 MAXW1 = GETSIZ2( 1, KBUF,LEN1,NWDS, KPAK, LEV,NLEV )
+      MAXW2 = GETSIZ2( 2, LBUF,LEN2,NWDS2,LPAK, LEV,NLEV2 )
+
+      IF (MAXW1.LE.0    .OR.
+     +    MAXW2.LE.0    .OR.
+     +    NLEV .NE.NLEV2   )                                   THEN
+          WRITE(6,6100) MAXW1,NLEV,MAXW2,NLEV2
+          CALL                                     XIT(' Spzxmlt ',-1 )
+      END IF
+
+      LEN   = MAX( LEN1, LEN2  )
+      MAXW  = MAX( MAXW1,MAXW2 )
+
+      NWDS2 = LBUF(5)
+
+      ALLOCATE( IBUF(LEN),F(NWDS *NLEV) ,
+     +          JBUF(LEN),G(NWDS2*NLEV) )
+
+***    READ NEXT SET OF RECORDS FROM INPUT.
+
+  100 CALL GETSET2( 1, F, LEV,NLEV1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF,JBUF, F,G )
+              IF (MAXW.EQ.0) GOTO 050
+              WRITE(6,6020) NR
+              IF (NR.EQ.0) CALL                    XIT(' Spzxmlt',-1 )
+              CALL                                 XIT(' Spzxmlt', 0 )
+
+          ELSE
+
+              WRITE(KIND,4) IBUF(1) 
+              IF (KIND.NE.'SPEC') GOTO 100
+
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+          CALL GETZX2( 2, G,ILAT, LEV,NLEV2, JBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( IBUF,JBUF, F,G )
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL PRECEDE( 1,NLEV1 )
+                  GOTO 050
+              END IF
+              CALL                                 XIT(' Spzxmlt',-2 )
+          END IF
+
+***        CHECK NUMBER OF LEVELS.
+
+          IF (NLEV1.GT.NLEV  .OR.
+     +        NLEV2.NE.NLEV1    )                              THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+              CALL                                 XIT(' Spzxmlt',-3 )
+          END IF
+
+          IF (NR.EQ.0) CALL PRTLAB( JBUF )
+
+***        MULTIPLY SPECTRAL COEFFICIENTS BY CONSTANT ZX FILE.
+
+          DO 200 L=1,NLEV1
+              FOM = (L-1)*NWDS
+              G0  = G((L-1)*ILAT+1)
+              DO 200 I=1,NWDS
+                  F(FOM+I) = F(FOM+I)*G0
+  200     CONTINUE
+
+***        SAVE ON FILE OUT.
+
+          CALL PUTSET2( 3, F, LEV,NLEV1, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+NLEV1
+      GOTO 100
+*-----------------------------------------------------------------------
+
+    4 FORMAT(A4)
+
+ 6020 FORMAT('0Spzxmlt read',I6,' records.')
+ 6100 FORMAT('0..Problems with input files...'/
+     +       '   Maxw,nlev(spin),maxw,nlev(zxin) =',4I8)
+
+      END
+#     endif

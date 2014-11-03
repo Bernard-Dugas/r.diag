@@ -1,0 +1,867 @@
+#     if !defined (pression_au_toit)
+#         define   pression_au_toit 0.01
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      gsathl  GSFLD GSLNSP GSTEMP GTHFLD INPUT OUTPUT [ -na ] \ 
+*            [ -n VAL1 -a VAL2 -b VAL3 -c VAL4 -kind VAL5 \ 
+*              -d VAL6 -i VAL7 -def ]
+*
+*
+*     DESCRIPTION...
+*      gsathl  - INTERPOLATES A FIELD FROM SIGMA/HYBRID OR PRESSURE LEVELS
+*                TO NTHL THETA (POTENTIAL TEMPERATURE) LEVELS
+*
+*
+*     AUTHOR  - J. Koshyk, July 27/94.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gsathl.ptn,v 4.30 2014/09/25 20:20:49 dugas Exp $
+*
+*
+*     PURPOSE - INTERPOLATES FROM ETA (SIGMA/HYBRID) OR PRESSURE LEVELS TO NTHL
+*               POTENTIAL TEMPERATURE (THETA) LEVELS. THE INTERPOLATION IS LINEAR
+*               IN LN(THETA).  EXTRAPOLATION UP AND DOWN IS BY LAPSE RATES,
+*               DF/D(LN THETA) SPECIFIED BY THE USER.
+*
+*
+*     INPUT FILES...
+*      GSFLD  = SETS OF ETA (SIGMA/HYBRID) OR PRESSURE LEVEL GRID DATA.
+*      GSLNSP = SERIES OF GRIDS OF LN(SF PRES IN MB) (IGNORED IF COORD='PRES')
+*      GSTEMP = SERIES OF GRIDS OF TEMPERATURE.
+*
+*     OUTPUT FILE...
+*      GTHFLD = SETS OF THETA LEVEL GRID DATA.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NTHL  (n)    = NUMBER OF REQUESTED THETA LEVELS (DEF 5, MAX 999).
+*                     IF NTHL IS NEGATIVE, EACH -NTHL LEVTH VALUES ARE READ WITH
+*                     A I10 FORMAT OR AN E10.0 IF ITS VALUE CONTAINS A DECIMAL
+*                     POINT.
+*      RLUP  (a)    = LAPSE RATE, (D FLD/D LN(THETA)) USED TO EXTRAPOLATE UPWARDS,
+*      RLDN  (b)    = LAPSE RATE USED TO EXTRAPOLATE DOWNWARDS,
+*      COORD (kind) = 'SIG'/'ETA'/'ET10'/'ET15' FOR INPUT VERTICAL COORDINATES AND
+*                     'GEM2'/'GEM3'/'GEM4' FOR VARIANTS OF THE GEM VERTICAL COORDINATES
+*                     'PRES' FOR INPUT PRESSURE COORDINATES.
+*
+*      PTOIT (c)    = PRESSURE (PA) AT THE LID OF MODEL.
+*      PREF  (d)    = REF PRESSURE USED WHEN COORD='GEM2' OR 'GEM3' (DEF 80000 PA).
+*      R     (i)    = EXPONENT USED ONLY WHEN COORD='GEM2' OR 'GEM3' (DEF 1.0)
+*
+*      LEVTH        = THETA LEVELS (K) (MONOTONE DECREASING I.E. TOP OF
+*                     ATMOSPHERE TO BOTTOM). THE DEFAULTS ARE AS SPECIFIED
+*                     IN THE EXAMPLE BELOW.
+*
+*      Notes: 1) The first input line is NOT read if any of
+*                its parametres are passed via the command line.
+*             2) Furthermore, the second line will not be read either
+*                if the "-def" defaults processing mode is requested.
+*             3) Specifying "-na' prevents the routine EATHL from
+*                aborting when it find a well-mixed theta layer.
+*             4) RLUP and RLDN are ignored when COORD='GEM' or 'GEM2'.
+*             5) GEM2 is the Original hybrid coordinate as implemented
+*                by Edouard & Gravel in GEM/DM v2.2.0. GEM3 is the
+*                normalized  that was implemented in the v2.3.1 GEM/DM.
+*                'GEM4' is the version by GEM/DM from v4.0.6.
+*             6) The default value of COORD is determined by the file type
+*                and the program will also try to determine it by the
+*                (internal) coding used for the coordinate itself.
+*
+*      READ(5,5010) NTHL,RLUP,RLDN,COORD,PTOIT,PREF,R
+*      IF (NTHL.GT.0)
+*      READ( 5,5020 ) (LEVTH(I),I=1,NTHL)
+*      IF (NTHL.LT.0)
+*      READ( 5,5030 ) (LEVTH(I),I=1,-NTHL)
+*5010  FORMAT(10X,I5,2E10.0,1X,A4,3E10.0)
+*5020  FORMAT(16E5.0)
+*5030  FORMAT(8E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARDS...
+*
+  GSATHL.     5        0.        0. PRES      pression_au_toit
+*850. 700. 550. 400. 330.
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NUMBER OF THETA LEVELS GREATER THAN MAXLEV
+*       2 THETA NOT MONOTONIC DECREASING
+*       3 ERROR READING FIRST TEMPERATURE SET
+*       4 ERROR READING FIRST FIELD IN GSLNSP
+*       5 ERROR READING FIRST SET IN GSFLD
+*       6 GSFLD,GSLNSP OR GSTEMP NOT THE SAME SIZE
+*       7 MORE THAN ONE SIZE IN GSFLD
+*       8 MISSING GSLNSP SET
+*       9 MORE THAN ONE SIZE IN GSLNSP
+*      10 MISSING GSTEMP SET
+*      11 MORE THAN ONE SIZE IN GSTEMP
+*      12 GSTEMP DOES NOT CONTAIN TEMPERATURES
+*      13 EROR ABORT READING INPUT CARD 1
+*      14 ERROR ABORT READING INPUT CARD 2
+*      15 GSFLD AND GSTEMP VERT COORDINATE DIFFER
+*      16 GSFLD VERT COORDINATE NOT MONOTONIC
+*      17 UNSUPPORTED VERTICAL COORDINATE IN GSTEMP
+*      18 COORD PARAMETRE AND GSTEMP MISMATCH
+*      19 PTOIT GREATER THAN TOP MODEL LEVEL (=ETA(TOP)*PREF)
+*      20 GSLNSP DOES NOT CONTAIN LN( SURFP ) FOR EARTH
+*      21 FOUND UNSUPPORTED DATA TYPE
+*      22 LEVTH DOES NOT CONTAIN THETA DATA
+*      23 INCONSISTENT GSFLD AND GSTEMP LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM gsathl
+*     PROGRAM GSATHL (GSFLD,       GSLNSP,       GSTEMP,       GTHFLD,
+*    1                                           INPUT,        OUTPUT,  )
+*    2          TAPE1=GSFLD, TAPE2=GSLNSP, TAPE3=GSTEMP, TAPE4=GTHFLD,
+*    3                                     TAPE5=INPUT,  TAPE6=OUTPUT)
+*     ----------------------------------------------------------------
+
+*      $Log: gsathl.ptn,v $
+*      Revision 4.30  2014/09/25 20:20:49  dugas
+*      Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*      Revision 4.29  2013/03/21 21:36:19  bernard
+*      Ajouter le support de VKIND=5003.
+*
+*      Revision 4.28  2011/02/10 17:08:07  dugas
+*      Corriger le traitement de VKIND lorsque COORD='PRES'.
+*
+*      Revision 4.27  2010/05/04 18:41:41  dugas
+*      Re-activer la prise en charge du VKIND des donnees
+*        via un argument sur la ligne de commande.
+*
+*      Revision 4.26  2010/02/15 22:39:14  dugas
+*      Support BETA de la coordonnee verticale GEM4.
+*
+*      Revision 4.25  2008/05/03 21:06:30  dugas
+*      Modification generale pour r.gppf.
+*
+*      Revision 4.24  2008/04/28 15:41:58  dugas
+*      Ne plus tenir compte du cas non-SQ98.
+*
+*      Revision 4.23  2007/12/20 21:01:45  dugas
+*      - Support du format E10.0 pour les niveaux verticaux en arguments.
+*      - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*      - Utiliser CONVPR pour decoder les niveaux verticaux.
+*      - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*      Revision 4.22  2007/08/29 17:53:25  dugas
+*      Expliciter les unites requises dans GSLNSP.
+*
+*      Revision 4.21  2006/12/18 12:35:17  dugas
+*      Ajouter des messages informatifs associes aux erreurs -12 et -19.
+*
+*      Revision 4.20  2006/03/15 23:10:02  dugas
+*      Corriger une erreur dans l'appel a FMMM2 rapportee par M Charron
+*
+*      Revision 4.19  2005/04/14 16:56:20  dugas
+*      Proteger PTOIT,PREF,R lors de l'appel a LIRPT.
+*
+*      Revision 4.18  2005/03/03 21:53:11  dugas
+*      Verifier que le type de donnees est approprie.
+*
+*      Revision 4.17  2005/02/23 19:21:59  dugas
+*      Verifier que GSLNSP contient bien des valeurs qui sont
+*       dans l'eventail connu du ln( pression de surface ) pour
+*       notre planete. Un nuveau code d'erreur est
+*       associe a cette operation.
+*
+*      Revision 4.16  2002/09/17 17:52:25  dugas
+*      Modifier/simplifier le traitement des coordonnees verticales hybrides
+*       de GEM (v2.2.0 et v2.3.1). Utilisation systematique de GETKIND et
+*       definition du type de coordonnee par defaut selon le genre de
+*       fichier rencontre (CCC ou RPN).
+*
+*      Revision 4.15  1999/07/23 15:39:22  armnrbd
+*      Modifier la documentation, y ajoutant la cle "-na'.
+*
+*      Revision 4.14  1999/06/29 16:50:18  armnrbd
+*      Ne plus lire LNSP pour le calcul de l'allocation
+*      dynamique de memoire lorsque COORD='PRES'.
+*
+*      Revision 4.13  1999/06/29 16:27:59  armnrbd
+*      Modifications s'applicant au cas COORD='PRES':
+*      1) Ne plus lire la pression de surface.
+*      2) Utiliser ETA plutot que LEV pour calculer A.
+*
+*      Revision 4.12  1998/10/15 15:05:26  armnrbd
+*      Ajouter le champs de travail MTH a l'appel de EATHL.
+*
+*     Revision 4.11  1998/09/18  18:22:13  armnrbd
+*     Implanter l'interface RPBLOC avec valeurs par defauts.
+*     L'orientation de la coordonne verticale dans les fichiers
+*     de donnees peut etre croissante ou decroissante.
+*
+*     Revision 4.10  1998/07/03  02:26:29  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.9  1998/07/03  01:18:35  armnrbd
+*     Ignorer les espaces dans le parametres d'entree COORD.
+*
+*     Revision 4.8  1997/09/26  17:39:00  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.7  1997/05/30  18:04:36  armnrbd
+*     Conversions de noms/unites seulement pour fichiers SQ89.
+*
+*     Revision 4.6  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.5  1995/11/09  02:00:49  armnrbd
+*     Implanter le macro cpp "pression_au_toit".
+*
+*     Revision 4.4  1995/06/02  20:19:55  armnrbd
+*     Supposer que si le dernier niveau sigma (entier) est egal
+*     a 1, on voudrait vraiment que sigma (reel) soit egal a 1.0
+*
+*     Revision 4.3  1995/05/31  14:08:45  armnrbd
+*     Convertir TT en degres Kelvin (fichiers SQI).
+*
+*     Revision 4.2  1995/02/13  19:45:31  armnrbd
+*     Convertion d'unites lorsque le nom dans gstemp est TT.
+*
+*     Revision 4.1  95/02/07  14:59:09  armnrbd
+*     Premiere version Unix/RPN.
+*     
+
+*      OCT  5/94 - J. KOSHYK (INTRODUCE COLUMN ARRAY FSIG INTO CALL TO EAPL).
+*      JUL 27/94 - J. KOSHYK
+
+*---------------------------------------------------------------------------------
+      use diag_toc, only: GetTOC, LirTOC
+
+      IMPLICIT     none
+
+      INTEGER      HEAD
+      PARAMETER  ( HEAD   = taille_entete )
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+      REAL         PTMIN
+      PARAMETER  ( PTMIN = pression_au_toit )
+
+      CHARACTER    GRTYP,LIGNE*80
+      CHARACTER*10 CLEVTH(MAXLEV)
+      REAL         AMIN,AMAX,AMEAN
+      REAL(8)      PTOIT8,PREF8,R8
+      LOGICAL      OK,OK1,OK2,MONOTON,MODETA,BIGF
+      CHARACTER* 4 COORD,TYPE,NAME,NOM,CTEMP,CLNSP,CHECK
+      REAL         DLNTH(MAXLEV),PTOIT,RLUP,RLDN,
+     +             FSIG(MAXLEV),THS(MAXLEV),DFDLNTH(MAXLEV+2),
+     +             ETA(MAXLEV),A(MAXLEV),B(MAXLEV),TH(MAXLEV),
+     +             PREF,R,TCON, PTOIT0,PREF0,R0,ETAT(MAXLEV)
+      INTEGER      LEV(MAXLEV),LEVTH(MAXLEV),KBUF(HEAD),IO,IER,
+     +             LBUF(HEAD),MBUF(HEAD),MAXW1,MAXW2,MAXW3,MAXW,NFIL,
+     +             LEN1,LEN2,LEN3,LEN,KPAK,LPAK,MPAK,NPAK,NWDS,NST,TOP,
+     +             BOT,INC,NSL,NSLT,K,L,M,NTHL,LIM1,LIM2,NSETS,MAXL,
+     +             MTH(MAXLEV+2),VKIND,TOC_NBR,TOC_NK, NI,NJ,
+     +             IG10,IG20,IG1,IG2,LEVT(MAXLEV),
+     +             TOPT,BOTT,INCT
+
+***    WORKSPACE ARRAYS
+
+      INTEGER,     DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:,:), ALLOCATABLE :: F,TEMP,LP
+
+      LOGICAL      RPBLOC,DEF
+      CHARACTER*4  GETYP,PKTYP*2,GETHIC
+      INTEGER      GETSIZ,GETSIZ2,GETKIND,GETHIGH
+      EXTERNAL     GETSIZ,GETSIZ2,MACSPE,JCLPNT,GETLIGN,XIT,
+     +             BURNF,CONVPR,CMPLBL,COORDAB,GETSET2,GETHIC,
+     +             GETFLD2,PUTSET2,WRITLEV,EATHL,GETYP,LEADBLK,
+     +             MONVERT,RPBLOC,GETKIND,FMMM2,GETHIGH
+      EXTERNAL     LIRPT,GETPT,SETPT
+
+      DATA        DEF   / .FALSE. /
+      DATA        MODETA/ .FALSE. /
+      DATA        CHECK / ' '     /
+
+      DATA      ( CLEVTH(L), L=1,5 ) /
+     +           ' 850.',' 700.',' 550.',' 400.',' 330.'
+     +                              /
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      DATA         CTEMP ,CLNSP /
+     +             'TEMP','LNSP'/
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gsathl.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFIL = 6
+      CALL JCLPNT( NFIL, 1,2,3,4, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+      PTOIT = PTMIN
+      PREF  = 80000.
+      R     = 1.0
+
+      COORD ='DEF'
+      BIGF  =.FALSE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+          NTHL  = 5 
+          RLUP  = 0.0
+          RLDN  = 0.0
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) COORD = LIGNE
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=908,ERR=908,IOSTAT=IO) NTHL
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=908,ERR=908,IOSTAT=IO) RLUP
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=908,ERR=908,IOSTAT=IO) RLDN
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=908,ERR=908,IOSTAT=IO) PTOIT
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=908,ERR=908,IOSTAT=IO) PREF
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ(LIGNE,0011,END=908,ERR=908,IOSTAT=IO) R
+
+          DEF = RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        READ-IN FIRST DIRECTIVE CARD.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 908
+          ELSE
+              READ( LIGNE, 5010, END=908,ERR=908,IOSTAT=IO)
+     +                           NTHL,RLUP,RLDN,COORD,PTOIT,PREF,R
+
+           END IF
+
+      END IF
+
+      IF (NTHL.LT.0)                                           THEN
+          NTHL = -NTHL
+          BIGF =.TRUE.
+      END IF
+
+      IF (COORD.NE.' ') CALL LEADBLK( COORD )
+      IF (COORD.EQ.' ') COORD  = 'DEF'
+
+      IF (NTHL.GT.MAXLEV) CALL                     XIT(' Gsathl ',-1)
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+          IF (COORD.EQ.'DEF'  .OR. 
+     +        COORD.EQ.'GEM2' .OR. 
+     +        COORD.EQ.'GEM3')
+     +        CALL SETPT( PTOIT,PREF,R )
+
+          IF (COORD /= 'DEF')                                  THEN
+              if (COORD == 'GEM'   .or.
+     +            COORD == 'GEM2') CALL setkind('SIGMA')
+              if (COORD == 'GEM3'  .or.
+     +            COORD == 'GEM4') CALL setkind('HYBRID')
+          END IF
+
+      END IF
+
+      IF (.NOT.(DEF .AND. (NTHL.EQ.5)))                        THEN
+
+***        READ THE REQUESTED THETA LEVELS.
+
+          IF (BIGF)                                            THEN
+              DO  K=1,(NTHL-1)/8+1
+                  CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 909
+                  ELSE
+                      LIM1 = 8*(K-1)+1
+                      LIM2 = MIN( NTHL, 8*K )
+                      READ( LIGNE, 5030,END=909,ERR=909,IOSTAT=IO) 
+     +                                  (CLEVTH(L),L=LIM1,LIM2)
+                  END IF  
+              END DO
+          ELSE
+              DO  K=1,(NTHL-1)/16+1
+                  CALL GETLIGN( 5,LIGNE,80,OK ) 
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 909
+                  ELSE
+                      LIM1 = 16*(K-1)+1
+                      LIM2 = MIN( NTHL, 16*K )
+                      READ( LIGNE, 5020,END=909,ERR=909,IOSTAT=IO) 
+     +                                  (CLEVTH(L),L=LIM1,LIM2)
+                  END IF  
+              END DO
+          END IF
+
+          CALL BURNF
+
+      END IF
+
+***    CHECK LEVTH CODING.
+
+      DO  K=1,NTHL
+          IF (INDEX( CLEVTH(K),'.' ).EQ.0)                     THEN
+              READ( CLEVTH(K),10, ERR=909,END=909,IOSTAT=IO ) LEVTH(K)
+              CALL CONVPR( LEVTH(K), TH(K), VKIND, -2 )
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  IF (VKIND.NE.6) CALL             XIT(' Gsathl ', -22)
+                  CALL CONVPR( LEVTH(K), TH(K), VKIND, +2 )
+              END IF
+          ELSE
+             READ( CLEVTH(K),11, ERR=909,END=909,IOSTAT=IO ) TH(K)
+             IF (PKTYP.EQ.'SQ')                                THEN
+                 VKIND = 6
+                 CALL CONVPR( LEVTH(K), TH(K), VKIND, +2 )
+             ELSE
+                 CALL LVCODE( LEVTH(K), TH(K)/1000.,1 ) 
+             END IF
+          END IF
+      END DO
+
+      CALL WRITLEV( TH,NTHL,'THET')
+
+      IF (COORD.NE.'GEM2' .AND. COORD.NE.'GEM3')               THEN
+          WRITE(6,6010) RLUP,RLDN,COORD,PTOIT
+      END IF
+
+***    ARE THESE THETA VALUES MONOTONOUSLY INCREASING ?
+
+      DO  L=2,NTHL
+          IF (TH(L).GE.TH(L-1)) CALL               XIT(' Gsathl ',-2 )
+      END DO
+
+***    GET SIZE FROM FIRST SET OF BUFFERS.
+***    GET ETA VALUES FROM THE GSFLD FILE.
+
+      MAXW3 = GETSIZ2( 3, MBUF,LEN3,NWDS,MPAK, LEVT,NSLT )
+      IF (MAXW3.EQ.0) CALL                         XIT(' Gsathl ',-3 )
+
+      LEN2  = LEN1 ; MAXW2 = MAXW3
+      IF (COORD.NE.'PRES')
+     +MAXW2 = GETSIZ(  2, LBUF,LEN2,NWDS,LPAK )
+      IF (MAXW2.EQ.0) CALL                         XIT(' Gsathl ',-4 )
+
+      MAXW1 = GETSIZ2( 1, KBUF,LEN1,NWDS,KPAK, LEV,NSL )
+
+      IF (MAXW1.EQ.0 .OR. NSL.LT.   1    .OR.
+     +                    NSL.GT.MAXLEV) CALL      XIT(' Gsathl ',-5 )
+
+
+***    SPECIFY CORRECT SET OF NAMES AND CONSTANTS.
+
+      WRITE(CTEMP,0004) MBUF(3)
+
+      IF (CTEMP.EQ.'TT')                                       THEN
+          CLNSP = 'LP'
+          TCON  = 273.15
+      ELSE IF (CTEMP.EQ.'TEMP')                                THEN
+          CLNSP = 'LNSP'
+          TCON   = 0.0
+      ELSE
+          WRITE(6,6045) CTEMP,'TT or TEMP'
+          CALL                                     XIT(' Gsathl ',-12)
+      END IF
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+
+***        RETREIVE VKIND FROM GETSIZ2( 1 ).
+
+          VKIND = GETKIND()
+
+          IF (VKIND /= 2)                                      THEN
+
+***            TRY LOOKING FOR A HY RECORD.
+
+              CALL LIRPT( 1 )
+              CALL GETPT( 1 , PTOIT0,PREF0,R0 )
+
+              IF (PTOIT0 == -1.)                               THEN
+
+***                LITPT/GETPT DID NOT WORK.
+***                 TRY LOOKKING FOR A !! RECORD.
+
+                  CALL LirToc( 1, TOC_NBR )
+
+                  IF (TOC_NBR > 0)                             THEN
+
+                      GRTYP = GETHIC('GRTYP',KBUF )
+
+                      IF (GRTYP /= 'Z')                        THEN
+                         IG10 = -1 ; IG20 = -1
+                      ELSE
+                         IG10  = GETHIGH('IG1',KBUF )
+                         IG20  = GETHIGH('IG2',KBUF )
+                      END IF
+
+                      CALL GETTOC( 1, 'VER',VKIND, IG10,IG20 )
+                      CALL GETTOC( 1, 'NK',TOC_NK, IG10,IG20 )
+                 
+                  END IF
+
+              END IF
+
+          END IF
+
+          IF (VKIND /= 1    .AND.
+     +        VKIND /= 2    .AND.
+     +        VKIND /= 5    .AND.
+     +        VKIND /= 5001 .AND.
+     +        VKIND /= 5002 .AND.
+     +        VKIND /= 5003)                                   THEN
+              CALL                                 XIT(' Gsathl ',-17)
+          ELSE IF (VKIND.EQ.1)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM3'
+              IF (COORD.EQ.'PRES') CALL            XIT(' Gsathl ',-18)
+          ELSE IF (VKIND.EQ.2)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'PRES'
+              IF (COORD.NE.'PRES') CALL            XIT(' Gsathl ',-18)
+          ELSE IF (VKIND == 5 .OR.
+     +             VKIND == 5001)                              THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM2'
+              IF (COORD.NE.'GEM2') CALL            XIT(' Gsathl ',-18)
+          ELSE IF (VKIND == 5002 .OR. VKIND == 5003)           THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM4'
+              IF (COORD.NE.'GEM4') CALL            XIT('  Gsapl ',-18)
+          END IF
+
+      ELSE IF (COORD.EQ.'DEF')                                 THEN
+
+          COORD = 'PRES'
+          VKIND = 2
+
+      END IF
+
+      IF (COORD.EQ.'SIG')                                      THEN
+          PTOIT = MAX( PTOIT,0.00 )
+      ELSE IF (COORD(1:3).NE.'GEM')                            THEN
+          PTOIT = MAX(PTOIT,PTMIN)
+      END IF
+
+***    COMPARE FIRST SETS.
+
+      OK1 = .TRUE.
+
+      IF (COORD.NE.'PRES')
+     +CALL CMPLBL( 0,LBUF, 0,KBUF, OK1 ) 
+      CALL CMPLBL( 0,MBUF, 0,KBUF, OK2 ) 
+
+      OK = OK1.AND.OK2
+
+      IF (.NOT.OK .OR. NSL.NE.NSLT)                            THEN
+          IF (COORD.NE.'PRES')                                 THEN
+              CALL PRTLAB( KBUF )
+              CALL PRTLAB( LBUF )
+              CALL PRTLAB( MBUF )
+          ELSE
+              CALL PRTLAB( KBUF ) ; CALL PRTLAB( KBUF )
+          END IF
+          WRITE(6,6040)  NSL,NSLT
+          CALL                                     XIT(' Gsathl ',-6 ) 
+      END IF
+
+      LEN  = MAX( LEN1, LEN2, LEN3  )
+      MAXW = MAX( MAXW1,MAXW2,MAXW3 )
+
+***    CHECK THAT GSLNSP REALLY HOLDS THE EXPECTED LOG(PS).
+
+      IF (COORD.NE.'PRES')                                 THEN
+
+          WRITE(NOM,0004) LBUF(3)
+          IF (NOM.NE.CLNSP)                                THEN
+              WRITE(6,6045) NOM,CLNSP
+              CALL                                 XIT(' Gsathlt',-19)
+          END IF
+
+      END IF
+
+***    CHECK LEV AND LEVT FOR COHERENCE. DECODE LEV INTO ETA.
+
+      IF (VKIND /= 5002)                                    THEN
+          DO  L=1,NSL
+              IF (LEV(L) /= LEVT(L)) CALL          XIT(' Gsathl ',-15)
+              CALL CONVPR( LEV(L), ETA(L), VKIND, -2 )
+              IF (COORD  /= 'PRES'  .AND.  VKIND == 2)
+     +            ETA(L) = ETA(L) * 0.001
+              ETAT(L) = ETA(L)
+          END DO
+      ELSE
+          DO  L=1,NSL
+              CALL CONVPR( LEV(L), ETA(L), VKIND, -2 )
+          END DO
+          DO  L=1,NSLT
+              CALL CONVPR( LEVT(L), ETAT(L), VKIND, -2 )
+          END DO
+      END IF
+
+***    SUPPOSE THAT LEV = 1 IS THE SURFACE.
+
+      IF (COORD   .NE.'PRES' .AND.
+     +    VKIND   .EQ. 2     .AND.
+     +    LEV(NSL).EQ. 1     )
+     +    ETA(NSL) =   1.0
+
+      CALL WRITLEV( ETA,NSL,COORD )
+
+***    CHECK THAT ETA,ETAT ARE MONOTONIC.
+
+      CALL MONVERT( ETA,NSL, TOP,BOT,INC, MONOTON )
+
+      IF (.NOT.MONOTON) CALL                       XIT(' Gsathl ',-16)
+
+      CALL MONVERT( ETAT,NSLT, TOPT,BOTT,INCT, MONOTON )
+
+      IF (.NOT.MONOTON) CALL                       XIT(' Gsathl ',-16)
+
+      IF ( INCT /= INC ) CALL                      XIT(' Gsathl ',-23)
+
+***    ALLOCATE WORKING MEMORY.
+
+      WRITE(TYPE,4) KBUF(1)
+
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      NI = KBUF(5) ; NJ = KBUF(6)
+
+      IF ((COORD.EQ.'PRES' .AND. TYPE.NE.'ZONL'
+     +                     .AND. TYPE.NE.'GRID'
+     +                     .AND. TYPE.NE.'SUBA') .OR.
+     +    (COORD.NE.'PRES' .AND. TYPE.NE.'GRID'
+     +                     .AND. TYPE.NE.'SUBA') )
+     +    CALL                                     XIT(' Gsathl ',-21) 
+
+      MAXL = MAX( NSL,NTHL )
+
+      ALLOCATE( IBUF(LEN),F(NWDS,MAXL),TEMP(NWDS,NSLT),LP(NI,NJ) )
+
+      IF (COORD.NE.'PRES')                                     THEN
+
+***        EVALUATE THE PARAMETERS OF THE ETA VERTICAL DISCRETIZATION.
+
+          IF (COORD.EQ.'GEM2'.OR.
+     +        COORD.EQ.'GEM3')                                 THEN
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+***                CHECK IF GSTEMP HOLDS OTHER
+***                VALUES OF PTOIT,PREF AND R.
+
+                  IF (PTOIT0.NE.-1.)                           THEN
+                      PTOIT = PTOIT0
+                      PREF  = PREF0
+                      R     = R0
+                  END IF
+                  
+              END IF
+
+              IF (.NOT.MODETA .AND. COORD.EQ.'GEM3')           THEN
+
+                  MODETA =.TRUE.
+
+                  ETA(1:NSL) = ETA(1:NSL)
+     +                       + ( 1.0 - ETA(1:NSL) ) * PTOIT / PREF
+
+              END IF
+
+              WRITE(6,6010) RLUP,RLDN,COORD,PTOIT
+              WRITE(6,6011) PREF,R
+
+              CALL GENAB( A,B, ETA, PTOIT,PREF,R, NSL )
+              IF (PTOIT .GT. ETA(TOP)*PREF) CALL   XIT(' Gsathl ',-19)
+
+          ELSE IF (COORD(1:3).NE.'GEM')                        THEN
+
+              CALL COORDAB( A,B, NSL,ETA, COORD,PTOIT )
+
+          END IF
+
+      ELSE
+
+***        CONVERT PRESSURE TO PASCALS ...
+
+          A(1:NSL) = ETA(1:NSL)*100.
+          B(1:NSL) = 0.0
+
+***        ... AND INITIALIZE SURFACE PRESSURE (AS IT
+***        WILL NOT BE READ OR EVEN USED, SINCE B=0).
+
+          LP(1:NI,1:NJ) = LOG( 1000. )
+
+      END IF
+*---------------------------------------------------------------------------------
+
+***    GET NEXT SET FROM FILE GSFLD.
+
+      NSETS = 0
+
+  150 CALL GETSET2( 1, F, LEV,NSL, IBUF,MAXW,OK )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6030) NSETS
+              IF (NSETS.EQ.0)                                  THEN
+                  CALL                             XIT(' Gsathl ',-5 )
+              ELSE
+                  CALL                             XIT(' Gsathl ', 0 )
+              END IF
+          END IF
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Gsathl ',-7 )
+
+          NST         =  IBUF(2)
+          WRITE(NAME, 4) IBUF(3)
+          NPAK        =  IBUF(8)
+
+          IF (COORD.NE.'PRES')                                 THEN
+
+***            GET LN(SF PRES) FOR THIS STEP,
+***            AND PUT IT AT THE BEGINNING OF F.
+
+              CALL GETFLD2( 2, LP ,'GRID'//'SUBA',NST,CLNSP,-1,
+     +                             IBUF,MAXW,OK )
+
+              IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+              IF (.NOT.OK) CALL                    XIT(' Gsathl ',-8 )
+
+              CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+              IF (.NOT.OK) CALL                    XIT(' Gsathl ',-9 )
+
+***            CHECK THAT CLNSP REALLY CONTAINS LN( SURFP ).
+
+              IF (CHECK.EQ.' ')                                THEN
+                  CALL FMMM2( AMIN,AMAX,AMEAN, F,NWDS )
+                  IF (AMIN .LE. 5.8  .OR.
+     +                AMAX .GE. 7.1) CALL          XIT(' Gsathl ',-20) 
+                  CHECK = 'OK'
+              END IF
+
+              IF (VKIND == 5002) LP(:,:) = 100.*EXP( LP(:,:) )
+
+          END IF
+
+***        GET MULTI-LEVEL TEMPERATURE FIELD FROM FILE GSTEMP.
+
+          CALL GETSET2( 3, TEMP, LEVT,NSLT, IBUF,MAXW,OK )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+          IF (.NOT. OK) CALL                       XIT(' Gsathl ',-10)
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Gsathl ',-11)
+
+          WRITE(NOM,4) IBUF(3)
+          IF (NOM.NE.'TEMP' .AND. NOM.NE.'TT')                 THEN
+              WRITE(6,6045) NOM,CTEMP
+              CALL                                 XIT(' Gsathl ',-12)
+          END IF
+
+***        (POSSIBLY) ACCOUNT FOR TEMPERATURES IN DEGREES C.
+
+          DO  K=1,NWDS*NSLT
+              TEMP(K,1) = TEMP(K,1)+TCON
+          END DO
+
+          IF (COORD /= 'GEM4')                                 THEN
+
+***            INTERPOLATE IN-PLACE FROM ETA/HYBRID/PRESSURE TO THETA.
+
+              CALL EATHL( F,NWDS,TH,NTHL, F,NSL,LP,RLUP,RLDN,
+     +                    TEMP,A,B,NSL+1, FSIG,THS,DFDLNTH,DLNTH,
+     +                    TOP,BOT,INC,MTH )
+
+          ELSE
+
+***            INTERPOLATE IN-PLACE FROM GEM4 TO THETA.
+
+              CALL GEM4ATH( F,NI,NJ, LEV,NSL, TH,NTHL, TEMP,LEVT,NSLT,
+     +                      LP, RLUP,RLDN, TOP,BOT,INC, TOPT,BOTT,INCT )
+
+          END IF
+
+***        WRITE THE THETA LEVEL GRIDS ONTO FILE 4.
+
+          READ(NAME,4) IBUF(3)
+          IBUF(4) = LEVTH(1)
+          IBUF(8) = NPAK
+
+          IF (PKTYP.EQ.'SQ') CALL SETKIND('THETA')
+
+          CALL PUTSET2( 4, F, LEVTH,NTHL, IBUF,MAXW )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+      NSETS = NSETS+1
+      GOTO 150
+
+***    E.O.F. ON INPUT.
+
+  908 IF (IO.NE.0) WRITE(6,6008) IO
+      CALL                                         XIT(' Gsathl ',-13)
+  909 IF (IO.NE.0) WRITE(6,6008) IO
+      CALL                                         XIT(' Gsathl ',-14)
+
+*---------------------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,I10)
+ 0011 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,I5,2E10.0,1X,A4,3E10.0)
+ 5020 FORMAT(16A5)
+ 5030 FORMAT(8A10)
+
+ 6008 FORMAT(' Gsathl reports I/O error number ',I5)
+
+ 6010 FORMAT(/' RLUP,RLDN = ',2F6.2,', COORD=',1X,A4,
+     +       ', P.LID (PA)=',F10.3)
+ 6011 FORMAT(' PR REF=',F10.3,', R=',F10.3)
+ 6030 FORMAT('0 Gsathl interpolated',I5,' sets of ',A4)
+ 6040 FORMAT('0 Number of levels in gsfld/gstemp is ',2I5)
+ 6045 FORMAT('0 Found ',A,', while expecting ',A)
+
+      END
+#     endif
+
+
+
+
+
+

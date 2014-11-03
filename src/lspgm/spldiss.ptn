@@ -1,0 +1,348 @@
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spldiss  IN OUT INPUT OUTPUT [ -n VAL1 -a VAL2 -b VAL3 ]
+*
+*
+*     DESCRIPTION...
+*      spldiss - COMPUTES SPECTRAL LEITH DISSIPATION FUNCTION
+*
+*
+*     AUTHOR   - T.Shepherd, June 01/79.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spldiss.ptn,v 4.9 2014/10/16 11:34:07 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES THE LEITH DISSIPATION FUNCTION L(M,N) FOR EACH FIELD
+*               IN A GLOBAL SPECTRAL FILE. THIS FUNCTION IS DEFINED AS:
+*
+*                     L(M,N) = ETA3*F(N) FOR N>NZ
+*
+*               WHERE,
+*
+*                     F(N)   = 4*(N-NZ)/NSTAR
+*                     NZ     = 0.55*NSTAR,
+*                     ETA3   = THE CUBIC ROOT OF THE ENSTROPHY FLUX RATE,
+*               AND   NSTAR  = THE TRUNCATION WAVENUMBER.
+*
+*     NOTE    - OUTPUTED RESULTS ARE ON AS MANY LEVELS AND FOR AS MANY
+*               STEPS AS THE INPUT FILE HAS.
+*
+*
+*     INPUT FILE...
+*      IN  = GLOBAL SPECTRAL FIELDS
+*
+*     OUTPUT FILE...
+*      OUT = CORRESPONDING FILE OF LEITH DISSIPATION FOR EACH WAVENUMBER
+*
+*
+*     INPUT PARAMETERS...
+*
+*      NSTAR (n) = THE TRUNCATION WAVENUMBER.
+*      ETA3  (a) = THE CUBIC ROOT OF THE ENSTROPHY FLUX RATE,
+*      TEST  (b) = 0, THE NEGATIVE VALUES IN THE DISSIPATION FUNCTION ARE SET
+*                     TO ZERO.
+*                <>0, (OTHERWISE) THE NEGATIVE VALUES ARE RETAINED.
+*
+*      READ( 5,5010 ) NSTAR,ETA3,TEST
+*5010  FORMAT(10X,I5,E10.0,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*  SPLDISS   15       1.0    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR READING FILE IN
+*       2 ERROR READING INPUT DIRECTIVES
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM SPLDISS
+*     PROGRAM SPLDISS (IN,       OUT,       INPUT,       OUTPUT,
+*    1           TAPE1=IN, TAPE2=OUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ----------------------------------------------------------
+*
+*     $Log: spldiss.ptn,v $
+*     Revision 4.9  2014/10/16 11:34:07  dugas
+*     Modifications commandees par la compilation avec GFORTRAN et IFORT.
+*
+*     Revision 4.8  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2013/10/16 20:50:24  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/05/23 21:28:51  dugas
+*     Augmenter la taille du macro grille_maximale a 300K mots.
+*
+*     Revision 4.3  1998/10/20 18:26:20  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.2  1998/07/03  02:26:39  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:55  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:21:50  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:04  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/08/04  15:55:33  armnrbd
+*     Utiliser CLRLMT dans les calculs de lrlmt.
+*     
+*     Revision 1.0  93/06/23  14:54:46  armnrbd
+*     Initial revision
+*     
+*     OCT   /86 - G.J.BOER  (CORRECTED)
+*     MAY 13/83 - R.LAPRISE.
+*     JUN 01/79 - TED SHEPHERD.
+
+*-----------------------------------------------------------------------
+      IMPLICIT  none
+
+      INTEGER,    PARAMETER :: MAXLM = lm_maximal
+      INTEGER,    PARAMETER :: HEAD  = taille_entete
+
+      LOGICAL     OK
+      REAL        ETA3
+      CHARACTER   LIGNE*80,LDIS*4
+      INTEGER     IER,IO,LSR(2,MAXLM),NFF,NR,MAXW,
+     +            NSTAR,TEST,NKNOT,LA,LR,LM,KTR,LRLMT,
+     +            LEN,NWDS,JBUF(HEAD),JPAK
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: G
+
+      LOGICAL     RPBLOC
+      INTEGER     CLRLMT,GETSIZ
+      EXTERNAL    CLRLMT,JCLPNT,GETLIGN,BURNF,GETFLD2,
+     +            ELEITH,LEITH,DIMGT2,PUTFLD2,XIT,
+     +            RPBLOC,GETSIZ
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spldiss.ptn,v $'
+
+*-----------------------------------------------------------------------
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NSTAR =  0
+          ETA3  = 0.0
+          TEST  = 0.0
+
+          OK = RPBLOC('N',LIGNE)
+          IF (OK) READ( LIGNE, 0005, ERR=902,END=902,IOSTAT=IO ) NSTAR
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 0010, ERR=902,END=902,IOSTAT=IO ) ETA3
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 0010, ERR=902,END=902,IOSTAT=IO ) TEST
+
+      ELSE
+
+***        READ PROCESSING PARAMETRES.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5010, ERR=902,END=902,IOSTAT=IO )
+     +                           NSTAR,ETA3,TEST
+              CALL BURNF
+          END IF
+
+      END IF
+
+      LDIS  = 'LDIS'
+      LRLMT =  -1
+
+      NKNOT = INT( .55*FLOAT( NSTAR )+.5 )
+      WRITE(6,6010) NKNOT,NSTAR,ETA3
+
+***    READ FIRST INFORMATION BUFFER
+***    AND ALLOCATE WORKING ARRAYS.
+
+      MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) CALL                          XIT(' Spldiss',-1 )
+
+      ALLOCATE( G(MAXW),IBUF(LEN) )
+
+***    READ RECORDS OF INPUT FILE, TO GIVE FILE OUT THE SAME DIMENSION.
+
+      NR = 0
+  100 CALL GETFLD2( 1, G, 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (NR.EQ.0) CALL                    XIT(' Spldiss',-1 )
+              WRITE(6,6020) NR
+              CALL                                 XIT(' Spldiss', 0 )
+          END IF
+
+          IF (NR.EQ.0 .OR. IBUF(7).NE.LRLMT)                   THEN
+
+***            IF NR=0, CHECK TO SEE WHETHER LABELS ARE OLD OR NEW.
+
+              IF (IBUF(7).LE.MAXLM)                            THEN
+                  LRLMT = CLRLMT( IBUF(5),IBUF(6),0,.TRUE. )
+              ELSE
+                  LRLMT = IBUF(7)
+              END IF
+
+              CALL DIMGT2( LSR, LA,LR,LM,KTR, LRLMT, 0,0 )
+
+          END IF
+
+***        IF TEST EQUAL TO ZERO, THE NEGATIVE VALUES IN THE 
+***        DISSIPATION FUNCTION ARE SET TO ZERO.  IF TEST NOT 
+***        EQUAL TO ZERO, THE NEGATIVE VALUES ARE RETAINED.
+
+          IF (TEST.EQ.0)                                       THEN
+              CALL LEITH ( G, LSR,LM,LA,NKNOT,NSTAR,ETA3 )
+              IF (NR.EQ.0) WRITE(6,6040)
+          ELSE
+              CALL ELEITH ( G, LSR,LM,LA,NSTAR,ETA3 )
+              IF (NR.EQ.0) WRITE(6,6050)
+          END IF
+
+***        SAVE ON FILE OUT.
+
+          READ(LDIS,4) IBUF(3)
+          CALL PUTFLD2( 2, G, IBUF,MAXW )
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  902 CALL                                         XIT(' Spldiss',-2 )
+*-----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,I5,E10.0,I5)
+
+ 6010 FORMAT('0NKNOT,NSTAR,ETA3 =',I4,' ,',I4,' ,',1PE15.6)
+ 6020 FORMAT('0Spldiss produced ',I6,' records.')
+ 6040 FORMAT(2X,'Incomplete leith function used...'/)
+ 6050 FORMAT(2X,'  Complete leith function used...'/)
+
+      END
+      SUBROUTINE ELEITH(GR,LSR,LM,LA,NSTAR,ETA3) 
+
+***    AUGUST 21, 1979 - TED SHEPHERD. 
+***    JUNE 18, 1980 - MODIFIED BY TED SHEPHERD. 
+***    RETURNS L(K)=LEITH EDDY VISCOSITY COEFF. 
+
+      IMPLICIT none
+
+      REAL     ETA3, X,F, GR(*)
+      INTEGER  LSR(2,*),LM,LA,NSTAR, M,K,KL,KR,NS
+
+      COMPLEX  G
+      POINTER (PGC,G(*))
+*-----------------------------------------------------------------------
+      PGC = LOC( GR(1) )
+
+      DO  200 M=1,LM 
+          KL = LSR(1,M) 
+          KR = LSR(1,M+1)-1 
+          DO  100 K=KL,KR
+              NS = (M-1)+(K-KL) 
+              X  = FLOAT( NS )/FLOAT( NSTAR )
+              IF (X.LE.0.15)                                   THEN
+                  F =  0.
+              ELSE IF (X.GT.0.15.AND.X.LE.0.33)                THEN 
+                  F = -0.2*(X-.15)
+              ELSE IF (X.GT.0.33.AND.X.LE.0.65)                THEN
+                  F = (1.1*((X-.38)**2))-.04
+              ELSE IF (X.GT.0.65)                              THEN
+                  F =  4.0*((X-.55)**2)
+              END IF
+              G(K) = F*ETA3
+  100     CONTINUE
+  200 CONTINUE
+
+      RETURN
+      END 
+      SUBROUTINE LEITH(GR,LSR,LM,LA,NKNOT,NSTAR,ETA3)
+
+***    AUGUST 21, 1979 - TED SHEPHERD. 
+***    RETURNS K(K)= (INCOMPLETE) LEITH EDDY VISCOSITY COEFF.
+
+      IMPLICIT none
+
+      REAL     ETA3, GR(*)
+      INTEGER  LSR(2,*),LM,LA,NKNOT,NSTAR, M,K,KL,KR,NS
+
+      COMPLEX  G
+      POINTER (PGC,G(*))
+*-----------------------------------------------------------------------
+
+      PGC = LOC( GR(1) )
+      DO  200 M=1,LM 
+          KL = LSR(1,M) 
+          KR = LSR(1,M+1)-1 
+          DO  100 K=KL,KR
+              NS = (M-1)+(K-KL) 
+              IF (NS.LE.NKNOT)                                 THEN
+                  G(K) = 0.0
+              ELSE
+                  G(K) = 4.0*ETA3
+     +                 *( (FLOAT( NS-NKNOT )/FLOAT( NSTAR ))**2 )
+              END IF
+  100     CONTINUE
+  200 CONTINUE
+
+      RETURN
+      END 
+#     endif

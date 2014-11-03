@@ -1,0 +1,626 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      shiftf  SERI SHIFT OUTPUT [-delt VAL1 -kind VAL2]
+*
+*
+*     DESCRIPTION...
+*      shiftf - SHIFT (CIRCULAR OR NOT) A TIME-SEQUENCE OF RECORDS.
+*
+*
+*     AUTHOR  - B.Dugas, octobre 1995.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/shiftf.ptn,v 4.11 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     PURPOSE - PERFORM A TIME-SHIFT ON A SEQUENCE OF RECORDS OR
+*               ON TIME SERIES RECORDS. THE OPERATION IS FORWARD
+*               OR BACKWARD, DEPENDING ON THE SIGN OF THE "DELT"
+*               PARAMETRE, CIRCULAR OR NON-CIRCULAR, DEPENDING
+*               ON THE KIND PARAMETRE. THE DEFAULT IS TO DO A
+*               CIRCULAR SHIFT, THUS CONSERVING ALL INPUT DATA.
+*               THE NON-CIRCULAR SHIFT FILLS THE RELEVANT
+*               DISPLACED DATA SECTION WITH ZEROES. 
+*
+*
+*     INPUT FILE...
+*      SERI   = EITHER OF 1) SERIES OF MULT-VARIABLE MULTI-LEVEL SETS,
+*               WHERE THE DATA MAY BE REAL OR COMPLEX OR 2) A SET
+*               OF TIME SERIES RECORDS.
+*
+*     NOTE THAT IN CASE 1), THE FILE IS SUPPOSED TO BE SORTED
+*               ACCORDING TO TIMESTEP/NAME/LEVEL, FROM MOST TO
+*               LEAST SIGNIFICANT
+*
+*     OUTPUT FILE...
+*      SHIFT  = FILE CONTAINING THE SHIFTED DATA CORRESPONDING TO SERI.
+*
+*
+*     PARAMETERS...
+*
+*      DELT      = THE SHIFT DELTA IN SAMPLE UNITS. POSITIVE (NEGATIVE)
+*                  VALUES IMPLY A SHIFT TOWARDS THE BEGINNING (END) OF
+*                  THE TIME SERIES.
+*      ABS(KIND) = 0 OR 1, CIRCULAR SHIFT (DEFAULT)
+*                  2,      NON-CIRCULAR SHIFT
+*      KIND      < 0,      INDIVIDUAL RECORDS ARE THEMSELVES TIME-SERIES
+*                >=0,      THE FULL INPUT FILE IS THE TIME-SERIES
+*
+*      READ( 5,5010 ) DELT,KIND
+*5010  FORMAT(10X,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* XLIN        5    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY OR NOT ENOUGH VERTICAL LEVELS ON FILE SERI
+*       2 NOT ENOUGH ALLOCATABLE MEMORY FOR BASIC FIELDS
+*      12 CANNOT ALLOCATE MEMORY FOR CIRCULAR BUFFER (KIND=0,1)
+*       3 PREMATURE EOF ON FILE SERI
+*       4 AT LEAST ONE TIMESTEP SET IS INCOMPLETE
+*       5 ERROR READING INPUT PARAMETERS
+*       6 ERROR READING FILE SERI
+*       7 DELT IS LARGER THAN LENGTH OF TIME SERIES
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM shiftf
+*    1               (SERI,        SHIFT,       INPUT,      OUTPUT,
+*    2         TAPE11=SERI, TAPE12=SHIFT, TAPE5=INPUT,TAPE6=OUTPUT)
+*     ------------------------------------------------
+
+*     $Log: shiftf.ptn,v $
+*     Revision 4.11  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.10  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.9  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.8  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.7  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.6  2000/04/07 20:50:59  armnrbd
+*     Verifier l'allocation de memoire dynamique.
+*
+*     Revision 4.5  1998/07/03 02:26:35  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1997/09/26  17:39:15  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1996/02/05  18:16:31  armnrbd
+*     Corriger une erreur dans le mode (DELT<0;kind=0).
+*     corriger le format des appels a XIT.
+*
+*     Revision 4.2  1995/10/26  17:44:07  armnrbd
+*     Ajouter de la decumentation sur le mode de fonctionnement multi-variable.
+*
+*     Revision 4.1  1995/10/03  19:18:40  armnrbd
+*     Premiere version fonctionnelle.
+*
+*     Revision 4.0  1995/10/03  14:45:16  armnrbd
+*     Version initiale.
+*
+
+*---------------------------------------------------------------------------
+      IMPLICIT    none
+ 
+      INTEGER,    PARAMETER :: HEAD    = taille_entete
+      INTEGER,    PARAMETER :: MAXLEV  = 999
+      INTEGER,    PARAMETER :: MAXSHFT = 200000
+
+      LOGICAL     OK,ERR
+      CHARACTER   LIGNE*80,PKTYP*2
+      CHARACTER*4 TYPE,VARIAB(MAXLEV)
+      INTEGER     I,K,NF,NLEV,MEM,NWDS,NVAR,LEN,
+     +            IER,LEV(MAXLEV),KPAK,KBUF(HEAD),MAXW,
+     +            NSETI,NSETO,NRECS,WHERE,TOTAL,IO,
+     +            MSTEP(MAXLEV),DELT,DELTA,KIND
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,TIME,STEP
+      REAL,       DIMENSION(:), ALLOCATABLE :: SERI,SHFT
+      
+#     include "machtype.cdk" 
+
+      CHARACTER,  EXTERNAL :: GETYP*4
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ3,GETHIGH
+      EXTERNAL    JCLPNT,XIT,GETMSET,
+     +            WRITLEV2,PUTMSET
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/shiftf.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4
+      CALL JCLPNT( NF, 11,12, 5,6 )
+ 
+      PKTYP = GETYP( 11 )
+      NSETI = 0
+      NSETO = 0
+
+      IF (RPBLOC( ' ',LIGNE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          DELT   = 0
+          KIND   = 0
+
+          OK = RPBLOC('DELT',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=900,IOSTAT=IO) DELT 
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=900,IOSTAT=IO) KIND
+
+      ELSE
+
+***        READ DELT,KIND FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO )
+     +                     DELT,KIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+      WRITE(6,6050) DELT,KIND
+      IF (ABS( DELT ).GT.MAXSHFT) CALL             XIT(' Shiftf ',-2 )
+
+      DELTA = ABS( DELT )
+
+***    FIND HOW MANY VARIABLES AND LEVELS IN ONE SET AND ASK
+***    FOR  NECESSARY MEMORY. USE NEXT SET OF INFO BUFFERS.
+ 
+  100 MAXW = GETSIZ3( 11, KBUF,LEN,NWDS,KPAK, .TRUE.,
+     +                    LEV,NLEV, VARIAB,NVAR, MAXLEV )
+
+      IF (MAXW.LE.0)                                           THEN
+          WRITE(6,6100) NVAR,NLEV,MAXLEV
+          CALL                                     XIT(' Shiftf ',-1 )
+      END IF
+
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = KBUF(5)
+
+      CALL PRTLAB( KBUF )
+      WRITE(6,6250) (VARIAB(I),I=1,NVAR)
+
+      CALL WRITLEV2( LEV,NLEV,KBUF )
+
+      NRECS = NLEV*NVAR
+      MEM   = NWDS*NRECS
+
+      ALLOCATE( IBUF(LEN) )
+      ALLOCATE( SERI(MEM),TIME(MAXSHFT),STEP(MAXSHFT), STAT=IER )
+
+      IF (IER /= 0 .OR. loc( seri ) == 0)                      THEN
+          WRITE(6,6002) LEN+MEM+2*MAXSHFT
+          CALL                                     XIT(' Shiftf ',-2 ) 
+      END IF
+
+***    CONTINBUE PROCESSING DEPENDING ON THE SIGN OF KIND.
+*-------------------------------------------------------------------------
+
+      IF (KIND.GE.0)                                           THEN
+
+***        WE HAVE TO WORK ON THE FULL FILE.
+
+          IF (KIND.LT.2)                                       THEN
+
+***            ALLOCATE CIRCULAR BUFFER SHFT. NOTE THAT
+***            IT'S SIZE DEPENDS STRONGLY ON DELT.
+
+              ALLOCATE( SHFT(MEM*MAX( 1,DELT )), STAT=IER )
+
+              IF (IER /= 0 .OR. loc( SHFT ) == 0)              THEN
+                  WRITE(6,6002) MEM*MAX( 1,DELT )
+                  CALL                             XIT(' Shiftf ',-12 ) 
+              END IF
+
+          END IF
+
+***        DO THE WORK.
+
+          IF (DELT.GT.0)                                       THEN
+
+**************************************************************************
+***            SHIFT TOWARDS THE BEGINNING OF THE TIME SERIES.
+
+              DO  I=1,DELTA
+
+***                READ THE FIRST DELTA TIME SAMPLES.
+
+                  CALL GETMSET( 11, SERI, LEV,NLEV, MSTEP,.TRUE.,
+     +                              VARIAB,NVAR, IBUF,MAXW,OK )
+
+                  IF (.NOT.OK) CALL                XIT(' Shiftf ',-3 )
+
+                  IF (KIND.LT.2)                               THEN
+
+***                    CIRCULAR CASE: SAVE THEM FOR LATER INSERSION.
+
+                      WHERE = (I-1)*MEM
+                      DO  K=1,MEM
+                          SHFT(WHERE+K) = SERI(K)
+                      END DO
+
+                  END IF
+
+                  TIME(I) = IBUF(2) ; IF (PKTYP == 'SQ') 
+     +            STEP(I) = GETHIGH('NPAS',IBUF )
+
+                  NSETI   = NSETI+1
+
+              END DO
+
+***            NOW READ THE REST OF THE FILE ...
+
+  200         CALL GETMSET( 11, SERI, LEV,NLEV, MSTEP,.TRUE.,
+     +                          VARIAB,NVAR, IBUF,MAXW,OK )
+
+              IF (OK)                                          THEN
+
+                  NSETI = NSETI+1
+
+***                ... AND SAVE ALL OF IT DIRECTLY, ...
+
+                  CALL PUTMSET( 12, SERI, LEV,NLEV, 
+     +                              VARIAB,NVAR, IBUF,MAXW )
+
+                  NSETO = NSETO+1
+
+                  GOTO 200
+
+              ELSE
+
+***                FINISHED READING. WRITE THE LAST DELTA SETS.
+
+                  IF (KIND.LT.2)                               THEN
+
+***                    CIRCULAR CASE: SAVE THE RECORDS STORED IN SHFT.
+
+                      DO  I=1,DELTA
+
+                          WHERE   = (I-1)*MEM+1
+
+                          IBUF(2) = TIME(I) ; IF (PKTYP == 'SQ')
+     +                    CALL PUTHIGH( STEP(I),'NPAS',IBUF )
+
+                          CALL PUTMSET( 12, SHFT(WHERE), LEV,NLEV,
+     +                                      VARIAB,NVAR, IBUF,MAXW )
+
+                          NSETO = NSETO+1
+
+                      END DO
+
+                  ELSE
+
+***                    ZERO FILL THE END OF THE FILE WITH DELTA SETS.
+
+                      SERI(1:MEM) = 0.0
+
+                      DO  I=1,DELTA
+
+***                        END BY WRITING DELTA ZERO-FILLED RECORDS.
+
+                          IBUF(2) = TIME(I) ; IF (PKTYP == 'SQ')
+     +                    CALL PUTHIGH( STEP(I),'NPAS',IBUF )
+
+                          CALL PUTMSET( 12, SERI, LEV,NLEV,
+     +                                      VARIAB,NVAR, IBUF,MAXW )
+
+                      END DO
+
+                  END IF
+
+              END IF
+
+          ELSE
+**************************************************************************
+
+***            SHIFT TOWARDS THE END OF THE TIME SERIES.
+***            START BY FINDING THE TOTAL NUMBER OF
+***            SAMPLES IN THE INPUT FILE.
+
+              I     = -1
+              TOTAL =  0 
+  300         CALL SUIVANT( 11, IBUF, ERR,OK )
+                  IF (.NOT.OK ) GOTO 400
+                  IF (     ERR) GOTO 999
+                  IF (I.NE.IBUF(2))                            THEN
+                      I           = IBUF(2)
+                      TOTAL       = TOTAL + 1
+                      TIME(TOTAL) = I ; IF (PKTYP == 'SQ')
+     +                STEP(TOTAL) = GETHIGH('NPAS',IBUF )
+                  END IF
+              GOTO 300
+
+  400         IF (TOTAL.EQ.0) CALL                 XIT(' Shiftf ',-3 )
+              CALL PRECEDE( 11,-1 )
+
+***            LET'S DO A SIMPLE CONSISTENCY CHECK.
+
+              IF (DELTA.GT.TOTAL)   CALL           XIT(' Shiftf ',-7 )
+              IF (TOTAL.GT.MAXSHFT) CALL           XIT(' Shiftf ',-2 )
+
+              IF (KIND.GE.2)                                   THEN
+
+                  SERI(1:MEM) = 0.0
+
+                  DO  I=1,DELTA
+
+***                    START BY WRITING DELTA ZERO-FILLED RECORDS.
+
+                      IBUF(2) = TIME(TOTAL-DELTA+I) ; IF (PKTYP == 'SQ')
+     +                CALL PUTHIGH( STEP(TOTAL-DELTA+I),'NPAS',IBUF )
+
+                      CALL PUTMSET( 12, SERI, LEV,NLEV,
+     +                                  VARIAB,NVAR, IBUF,MAXW )
+
+                  END DO
+                  DO  I=1,TOTAL-DELTA
+
+***                    AND NOW, SIMPLY READ AND SAVE
+***                    THE FIRST TOTAL-DELTA SAMPLES.
+
+                      CALL GETMSET( 11, SERI, LEV,NLEV, MSTEP,.TRUE.,
+     +                                  VARIAB,NVAR, IBUF,MAXW,OK )
+                      NSETI = NSETI+1
+
+                      IF (.NOT.OK) CALL            XIT(' Shiftf ',-3 )
+
+                      CALL PUTMSET( 12, SERI, LEV,NLEV,
+     +                                  VARIAB,NVAR, IBUF,MAXW )
+                      NSETO = NSETO+1
+
+                  END DO
+
+              ELSE
+
+***                CIRCULAR SHIFT CASE.
+
+                  DO  I=1,TOTAL-DELTA
+
+***                    SKIP THE FIRST TOTAL-DELTA SAMPLES.
+
+                      CALL GETMSET( 11, SERI, LEV,NLEV, MSTEP,.TRUE.,
+     +                                  VARIAB,NVAR, IBUF,MAXW,OK )
+
+                      IF (.NOT.OK) CALL            XIT(' Shiftf ',-3 )
+
+                  END DO
+                  DO  I=1,DELTA
+
+***                    READ THE LAST DELTA SAMPLES OF FILE SERI...
+
+                      CALL GETMSET( 11, SHFT, LEV,NLEV, MSTEP,
+     +                              .TRUE.,VARIAB,NVAR, IBUF,MAXW,OK )
+
+                      IF (.NOT.OK) CALL            XIT(' Shiftf ',-3 )
+
+                      NSETI   = NSETI+1
+
+***                    ...AND WRITE THEM AT THE BEGINNING OF FILE SHIFT.
+
+                      CALL PUTMSET( 12, SHFT, LEV,NLEV,
+     +                                  VARIAB,NVAR, IBUF,MAXW )
+
+                      NSETO = NSETO+1
+
+                  END DO
+
+                  CALL PRECEDE( 11,-1 )
+
+                  DO  I=1,TOTAL-DELTA
+
+***                    FOLLOW WITH THE REST.
+
+                      CALL GETMSET( 11, SERI, LEV,NLEV, MSTEP,.TRUE.,
+     +                                  VARIAB,NVAR, IBUF,MAXW,OK )
+                      NSETI = NSETI+1
+
+                      IF (.NOT.OK) CALL            XIT(' Shiftf ',-3 )
+
+                      CALL PUTMSET( 12, SERI, LEV,NLEV,
+     +                                  VARIAB,NVAR, IBUF,MAXW )
+                      NSETO = NSETO+1
+
+                  END DO
+
+              END IF
+
+**************************************************************************
+          END IF
+
+          WRITE(6,6200) NSETI,NSETO
+
+      ELSE
+*-------------------------------------------------------------------------
+
+          KIND = -KIND
+
+***        ALLOCATE CIRCULAR BUFFER.
+
+          IF (KIND.LT.2) ALLOCATE( SHFT(NWDS) )
+
+***        LET'S DO A SIMPLE CONSISTENCY CHECK.
+
+          IF (ABS( DELT ).GT.NWDS) CALL            XIT(' Shiftf ',-7 )
+
+***        EACH INPUT RECORD IS A FULL TIME SERIES.
+***        READ THE NEXT NLEV*NVAR RECORDS.
+
+  500     CALL GETMSET( 11, SERI, LEV,NLEV, MSTEP,.TRUE.,
+     +                      VARIAB,NVAR, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6201) NSETI
+              IF (NSETI.EQ.0) CALL                 XIT(' Shiftf ',-3 )
+              CALL                                 XIT(' Shiftf ', 0 )
+          END IF
+
+          NSETI = NSETI+1
+
+          IF (KIND.LT.2)                                       THEN
+
+***            CIRCULAR SHIFT.
+
+              DO  I=1,NRECS
+
+                  WHERE = (I-1)*NWDS
+
+                  IF (DELT.GT.0)                               THEN
+
+***                    SHIFT TOWARDS THE BEGINNING OF THE TIME SERIES.
+
+                      DO  K=1,NWDS-DELTA
+                          SHFT(K) = SERI(K+DELT+WHERE     )
+                      END DO
+                      DO  K=NWDS-DELTA+1,NWDS
+                          SHFT(K) = SERI(K+DELT+WHERE-NWDS)
+                      END DO
+                      DO  K=1,NWDS
+                          SERI(WHERE+K) = SHFT(K)
+                      END DO
+
+                  ELSE
+
+***                    SHIFT TOWARDS THE END OF THE TIME SERIES.
+
+                      DO  K=1,DELTA
+                          SHFT(K) = SERI(K-DELTA+WHERE+NWDS)
+                      END DO
+                      DO  K=DELTA+1,NWDS
+                          SHFT(K) = SERI(K-DELTA+WHERE     )
+                      END DO
+                      DO  K=1,NWDS
+                          SERI(WHERE+K) = SHFT(K)
+                      END DO
+
+                          
+                  END IF
+
+              END DO
+
+
+          ELSE
+
+***            NON-CIRCULAR BUFFER.
+
+              DO  I=1,NRECS
+
+                  WHERE = (I-1)* NWDS
+
+                  IF (DELT.GT.0)                               THEN
+
+***                    SHIFT TOWARDS THE BEGINNING OF THE TIME SERIES.
+
+                      DO  K=1,NWDS-DELTA
+                          SERI(K+WHERE) = SERI(K+DELTA+WHERE)
+                      END DO
+                      DO  K=NWDS-DELTA+1,NWDS
+                          SERI(K+WHERE) = 0.0
+                      END DO
+
+                  ELSE
+
+***                    SHIFT TOWARDS THE END OF THE TIME SERIES.
+
+                      DO  K=NWDS,DELTA+1,-1
+                          SERI(K+WHERE) = SERI(K-DELTA+WHERE)
+                      END DO
+                      DO  K=1,DELTA
+                          SERI(K+WHERE) = 0.0
+                      END DO
+                          
+                  END IF
+
+              END DO
+
+          END IF
+
+***        WRITE SHIFTED TIME SERIES.
+
+          CALL PUTMSET( 12, SERI, LEV,NLEV,
+     +                      VARIAB,NVAR, IBUF,MAXW )
+
+***        RETURN FOR NEXT SET.
+
+          GOTO 500
+
+*-------------------------------------------------------------------------
+      END IF
+
+***    NORMAL EXIT.
+
+      CALL                                         XIT(' Shiftf ', 0 )
+
+***    E.O.F. ON UNIT #5.
+
+  900 IF (IO.NE.0) WRITE(6,6300) IO
+      CALL                                         XIT(' Shiftf ',-5 )
+
+***    ERROR READING FILE SERI.
+
+  999 WRITE(6,6400) TOTAL+1
+      CALL                                         XIT(' Shiftf ',-6 )
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+
+ 5010 FORMAT(10X,2I5)
+
+ 6002 FORMAT(' Unable to allocate enough working memory'/
+     +       ' Requesting ',I10,' words.')
+ 6050 FORMAT(' Shift Delta, kind =',2I6)
+ 6100 FORMAT(' ..Shiftf input file is empty. NVAR/NLEV/MAX VALUE=',3I6/)
+ 6200 FORMAT(' Read/used ',I5,'/',I5,' time sets.')
+ 6201 FORMAT(' Read ',I5,' time series.')
+ 6250 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6300 FORMAT(/' Shiftf reports I/O error number ',I3,' on unit 5.')
+ 6400 FORMAT(/' Error reading set number ',I5/)
+
+      END
+#     endif

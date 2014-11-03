@@ -1,0 +1,285 @@
+README File for the Fortran-90 Double-Double Precision System
+
+Contact:
+
+David H. Bailey
+NERSC, Lawrence Berkeley Lab
+Mail Stop 50B-2239
+Berkeley, CA 94720
+Email: dhbailey@lbl.gov
+
+Update as of 2005-03-11
+
+--------------------------------------------
+
+I. Copyright and Legal Matters
+II. Description
+III. Directories and Files
+IV. Instructions and System-Dependent Issues
+V. Fortran Usage
+
+I. Copyright and Legal Matters
+
+This work was supported by the Director, Office of Science, Division
+of Mathematical, Information, and Computational Sciences of the
+U.S. Department of Energy under contract number DE-AC03-76SF00098.
+
+The software included in this package is a revision of software
+earlier written while the author was an employee of NASA, in the
+Numerical Aerospace Systems Division at the NASA Ames Research Center.
+
+Copyright (c) 2005 The Regents of the University of California,
+through Lawrence Berkeley National Laboratory (subject to receipt of
+any required approvals from U.S. Dept. of Energy).  All rights reserved. 
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are 
+met: 
+
+(1) Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer. 
+(2) Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution. 
+(3) Neither the name of Lawrence Berkeley National Laboratory,
+U.S. Dept. of Energy nor the names of its contributors may be used to
+endorse or promote products derived from this software without
+specific prior written permission. 
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+
+-------------------------------------
+
+II. Description
+
+This package contains a library of Fortran-90 double-double precision
+computation routines, which provide a precision level of twice that
+of normal 64-bit IEEE arithmetic, or about 31 decimal digits.  The
+package includes Fortran-90 translation modules, which permit one to
+use the double-double library by making only minor changes to existing
+Fortran-90 programs.  In most cases it is only necessary to change the
+type declarations of certain variables, plus two or three other very
+minor changes.  All usual arithmetic operations are naturally
+extended, as are many transcendental functions.  See "Fortran Usage", 
+section V below for details.
+
+These programs have recently been revamped to be in conformance with
+the DD part of the QD package, which is also available in the directory
+http://crd.lbl.gov/~dhbailey/mpdist.  The QD package is written in
+C++ and provides the same high-level programming feature for C++
+users, but also includes Fortran-90 translation modules similar to
+those available in the DDFUN90 package.  This package provides the
+double-double functionality in an all-Fortran environment.
+
+The ddfun90 directory in the distribution package includes, as a
+sample, a quadrature application program, which may be run as is, or
+may be used as templates for other programs.
+
+III. Directories and Files
+
+The following files are included in the ddfun90.tar.gz file:
+
+Makefile      Makefile for the f90 directory programs.
+ddfun90.f     Main DDFUN90 library file.
+ddmod90.f     DDFUN90 translator modules (to enable high-level coding).
+tquadtsdd.f   Tanh-Sinh quadrature (numerical integration) program.
+tquadtsdd.out Output file from tquadtsdd.f.
+second.f      Timing routine.
+x86.cc        C++ program containing a system routine for X86 systems.
+x86.h         Include file for x86.cc.
+
+IV.  Instructions and System-Dependent Issues
+
+A. General instructions:
+
+On many systems, it is only necessary to compile the files ddfun90.f,
+ddmod90.f and second.f.  For example, on an Apple G5 system with the
+IBM compiler, one can type
+
+% xlf90 -O3 -qstrict -c ddfun90.f ddmod90.f second.f
+
+Then to compile the sample application program tquadtsdd.f:
+
+% xlf90 -O3 tquadtsdd.f ddfun90.o ddmod90.o second.o
+
+If you get "etime" listed as an unsatisfied external here, this is
+because your Fortran-90 compiler does not add an underscore after
+external names.  In that case, edit the file second.f and remove the
+underscore that follows "etime", and recompile.
+
+The result from typing ./a.out should match the contents of
+tquadtsdd.out.  If this looks good, then the package is ready for use.
+
+B. Systems with fused multiply-add hardware:
+
+If your system has a fused multiply-add instruction (all IBM-based
+processors, including Apple system, and Intel IA-64 or Itanium), edit
+the file "ddfun90.f", look for the comment line starting with !> and
+follow the instructions (uncomment two lines and comment out several
+lines that follow).  This will permit significantly faster run times.
+
+C. Intel X86 systems: 
+
+If your system is a Pentium or other X86 based system, it is necessary
+to disable the 80-bit mode.  This can be done by first compiling the
+file x86.cc by means of the command
+
+% gcc -Dx86 -DADD_UNDERSCORE -c x86.cc
+
+If your Fortran compiler does not add an underscore (see A above),
+do not type the -DADD_UNDERSCORE flag.  Then in the file tquadtsdd.f
+uncomment the lines
+
+! integer*4 old_cw
+
+! call x86_fix_start (old_cw)
+
+! call x86_fix_end (old_cw) 
+
+The first two lines appear near the beginning of the main program; the
+third is just before the stop statement.  Similar code must be placed
+in any application program.  When these changes are made, the program
+tquadtsqq.f should reproduce the answers in the file tquadtsqdd.out.
+
+V. Fortran Usage
+
+A. Introduction
+
+The basic concept of the DDFUN90 package is to extend the Fortran-90
+language, by means of completely standard Fortran-90 features
+(operator overloading and custom datatypes), to perform computations
+with a level of numeric precision approximately double that of the
+conventional IEEE 64-bit arithmetic available on present-day systems.
+In most cases, only minor modifications need to be made to an existing
+Fortran program -- e.g., change the type statements of variables that
+you wish to be treated as double-double variables, plus a few other
+minor details.  Two double-double datatypes are supported: dd_real,
+dd_complex.
+
+B. Fortran programming techniques
+
+Modifying an existing Fortran-90 program to use the DDFUN90 library is
+generally quite easy, because of the translation facilities in
+ddmod90.f.  A sample user program is:
+
+  program main
+    use ddmodule
+    implicit none
+    type (dd_real) a, b
+    a = 1.d0
+    b = cos(a)**2 + sin(a)**2 - 1.d0
+    call ddwrite(6, b)
+    stop
+  end program
+
+This verifies that cos^2(1) + sin^2(1) = 1 to 31 digit accuracy.  The
+line "use ddmodule", as shown above, must be included at the beginning
+of each subroutine or function subprogram that uses the double-double
+datatype.  If you are using an Intel system, three additional lines of
+code are required -- see IV.B. above.
+
+Double-double variables are declared using a Fortran-90 defined type
+statement such as the following.
+
+   type (dd_real) a, b, c(10)
+   type (dd_complex) z1, z2(5,5), z3
+
+Most operators and generic function references, including many
+mixed-mode type combinations with double-precision or real*8, have been
+overloaded (extended) to work with double-double data.  It is
+important, however, that users keep in mind the fact that expressions
+are evaluated strictly according to conventional Fortran operator
+precedence rules.  Thus some subexpressions may be evaluated only to
+15-digit accuracy. For example, with the code
+
+   real*8 d1
+   type (dd_real) t1, t2
+   ...
+   t1 = cos (t2) + d1/3.d0
+
+the expression d1/3.d0 is computed to real*8 accuracy only (about 15
+digits), since both d1 and 3.d0 have type real*8.  This result is then
+converted to mp_real by zero extension before being added to cos(t2).
+So, for example, if d1 held the value 1.d0, then the quotient d1/3.d0
+would only be accurate to 15 digits.  If a fully accurate
+double-double quotient is required, this should be written:
+
+  real*8 d1
+  type (dd_real) t1, t2
+   ...
+  t1 = cos (t2) + ddreal (d1) / 3.d0
+
+which forces all operations to be performed with double-double
+arithmetic.
+
+Along this line, a constant such as 1.1 appearing in an expression is
+evaluated only to real*4 accuracy, and a constant such as 1.1d0 is
+evaluated only to real*8 accuracy (this is according to standard
+Fortran conventions).  If full double-double accuracy is required,
+one should write
+
+   type (dd_real) t1
+   ...
+   t1 = '1.1'
+
+The quotes enclosing 1.1 specify to the compiler that the constant is
+to be converted to binary using double-double arithmetic, before
+assignment to t1.  Quoted constants may only appear in assignment
+statements such as this.
+
+C. Functions defined with double-double arguments
+
+F90 functions defined with dd_real arguments:
+  Arithmetic:  + - * / **
+  Comparison tests:  == < > <= >= /=
+  Others: abs, acos, aint, anint, asin, atan, atan2, cos, cosh, dble, erf,
+  erfc, exp, int, log, log10, max, min, mod, ddcsshf (cosh and sinh),
+  ddcssnf (cos and sin), ddranf (random number generator in (0,1)), 
+  ddnrtf (n-th root), sign, sin, sinh, sqr, sqrt, tan, tanh
+
+D.  Input/output of double-double data
+
+Input and output of double-double data is performed using the special
+subroutines ddread and ddwrite.  The first argument of these
+subroutines is the Fortran I/O unit number, while additional arguments
+(up to 9 arguments) are scalar variables or array elements of the
+appropriate type.  Example:
+
+   type (dd_real) a, b, c(n)
+   ...
+   call ddread (6, a, b)
+   do j = 1, n
+     call ddwrite (6, c(j))
+   enddo
+
+When using ddread, each input numerical value must start on a separate
+line.  Here are three valid examples:
+
+   1.1
+   3.141592653589793
+   3.141592653589793238462643383279e5
+
+When read using ddread, these constants will be converted using full
+double-double accuracy.
+
+One can also read and write double-double variables and arrays using
+Fortran unformatted (binary) I/O, as in
+
+   type (dd_real) t1, a(30)
+   write (11, t1)
+   write (12, a)
+
+Data written to a file in this fashion can be read with a similar
+unformatted read statement, but only on the same system that it was
+written on.
+

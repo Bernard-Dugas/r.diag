@@ -1,0 +1,615 @@
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 100000000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     SEQUENCE D'APPEL...
+*      adjust  -cccma "CCCma file name" -rpn "RPN file name" 
+*             [-ipktyp "input packing type"] [-help] [-info]
+*             [-opktyp "output packing type"] [-date]
+*
+*
+*     AUTEUR: B.Dugas, RPN - 22 fevrier 1993.
+*     DERNIERE REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/adjust.ptn,v 4.18 2014/09/26 21:26:15 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      Ce programme tient compte des differences entre les
+*      les fichiers de type CCC crees par la version CCCma
+*      des programmes diagnostiques (definis par la cle
+*      "-cccma") et ceux crees par la version Montreal/RPN
+*      de ces programmes (definis par la cle "-rpn"). Au
+*      moins un des deux fichiers doit exister a l'entree.
+*      Si les deux existent, le fichier CCCMA est detruit.
+*
+*      Voici une liste sommaire des differences entre les
+*      deux versions (decrivant les ajouts effectues dans
+*      la version Montreal/RPN):
+*
+*      1) Support pour des troncatures spectrale plus
+*         grandes que T99. Les nouvelles donnees ayant
+*         une troncature plus elevee ne pourront etre
+*         converties.
+*      2) Deux types de compaction sont supportes dans
+*         les fichiers Montreal/RPN i.e. une type compatible
+*         au format original CRAY et le format ayant ete
+*         implante sur le NEC SX-3 par le CCC en 1992.
+*      3) Les coupes zonales sont par defauts conservees
+*         dans un mode multi-niveaux dans les fichiers
+*         Montreal/RPN.
+*      4) Les dates sont toujours gardees avec un format
+*         d'annees ayant quatre chiffres.
+*         
+*
+*      Par ailleurs, les grilles de surfaces de type "PK92"
+*      peuvent etre lues et ecrites par les deux jeux de
+*      programmes et aucune conversion n'est alors
+*      effectuee.
+*
+*      Aucune version des fichiers standards CMC/RPN n'est
+*      supportee par ADJUST: Il faut toujours utiliser CONVERT
+*      avant de faire appel a ADJUST pour ces types de fichiers.
+*
+*
+*     EXIT CONDITIONS...
+*       0 No problems
+*       1 No input file specified
+*       2 Both of the input files are empty
+*       3 Unknown file type
+*       4 WKOFFIT reports for wrong type for either of CCCma/RPN files
+*       5 Unable to open/create one of the data files
+*       6 Found PK84 packing type in CCCma file
+*       7 Not enough available memory
+*       8 Found multi-level zonal records in CCCma file
+*       9 Truncation greater than T99 in RPN file
+*      10 Premature End-Of-File on input file
+*      99 Detected previous XIT ABORT VALUE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM adjust
+
+*     $Log: adjust.ptn,v $
+*     Revision 4.18  2014/09/26 21:26:15  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.17  2013/02/07 21:52:14  bernard
+*     Multiplier par 10 la valeur du macro memoire_maximale.
+*
+*     Revision 4.16  2012/07/06 17:35:29  dugas
+*     Allocation de 512 caracters pour les noms de fichiers.
+*
+*     Revision 4.15  2011/08/24 22:18:22  dugas
+*     Appeller qqexit en mode documentation.
+*
+*     Revision 4.14  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.13  2008/01/15 16:47:40  dugas
+*     Utiliser system_clock pour initialiser stimei.
+*
+*     Revision 4.12  2007/12/20 21:12:37  dugas
+*     Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*
+*     Revision 4.11  2006/07/13 21:46:47  dugas
+*     Corriger les messages d'erreurs.
+*
+*     Revision 4.10  2005/03/03 18:31:44  dugas
+*     Mise-a-jour de la documentation automatique.
+*
+*     Revision 4.9  2003/07/05 14:43:09  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.8  2002/09/17 17:56:34  dugas
+*     Modifier le common ZZZDATE
+*
+*     Revision 4.7  2000/09/21 14:51:58  armnrbd
+*     Modifier la sequnce d'appel a wkoffit pour corriger
+*     un probleme qu'on semble avoir avec F90 .
+*
+*     Revision 4.6  1999/04/08 22:05:41  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.5  1998/09/04 19:39:34  armnrbd
+*     Corriger la documentation.
+*
+*     Revision 4.4  1998/09/04  16:51:59  armnrbd
+*     Ajouter la cle "-date".
+*     Remplacer les cles "tor" et "mtl" par "cccma" "rpn".
+*     Modifier le format de l'annee au besoin.
+*
+*     Revision 4.3  1997/09/26  17:38:44  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1996/12/10  18:18:37  armnrbd
+*     Remplacer IOPEN par ZZZOPEN.
+*
+*     Revision 4.1  1996/05/23  18:04:04  armnrbd
+*     Remplacer NMBLKS par WKOFFIT pour voir si les fichiers sont vides.
+*
+*     Revision 4.0  1994/11/17  14:19:14  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:31  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/03/02  15:21:49  armnrbd
+*     Initial revision
+*     
+*-----------------------------------------------------------------------
+      Implicit        none
+
+      Integer         nbrcle
+      Parameter     ( nbrcle = 10 )
+      Integer         maxlev
+      Parameter     ( maxlev = 999 )
+      Integer         maxmem
+      Parameter     ( maxmem= memoire_maximale )
+
+      Real            zero
+      Character*16    cles(nbrcle)
+      Character*512   MTLfil,TORfil,evalue,
+     +                nam(nbrcle),def(nbrcle),unit5
+      Character*20    tmpdir,xitval,vrbose,pkval
+      Character*4     pktyp(0:99),typin,typout,kind,name
+      Integer         head,stime,lev(maxlev),maxw,jbuf(taille_entete),
+     +                jpak,len,nwds,nlev,in,out,lsr,
+     +                mode,ipos,ier1,ier2,nr,ktr,lr,lm,la,
+     +                i,l,num,mem,inbr1,inbr2,lenn1,lenn2
+
+      integer,        dimension(:), allocatable :: ibuf
+      real,           dimension(:), allocatable :: data
+
+#     include        "machtype.cdk"
+
+      Integer         datval,stimei
+      Logical         ok,info,date,keepip2,help,LOPEN(99)
+
+      Common         /TIMER/   stimei
+      Common         /IODIRE/  unit5
+      Common         /ZZZOPEN/ lopen
+      Common         /ZZPKTYP/ pktyp
+      Common         /ZZVERBO/ info
+      Common         /ZZZDATE/ date,keepip2,datval
+
+      Logical         is_on
+      Character*4     getyp
+      Integer         getsiz2,fnom,clrlmt,wkoffit
+      External        macspe,xit,getenvc,ccard,fnom,
+     +                low2up,up2low,qqqdoc,perror,getyp,
+     +                getsiz2,recget,
+     +                wkoffit,recput,dimgt2,clrlmt,
+     +                getset2,putfld2,is_on
+
+
+      Character*256            nomprg
+      Common         /PROGNAM/ nomprg
+
+      Data            pkval  / 'DEFAULT_PACKING_TYPE' /,
+     +                tmpdir /        'TMPDIR'        /,
+     +                xitval /        'XITVAL'        /,
+     +                vrbose /        'INFORM'        /
+
+      Data cles(1) / 'CCCMA.' /,nam(1) / 'NULL' /,def(1) / 'NULL' /,
+     +     cles(2) / 'RPN.'   /,nam(2) / 'NULL' /,def(2) / 'NULL' /,
+     +     cles(3) / 'IPKTYP' /,nam(3) / ' '    /,def(3) / ' '    /,
+     +     cles(4) / 'OPKTYP' /,nam(4) / ' '    /,def(4) / ' '    /,
+     +     cles(5) / 'INFO'   /,nam(5) / 'NON'  /,def(5) / 'OUI'  /,
+     +     cles(6) / 'HELP'   /,nam(6) / 'NON'  /,def(6) / 'OUI'  /,
+     +     cles(7) / 'DATE'   /,nam(7) / 'NON'  /,def(7) / 'OUI'  /,
+     +     cles(8) / 'TOR.'   /,nam(8) / 'NULL' /,def(8) / 'NULL' /,
+     +     cles(9) / 'MTL.'   /,nam(9) / 'NULL' /,def(9) / 'NULL' /,
+     +     cles(10)/ '-.'     /,nam(10)/ ' '    /,def(10)/ ' '    /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/adjust.ptn,v $'
+
+*--------------------------------------------------------------
+***    Debut du code executable
+
+      Call macspe( head,zero )
+      Call setrabt( '&NON' )
+
+***    Define logical switches found in common.
+
+      help  = .false.
+      info  = .false.
+      date  = .false.
+
+      do  i=1,99
+          lopen(i) = .false.
+      end do
+
+***    Standart input i/o unit name is blanck.
+
+      unit5 = ' '
+
+***    Get initial system time and save it.
+
+      call system_clock( stimei )
+
+***    Check for previous uncleared abort conditions.
+
+      Call getenvc( xitval,evalue )
+
+      If (      evalue.ne.' ' 
+     +   .and.  evalue.ne.'0' )                                Then
+          read( evalue,'(bn,i4)') num
+          If (     num.lt.100 
+     +       .and. num.gt. 0  )                                Then
+              Write(6,6099) -num
+              Call                                 xit(' Adjust ',-99)
+          End If
+      End If
+
+***    Check for "verbose" environment variable.
+
+      Call getenvc( vrbose,evalue )
+
+      info = is_on( evalue )
+
+***    Retrieve parameters.
+
+      ipos = 1
+      Call ccard( cles,def,nam,nbrcle, ipos )
+
+***    ipos.eq.1 toggles help mode (only program name found)
+
+      If (     ipos  .eq.  1
+     +   .and. nam(1).eq.'NULL'
+     +   .and. nam(2).eq.'NULL'
+     +   .and. nam(8).eq.'NULL'
+     +   .and. nam(9).eq.'NULL') help = .true.
+
+***    Check the keyword parameters. This could be a help
+***    request ("-help"), a particular packing input type 
+***    ("-ipktyp") or a more verbose working mode ("-info").
+***    Also check for the forced-date indicator.
+
+      If (nam(5).eq.'oui')        info  = .true.
+      If (nam(6).eq.'oui')        help  = .true.
+      If (nam(7).eq.'oui')        date  = .true.
+
+      If (     nam(3).eq.'PK92')                               Then
+               typin  =  '    '
+      Else If (nam(3).eq.'PK84')                               Then
+               typin  =  'PK84'
+      Else
+               typin  =  '****'
+      End If
+
+***    check the "-opktyp" key. treat later.
+
+      If (     nam(4).eq.'PK92')                               Then
+               nam(4) =  '    '
+      Else If (nam(4).ne.'PK84')                               Then
+               nam(4) =  '****'
+      End If
+
+***    Process a help request.
+
+      If (help)                                                Then
+          Call qqqdoc( )
+          Call qqexit( 0 )
+      End If
+
+***    Define pktyp for the two relevant I/O units. 
+***    Do not define pktyp(0) yet.
+
+      pktyp(1) = typin
+      pktyp(2) = typin
+
+***    1) Check for "DEFAULT_PACKING_TYPE" environment variable. 
+***    2) Check for the "-opktyp" ccard key value. The default 
+***       packing is set by primarily determined by this value 
+***       and, secondarily, by the previous variable.
+***    3) Define pktyp(0), which will hold the default.
+
+      Call getenvc( pkval, evalue )
+      Call low2up(  evalue,typout )
+
+      If (     typout.eq.'PK92')                               Then
+               typout =  '    '
+      Else If (typout.ne.'PK84')                               Then
+               typout =  '****'
+      End If
+
+      If (     nam(4).eq.'    ' 
+     +    .or. nam(4).eq.'PK84')                               Then
+                                  pktyp(0) =  nam(4)
+      Else If (typout.eq.'    ' 
+     +    .or. typout.eq.'PK84')                               Then
+                                  pktyp(0) =  typout
+      Else
+          If (machine.eq.1)       pktyp(0) = '    '
+          If (machine.eq.2)       pktyp(0) = 'PK84'
+      End If
+
+      typout = pktyp(0)
+
+***    Check input file names, starting with the
+***    "cccma" and "rpn" key values. If we find "NULL",
+***    check the older "tor" and "mtl" keys.
+
+      If (nam(1).ne.'NULL')                                    Then
+          TORfil = nam(1)
+      Else
+          TORfil = nam(8)
+      End If
+
+      If (nam(2).ne.'NULL')                                    Then
+          MTLfil = nam(2)
+      Else
+          MTLfil = nam(9)
+      End If
+
+      If (    TORfil .eq.'NULL'
+     +   .or. MTLfil .eq.'NULL' )                              Then
+          Write(6,6001) 
+          Call                                     xit(' Adjust ',-1 )
+      End If
+
+***    Check that one of the file exist.
+
+      lenn1 = index( TORfil // ' ' , ' ' ) - 1
+      inbr1 = wkoffit( '+' // TORfil(1:lenn1) )
+
+      lenn2 = index( MTLfil // ' ' , ' ' ) - 1
+      inbr2 = wkoffit( '+' // MTLfil(1:lenn2) )
+
+***    Check that at least one of the files contrains something.
+
+      If (    inbr1 .lt. 0
+     +   .and.inbr2 .lt. 0)                                    Then
+          Write(6,6002) 
+          Call                                     xit(' Adjust ',-2 )
+      Else
+          If (inbr1 .eq.-1
+     +   .or. inbr2 .eq.-1)                                    Then
+              If (inbr1 .eq.-1) Write(6,6003) TORfil(1:lenn1)
+              If (inbr2 .eq.-1) Write(6,6003) MTLfil(1:lenn2)
+              Call                                 xit(' Adjust ',-3 )
+          Else
+              If ((inbr1 .gt. 0 .and. inbr1 .ne. 4)
+     +       .or. (inbr2 .gt. 0 .and.
+     +            (inbr2 .ne. 5 .and. inbr2 .ne. 4)))          Then
+                  Write(6,6004) inbr1,inbr2
+                  Call                             xit(' Adjust ',-4 )
+              End If
+          End If
+      End If
+
+***    Open the files.
+
+      ier1 = fnom( 1, '+'// TORfil(1:lenn1),'SEQ/FTN/UNF',0 )
+      ier2 = fnom( 2, '+'// MTLfil(1:lenn2),'SEQ/FTN/UNF',0 )
+
+      If (    ier1 .ne. 0
+     +   .or. ier2 .ne. 0 )                                    Then
+          Write(6,6005) 
+          Call                                     xit(' Adjust ',-5 )
+      End If
+
+      lopen(1) = .true.
+      lopen(2) = .true.
+
+***    Determine operating mode according to the previous result.
+***    mode = 0 (from TOR to MTL) ; mode = 1 (from MTL to TOR).
+
+      If (inbr2.lt.0)                                          Then
+          in   = 1
+          out  = 2
+          mode = 0
+          Write(6,6100) TORfil(1:lenn1),MTLfil(1:lenn2)
+      Else
+          in   = 2
+          out  = 1
+          mode = 1
+          pktyp( 0 ) = ' ' 
+          Write(6,6150) MTLfil(1:lenn2),TORfil(1:lenn1)
+      End If
+
+      typin = getyp( in )
+
+***    First consistency check.
+
+      If (     mode .eq.0 
+     +   .and. typin.eq.'PK84')                                Then
+          Write(6,6006) 
+          Call                                     xit(' Adjust ',-6 )
+      End If
+
+      nr = 0
+
+  100 maxw = getsiz2( in, jbuf,len,nwds,jpak, lev,nlev )
+
+      If (    maxw.eq.0
+     +   .or. nlev.eq.0) GoTo 999
+
+***    Determinons la memoire dont on a besoin ...
+ 
+      mem = nlev*nwds + len
+ 
+      If (mem.gt.maxmem)                                       Then
+          Write(6,6007) mem-maxmem
+          Call                                     xit(' Adjust ',-7 )
+      End If
+ 
+      Write(kind,4) jbuf(1)
+
+***    ... et definissons les pointeurs. 
+ 
+      allocate( ibuf(len),data(nwds*nlev) )
+
+***    Read next records, unpacking only if necessary.
+
+  200 If (     mode .eq.  0 
+     +   .and. typin.eq.typout)                                Then
+
+***        Transfer TOR to MTL, checking only for spectral 
+***        arrays as well as inconsistent zonal arrays.
+
+          Call recget( in, ' ',-1,' ',-1, ibuf,maxw,ok ) 
+
+          If (.not.ok)                                         Then
+
+              deallocate( ibuf,data )
+              If (maxw.eq.0) GoTo 100
+              Write(6,6200) nr
+              Call                                 xit(' Adjust ', 0 ) 
+
+          End If
+
+          Write(kind,4) ibuf(1)
+          Write(name,4) ibuf(3)
+
+          If (kind.eq.'SPEC')                                  Then
+              Call dimgt2( lsr, la,lr,lm,ktr,ibuf(7),  0,-1 )
+              ibuf(7) = clrlmt( lr,lm,ktr,.true. )
+          End If
+
+***        Second consistency check.
+
+          If (     kind.eq.'zonl' 
+     +       .and. name.eq.'  ++')                             Then
+
+              Write(6,6008)
+              Call                                 xit(' Adjust ',-8 ) 
+
+          End If
+
+***        Write the result.
+
+          Call recput( out,ibuf )
+
+          nr = nr+1 
+
+      Else
+
+***        Transfer from MTL to TOR.
+
+          Call getset2( in, data,lev,nlev, ibuf,maxw,ok )
+
+          If (.not.ok)                                         Then
+
+              deallocate( ibuf,data )
+              If (maxw.eq.0) GoTo 100
+              Write(6,6200) nr
+              Call                                 xit(' Adjust ', 0 ) 
+
+          End If
+
+          Write(kind,4) ibuf(1)
+          Write(name,4) ibuf(3)
+
+          If (kind.eq.'SPEC')                                  Then
+
+              Call dimgt2( lsr, la,lr,lm,ktr,ibuf(7),  0,-1 )
+
+              If (mode.eq.0)                                   Then
+
+                  ibuf(7) = clrlmt( lr,lm,ktr,.true. )
+
+              Else
+
+                  If (lr.ge.100 .or. lm.ge.100)                Then
+
+***                    Third consistency check.
+
+                      Write(6,6009)
+                      Call                         xit(' Adjust ',-9 ) 
+
+                  End If
+
+                  ibuf(7) = (lr*100+lm)*10+ktr
+
+              End If
+
+          End If
+
+***        Second consistency check.
+
+          If (     mode.eq.    0
+     +       .and. kind.eq.'zonl' 
+     +       .and. name.eq.'  ++')                             Then
+
+              Write(6,6008)
+              Call                                 xit(' Adjust ',-8 ) 
+
+          End If
+
+***        Dates between the years 1930 and 2000
+***        are saved in two-digit year format.
+
+          If (ibuf(2) .ge. 1930 01 00 00 .and.
+     +        ibuf(2) .lt. 2000 01 00 00 )
+     +        ibuf(2)  = ibuf(2) - 1900 00 00 00
+
+***        Save one level at a time.
+
+          If (     kind.eq.'ZONL'
+     +       .and. nlev.ne.  1  )                              Then
+              ibuf(6) = 1
+              nwds    = ibuf(5)
+          End If
+
+          Do  l=0,nlev-1
+
+              ibuf(4) = lev(l+1)
+              Call putfld2( out, data(l*nwds+1), ibuf,maxw )
+
+          End Do
+
+          nr = nr+nlev
+
+      End If
+
+      GoTo 200
+
+***    Premature End_Of_File on input unit.
+
+  999 Write(6,6010)
+      Call                                         xit(' Adjust ',-10)
+*----------------------------------------------------------------------
+
+    4 Format(A4)
+
+ 6001 Format(' No input file specified...')
+ 6002 Format(' Both of the input files are empty...')
+ 6003 Format(' Unable to determine the file type...'/1X,A)
+ 6004 Format(' Low level WKOFFIT reports for CCCma/RPN:',I2,'/',I2,'.'/
+     +       ' Correct values are 4 and (4 or 5), respectively.')
+ 6005 Format(' Unable to open/create one of the data files...')
+ 6006 Format(' Found PK84 packing type in CCCma file.')
+ 6007 Format(' Missing at least ',I6,'words of available memory.')
+ 6008 Format(' Found multi-level zonal records in CCCma file.')
+ 6009 Format(' Found spectral truncation > T99 in CCCma file.')
+ 6010 Format(' Premature End-Of-File on input file.')
+ 6099 format(' Detected previous XIT ABORT VALUE ',I3)
+
+ 6100 Format(' Converting from (CCCma) '/1X,A/' to (RPN)'/1X,A)
+ 6150 Format(' Converting from (RPN) '/1X,A/' to (CCCma)'/1X,A)
+ 6200 Format(' Adjust transfered ',I6,' records.')
+
+      End
+#     endif

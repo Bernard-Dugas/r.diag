@@ -1,0 +1,123 @@
+#! /bin/ksh
+#
+zxzxzx=${DIAGNOSTIC_EXIT:=DIAGNOSTIC_EXIT}
+if [ -s "${zxzxzx}" ]; then exit 0 ; fi
+#
+TMPDIRN=`r.which_tmpdir`
+LANGUE=${CMCLNG:-english}
+#
+# Sauver le repertoire courant.
+#
+LOCAL=`pwd`
+#
+cclargs 0$                                "[effacer des fichiers locaux]"\
+        -dn "on_veut_tout_effacer" ",,,," "[liste des fichiers a effacer]"\
+        -na "non"                  "oui"  "[ne pas generer de codes d'erreurs]"\
+        -f  "non"                  "oui"  "[activer le mode efface-tout]"\
+        ++ $* > ${TMPDIRN}/cclargs_r.delf.out$$
+#
+. ${TMPDIRN}/cclargs_r.delf.out$$ && /bin/rm -f ${TMPDIRN}/cclargs_r.delf.out$$
+# 
+# usage: r.delf [ -dn fichier1 fichier2 ... ] [ -na ] [ -f ]
+#
+# notes: 1) specifier le parametre "-f" tout seul equivaut
+#           a vider completement le repertoire $TMPDIR.
+#        2) il est possible de specifier une liste de plusieurs
+#           fichiers a effacer si on l'encadre de gillemets.
+#
+# auteur:   B. Dugas, RPN/13 avril 1992.
+#
+# modifications: 1) reviser l'utilisation des codes d'erreurs
+#                   (BD - janvier 1999)
+#                2) utiliser r.which_tmpdir pour trouver le tmpdir
+#                   (BD - mai 1999)
+#                3) modifier l'appel a cclargs (enlever eval)
+#                   (BD - juin 2003)
+#
+BIG=BIG_
+if [ "${BIG_TMPDIR}" != "${TMPDIRN}" ]; then BIG='' ; fi
+#
+if [ $# != 0 ]; then
+     echo " "
+     echo " Usage:  $0 [ -dn fichier1 fichier2 ... ] [ -na ] [ -f ]"
+     echo " "
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo "no argument specified in $0" > ${zxzxzx}
+          fi
+          exit 1
+     else
+          exit 0
+     fi
+fi
+#
+if [ "${ECHO_COMMAND_LINE:-PAS_DEFINI}" != "PAS_DEFINI" ]; then
+     echo "`basename $0` -dn ${dn} -na ${na} -f ${f}"
+fi
+#
+# Est-ce TMPDIRN existe?
+#
+cd $TMPDIRN 2> /dev/null
+STATUS=$?
+#
+if [ ${STATUS} != 0 ]; then
+     if [ ${LANGUE} = english  ]; then echo 'unable to access $'${BIG}'TMPDIR =' $TMPDIRN ; fi
+     if [ ${LANGUE} = francais ]; then echo "incapable d'"'acceder $'${BIG}'TMPDIR =' $TMPDIRN ; fi
+     if [ "${na}" = non ]; then
+          if [ -f ${zxzxzx} ]; then
+               echo $0 'is unable to access $'${BIG}'TMPDIR =' $TMPDIRN > ${zxzxzx}
+          fi
+          exit 2
+     else
+          exit 0
+     fi
+fi
+#
+tty -s
+if [ $? = 0 ]; then
+     interactive=oui
+else
+     interactive=non
+fi
+#
+if [ "${dn}" = "on_veut_tout_effacer" ]; then
+     if [ "${f}" = oui -a ${interactive} = oui ]; then
+          reponse_DEL=non
+          while [ "${reponse_DEL}" != oui ]
+               do
+               if [ ${LANGUE} = english  ]; then echo 'remove everything in $'${BIG}'TMPDIR ? (y/n) \c' ; fi
+               if [ ${LANGUE} = francais ]; then echo 'tout effacer dans $'${BIG}'TMPDIR ? (o/n) \c' ; fi
+               read reponse_DEL
+               if [ ${reponse_DEL} = o -o ${reponse_DEL} = O -o\
+                    ${reponse_DEL} = y -o ${reponse_DEL} = Y -o\
+                    ${reponse_DEL} = n -o ${reponse_DEL} = N ]; then
+                    if [ ${reponse_DEL} != n -a ${reponse_DEL} != N ];then
+                         \rm -f * 2> /dev/null
+                         if [ $? != 0 ]; then STATUS=3 ; fi
+                    fi
+                    reponse_DEL=oui
+               fi
+          done
+     elif [ "${f}" = oui -a ${interactive} = non ]; then
+               \rm -f * 2> /dev/null
+               if [ $? != 0 ]; then STATUS=3 ; fi
+     else
+          echo " "
+          echo " Usage:  $0 [ -dn fichier1 fichier2 ... ]  [ -na ] [ -f ]"
+          echo " "
+          STATUS=4
+     fi
+else
+     \rm -f ${dn} 2> /dev/null
+     if [ $? != 0 ]; then STATUS=5 ; fi
+fi
+#
+cd ${LOCAL}
+if [ ${STATUS} != 0 -a ${na} = non ]; then
+     if [ -f ${zxzxzx} ]; then
+          echo "error ${STATUS} in $0" > ${zxzxzx}
+     fi
+     exit ${STATUS}
+fi
+#
+exit 0

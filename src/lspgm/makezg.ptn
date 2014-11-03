@@ -1,0 +1,936 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 99999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 99999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCES...
+*      makezg  GIN ZOUT OUTPUT \ 
+*                  or 
+*      makezgv UIN VIN ZUOUT ZVOUT OUTPUT \ 
+*                  + 
+*              [ -dlon1 VAL0  -dlat1   VAL1    \ 
+*                -dlon2 VAL2  -dlat2   VAL3    \ 
+*                -i     VAL5  [VAL6   [VAL7]]  \ 
+*                -j     VAL8  [VAL9   [VAL10]] \ 
+*                -m     VAL9  [VAL11  [VAL12]] \ 
+*                -n     VAL13 [VAL14  [VAL15]] \ 
+*                -kind  VAL16 [VAL17  [VAL18]] \ 
+*                -d60   VAL19 -dgrw    VAL20   \ 
+*                -pi    VAL21 -pj      VAL22   \ 
+*                -a     VAL23 -def     VAL24   ] 
+*
+*      makeyy  GIN YYOUT OUTPUT -i VAL1 -j VAL2 -def [VAL3]
+*      makezgv UIN VIN YYUOUT YYVOUT OUTPUT -i VAL1 -j VAL2 -def [VAL3]
+*
+*
+*     DESCRIPTION...
+*      makezg  - INTERPOLATE SCALAR FIELDS ONTO A GEM/DM Z-GRID
+*      makezgv - INTERPOLATE VECTOR FIELDS ONTO A GEM/DM Z-GRID
+*      makeyy  - INTERPOLATE SCALAR FIELDS ONTO A GEM/DM YinYang-GRID
+*      makeyyv - INTERPOLATE VECTOR FIELDS ONTO A GEM/DM YinYang-GRID
+*
+*
+*     AUTHORS  - B.Dugas, MARCH 2002.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/makezg.ptn,v 4.25 2014/10/10 19:53:43 dugas Exp $
+*
+*
+*     PURPOSE...
+*      GIVEN A SET OF FIELDS DEFINED ON CMC/RPN GRIDS,
+*      INTERPOLATE THEM TO THE GEM/DM Z-GRID. THE CODE IS
+*      BORROWED FROM THE V2.3.1. MODEL LIBRARY AND HAS
+*      THE SAME GRID DEFINITION INPUT PARAMETRES AS
+*      THE MODEL ITSELF.
+*
+*
+*     INPUT FILE...
+*      GIN   = ANY FILE OF SCALAR VARIABLES ON CMC/RPN GRIDS (MAKEZG)
+*      UIN   = ANY FILE OF U-COMPONENT VARIABLES ON CMC/RPN GRIDS (MAKEZGV)
+*      VIN   = ANY FILE OF V-COMPONENT VARIABLES ON CMC/RPN GRIDS (MAKEZGV)
+*
+*     OUTPUT FILE...
+*      ZOUT   = RESULTING FILE OF Z-GRID INTERPOLATED SCALAR ARRAYS (MAKEZG)
+*      YYOUT  = RESULTING FILE OF YY-GRID INTERPOLATED SCALAR ARRAYS (MAKEYY)
+*      ZUOUT  = RESULTING FILE OF Z-GRID INTERPOLATED U-COMPONENT ARRAYS (MAKEZGV)
+*      ZVOUT  = RESULTING FILE OF Z-GRID INTERPOLATED V-COMPONENT ARRAYS (MAKEZGV)
+*      YYUOUT = RESULTING FILE OF YY-GRID INTERPOLATED U-COMPONENT ARRAYS (MAKEYYV)
+*      YYVOUT = RESULTING FILE OF YY-GRID INTERPOLATED V-COMPONENT ARRAYS (MAKEYYV)
+*
+*
+*     COMMAND-LINE INPUT PARAMETER...
+*
+*      kind(1)         POSITIVE OR NULL VALUES INDICATE THAT THE OUTPUT IS ON
+*                      A NON-ROTATED GRID (DEFAULT). NEGATIVES FOR A ROTATED ONE.
+*                      THE ABSOLUTE VALUE DEFINES THE INTERPOLATION TYPE:
+*                      = 1, LINEAR
+*                      = 2, NEAREST NEIGHBOR
+*                      = OTHERWISE, CUBIC
+*      kind(2)         SPECIFIES THE PARTICULAR MODEL GRID WE WANT
+*                      KNOWN VALUES ARE 'PHI' (DEFAULT), 'U' AND 'V'.
+*      kind(3)         SPECIFIES GAUSSIAN ('G'), LIMITED AREA ('L') OR
+*                      POLAR STEREOGRAPHIC ('N' OR 'S') GRID OPTIONS.
+*                      DEFAULT IS A GLOBAL LAT-LON/NON-GAUSSIAN GRID.
+*      spval (a)       VALUE USED FOR EXTRAPOLATIONS. NO DEFAULT IS PROVIDED.
+*
+*     If kind(3) is not equal to 'N' and not equal to 'S' ...
+*  
+*     (dlon1,dlat1)    FIRST POINT ON THE GREAT CIRCLE DEFINING THE
+*                      ROTATED MODEL EQUATOR'S. REQUIRED WHEN KIND=1.
+*     (dlon2,dlat2)    AS (dlon1,dlat1) BUT FOR THE SECOND POINT.
+*      i(1),j(1)       NUMBER OF DISTINCT POINTS IN X AND Y FOR THE GRID.
+*      i(2),j(2)       (OPTIONAL) # OF POINTS IN THE X AND Y DIRECTIONS
+*                      OF THE HIGH RESOLUTION DOMAIN. THEY DEFAULT TO
+*                      THE VALUES OF i(1) AND j(1).
+*      m(1),n(1)       RESOLUTION OF THE HIGH RESOLUTION (CONSTANT)
+*                      DOMAIN IN X and Y, RESPECTIVELY (IN DEGREES).
+*                      THE DEFAULTS VALUES ARE 360/i(1) AND 180/j(1).
+*      m(2),n(2)       (OPTIONAL) MAXIMUM GRID POINT SPACING ALONG
+*                      X AND Y, RESPECTIVELY (IN DEGREES).
+*
+*     And if in addition to the above, kind(3) = 'L' ...
+*
+*      i(3),j(3)       POSITION OF THE LAM REFERENCE POINT IN THE GRID
+*      m(3),n(3)       (LONGITUDE,LATITUDE) OF THE LAM REFERENCE POINT
+*
+*     However, if kind(3) is equal to 'N' or is equal to 'S'. the
+*     following parametres will instead be considered... 
+*
+*      i(1),j(1)       NUMBER OF DISTINCT POINTS IN X AND Y FOR THE GRID.
+*
+*      i(2),j(2)       GRID COORDINATES OF THE POLE. 
+*      i(3),j(3)       DX AND DY INCREMENTS FROM THE LOWER-LEFT CORNER,
+*                      AGAIN IN UNITS OF THE ps REFERENCE (DEFAULT=1.0)
+*      D60             GRID LENGTH AT 60 DEGREES (METERS) 
+*                      (DEFAULT VALUE 3.81E5 = 381 KM).
+*      DGRW            ORIENTATION IN THE GRID WITH RESPECT TO
+*                      THE GREENWICH MERIDIAN (DEG) (DEFAULT 350.).
+*
+*     GENERAL NOTES :
+*             1) Specifying "-def APPEND" indicates that the program should
+*                attempt to check to output file in order to find a TicTac
+*                ( >> and ^^ ) set of variables or a TocToc (!!) variable,
+*                for Z-grid or YinYang-grids outputs, respectively, to fully
+*                specify the horizontal grid description of the output data.
+*                In this mode, a new set of descriptors will no be created. If
+*                the horizontal dimensions are specified as well (see above),
+*                this will constrain the choice of the TicTac set or of the
+*                TocToc variables. Otherwise, the first set or variable found
+*                is retained. The resulting newly interpolated data will then
+*                be APPENDED to the file. Note that this is the only option
+*                available for MAKEYY and MAKEYYV and not other parametre
+*                is supported at this time for these commands. 
+*
+*     NOTES FOR THE NON-PS GRID OPTIONS :
+*             2) In non-APPEND mode (which is the default), the only two
+*                required parametres are i(1) and j(1). They will them
+*                define a non-rotated uniform-resolution Z-grid.
+*             3) Non-uniform resolution limited area grids are not supported.
+*             4) The gaussian and lam options are mutually exclusive.
+*
+*     NOTES FOR THE PS GRID OPTION :
+*             5) Only the absolute value of kind(1) is relevant.
+*             6) All values of kind(2) are irrelevant.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ROTATED GRID COORDINATES ARE MISSING
+*       2 NO COMMAND-LINE PARAMETRES
+*       3 UNSUPPORTED GRID TYPE IN GIN
+*       4 SOME OF THE i AND/OR j VALUES ARE WRONG
+*       5 INCONSISTENT i,j AND m,n VALUES
+*       6 GIN IS NOT A CMC/RPN FILE
+*       8 INPUT PARAMETRE ERROR
+*       9 PROBLEM READING GIN
+*      10 LV GRID NOT SUPPORTED
+*      11 PS GRID DESCRIPTORS ARE MISSING
+*      12 NO TICTAC FOUND IN APPEND MODE
+*      13 NOT THE RIGHT NUMBER OF I/O FILES
+*      14 IN APPEND-MODE, INCONSISTENT ZUOUT,ZVOUT FILES
+*      15 PROBLEM ALLOCATION WORKING MEMORY
+*      16 FEWER RECORDS IN VIN THAN IN UIN
+*      17 INCONSISTENT UIN,VIN RECORD SIZES/TIMES/LEVELS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM makezg
+*    1        (      GIN,       ZOUT,       OUTPUT,
+*    2         TAPE1=GIN, TAPE2=GOUT, TAPE6=OUTPUT)
+  
+*     $Log: makezg.ptn,v $
+*     Revision 4.25  2014/10/10 19:53:43  dugas
+*     Corriger l'initialisation de GRTYP.
+*
+*     Revision 4.24  2014/10/02 18:44:07  dugas
+*     Ne plus tenir compte des codes d'erreurs 1 et 11 lorsque APPEND=Vrai.
+*
+*     Revision 4.23  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.22  2014/03/08 01:40:42  bernard
+*     Appeller MAXZREF2 avev REM=VRAI.
+*
+*     Revision 4.21  2014/01/28 18:26:33  dugas
+*     Ajouter les alias MAKEYY et MAKEYYV au module MAKEZG.
+*
+*     Revision 4.20  2014/01/17 17:35:12  dugas
+*     Ajouter le point d'entree MAKEZGV pour prendre en charge le calcul des champs vectoriels.
+*
+*     Revision 4.19  2013/11/28 22:21:52  dugas
+*     Corriger l'endroit ou la variable ROTATE est definie.
+*
+*     Revision 4.18  2013/10/17 11:18:59  bernard
+*     Utiliser les macros longitude_maximale et latitude_maximale pour definir les parametres MAXI et MAXJ, respectivement.
+*
+*     Revision 4.17  2013/03/21 21:27:54  bernard
+*     Implementation du mode '-def APPEND'.
+*
+*     Revision 4.16  2012/07/26 16:18:33  dugas
+*     Ajouter support des grilles de type '\!'(NCEP GRIB).
+*
+*     Revision 4.15  2012/05/17 19:07:41  dugas
+*     Corrections pour le support de grilles d'entree multiple.
+*
+*     Revision 4.14  2011/02/10 17:02:22  dugas
+*     Correction a la derniere mise-a-jour: Reinstaller la lecture des
+*      arguments NI et NJ pour le mode non polaire-stereographique.
+*
+*     Revision 4.13  2011/01/13 17:34:40  dugas
+*     - Ajouter le support des grilles Z a reference PS.
+*     - Remplacer l'allocation via HPALLOC par ALLOCATE.
+*
+*     Revision 4.12  2010/10/23 16:50:02  dugas
+*     Correction de la documentation sur le type d'interpolation.
+*
+*     Revision 4.11  2010/07/06 15:38:22  dugas
+*     Implanter le controle de la valeur d'extrapolation via le parametre -a.
+*
+*     Revision 4.10  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.9  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2007/08/29 17:19:25  dugas
+*     MAXI,MAXJ passent de 1999/999 a 99999/99999.
+*
+*     Revision 4.7  2006/07/04 17:55:41  dugas
+*     Corriger la definition de GRIDOPT.
+*
+*     Revision 4.6  2005/11/22 19:07:40  dugas
+*     Verifier que ILG/ILAT sont bien definis apres lecture de GIN.
+*
+*     Revision 4.5  2005/07/05 18:44:46  dugas
+*     Augmenter la taille de OGRID et g2gtyp pour mode DEBUG sous Linux.
+*
+*     Revision 4.4  2005/04/12 17:36:31  dugas
+*     Utiliser EZSINT plutot que EZ_RGSCINT et ajouter le support de GEM/LAM.
+*
+*     Revision 4.3  2004/11/22 21:04:13  dugas
+*     Corriger le support des grilles d'entrees de type  L.
+*      Les grilles A, B et G sont egalement supportees.
+*
+*     Revision 4.2  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.1  2002/09/17 18:42:43  dugas
+*     Ajouter la possibilite de choisir le type d'interpolation
+*      (lineaire, proche voisin ou quadratique) et de choisir
+*      le type de grilles cibles (PHI, U ou V).
+*
+*     Revision 4.0  2002/03/22 18:32:44  dugas
+*     Version initiale
+*
+
+***    MARS 18/2002 - B.DUGAS. 
+
+*-----------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXI = longitude_maximale
+      INTEGER,    PARAMETER :: MAXJ = latitude_maximale
+
+      REAL*8      RROT(3,3)
+      CHARACTER*8 g2gtyp,VERBE
+      CHARACTER   LIGNE*80,SPVALC*20
+      LOGICAL     OK,OK1,OK2,OK3,OK4,PS,YY,
+     +            FIRST,ROTATE,APPEND,DEF,WIND
+      CHARACTER*2 GRTYP,GRTYP1,GTYP,OGRTYP,ZTYP
+      CHARACTER*4 KIND,SUBA,PKTYP,GRIDOPT,OGRID,STATUS
+      REAL        DLAT1,DLAT2,DLON1,DLON2,DXLA,DYLA,DXMAX,DYMAX,
+     +            LONRP,VALX(MAXI),VALY(MAXJ),LATRP,SPVAL,XPS,YPS
+      INTEGER     KBUF(HEAD),TYPE,NFIL,MAXW,NR,
+     +            LENIN,LEN,IP1,IP2,IP3,ZIG1,ZIG2,
+     +            ZIG3,ZIG4,NWDS,JPAK,NI,NJ,NILA,NJLA,
+     +            ILG,ILAT,IER,IO,IG1,IG2,IG3,IG4,OGID,
+     +            I,IJ,J,IGID,IREF,JREF,KHEM,NFIN,NFOUT,
+     +            NFIN2,NFOUT2,NI0,NJ0
+
+      REAL        PI,PJ, D60,DGRW, DX,DY
+
+      INTEGER,    ALLOCATABLE, DIMENSION(:) :: IBUF,JBUF
+      REAL,       ALLOCATABLE, DIMENSION(:) :: LONR,LATR,GIN,DAT
+      REAL,       ALLOCATABLE, DIMENSION(:) :: GIN2,DAT2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
+      INTEGER,    EXTERNAL :: GETSIZ,GETHIGH,EZQKDEF,
+     +                        EZGDEF,EZDEFSET,EZSINT,EZUVINT
+      EXTERNAL    JCLPNT,XIT,PUTHIGH,PUTHIC,PUTZREF,D_GRIDGEF,
+     +            EZSETOPT,EZSETVAL,GETSET2,PUTSET2
+
+      DATA        FIRST / .TRUE. /, WIND / .FALSE. /
+      DATA        SUBA  / 'SUBA' /, YY   / .FALSE. /
+      DATA        GRTYP / ' '    /, KHEM /  -999   /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/makezg.ptn,v $'
+
+*---------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFIL = 5 ; NFIN = 1 ; NFOUT = 2
+      CALL JCLPNT( NFIL, 1,2,3,4, 6 )
+
+***    VERIFIER LE MODE DE FONCTIONNEMENT.
+
+      CALL GETVERB( VERBE ) ; CALL up2low( VERBE,VERBE )
+
+      IF (VERBE == 'makeyy')  YY   = .TRUE.
+      IF (VERBE == 'makezgv' .or.
+     +    VERBE == 'makeyyv') WIND = .TRUE.
+
+      IF (WIND)                                                THEN
+          IF (NFIL /= 4) CALL                      XIT( VERBE,-13)
+          NFIN2 = 2 ; NFOUT = 3 ; NFOUT2 = 4
+      ELSE
+          IF (NFIL /= 2) CALL                      XIT( VERBE,-13)
+      END IF
+
+      NR = 0
+
+      PKTYP = GETYP( NFIN)
+      IF (PKTYP(1:2).NE.'SQ') CALL                 XIT( VERBE,-6 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NI    = 0
+          NJ    = 0
+          NILA  = 0
+          NJLA  = 0
+          DLAT1 = 0.
+          DLAT2 = 0.
+          DLON1 = 0.
+          DLON2 = 0.
+          TYPE  = 3
+          DXLA  = 0.
+          DYLA  = 0.
+          DXMAX = 180.
+          DYMAX = 90.
+          OGRID ='PHI'
+
+          GTYP  = ' '
+          IREF  = 1
+          JREF  = 1
+          LONRP = 0.
+          LATRP = 0.
+
+          SPVALC = ' '
+
+          PS     = .FALSE.
+          APPEND = .FALSE. ; IF (YY) APPEND = .TRUE.
+
+          DEF = RPBLOC('DEFAUT',LIGNE)
+          IF (DEF .AND. LIGNE == 'APPEND') APPEND = .TRUE.
+
+          IF (APPEND)                                          THEN
+              ! Does NFOUT point to an pre-existing file.
+              CALL GETSTAT( NFOUT, STATUS )
+              IF (STATUS == 'OLD')                             THEN
+                  ! Yes, activate the 'APPEND' mode for NFOUT.
+                  CALL PUTPOSIT( NFOUT,'APPEND' )
+              ELSE
+                  APPEND = .FALSE.
+              END IF
+              IF (APPEND .and. WIND)                           THEN
+                  CALL GETSTAT( NFOUT2, STATUS )
+                  IF (STATUS == 'OLD')                         THEN
+                      ! Yes, activate the 'APPEND' mode for NFOUT2.
+                      CALL PUTPOSIT( NFOUT2,'APPEND' )
+                  ELSE
+                      WRITE(6,6014)
+                      CALL                         XIT( VERBE,-14)
+                  END IF
+              END IF
+          END IF
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) TYPE
+
+          OK = RPBLOC('KIND2',LIGNE)
+          IF (OK) OGRID = LIGNE
+
+          OK = RPBLOC('KIND3',LIGNE)
+          IF (OK) GTYP = LIGNE
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) SPVALC = LIGNE
+
+          IF (YY)                                              THEN
+
+              OK = RPBLOC('I',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) NI
+
+              OK = RPBLOC('J',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) NJ
+
+              IF (.NOT.APPEND)                                 THEN
+                  WRITE(6,6018)
+                  CALL                             XIT( VERBE,-18)
+              END IF
+
+          ELSE IF (GTYP == 'N' .OR. GTYP == 'S')               THEN
+
+              NI   = 51 
+              NJ   = 55 
+
+              PI   = 26.
+              PJ   = 28.
+
+              DX   = 1.
+              DY   = 1.
+
+              D60  = 3.81E5 
+              DGRW = 350. 
+
+              OK = RPBLOC('I',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) NI
+
+              OK = RPBLOC('J',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) NJ
+
+              OK1 = RPBLOC('I2',LIGNE)
+              IF (OK1) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) PI
+
+              OK2 = RPBLOC('J2',LIGNE)
+              IF (OK2) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) PJ
+
+              OK3 = RPBLOC('D60',LIGNE)
+              IF (OK3) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) D60
+          
+              OK4 = RPBLOC('DGRW',LIGNE)
+              IF (OK4) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DGRW
+          
+              OK = RPBLOC('I3',LIGNE)
+              IF (OK) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DX
+
+              OK = RPBLOC('J3',LIGNE)
+              IF (OK) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DY
+
+              OK = ( OK1 .AND. OK2 .AND. OK3 .AND. OK4 )
+
+              IF (.NOT.(OK .OR. APPEND))                       THEN
+                  IF (.NOT.OK1) WRITE(6,6001) 'PI'
+                  IF (.NOT.OK2) WRITE(6,6001) 'PJ'
+                  IF (.NOT.OK3) WRITE(6,6001) 'D60'
+                  IF (.NOT.OK4) WRITE(6,6001) 'DGRW'
+                  CALL                                 XIT( VERBE,-11 )
+              END IF
+
+              PS = .TRUE.
+
+          ELSE
+
+              IF (TYPE.LT.0 .OR. GTYP.EQ.'L')                  THEN
+
+                  OK1 = RPBLOC('DLAT1',LIGNE)
+                  IF (OK1) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DLAT1
+
+                  OK2 = RPBLOC('DLAT2',LIGNE)
+                  IF (OK2) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DLAT2
+
+                  OK3 = RPBLOC('DLON1',LIGNE)
+                  IF (OK3) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DLON1
+
+                  OK4 = RPBLOC('DLON2',LIGNE)
+                  IF (OK4) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DLON2
+
+                  OK = ( OK1 .AND. OK2 .AND. OK3 .AND. OK4 )
+
+                  IF (.NOT.(OK .OR. APPEND))                                 THEN
+                      IF (.NOT.OK1) WRITE(6,6001) 'DLAT1'
+                      IF (.NOT.OK2) WRITE(6,6001) 'DLAT2'
+                      IF (.NOT.OK3) WRITE(6,6001) 'DLON1'
+                      IF (.NOT.OK4) WRITE(6,6001) 'DLON2'
+                      CALL                             XIT( VERBE,-1 )
+                  END IF
+
+              END IF
+
+              OK = RPBLOC('I',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) NI
+
+              OK = RPBLOC('J',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) NJ
+
+              OK = RPBLOC('I2',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) NILA
+
+              OK = RPBLOC('J2',LIGNE)
+              IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) NJLA
+
+              OK = RPBLOC('M',LIGNE)
+              IF (OK) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DXLA
+
+              OK = RPBLOC('N',LIGNE)
+              IF (OK) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DYLA
+
+              OK = RPBLOC('M2',LIGNE)
+              IF (OK) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DXMAX
+
+              OK = RPBLOC('N2',LIGNE)
+              IF (OK) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) DYMAX
+
+              IF (GTYP.EQ.'L')                                 THEN
+
+                  OK = RPBLOC('I3',LIGNE)
+                  IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) IREF
+
+                  OK = RPBLOC('J3',LIGNE)
+                  IF (OK) READ(LIGNE,5,ERR=9000,END=9001,IOSTAT=IO) JREF
+
+                  OK = RPBLOC('M3',LIGNE)
+                  IF (OK) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) LONRP
+
+                  OK = RPBLOC('N3',LIGNE)
+                  IF (OK) READ(LIGNE,10,ERR=9000,END=9001,IOSTAT=IO) LATRP
+
+              END IF
+
+          END IF
+
+      ELSE
+
+          WRITE(6,6002)
+          CALL                                     XIT( VERBE,-2 )
+
+      END IF
+
+      IF (APPEND)                                              THEN
+
+          ! READ Z- OR YY-GRID INFORMATION FROM NFOUT.
+
+          IF (YY)                                              THEN
+              CALL savUref( NFOUT, OK )
+          ELSE
+              CALL MAKZREF2( NFOUT, OK, .true. )
+          END IF
+          IF (.NOT.OK) CALL                        XIT( VERBE,-12)
+
+          IF (NI > 0 .AND. NJ > 0)                             THEN
+              ! NI and NJ have been specified.
+              WRITE(6,'(/" Append mode active..."/" Will search for",
+     +        " grid descriptors coresponding to NI,NJ = ",2I5/)') NI,NJ
+              NI0 = NI ; NJ0 = NJ
+          ELSE ! NI and/or NJ have not been specified.
+              WRITE(6,'(/" Append mode active..."/" First grid",
+     +          " descriptors will be used. NI,NJ will be defined",
+     +          " accordingly.")')
+          END IF
+
+          IF (YY)                                              THEN
+              OGRTYP = 'U'
+              CALL GETUDESC( IP1,IP2,IP3, NI0,NJ0 )
+          ELSE
+              CALL GETZDES2( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, NI0,NJ0 )
+              CALL GETZIPX( IP1,IP2,IP3 ) ; CALL GETZTYP( OGRTYP )
+          END IF
+
+          IF (IP1 < 0 ) CALL                       XIT( VERBE,-12)
+
+          IF (NI0 /= NI .OR. NJ0 /= NJ)                        THEN
+              NI = NI0 ; NJ = NJ0
+              WRITE(6,'(" NI,NJ = ",2I5/)') NI,NJ
+          END IF
+
+          ! DEFINE THE APPROPRIATE OUTPUT GRID FOR THE INTERPOLATOR.
+
+          OGID = EZQKDEF( NI,NJ, OGRTYP,IP1,IP2,IP3,0, NFOUT )
+
+      ELSE
+
+          OGRTYP = 'Z'
+
+          IF (GTYP == 'N') KHEM = 1
+          IF (GTYP == 'S') KHEM = 2
+
+          IF (DXMAX.EQ.0.) DXMAX = 180.
+          IF (DYMAX.EQ.0.) DXMAX = 090.
+
+          GRIDOPT = OGRID
+          IF (GTYP.NE.' ') GRIDOPT = GTYP(1:1) // GRIDOPT
+
+      END IF
+
+***    READ IN FIRST INFORMATION BUFFER.
+  
+  050 MAXW = GETSIZ( NFIN, KBUF,LENIN,NWDS,JPAK )
+      IF (MAXW.EQ.0) GOTO 9002
+
+      IF (FIRST)                                               THEN
+
+***        EXECUTE THIS SECTION ONLY ONCE.
+
+          FIRST = .FALSE.
+
+          WRITE(KIND,4) KBUF(1)
+          ILG  = KBUF(5)
+          ILAT = KBUF(6)
+
+          IF (KIND.NE.'GRID' .AND. KIND.NE.SUBA)               THEN
+              WRITE(6,6003) KIND
+              CALL                                 XIT( VERBE,-3 )
+          END IF
+
+***        SET EXTRAPOLATION VALUE.
+
+          IF (SPVALC /= ' ')                                   THEN
+              READ(SPVALC,20,ERR=9000,END=9001,IOSTAT=IO) SPVAL
+              CALL EZSETVAL( 'EXTRAP_VALUE', SPVAL )
+              CALL EZSETOPT( 'EXTRAP_DEGREE','VALEUR' )
+              WRITE(6,6111) trim( SPVALC )
+          END IF
+
+                         ROTATE = .FALSE.
+          IF (TYPE.LT.0) ROTATE = .TRUE.
+
+***        SET INTERPOLATION TYPE.
+
+          TYPE = ABS( TYPE )
+
+          IF (TYPE.NE.1 .AND. TYPE.NE.2) TYPE = 3
+
+          IF      (TYPE.EQ.1)                                  THEN
+              g2gtyp = 'LINEAR'
+              CALL EZSETOPT( 'DEGRE_INTERP',g2gtyp )
+              WRITE(6,6110) g2gtyp
+          ELSE IF (TYPE.EQ.2)                                  THEN
+              g2gtyp = 'NEAREST'
+              CALL EZSETOPT( 'DEGRE_INTERP', g2gtyp )
+              WRITE(6,6110) g2gtyp
+          ELSE IF (TYPE.EQ.3)                                  THEN
+              g2gtyp = 'CUB_LAG'
+              CALL EZSETOPT( 'DEGRE_INTERP','CUBIC' )
+              WRITE(6,6110) 'CUBIC'
+          END IF
+
+          IF (APPEND) GOTO 100
+
+***        CHECK INPUT VALUES. DO DEFAULTS HAVE TO BE INVOKED ?
+
+          IF (NI  .LE.0    .OR.
+     %        NJ  .LE.0    .OR.
+     %        NILA.LT.0    .OR.
+     %        NJLA.LT.0    .OR.
+     %        NI  .GE.MAXI .OR.
+     %        NJ  .GT.MAXJ .OR.
+     %        NILA.GE.MAXI .OR.
+     %        NJLA.GT.MAXJ) CALL                   XIT( VERBE,-4 )
+
+          IF (NI.LT.NILA) NI = NILA
+          IF (NJ.LT.NJLA) NJ = NJLA
+
+          IF (DXLA.EQ.0.) DXLA = 360./NI
+          IF (DYLA.EQ.0.) DYLA = 180./NJ
+
+          IF (NINT( 360./DXLA ).EQ.NI-1) NI = NI-1
+
+          IF (NILA.LE.0 ) NILA = NI
+          IF (NJLA.LE.0 ) NJLA = NJ
+
+          IF (GTYP.EQ.'L'  .AND.
+     +       (NI  .NE.NILA .OR. NJ.NE.NJLA)) CALL  XIT( VERBE,-10)
+     +       
+          IF (GTYP.NE.'L' .AND.
+     +       (NINT( 360./DXMAX ).GT.NI+1 .OR.
+     +        NINT( 180./DYMAX ).GT.NJ+1 ))
+     +        CALL                                 XIT( VERBE,-5 )
+
+          ALLOCATE( LONR((NI+1)*NJ),LATR((NI+1)*NJ), STAT=IER )
+          IF (IER /= 0) CALL                       XIT( VERBE,-15)
+
+***        DEFINE THE GRID ITSELF.
+
+          IF (PS)                                              THEN
+
+              ZTYP = GTYP
+
+              CALL CXGAIG( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4 ,
+     +                           pi , pj , d60, dgrw  )
+              CALL CIGAXG( ZTYP, pi , pj , d60, dgrw ,
+     +                           ZIG1,ZIG2,ZIG3,ZIG4  )
+
+              VALX(1) = 1.0 ; VALY(1) = 1.0
+
+              DO  I=2,NI
+                  VALX(I) = VALX(I-1)+DX
+              END DO
+              DO  J=2,NJ
+                  VALY(J) = VALY(J-1)+DY
+              END DO
+
+              IJ = 1 ; DO  J=1,NJ
+                  YPS = VALY( J ) - PJ
+                  DO  I = 1,NI
+                      XPS = VALX( I ) - PI
+                      CALL LLFXY( LATR(IJ),LONR(IJ),XPS,YPS,D60,DGRW,KHEM )
+                      IF (LONR(IJ) < 0.) LONR(IJ) = LONR(IJ) + 360.
+                      IJ = IJ+1
+                  END DO
+              END DO
+
+          ELSE
+
+              ZTYP = 'E'
+              CALL D_GRIDGEF( VALX,VALY,lonr,latr,
+     %                        ZTYP,ZIG1,ZIG2,ZIG3,ZIG4,
+     %                        NI,NJ,NILA,NJLA,RROT,
+     %                        DLON1,DLAT1,DLON2,DLAT2,ROTATE,
+     %                        DXLA,DYLA,DXMAX,DYMAX, GRIDOPT,
+     %                        IREF,JREF,LONRP,LATRP )
+
+          END IF
+
+***        DEFINE AND SAVE THE Z-GRID OUTPUT DESCRIPTORS. SET IP3 = 0.
+          
+          IP3 = 0 ; CALL dset_igs( IP1,IP2, LONR,LATR,
+     +                   ZTYP,ZIG1,ZIG2,ZIG3,ZIG4,
+     +                   NI,NJ )
+!!!!      CALL ZIPIG( IP1,IP2,IP3, DXLA,DYLA,
+!!!! +                NILA,NJLA,NI,NJ,
+!!!! +                RROT,ROTATE )
+
+          DEALLOCATE( LONR,LATR, STAT=IER )
+
+          IF (OGRID.EQ.'U') IP2 = IP2+1
+          IF (OGRID.EQ.'V') IP2 = IP2+2
+
+          CALL PUTZREF( VALX,VALY, 'Z',
+     +                  ZTYP,ZIG1,ZIG2,ZIG3,ZIG4,
+     +                  IP1,IP2,IP3,NI,NJ )
+
+          OGID = EZGDEF( NI,NJ, 'Z',ZTYP,ZIG1,ZIG2,ZIG3,ZIG4, VALX,VALY )
+
+      END IF
+
+*---------------------------------------------------------------------
+***    DETERMINE NECESSARY WORK ARRAY SIZES. TAKE CARE
+***    TO ALLOCATE ENOUGH SPACE FOR REAL*8 INPUT ARRAYS.
+
+  100 KBUF(5) = NI
+      KBUF(6) = NJ
+
+      MAXW = 2*MAX( NWDS,NI*NJ )+4
+      LEN  = MAX( LENIN,MAXW+HEAD )
+  
+***    ASK FOR THE REQUIRED AMOUNT OF MEMORY ...
+  
+      ALLOCATE( IBUF(LEN),GIN(MAXW),DAT(MAXW), STAT=IER )
+      IF (WIND .AND. IER == 0)
+     +    ALLOCATE( JBUF(LEN),GIN2(MAXW),DAT2(MAXW), STAT=IER )
+      IF (IER /= 0) CALL                           XIT( VERBE,-15)
+
+***    READ-IN GRIDS.
+  
+  200 CALL GETFLD2( NFIN, GIN, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK )
+  
+          IF (NR.EQ.0) CALL PRTLAB2( ' IBUF  IN =',IBUF )
+  
+          IF (.NOT.OK)                                         THEN
+              DEALLOCATE( IBUF,GIN,DAT, STAT=IER )
+              IF (WIND) DEALLOCATE( JBUF,GIN2,DAT2, STAT=IER )
+              IF (MAXW.EQ.0)                                   THEN
+                  ILG = -1 ; ILAT = -1
+                  GOTO 050
+              END IF
+              IF (WIND) NR = NR*2
+              WRITE(6,6000) NR
+              IF (NR.EQ.0) GOTO 9002
+              CALL                                 XIT( VERBE, 0 )
+          END IF
+
+***        CHECK INPUT ARRAYS.
+
+          GRTYP1 = GETHIC( 'GRTYP',IBUF )
+          
+          IF (IBUF(5).LE.2 .AND. IBUF(6).LE.2)                 THEN
+
+***            FOUND TOO SMALL ILG OR ILAT IN GIN.
+
+              WRITE(6,6009) IBUF(5),IBUF(6)
+              CALL                                 XIT( VERBE,-9 )
+
+          ELSE IF
+     +       (IBUF(5).NE. ILG  .OR.
+     +        IBUF(6).NE. ILAT .OR.
+     +        GRTYP1 .NE. GRTYP )                              THEN
+ 
+              IF (
+     +           (GRTYP1 /= 'G' .AND.
+     +            GRTYP1 /= 'L' .AND.
+     +            GRTYP1 /= 'Z' .AND.
+     +            GRTYP1 /= 'N' .AND.
+     +            GRTYP1 /= 'S' .AND.
+     +            GRTYP1 /= '!' .AND.
+     +            GRTYP1 /= 'A' .AND.
+     +            GRTYP1 /= 'B'))                              THEN
+
+***                UNSUPPORTED TYPE OF ARRAYS. Ignore them for now !
+
+                  WRITE(6,6003) GRTYP1
+                  GOTO 200
+***               CALL                             XIT( VERBE,-3 )
+
+              END IF
+
+***            DEFINE NEW IGID.
+
+              GRTYP = GRTYP1
+
+              ILG   = IBUF(5)
+              ILAT  = IBUF(6)
+
+              IG1   = GETHIGH( 'IG1' ,IBUF ) 
+              IG2   = GETHIGH( 'IG2' ,IBUF ) 
+              IG3   = GETHIGH( 'IG3' ,IBUF ) 
+              IG4   = GETHIGH( 'IG4' ,IBUF ) 
+
+              IGID = EZQKDEF( ILG,ILAT, GRTYP,IG1,IG2,IG3,IG4, NFIN )
+              IER  = EZDEFSET( OGID,IGID )
+
+          END IF
+
+          IF (WIND)                                            THEN
+
+              CALL GETFLD2( NFIN2, GIN2, 'GRID'//'SUBA',
+     +                     -1,' ',-1, JBUF,MAXW,OK )
+  
+              IF (NR.EQ.0) CALL PRTLAB2( ' JBUF  IN =',JBUF )
+  
+              IF (.NOT.OK)                                     THEN
+                  DEALLOCATE( IBUF,GIN,DAT, STAT=IER )
+                  IF (WIND) DEALLOCATE( JBUF,GIN2,DAT2, STAT=IER )
+                  IF (MAXW.EQ.0)                               THEN
+                      CALL PRECEDE( NFIN,1 )
+                      ILG = -1 ; ILAT = -1
+                      GOTO 050
+                  END IF
+                  NR = NR*2-1 ; WRITE(6,6000) NR
+                  CALL                             XIT( VERBE,-16)
+              END IF
+
+              CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+              IF (IBUF(2) /= JBUF(2) .OR.
+     +            IBUF(4) /= JBUF(4) .OR. .NOT.OK)
+     +            CALL                             XIT( VERBE,-17)
+
+          END IF
+
+*=====================================================================
+
+***        DO THE ACTUAL INTERPOLATION.
+
+          IF (WIND)                                            THEN
+              IER = EZUVINT( DAT,DAT2, GIN,GIN2 )
+          ELSE
+              IER =  EZSINT( DAT,      GIN )
+          END IF
+
+*=====================================================================
+
+***        SAVE RESULT GRID. 
+
+          READ(SUBA,4) IBUF(1)
+
+          IBUF(5) = NI
+          IBUF(6) = NJ
+          IBUF(7) = 0
+
+          CALL PUTHIC( OGRTYP,'GRTYP',IBUF )
+
+          CALL PUTHIGH( IP1,'IG1' ,IBUF ) 
+          CALL PUTHIGH( IP2,'IG2' ,IBUF ) 
+          CALL PUTHIGH( IP3,'IG3' ,IBUF ) 
+          CALL PUTHIGH(  0 ,'IG4' ,IBUF ) 
+
+          CALL PUTFLD2( NFOUT, DAT, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB2( ' IBUF OUT =',IBUF )
+
+          IF (WIND)                                            THEN
+              IBUF(3) = JBUF(3)
+              CALL PUTFLD2( NFOUT2, DAT2, IBUF,MAXW )
+              IF (NR.EQ.0) CALL PRTLAB2( ' JBUF OUT =',IBUF )
+          END IF
+  
+      NR = NR+1
+      GOTO 200
+  
+***    E.O.F. ON INPUT
+
+ 9000 IF (IO.NE.0) WRITE(6,6008) IO
+ 9001 CALL                                         XIT( VERBE,-8 )
+  
+***    PREMATURE E.O.F. ON UNIT 1.
+  
+ 9002 CALL                                         XIT( VERBE,-9 )
+  
+*--------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+   10 FORMAT(BN,E10.0)
+   20 FORMAT(BN,E20.0)
+
+ 5000 FORMAT(10X,5I5,E10.0,I5)
+
+ 6000 FORMAT(/I10,' Records processed.'/) 
+ 6001 FORMAT(' Please specify ',A,'...')
+ 6002 FORMAT(' The I,J command-line parametres are required.')
+ 6003 FORMAT(' Unsupported grid type in gin. KIND/GRTYP=',A)
+ 6006 FORMAT(' Input file is not a CMC/RPN file.')
+ 6008 FORMAT(/' Makezg reports I/O error number ',I4,' on unit 5.')
+ 6009 FORMAT(' Input file NI,NJ=',2I5)
+ 6014 FORMAT(/' In APPEND-mode, inconsistent ZUOUT,ZVOUT files.')
+ 6018 FORMAT(/' When in MAKEYY*, APPEND-mode should be active.')
+
+ 6110 FORMAT(/' Using INTERP=',A,' interpolation.')
+ 6111 FORMAT(/' Using SPVAL=',A,' extrapolation value.')
+
+      END 
+#     endif

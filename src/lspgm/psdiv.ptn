@@ -1,0 +1,323 @@
+#     include "diagmacros.cdk"
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      psdiv  IN1 IN2 OUT OUTPUT
+*
+*
+*     DESCRIPTION...
+*      psdiv  - DIVIDES A FILE OF GRIDS BY A CORRESPONDING ONE-LEVEL FILE
+*
+*
+*     AUTHOR  - Rene Laprise , MAY 13/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/psdiv.ptn,v 4.9 2014/09/25 20:20:52 dugas Exp $
+*
+*
+*     PURPOSE - DIVIDES A FILE OF REAL OR COMPLEX MULTI-LEVEL GRIDS
+*               SETS (IN2) BY A FILE OF CORRESPONDING ONE LEVEL FIELDS
+*               (IN1). EACH ONE LEVEL FIELD DIVIDES AN ENTIRE SET FROM
+*               THE MULTI-LEVEL FILE.
+*
+*     NOTES   - 1) BOTH INPUT FILES IN1 AND IN2 MUST HAVE REAL OR
+*                  COMPLEX GRID  DATA (I.E. ZONL,GRID,SUBA OR CMPL)
+*               2) THERE MUST BE ONE SET IN IN2 FOR EACH FIELD IN IN1
+*               3) IF IN1 IS MULTI-LEVEL, ITS FIRST LEVEL IS USED
+*               4) DIVISION BY ZERO YIELDS ZERO
+*
+*
+*     INPUT FILES...
+*      IN1 = FILE OF MULTI- OR SINGLE-LEVEL FIELDS.
+*      IN2 = FILE OF MULTI-LEVEL SETS.
+*
+*     OUTPUT FILE...
+*      OUT = THE QUOTIENT
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 FIRST RECORDS NOT SAME SIZE IN IN1,IN2
+*       2 FOUND UNSUPPORTED DATA TYPE
+*       3 RECORDS NOT THE SAME SIZE IN IN1
+*       4 FEWER SETS FILE IN2 THAN IN FILE IN1
+*       5 RECORDS NOT THE SAME SIZE IN IN2
+*       6 UNABLE TO READ IN1
+*       7 UNABLE TO READ IN2
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM psdiv
+*     PROGRAM PSDIV (IN1,       IN2,       OUT,       OUTPUT,
+*    1         TAPE1=IN1, TAPE2=IN2, TAPE3=OUT, TAPE6=OUTPUT)
+*     -------------------------------------------------------
+
+*     $Log: psdiv.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2005/04/14 17:01:14  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*     - Ajouter le support explicite des enregistrements de type SUBA.
+*     - Corriger une erreur dans le traitement des donnees complexes.
+*
+*     Revision 4.5  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.4  2000/03/22 19:29:20  armnrbd
+*     Ajouter un include pour definir le macro AIMAG (f77 vs f90).
+*
+*     Revision 4.3  2000/03/20 20:34:09  armnrbd
+*     Remplace l'intrinseque IMAG par AIMAG.
+*
+*     Revision 4.2  1998/07/03 02:26:34  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:12  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:20  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  93/10/26  13:36:32  armnrbd
+*     Meme corrections que dans PSMLT (3.1 et 3.2).
+*     
+*     Revision 3.0  93/10/13  13:56:42  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/11/23  14:06:07  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/11/10  16:55:50  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.0  92/04/30  13:48:56  armnrbd
+*     Initial revision
+*     
+*     MAY 13/83 - R.LAPRISE.
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      COMPLEX     A,B
+      CHARACTER   TYPE*4
+      LOGICAL     OK,SPEC,CMPL
+      REAL        C,D,F,G,ZERO
+      INTEGER     LEV(MAXLEV),HEAD,NPTS,NFF,
+     +            NRECS,NLEV,NLEV0,I,K,L,WHEREF,NLEV1,
+     +            KBUF(taille_entete),KPAK,LBUF(taille_entete),LPAK,IBUF,IER,
+     +            MAXW,MAXW1,MAXW2,LEN,LEN1,LEN2,LEV1
+
+      POINTER   ( PI,IBUF(8) )
+      POINTER   ( PF,F(1) )
+      POINTER   ( PG,G(1) )
+      POINTER   ( PF,C(2,1) )
+      POINTER   ( PG,D(2,1) )
+
+
+      INTEGER     GETSIZ,GETSIZ2
+      EXTERNAL    GETSIZ,GETSIZ2
+
+      EXTERNAL    MACSPE,JCLPNT,XIT,HPALLOC,HPDEALLC,
+     +            GETSET2,PRECEDE,CMPLBL,PUTSET2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        CMPL / .FALSE. /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/psdiv.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF=4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+
+      NRECS=0
+
+***    GET THE NUMBER OF LEVELS IN THE MULTI-LEVEL FILE
+***    AND ALLOCATE MULTI-LEVEL WORKING MEMORY.
+
+  100 MAXW1 = GETSIZ(  1, LBUF,LEN1,NPTS,LPAK )
+      MAXW2 = GETSIZ2( 2, KBUF,LEN2,NPTS,KPAK, LEV,NLEV )
+
+      IF (MAXW1.EQ.0) GOTO 901
+      IF (MAXW2.EQ.0) GOTO 902
+
+      WRITE(TYPE,4) KBUF(1)
+
+      IF (LBUF(1).NE.KBUF(1) .OR.
+     +    LBUF(5).NE.KBUF(5) .OR.
+     +   (LBUF(6).NE.KBUF(6) .AND. TYPE.NE.'ZONL'))            THEN 
+          CALL PRTLAB( LBUF ) ; CALL PRTLAB( KBUF )
+          CALL                                     XIT('  Psdiv ',-1 ) 
+      END IF
+
+      LEV1 = LBUF(4)
+
+      LEN  = MAX( LEN1, LEN2  )
+      MAXW = MAX( MAXW1,MAXW2 )
+
+      WRITE(TYPE,4) KBUF(1)
+      IF (TYPE.EQ.'ZONL') NPTS = KBUF(5)
+
+***    CHECK DATA TYPE BEFORE ALLOCATING MEMORY.
+
+      IF (TYPE.NE.'CMPL' .AND.
+     +    TYPE.NE.'ZONL' .AND.
+     +    TYPE.NE.'GRID' .AND.
+     +    TYPE.NE.'SUBA')                                      THEN
+          CALL PRTLAB( KBUF )
+          CALL                                     XIT('  Psdiv ',-2 )
+      ELSE IF (TYPE.EQ.'CMPL')                                 THEN
+          CMPL = .TRUE.
+      END IF
+
+      CALL HPALLOC( PF, MAX( MAXW,NPTS*NLEV ),IER,0 )
+      CALL HPALLOC( PG, MAX( MAXW,NPTS*NLEV ),IER,0 )
+      CALL HPALLOC( PI,           LEN,        IER,0 )
+
+***    GET THE NEXT SET FROM FILE 1. ONLY CONSIDER THE FIRST LEVEL.
+
+  200 CALL GETSET2( 1, G,LEV,NLEV1, IBUF,MAXW,OK )
+
+              IF (.NOT.OK)                                     THEN
+                  CALL                             HPDEALLC(PI,IER,0 )
+                  CALL                             HPDEALLC(PG,IER,0 )
+                  CALL                             HPDEALLC(PF,IER,0 )
+                  IF (MAXW.EQ.0) GOTO 100
+                  WRITE(6,6010) NRECS,NLEV
+                  CALL                             XIT('  Psdiv ', 0 )
+              END IF
+
+***        BY-PASS (I.E. STRIP) LABEL/CHARACTER RECORDS.
+
+          WRITE(TYPE,4) IBUF(1)
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 200
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+***        COMPARE THIS RECORD TO THE FIRST ONE.
+
+          CALL CMPLBL( 0,IBUF, 0,LBUF, OK )
+
+          IF (.NOT.OK .OR. LEV1.NE.LEV(1))                     THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Psdiv ',-3 )
+          END IF
+
+***        READ NEXT SET. STOP IF WRONG KIND OR SIZE.
+
+  300     CALL GETSET2( 2, F,LEV,NLEV0, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL                                 HPDEALLC(PI,IER,0 )
+              CALL                                 HPDEALLC(PG,IER,0 )
+              CALL                                 HPDEALLC(PF,IER,0 )
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL PRECEDE( 1,1 )
+                  GOTO 100
+              END IF
+              CALL                                 XIT('  Psdiv ',-4 )
+          END IF
+
+***        AGAIN, BY-PASS (I.E. STRIP) LABEL/CHARACTER RECORDS.
+
+          WRITE(TYPE,4) IBUF(1)
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 300
+
+***        COMPARE THIS SET TO THE FIRST ONE.
+
+          CALL CMPLBL( 0,IBUF, 0,KBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV0.GT.NLEV)                      THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Psdiv ',-5 )
+          END IF
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+***        DIVIDE THE SET BY THE ONE LEVEL FIELD.
+***        SAVE THE RESULT ON FILE 3.
+
+          DO 400 L=1,NLEV0
+              WHEREF = (L-1)*NPTS
+              IF (CMPL)                                        THEN
+                  DO  I=1,NPTS
+                      A = CMPLX( D(1,I),D(2,I) )
+                      B = CMPLX( C(1,WHEREF+I) ,
+     +                           C(2,WHEREF+I) )
+                      IF (D(1,I).EQ.ZERO .AND.
+     +                    D(2,I).EQ.ZERO)                      THEN 
+                          C(1,WHEREF+I) =  ZERO
+                          C(2,WHEREF+I) =  ZERO
+                      ELSE 
+                          B = B/A
+                          C(1,WHEREF+I) = REAL( B )
+                          C(2,WHEREF+I) = AIMAG( B )
+                      END IF 
+                  END DO
+              ELSE
+                  DO  I=1,NPTS
+                      IF (G(I).EQ.ZERO)                        THEN 
+                          F(WHEREF+I) =  ZERO
+                      ELSE 
+                          F(WHEREF+I) = F(WHEREF+I)/G(I)
+                      END IF 
+                  END DO
+              END IF
+  400     CONTINUE
+
+          CALL PUTSET2( 3, F, LEV,NLEV, IBUF,MAXW )
+
+      NRECS = NRECS+1
+      GOTO 200
+
+***    PREMATURE E.O.F. ON UNITS #1,#2
+
+  901 CALL                                         XIT('  Psdiv ',-6 )
+  902 CALL                                         XIT('  Psdiv ',-7 )
+
+*-----------------------------------------------------------------------
+
+    4 FORMAT(A4)
+
+ 6010 FORMAT('0   Psdiv divided',I6,' sets to',I3,' levels.')
+
+      END
+#     endif

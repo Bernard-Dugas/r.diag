@@ -1,0 +1,295 @@
+#     if !defined (max_line)
+#         define   max_line 10 000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      addtext  FILE INPUT OUTPUT [ -name VALUE1 -label VALUE2 \ 
+*                                   -t1   VALUE3 -delt  VALUE4 \
+*                                   -t2   VALUE5 ]
+*
+*
+*     DESCRIPTION...
+*      addtext - APPEND A TEXT RECORD TO A FILE. DATA READ FROM stdin.
+*
+*
+*     AUTHOR   - B.Dugas, Sept 2004.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/addtext.ptn,v 5.5 2014/09/25 20:20:45 dugas Exp $
+*
+*
+*     INPUT/OUTPUT FILE... 
+*      FILE  = FILE CONTAINING ANY TYPE OF DATA. COULD EVEN BE EMPTY.
+* 
+*
+*     INPUT PARAMETERS...
+*
+*      NAME  = NAME ASSIGNED TO THE TEXT RECORD
+*      LABEL = INTERNAL LABEL ASSIGNED TO THE TEXT RECORD (i.e. ETIKET)
+*
+*      T1    = TIMESTEP OR DATE.
+*      T2    = (OPTIONAL) STARTING DATE (DATEO).
+*      DELT  = (OPTIONAL) SIZE OF TIMESTEP IN SECONDS.
+*
+*      NOTES: - LEGAL DATE ARGUMENTS FOR -t1 RANGE FROM 0001010100 
+*               TO 9999123123. VALUES OUTSIDE THIS RANGE ARE
+*               ASSUMED TO BE TIMESTEPS.
+*             - ALTERNATIVELY, THE TIMESTEP CAN BE DETERMINED WHEN
+*               DATEO AND DELT ARE DEFINED.
+*             - LONG TEXT LINES ARE TRUNCATED TO 128 CHARACTERS
+                AND A MAXIMUM OF max_line LINES CAN BE WRITTEN
+*               IN A GIVEN RECORD.
+*             
+*      READ( 5,5000 ) NAME,LABEL,T1,T2,DELT
+*      DO I=1,FOREVER
+*         READ( 5,5010,END=1000 ) LINE
+*         ---> TEXT TO BE ADDED TO FILE <---
+*      END DO
+*1000  CONTINUE       
+*5000  FORMAT(11X,A4,4X,A16,5X,3I10)
+*5010  FORMAT(A132)
+*
+*
+*     EXAMPLE OF INPUT CARD(S)...
+*
+*ADDTEXT  INFO    GEM_v3.1.1_0
+* BEGIN-BEGIN-BEGIN-BEGIN-BEGIN-BEGIN-BEGIN-BEGIN-BEGIN-BEGIN-BEGIN
+* Model description...
+*
+*    ... GOES HERE ...
+*
+*  Simulation parametres...
+*
+*     ... GOES HERE ...
+*
+*   Data, Time and Location...
+*
+*     ... GOES HERE ...
+*
+*  END-END-END-END-END-END-END-END-END-END-END-END-END-END-END-END
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR ON FIRST LINE OF INPUT
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM addtext
+*    +                (FILE,      INPUT,       OUTPUT,
+*    +           TAPE1=FILE,TAPE5=INPUT, TAPE6=OUTPUT)
+*     -------------------------------------
+ 
+*     $Log: addtext.ptn,v $
+*     Revision 5.5  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 5.4  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 5.3  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 5.2  2006/12/18 12:21:02  dugas
+*     Utiliser la fonction intrinseque TRIM dans le format 6100
+*
+*     Revision 5.1  2006/04/26 22:26:41  dugas
+*     Definir le macro max_line pour la documentation automatique.
+*
+*     Revision 5.0  2004/09/13 16:37:13  dugas
+*     Initial version.
+*
+
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      MAXLINE
+      PARAMETER  ( MAXLINE = max_line )
+      INTEGER      LEN
+      PARAMETER  ( LEN = taille_entete + 32 * MAXLINE )
+
+      REAL*8       HEURES
+      LOGICAL      RPBLOC,OK
+      INTEGER*8    DATEO,DATEV
+      LOGICAL      DATEO_L,DATEV_L
+      CHARACTER    LINE*128,ETIKET*16,NAME*4,POSIT*6
+      INTEGER      NFF,ILINE(32,MAXLINE),
+     +             IBUF(LEN),I,IO,MAXW,NL,
+     +             DEET,NPAS,DAT1,DAT2,
+     +             SDATEV,SDATEO,IER
+
+      INTEGER      NEWDATE
+      CHARACTER*4  GETYP,PKTYP
+      EXTERNAL     JCLPNT,PUTPOSIT,GETYP,GETLIGN,
+     +             PUTPARC,PUTPARI,SETLAB,PUTFLD2,
+     +             NEWDATE,DIFDATR,DATE2STAMP
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+ 
+      DATA         POSIT   / 'APPEND' /,
+     +             NPAS    /  0       /,
+     +             DATEO_L / .FALSE.  /,
+     +             DATEV_L / .FALSE.  /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/addtext.ptn,v $'
+
+*-----------------------------------------------------------------------
+      NFF = 3
+      CALL JCLPNT( NFF, 1, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      MAXW  = LEN - taille_entete
+
+***    RESET FILE 1 TO 'APPEND' MODE.
+
+      CALL PUTPOSIT( 1,POSIT )
+
+      IF (RPBLOC( ' ',LINE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NAME   = 'NONE'
+          ETIKET = 'NONE'
+
+          DATEV  =  0
+          DATEO  =  0
+          DEET   =  0
+
+          OK = RPBLOC('NAME',LINE)
+          IF (OK) NAME = LINE
+
+          OK = RPBLOC('LABEL',LINE)
+          IF (OK) ETIKET = LINE
+
+          OK = RPBLOC('T1',LINE)
+          IF (OK) READ(LINE,0020,ERR=900,END=901,IOSTAT=IO) DATEV
+
+          OK = RPBLOC('T2',LINE)
+          IF (OK) READ(LINE,0020,ERR=900,END=901,IOSTAT=IO) DATEO
+
+          OK = RPBLOC('DELT',LINE)
+          IF (OK) READ(LINE,0010,ERR=900,END=901,IOSTAT=IO) DEET
+
+      ELSE
+
+***        READ NAME
+
+          CALL GETLIGN( 5,LINE,128,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LINE, 5000,ERR=900,END=901,IOSTAT=IO)
+     +                    NAME,ETIKET, DATEV,DATEO,DEET
+          END IF
+
+      END IF
+
+      CALL DATE2STAMP( DATEV,SDATEV )
+      IF ( INT( DATEV ) /= SDATEV) DATEV_L = .TRUE.
+
+      CALL DATE2STAMP( DATEO,SDATEO )
+      IF ( INT( DATEO ) /= SDATEO) DATEO_L = .TRUE.
+      
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          CALL PUTPARC( 'ETIKET',ETIKET )
+          IF (DATEO_L .AND. DATEV_L)                           THEN
+
+              CALL PUTPARI( 'DATEO',SDATEO )
+              CALL PUTPARI( 'DEET', DEET )
+
+              IF (DEET.GT.0)                                   THEN
+
+                  CALL DIFDATR( SDATEV,SDATEO,HEURES )
+                  NPAS = NINT( HEURES*( 3600.D0/DEET ) )
+
+                  CALL PUTPARI( 'NPAS',NPAS )
+
+              END IF
+
+          ELSE
+     +    IF (DATEO_L)                                         THEN
+
+              CALL PUTPARI( 'NPAS', DATEV )
+              CALL PUTPARI( 'DATEO',SDATEO )
+              CALL PUTPARI( 'DEET', DEET )
+
+          END IF
+      END IF
+
+***    READ AND SAVE LINES OF TEXT.
+
+      NL = 0
+
+  100 CALL GETLIGN( 5,LINE,128,OK )
+          IF (.NOT.OK) GOTO 300
+
+          NL = NL+1
+          WRITE(6,6100) NL, TRIM( LINE )
+
+          IF (NL.LT.MAXLINE)                                   THEN
+              READ(LINE,'(32A4)') (ILINE(I,NL),I=1,32)
+          ELSE
+              GOTO 300
+          END IF
+
+      GOTO 100
+
+***    INPUT SECTION IS FINISHED.
+
+  300 IF (PKTYP.EQ.'SQ')                                       THEN
+          CALL SETLAB( IBUF, 'CHAR',DATEV,NAME,0,32,NL,0,-32 )
+      ELSE IF (PKTYP.EQ.'PK')                                  THEN
+          CALL SETLAB( IBUF, 'CHAR',DATEV,NAME,0,16,NL,0,-64 )
+      END IF
+      
+      CALL PUTFLD2( 1, ILINE,IBUF,MAXW )
+
+      CALL                                         XIT(' AddText', 0 )
+
+***    E.O.F. ON INPUT.
+
+  900 IF (IO.NE.0) WRITE(6,6200) IO
+  901 CALL                                         XIT(' AddText',-1 )
+
+*-----------------------------------------------------------------------
+ 0010 FORMAT(BN,I10)
+ 0020 FORMAT(BN,I20)
+ 5000 FORMAT(11X,A4,4X,A16,5X,3I10)
+
+ 6100 FORMAT(1X,I4,5X,A)
+ 6200 FORMAT(' AddText reports I/O error number ',I3,' on unit 5.')
+
+      END
+#     endif

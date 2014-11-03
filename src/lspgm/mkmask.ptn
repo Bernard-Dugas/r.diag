@@ -1,0 +1,794 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 200000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCES...
+*      mkmask1  MASKIN OUT1 OUT2 INPUT OUTPUT
+*      mkmask2  MSKIN1 MSKIN2 MSKOUT OUTPUT
+*      mkmask3  MSKIN1 MSKIN2 MSKOUT OUTPUT
+*
+*
+*     AUTHOR  - B.Dugas, MARS 21/1989.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/mkmask.ptn,v 4.5 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     DESCRIPTION OF THE DIFFERENT PROGRAMS...
+*      1) MKMASK1 IS A COMPLETELY (I.E. INCOMPATIBLE) NEW VERSION OF THE 
+*         OLD XTRAC2 PROGRAM. IT DOES NOT ACTUALLY EXTRACT RECORDS OUT OF
+*         AN AUXILIARY DATASET (AS BEFORE) BUT RATHER BUILDS ONE OR TWO
+*         NEW MASKING RECORDS FROM THE ORIGINAL ONE. INPUT INFORMATION
+*        (FROM UNIT 5) STILL HAS THE SAME MEANING AND FORMAT. 
+*
+*        INPUT PARAMETER SET (DEFAULT VALUES IN PARENTHESIS) ... 
+*
+*         NUMBER (=0)         =  LENGTH OF PARTIAL SERIES. IF  EQUAL 
+*                                TO ZERO, YOU TAKE ALL POINTS AS  IN 
+*                                PROGRAM  XTRAC. IN  THIS  CASE, OFF 
+*                                AND ALIGN ARE IGNORED. 
+*
+*         ALIGNMENT (ALIGN=1) =  1  ON THE START OF THE EVENTS, 
+*                                2  ON THE MIDDLE OF THEM, 
+*                                3  ON THEIR END. 
+*
+*         OFFSET (OFF=0)      =  STARTING DISTANCE FROM  ALIGNMENT POINT. 
+*                                IT CAN BE ANY POSITIVE OR NEGATIVE INTEGER.
+*
+*         IF THE COMBINATION OF PARAMETERS IS SUCH AS TO PRODUCE A SUBSET 
+*         OF THE ORIGINAL MASK (I.E. EVERY NON-ZERO VALUE OF OUT1 CORRES- 
+*         PONDS TO NON-ZERO VALUES OF MASKIN) A SECOND OUTPUT MASK (OUT2) 
+*         IS PRODUCED. THIS NEW MASK WILL HAVE LENGTH EQUAL TO THE NUMBER 
+*         OF NON-ZERO VALUES FOUND IN MASKIN.  IT WILL BE NULL  WHEN OUT1 
+*         AND MASKIN ARE NOT IN AGREEMENT, ONE OTHERWISE. 
+*
+*         SEVERAL SETS OF MASK RECORDS CAN BE BUILT BY SIMPLY INCLUDING 
+*         AS MANY INPUT CARDS AS REQUIRED. 
+*
+*         READ( 5,5000 ) NUMBER,ALIGN,OFF
+*5000     FORMAT(10X,3I5)
+*
+*
+*        EXAMPLE OF INPUT CARD...
+*
+* MKMASK1     7    2    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*      2) MKMASK2 MERGES TWO SERIES OF MASKING RECORDS INTO A NEW 
+*         SINGLE SET. THE NEW SET OF MASKS IS DEFINED IN THE FOLLOWING 
+*         WAY... 
+*
+*         A) THE I-TH SET OF RECORDS OF MSKOUT HAS LENGHT EQUAL TO THE 
+*            NUMBER OF NON-ZERO POINTS OF THE I-TH MSKIN1. 
+*         B) THERE ARE M RECORDS IN MSKIN1, N RECORDS IN MSKIN2 AND MN 
+*            RECORDS IN MSKOUT. 
+*         C) IF THE J-TH  MSKIN1 AND AND I-TH MSKIN2 HAVE CORRESPONDING 
+*            NON-ZERO POINTS,  THE (I,J)-TH  MSKOUT WILL HAVE ONES  FOR 
+*            THESE POINTS AND ZERO OTHERWISE. 
+*
+*
+*      3) MKMASK3 MERGES TWO SERIES OF  MASKING RECORDS INTO A NEW 
+*         SINGLE SET. IT PERFORMS AS A FUNCTIONAL INVERSE TO THE MKMASK2 
+*         PROGRAM. THE NEW MASKS ARE DEFINED IN THE FOLLOWING WAY... 
+*
+*         A) THE RECORDS OF MSKOUT HAVE LENGHT EQUAL TO THE NUMBER OF 
+*            POINTS IN THE FIRST RECORD OF MSKIN1. ONLY THAT RECORD IS 
+*            IN FACT CONSIDERED. 
+*         B) THERE ARE THE SAME NUMBER OF RECORDS IN MSKOUT AS IN FILE 
+*            MASKIN2. 
+*         C) THE NUMBER OF POINTS  IN ALL RECORDS OF MSKIN2  HAS TO BE 
+*            EQUAL TO THE NUMBER OF NON-ZERO VALUES IN MSKIN1. THAT IS 
+*            WERE THE CONNECTION TO XTRAC OCCURS. 
+*
+*
+*     EXIT CONDITIONS FOR MKMASK1...
+*      0 NO PROBLEMS
+*      1 PROBLEM READING FILE MASKIN
+*      2 OFFSET GREATER THAN RECORD LENGTH
+*      3 PREMATURE EOF ON INPUT
+*
+*     EXIT CONDITIONS FOR MKMASK2/MKMASK3...
+*      0 NO PROBLEMS
+*      1 UNABLE TO READ MSKIN1
+*      2 UNABLE TO READ MSKIN2
+*      3 GRIDS NOT THE SAME SIZE IN MSKIN1 AND MSKIN2
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM mkmask_driver
+
+***  Ceci est le programme d'appel des routines de type mkmask
+***  tel qu'implante a RPN (SEA/Dorval) par B.Dugas, en 1993.
+
+*     $Log: mkmask.ptn,v $
+*     Revision 4.5  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.4  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.3  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.2  2007/12/20 21:09:02  dugas
+*     - Corriger l'appel a JCLPNT.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.1  1998/05/21 20:20:51  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:21:08  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:04:20  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:56:32  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/04  09:31:39  armnrbd
+*     Initial revision
+*     
+
+      IMPLICIT  none
+
+      INTEGER   i,j,k
+      CHARACTER nom*256,nomprg*8
+
+      EXTERNAL  qqexit,
+     +          xtrac,  xtrac2, xtrac3, xtrac4
+
+      data      nomprg / ' ' /
+
+*------------------------------------------------------------------
+***    Recuperer le nom du programme. S'assurer de sa validite.
+
+      Call getarg( 1,nom )
+
+      If (nom(256:256).EQ.'/')                                 Then
+          Write(6,'(" Pas trouve le nom du programme dans"/A256)') nom
+          Call qqexit( -11 )
+      End If
+
+***    Enlever tout prefixe.
+
+      Do i=255,1,-1
+          If (nom(i:i).EQ.'/')                                 Then
+              Do j=i+1,Min( i+8,256 )
+                  k           = j-i
+                  nomprg(k:k) = nom(j:j)
+              End Do
+              GoTo 100
+          End If
+      End Do
+
+***    S'assurer que le nom du programme est dans nomprg.
+
+      nomprg = nom
+
+***    Enlever tout postfixe.
+
+  100 Do i=1,8
+          If (nomprg(i:i).EQ.'.')                              Then
+              Do j=i,8
+                  nomprg(j:j) = ' '
+              End Do
+              GoTo 200
+          End If
+      End Do
+
+  200 IF (nomprg.EQ.'mkmask1') CALL mkmask1
+      IF (nomprg.EQ.'mkmask2') CALL mkmask2
+      IF (nomprg.EQ.'mkmask3') CALL mkmask3
+
+      Write(6,'(" Programme ",A8," inconnu.")') nomprg
+      Call qqexit( -12 )
+
+      Stop
+      End
+      SUBROUTINE MKMASK1 
+*    1                  (      MASKIN,       OUT1,         OUT2, 
+*    2                   TAPE1=MASKIN, TAPE2=OUT1,   TAPE3=OUT2, 
+*    3                         INPUT,        OUTPUT, 
+*    4                   TAPE5=INPUT,  TAPE6=OUTPUT) 
+ 
+***    MARS 21/1989 (VERSION ORIGINALE: AVRIL 15/1987) - B. DUGAS. 
+ 
+***    MODIFIEE LE 04 AVRIL 1989 PAR B. DUGAS ... 
+***    ... POSSIBILITE DE LIRE PLUSIEURS ENREGISTREMENTS SUR MASKIN ET 
+***        CE POUR CHAQUE SERIE DE PARAMETRES. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+ 
+      LOGICAL     OK,UNIT3,ZERO 
+      CHARACTER   TYPE*4,LIGNE*80
+      REAL        VALUE,MASK1,MASK2,MASK3,V0
+      INTEGER     IBUF,IER,NUMBER,ALIGN,OFF,NF,NR,
+     +            NS,LENGTH,I,J,I0,I1,I2,I3,MAXR,IO
+ 
+      POINTER   ( IB,IBUF(8) )
+      POINTER   ( M1,MASK1(1) )
+      POINTER   ( M2,MASK2(1) )
+      POINTER   ( M3,MASK3(1) )
+
+      EXTERNAL    JCLPNT,GETLIGN,XIT,GETFLD2,
+     +            PUTFLD2,SETLAB,HPALLOC,PRECEDE
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/mkmask.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,1 )
+      CALL HPALLOC( M1,      MAXW, IER,1 )
+      CALL HPALLOC( M2,      MAXW, IER,1 )
+      CALL HPALLOC( M3,      MAXW, IER,1 )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5 
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+ 
+      ZERO   = .TRUE. 
+      LENGTH =  1 
+ 
+      UNIT3  = .TRUE. 
+ 
+***    READ INPUT PARAMETERS. 
+ 
+      NS = 0 
+  050 CALL GETLIGN( 5, LIGNE,80,OK )
+
+          IF (.NOT.OK)                                             THEN
+              GOTO 999
+          ELSE
+              READ( LIGNE, 5000, ERR=999,END=999,IOSTAT=IO ) 
+     +                           NUMBER,ALIGN,OFF
+              CALL BURNF
+          END IF
+ 
+***        CHECK FOR DEFAULTS. 
+ 
+          IF (ALIGN.LE.0 .OR. ALIGN.GT.3) ALIGN = 1 
+ 
+***        GO GET THE MASKING RECORD, ... 
+ 
+          CALL PRECEDE( 1,-1 )
+ 
+          NR = 0 
+  100     CALL GETFLD2( 1, MASK1, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+              IF (NR.EQ.0)                                     THEN 
+                  WRITE(6,6001) 
+                  CALL                             XIT(' Mkmask1',-1 ) 
+              ELSE 
+                  NS = NS+1 
+                  WRITE(6,6110) NS, NUMBER, ALIGN, OFF 
+                  GOTO 050 
+              END IF 
+          END IF 
+ 
+          WRITE(TYPE,0004) IBUF(1) 
+ 
+          MAXR = IBUF(5)*IBUF(6) 
+          IF (TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR' .OR.
+     +        TYPE.EQ.'CMPL')
+     +        MAXR = MAXR*2 
+ 
+          IF (ABS( OFF ).GT.MAXR)                              THEN 
+             WRITE(6,6002) ABS( OFF ),MAXR 
+             CALL                                  XIT(' Mkmask1',-2 ) 
+          END IF 
+ 
+***        SETUP OUTPUT BUFFER. 
+ 
+          CALL SETLAB( IBUF, 'GRID',-1,' ',-1,MAXR,1,-1,-32 ) 
+ 
+***        ... INITIALIZE MASK2 AND ... 
+ 
+          DO 150 I=1,MAXR 
+              MASK2(I) = 0 
+  150     CONTINUE 
+ 
+***        ... MODIFY IT ACCORDING TO THE INPUT PARAMETERS. 
+ 
+          IF (NUMBER.NE.0)                                     THEN 
+ 
+              NUMBER = ABS( NUMBER ) 
+              DO 350 I=1,MAXR 
+ 
+***                CHECK FOR AN EVENT. 
+ 
+                  IF (MASK1(I).NE.0)                           THEN 
+ 
+***                    IS THE EVENT STARTING ? 
+ 
+                      IF (ZERO)                                THEN 
+ 
+***                        YES IT IS. 
+ 
+                          ZERO   = .FALSE. 
+ 
+                          IF (ALIGN.EQ.1)                      THEN 
+ 
+                              I0 = I 
+
+                              I1 = MIN(
+     +                             MAXR, MAX(    1, I0+OFF )
+     +                                ) 
+                              I2 = MAX(
+     +                                1, MIN( MAXR, I0+OFF+NUMBER-1 )
+     +                                )
+
+                                            I3 =  1 
+                              IF (I1.GT.I2) I3 = -1 
+
+                              V0 = MASK1(I0) 
+ 
+                              DO 200 J=I1,I2,I3 
+                                  MASK2(J) = V0 
+  200                         CONTINUE 
+ 
+                          END IF 
+ 
+                      ELSE 
+ 
+***                        NO IT IS'NT. 
+ 
+                          LENGTH = LENGTH + 1 
+ 
+                      END IF 
+ 
+***                OR IS THIS THE END OF AN EVENT ? 
+ 
+                  ELSE IF (.NOT.ZERO)                          THEN 
+ 
+                      ZERO = .TRUE. 
+ 
+                      IF (ALIGN.EQ.2)                          THEN 
+ 
+                          I0 = I-1-LENGTH/2 
+
+                          I1 = MIN(
+     +                         MAXR, MAX(    1, I0+OFF )
+     +                            ) 
+                          I2 = MAX(
+     +                            1, MIN( MAXR, I0+OFF+NUMBER-1 )
+     +                            ) 
+
+                                        I3 =  1 
+                          IF (I1.GT.I2) I3 = -1 
+ 
+                          DO 250 J=I1,I2,I3 
+                              MASK2(J) = MASK1(J) 
+  250                     CONTINUE 
+ 
+                      ELSE IF (ALIGN.EQ.3)                     THEN 
+ 
+                          I0 = I-1 
+
+                          I1 = MIN(
+     +                         MAXR, MAX(    1, I0+OFF )
+     +                            ) 
+                          I2 = MAX(
+     +                            1, MIN( MAXR, I0+OFF+NUMBER-1 )
+     +                            ) 
+
+                                        I3 =  1 
+                          IF (I1.GT.I2) I3 = -1 
+
+                          V0 = MASK1(I0) 
+ 
+                          DO 300 J=I1,I2,I3 
+                              MASK2(J) = V0 
+  300                     CONTINUE 
+ 
+                      END IF 
+                      LENGTH = 1 
+ 
+                  END IF 
+ 
+  350         CONTINUE 
+ 
+          ELSE 
+ 
+***            DEFAULT CASE (AS IN XTRAC). 
+ 
+              DO 400 I=1,MAXR 
+                  MASK2(I) = MASK1(I) 
+  400         CONTINUE 
+ 
+          END IF 
+ 
+***        SAVE NEW MASK ONTO UNIT 2. 
+ 
+          CALL PUTFLD2( 2, MASK2, IBUF,MAXW ) 
+ 
+***        IF A SECOND OUTPUT FILE WAS SPECIFIED, CHECK WHETHER 
+***        ANOTHER MASK IS TO BE PRODUCED FROM THE FIRST TWO. 
+ 
+          IF (NF.EQ.3)                                         THEN 
+              VALUE = 0.0 
+              DO 450 I=1,MAXR 
+                  VALUE = MIN( VALUE, MASK1(I)-MASK2(I) )
+  450         CONTINUE 
+          ELSE 
+              VALUE = -1.0 
+          END IF 
+ 
+          IF (VALUE.GE.0.0)                                    THEN 
+ 
+***            REWIND UNIT 3 IF THIS HAS NOT BEEN DONE ALREADY. 
+ 
+              IF (UNIT3)                                       THEN 
+                  UNIT3  = .FALSE. 
+                  WRITE(6,6100) 
+              END IF 
+ 
+***            LET'S BUILD MASK3 ... 
+ 
+              J = 0 
+              DO 500 I=1,MAXR 
+                  IF (MASK1(I).NE.0.0)                         THEN 
+                      J = J+1 
+                      IF (MASK2(I).NE.0.0)                     THEN 
+                          MASK3(J) = 1.0 
+                      ELSE 
+                          MASK3(J) = 0.0 
+                      END IF 
+                  END IF 
+  500         CONTINUE 
+ 
+***            ... AND SAVE IT. 
+ 
+              IBUF(5) = J 
+              CALL PUTFLD2( 3, MASK3, IBUF,MAXW )
+ 
+          END IF 
+ 
+      NR = NR+1 
+      GOTO 100 
+ 
+***    E.O.F. ON INPUT. 
+ 
+  999 IF (NR.EQ.0)                                             THEN 
+          WRITE(6,6003) 
+          CALL                                     XIT(' Mkmask1',-3 ) 
+      END IF 
+ 
+      WRITE(6,6000) NR 
+      CALL                                         XIT(' Mkmask1', 0 ) 
+*----------------------------------------------------------------------- 
+
+ 0004 FORMAT(A4) 
+
+ 5000 FORMAT(10X,3I5) 
+
+ 6000 FORMAT('0',I5,' Mask(s) written to unit 2.') 
+ 6001 FORMAT('0Mkmask1 aborting for lack of masking record...') 
+ 6002 FORMAT('0Offset, lenght of record =',2I6) 
+ 6003 FORMAT('0Mkmask1 aborting for lack of input information.') 
+ 6100 FORMAT('0Mask subset to be written onto unit 3.') 
+ 6110 FORMAT(' Set No. ',I3,', number, alignment and offset =',3I5) 
+ 
+      END 
+      SUBROUTINE MKMASK2 
+*    1                  (      MSKIN1,       MSKIN2,         MSKOUT, 
+*    2                   TAPE1=MSKIN1, TAPE2=MSKIN2,   TAPE3=MSKOUT, 
+*    3                         OUTPUT, TAPE6=OUTPUT) 
+ 
+***    MARS 23/1989 - B. DUGAS. 
+ 
+***    MODIFIEE LE 05 AVRIL 1989 PAR B. DUGAS ... 
+***    ... ON LIT TOUS LES ENREGISTREMENTS SUR MSKIN2 POUR CHAQUE 
+***        ENREGISTREMENT DE MSKIN1. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+ 
+      LOGICAL     OK 
+      CHARACTER*4 TYPE,NAME
+      REAL        MASK1,MASK2,MASK3 
+      INTEGER     I,J,IBUF,IER,NF,KIND,NM1,
+     +            LEVL,MAXR1,MAXR2,NM2
+ 
+      POINTER   ( IB,IBUF(8) )
+      POINTER   ( M1,MASK1(1) )
+      POINTER   ( M2,MASK2(1) )
+      POINTER   ( M3,MASK3(1) )
+
+      EXTERNAL    JCLPNT,XIT,GETFLD2,SETLAB,PUTFLD2,HPALLOC,PRECEDE
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/mkmask.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,1 )
+      CALL HPALLOC( M1,      MAXW, IER,1 )
+      CALL HPALLOC( M2,      MAXW, IER,1 )
+      CALL HPALLOC( M3,      MAXW, IER,1 )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2,3, 6 )
+ 
+***    GO GET THE FIRST MASKING RECORD ... 
+ 
+      NM1 = 0 
+  050 CALL GETFLD2( 1, MASK1, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+      IF (.NOT.OK)                                             THEN 
+          IF (NM1.EQ.0)                                        THEN 
+              WRITE(6,6001) 
+              CALL                                 XIT(' Mkmask2',-1 ) 
+          END IF 
+          WRITE(6,6000) NM1,NM2 
+          CALL                                     XIT(' Mkmask2', 0 ) 
+      END IF 
+ 
+***    ... SAVE A FEW CONSTANTS ... 
+ 
+      IF (NM1.EQ.0)
+     +    CALL PRTLAB2(' first record in from unit #1 ...', IBUF )
+ 
+      KIND  =  IBUF(1) 
+      LEVL  =  IBUF(4) 
+      MAXR1 =  IBUF(5)*IBUF(6) 
+      WRITE(TYPE,0004) IBUF(1) 
+      WRITE(NAME,0004) IBUF(3) 
+ 
+      IF (TYPE.EQ.'SPEC' .OR. TYPE.EQ.'FOUR') 
+     +    MAXR1 = MAXR1*2 
+ 
+***    ... AND GET THE SECOND MASKING RECORD. 
+ 
+      NM2 = 0 
+  100 CALL GETFLD2( 2, MASK2, TYPE,-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+ 
+              IF (NM2.EQ.0)                                    THEN 
+                  WRITE(6,6002) 
+                  CALL                             XIT(' Mkmask2',-2 ) 
+              END IF 
+ 
+              NM1 = NM1+1 
+              CALL PRECEDE( 2,-1 )
+              GOTO 050 
+ 
+          END IF 
+ 
+          MAXR2 = IBUF(5)*IBUF(6) 
+          IF (TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR' .OR.
+     +        TYPE.EQ.'CMPL')
+     +        MAXR2 = MAXR2*2 
+ 
+          IF (NM1.EQ.0 .AND. NM2.EQ.0)
+     +        CALL PRTLAB2(' First record in from unit #2 ...', IBUF )
+ 
+***        CHECK FOR CONSISTENCY. 
+ 
+          IF (MAXR2.NE.MAXR1)                                   THEN 
+              WRITE(6,6003) NM2+1, MAXR1,MAXR2 
+              CALL                                 XIT(' Mkmask2',-3 ) 
+          END IF 
+ 
+***        LET'S BUILD AND ... 
+ 
+          J = 0 
+          DO 150 I=1,MAXR1 
+              IF (MASK1(I).NE.0.0)                             THEN 
+                  J = J+1 
+                  MASK3(J) = MASK2(I) 
+              END IF 
+  150     CONTINUE 
+ 
+***        ... AND SAVE MASK3. 
+ 
+          CALL SETLAB( IBUF, 'GRID',-1,NAME,LEVL,J,1,-1,-32 ) 
+          CALL PUTFLD2( 3, MASK3, IBUF,MAXW ) 
+ 
+      NM2 = NM2+1 
+      GOTO 100 
+*----------------------------------------------------------------------- 
+ 
+ 0004 FORMAT(A4) 
+
+ 6000 FORMAT('0 (',I5.5,'*',I5.5,') Mask(s) written to unit 3.') 
+ 6001 FORMAT('0Mkmask2 aborting for lack of unit 1 mask record...') 
+ 6002 FORMAT('0Mkmask2 aborting for lack of unit 2 mask record...') 
+ 6003 FORMAT('0At record no. ',I4,',', 
+     +       ' The two input mask do not have the same lenght,', 
+     +       ' Mask1/Mask2= ',2I6) 
+ 
+      END 
+      SUBROUTINE MKMASK3 
+*    1                  (      MSKIN1,       MSKIN2,         MSKOUT,
+*    2                   TAPE1=MSKIN1, TAPE2=MSKIN2,   TAPE3=MSKOUT, 
+*    3                         OUTPUT, TAPE6=OUTPUT) 
+ 
+***    MA1 02/1989 - B. DUGAS. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+
+      LOGICAL     OK 
+      CHARACTER*4 TYPE,NAME
+      REAL        MASK1,MASK2,MASK3 
+      INTEGER     I,J,IBUF,IER,NF,KIND,
+     +            LEVL,MAXR1,MAXR2,MAXR3,NM
+ 
+      POINTER   ( IB,IBUF(8) )
+      POINTER   ( M1,MASK1(1) )
+      POINTER   ( M2,MASK2(1) )
+      POINTER   ( M3,MASK3(1) )
+
+      EXTERNAL    JCLPNT,XIT,GETFLD2,SETLAB,PUTFLD2,HPALLOC
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/mkmask.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,1 )
+      CALL HPALLOC( M1,      MAXW, IER,1 )
+      CALL HPALLOC( M2,      MAXW, IER,1 )
+      CALL HPALLOC( M3,      MAXW, IER,1 )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2,3, 6 )
+ 
+***    GO GET THE FIRST MASKING RECORD OF UNIT#1 ... 
+ 
+      CALL GETFLD2( 1, MASK1, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+      IF (.NOT.OK)                                             THEN 
+          WRITE(6,6001) 
+          CALL                                     XIT(' Mkmask3',-1 ) 
+      END IF 
+ 
+***    ... AND SAVE A FEW CONSTANTS. 
+ 
+      CALL PRTLAB2(' first record in from unit #1 ...', IBUF )
+ 
+      KIND  = IBUF(1) 
+      LEVL  = IBUF(4) 
+      MAXR1 = IBUF(5)*IBUF(6) 
+      WRITE(TYPE,0004) IBUF(1) 
+      WRITE(NAME,0004) IBUF(3) 
+ 
+      IF (TYPE.EQ.'SPEC' .OR.
+     +    TYPE.EQ.'FOUR' .OR.
+     +    TYPE.EQ.'CMPL')
+     +    MAXR1 = MAXR1*2 
+ 
+***    HOW MANY NON-ZERO POINTS IN MASK1 ? 
+ 
+      MAXR2 = 0 
+      DO 100 I=1,MAXR1 
+          IF (MASK1(I).NE.0.0) MAXR2 = MAXR2+1 
+  100 CONTINUE 
+ 
+***    GET THE SECOND SET OF MASKING RECORDS. 
+ 
+      NM = 0 
+  200 CALL GETFLD2( 2, MASK2, TYPE,-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+ 
+              IF (NM.EQ.0)                                     THEN 
+                  WRITE(6,6002) 
+                  CALL                             XIT(' Mkmask3',-2 ) 
+              END IF 
+ 
+              WRITE(6,6000) NM 
+              CALL                                 XIT(' Mkmask3', 0 ) 
+ 
+          END IF 
+ 
+          MAXR3 = IBUF(5)*IBUF(6) 
+          IF (TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR' .OR.
+     +        TYPE.EQ.'CMPL')
+     +        MAXR3 = MAXR3*2 
+ 
+          IF (NM.EQ.0)
+     +    CALL PRTLAB2(' First record in from unit #2 ...', IBUF )
+ 
+***        CHECK FOR CONSISTENCY. 
+ 
+          IF (MAXR3.NE.MAXR2)                                  THEN 
+              WRITE(6,6003) NM+1, MAXR2,MAXR3 
+              CALL                                 XIT(' Mkmask3',-3 ) 
+          END IF 
+ 
+***        LET'S INITIALIZE, ... 
+ 
+          DO 300 I=1,MAXR1 
+              MASK3(I) = 0.0 
+  300     CONTINUE 
+ 
+***        ... BUILD AND ... 
+ 
+          J = 0 
+          DO 400 I=1,MAXR1 
+              IF (MASK1(I).NE.0.0)                             THEN 
+                  J = J+1 
+                  MASK3(I) = MASK2(J) 
+              END IF 
+  400     CONTINUE 
+ 
+***        ... SAVE MASK3. 
+ 
+          CALL SETLAB( IBUF, 'GRID',-1,NAME,LEVL,MAXR1,1,-1,-32 ) 
+          CALL PUTFLD2( 3, MASK3, IBUF,MAXW ) 
+ 
+      NM = NM+1 
+      GOTO 200 
+*----------------------------------------------------------------------- 
+ 
+ 0004 FORMAT(A4) 
+
+ 6000 FORMAT('0 ',I5.5,' Mask(s) written to unit 3.') 
+ 6001 FORMAT('0 Aborting for lack of unit#1 mask record...') 
+ 6002 FORMAT('0 Aborting for lack of unit#2 mask record...') 
+ 6003 FORMAT('0At record no. ',I4/ 
+     +       ' The second input mask does not have the same number', 
+     +       ' of points as the first input mask'/ 
+     +       ' Has non-zero values ... Mask1/Mask2= ',2I6) 
+ 
+      END 
+#     endif

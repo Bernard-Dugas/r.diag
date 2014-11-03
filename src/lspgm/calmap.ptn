@@ -1,0 +1,385 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 300000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      calmap  DATAIN MOUT FOUT INPUT OUTPUT [-lx VAL1 -ly VAL2 -d60  VAL3
+*                                              -i VAL4  -j VAL5 -dgrw VAL6]
+*
+*
+*     DESCRIPTION...
+*      calmap - CALCUL LES FACTEURS MAPSCALE ET DE CORIOLIS
+*
+*     AUTHORS  - SANDRA TURNER, BERTRAND DENIS, SEBASTIEN BINER, JUL 08/93
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/calmap.ptn,v 4.9 2014/09/25 20:20:45 dugas Exp $     
+*          
+*
+*     PURPOSE - CALCUL DU FACTEUR D'ECHELLE HORIZONTAL STEREOGRAPHIQUE
+*               POLAIRE ET DU FACTEUR DE CORIOLIS POUR CHACUN DES
+*               POINTS DE LA GRILLE A PARTIR DE L'INFORMATION DU
+*               FICHIER DATA ATTACHE A CETTE DERNIERE
+*
+*
+*     INPUT FILE...
+*        DATAIN = PARAMETRE DE GRILLE DU RCM
+*
+*     OUTPUT FILE...
+*        MOUT = FACTEUR D'ECHELLE
+*        FOUT = PARAMETRE DE CORIOLIS
+*
+*
+*     PARAMETERS...
+*
+*       NI  (lx) = NOMBRE DE POINTS DE GRILLE SELON X
+*       NJ  (ly) = NOMBRE DE POINTS DE GRILLE SELON Y
+*       PII (i)  = NOMBRE DE POINTS DE GRILLE SELON X
+*                  ENTRE L'ORIGINE ET LE POLE
+*       PJJ (j)  = NOMBRE DE POINTS DE GRILLE SELON Y
+*                  ENTRE L'ORIGINE ET LE POLE
+*       D60      = LONGUEUR DE LA MAILLE VRAIE A 60 DEGRES DE LATITUDE
+*       DGRW     = ORIENTATION P/R AU MERIDIEN DE GRENWITCH (DEGRES)
+*       NHEM     = HEMISPHERE (0,1=NORD,2=SUD)
+*
+*       NOTES:  1) LE PARAMETRE DGRW N'EST UTILISE QU'AVEC LES FICHIERS SQI
+*               2) IL EST IMPORTANT DE SAVOIR QUE TOUS CES PARAMETRES SONT
+*                  FACULTATIFS SI LE FICHIER DATAIN EXISTE DEJA:
+*                  A) SI CELUI-CI EST UN FICHIER CCC, LES VALEURS
+*                     SONT ALORS LUES DE DATAIN(1), DATAIN(2), DATAIN(4),
+*                     DATAIN(5), DATAIN(6) ET DATAIN(12), RESPECTIVEMENT.
+*                  B) PAR CONTRE, SI DATAIN EST UN FICHIER SQI, L'INFORMATION
+*                     EST RECUPEREE DANS LA LISTE DES DESCRIPTEURS INTERNES
+*                     DU PREMIER ENREGISTREMENT DU FICHIER.
+*
+*       >>>>>  DANS LES CAS A) ET B), LE PROGRAMME NE LIRA RIEN D'AUTRES <<<<<
+*              
+*       READ(5,5011) NI,NJ,PII,PJJ,D60,NHEM,DGRW
+*5011   FORMAT(10X,2I5,3F10.1,I5,E10.0)
+*
+*
+C     EXEMPLE DE CARTE D'ENTRE...
+*
+*CALMAP     121  121       63.      175.    45000.    1      270.
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEM READING THE DIRECTIVE CARD
+*       2 NI,NJ,D60 OR DGRW INCORRECTLY SPECIFIED
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM calmap
+*     PROGRAM CALMAP (DATAIN,       MOUT,       FOUT,
+*    1          TAPE1=DATAIN, TAPE2=MOUT, TAPE3=FOUT, 
+*    2          INPUT,OUTPUT, TAPE5=INPUT,TAPE6=OUTPUT
+*     -------------------------------------------------------------
+*     $Log: calmap.ptn,v $
+*     Revision 4.9  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2004/11/26 15:52:33  dugas
+*     Modifier le critere de lecture de DATAIN.
+*
+*     Revision 4.5  2001/03/17 01:00:07  armnrbd
+*     Utiliser PUTHIGH/GETHIGH plutot qur PUTPARC/GETXGI.
+*
+*     Revision 4.4  1998/07/03 02:26:21  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.3  1998/05/21  20:20:45  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.2  1996/12/12  20:00:37  armnrbd
+*     Modifier le support des fichiers SQI, notamment
+*     par la lecture du parametre DGRW.
+*
+*     Revision 4.1  1996/12/11  20:17:37  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.0  1995/11/10  18:04:16  armnrbd
+*     Version initiale.
+*
+
+*     MAR 25/94 - G. BERGERON (DATAIN EN PARAMETRE DE CONTROLE)
+*     MAR 15/94 - M.GIGUERE (AUGMENTER DATAIN ET MODIFIER LECTURE DES PARAM.)
+*     JUL 08/93 - S.TURNER, B.DENIS, S.BINER
+
+*-----------------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: MAXW = grille_maximale
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+
+      LOGICAL     OK
+      REAL(8)     PI,RAD
+      CHARACTER(4) LIGNE*80,CORN,PKTYP,STATUS
+      INTEGER     NI,NJ,IER,IO,HEM,NFF,MAXS,LEN,NWDS,IPAK
+      REAL        DX,COR,SCF, RE,RS
+
+      integer,    allocatable,dimension(:) :: ibuf
+      real,       allocatable,dimension(:) :: datain,f,sf
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      CHARACTER   GRTYP
+      INTEGER     IG1,IG2,IG3,IG4
+      REAL        PII,PJJ,D60,DGRW
+
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETHIGH,GETSIZ
+      CHARACTER(4),EXTERNAL ::  GETHIC,GETYP
+      EXTERNAL    JCLPNT,GETLIGN,SCALFAC,
+     +            BURNF,GETFLD2,PUTFLD2,XIT,SETLAB,
+     +            GETSTAT,CIGAXG,CXGAIG,PUTHIC,PUTHIGH
+
+*     PI   = LE NOMBRE PI
+*     PHI0 = LATITUDE DE REFERENCE, C'EST A DIRE 60 DEGRES NORD
+*     SCF  = FACTEUR D'ECHELLE DE REFERENCE (I.E.(1 + SIN(PHI0)))
+*     RAD  = RAYON DE LA TERRE EN KILOMETRE (KM)
+*     DX   = D60 EXPRIME EN KILOMETRE (KM)
+
+      DATA PI / 3.14159265358987 /, RAD / 6371.22 /
+      DATA CORN / 'F' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/calmap.ptn,v $'
+
+*---------------------------------------------------------------------- 
+      ALLOCATE( ibuf(MAXW+HEAD),datain(MAXW),f(MAXW),sf(MAXW) )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 5
+      CALL JCLPNT( NFF, 1,2,3, 5,6 )
+
+***    DETERMINER LE STATUT DU FICHIER ASSOCIE A L'UNITE I/O 1
+
+      CALL GETSTAT( 1,STATUS )
+
+      IF (STATUS.EQ.'OLD' .AND. NFF.EQ.3)                      THEN
+
+          PKTYP = GETYP( 1 )
+
+          IF (PKTYP.EQ.'PK84' .OR. PKTYP.EQ.' ')               THEN
+
+***            LECTURE DE DATAIN
+
+              CALL GETFLD2( 1, DATAIN, 'DATA',-1,' ',-1, IBUF,MAXW,OK )
+
+              IF (OK)                                          THEN
+                  NI  = INT( DATAIN( 1)+0.5 )
+                  NJ  = INT( DATAIN( 2)+0.5 )
+                  PII =      DATAIN( 4)
+                  PJJ =      DATAIN( 5)
+                  D60 =      DATAIN( 6)
+                  HEM = INT( DATAIN(12)+0.5 )
+              END IF
+
+          ELSE
+
+***            L'INFORMATION SE TROUVE DANS LE TAMPON
+***            DES DESCRIPTEURS DU PREMIER ENREGISTREMENT.
+
+              MAXS = GETSIZ( 1, IBUF,LEN,NWDS,IPAK )
+
+              IF (MAXS.GT.0)                                   THEN
+
+                  NI  = IBUF(5)
+                  NJ  = IBUF(6)
+                  HEM = IBUF(7)
+
+                  GRTYP = GETHIC ('GRTYP',IBUF )
+                  IG1   = GETHIGH('IG1'  ,IBUF )
+                  IG2   = GETHIGH('IG2'  ,IBUF )
+                  IG3   = GETHIGH('IG3'  ,IBUF )
+                  IG4   = GETHIGH('IG4'  ,IBUF )
+
+                  CALL CIGAXG( GRTYP, PII,PJJ,D60,DGRW,
+     +                                IG1,IG2,IG3,IG4 )
+                  
+                  OK  = .TRUE.
+
+              END IF
+
+          END IF
+
+      ELSE
+
+***        VERIFIER LE TYPE DU FICHIER DE SORTIE.
+
+          PKTYP = GETYP( 0 )
+
+      END IF
+      IF (.NOT.OK)                                             THEN
+
+          IF (RPBLOC( ' ',LIGNE ))                             THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+              NI   = 0
+              NJ   = 0
+              PII  = 0.0
+              PJJ  = 0.0
+              D60  = 0.0
+              DGRW = 0.0
+              HEM  = 1
+
+              OK = RPBLOC('LX',LIGNE)
+              IF (OK) READ( LIGNE, 05, END=901,ERR=901,IOSTAT=IO ) NI
+
+              OK = RPBLOC('LY',LIGNE)
+              IF (OK) READ( LIGNE, 05, END=901,ERR=901,IOSTAT=IO ) NJ
+
+              OK = RPBLOC('I',LIGNE)
+              IF (OK) READ( LIGNE, 10, END=901,ERR=901,IOSTAT=IO ) PII
+
+              OK = RPBLOC('J',LIGNE)
+              IF (OK) READ( LIGNE, 10, END=901,ERR=901,IOSTAT=IO ) PJJ
+
+              OK = RPBLOC('D60',LIGNE)
+              IF (OK) READ( LIGNE, 10, END=901,ERR=901,IOSTAT=IO ) D60
+
+              OK = RPBLOC('DGRW',LIGNE)
+              IF (OK) READ( LIGNE, 10, END=901,ERR=901,IOSTAT=IO ) DGRW
+
+              OK = RPBLOC('NHEM',LIGNE)
+              IF (OK) READ( LIGNE, 05, END=901,ERR=901,IOSTAT=IO ) HEM
+
+          ELSE
+
+              CALL GETLIGN( 5,LIGNE,80,OK )
+
+              IF (.NOT.OK)                                     THEN
+
+                  GOTO 901
+
+              ELSE
+
+                  READ( LIGNE,  5011,ERR=901,END=901,IOSTAT=IO)
+     +                          NI,NJ,PII,PJJ,D60,HEM,DGRW
+
+              END IF
+
+              CALL BURNF
+
+          END IF
+
+      END IF
+
+      IF (DGRW.LT.0.0 ) DGRW = DGRW+360.
+      IF (HEM .EQ. 0  ) HEM  = 1
+
+      WRITE(6,6009) NI,NJ,PII,PJJ,D60,HEM
+
+      DX  = D60/1000.0
+      COR = 2.0*7.292E-05
+      SCF = 1.0+SIN(PI/3.0)
+      RE  = SCF*RAD/DX
+      RS  = RE**2
+
+***    VERIFIER QUE NI,NJ, D60 ET DGRW SONT CORRECTEMENT SPECIFIES.
+
+      IF (NI .LE.  0  .OR.
+     +    NJ .LE.  0  .OR.
+     +    D60.LE. 0.0 ) CALL                       XIT(' Calmap ',-2 ) 
+
+      IF (DGRW.LT.0.0  .OR.
+     +    DGRW.GT.360.) CALL                       XIT(' Calmap ',-2 )
+
+      IF (NI*NJ.GT.MAXW)                                       THEN
+          WRITE(6,6010) NI*NJ,MAXW
+          CALL                                     XIT(' Calmap ',-2 )
+      END IF
+
+***    CALCUL DU FACTEUR D'ECHELLE ET DU PARMETRE DE CORIOLIS
+
+      CALL SCALFAC( SF,F, NI,NJ,PII,PJJ,RS,SCF,COR )
+
+***    DEFINIR L'ETIQUETTE POUR LE FICHIER
+***    DE SORTIE DU FACTEUR D'ECHELLE
+
+      IF (PKTYP(1:2).EQ.'SQ')                                  THEN
+
+          IF (HEM.EQ.1) GRTYP = 'N'
+          IF (HEM.EQ.2) GRTYP = 'S'
+
+          CALL CXGAIG( GRTYP, IG1,IG2,IG3,IG4,
+     +                        PII,PJJ,D60,DGRW )
+
+          CALL PUTHIC( GRTYP,'GRTYP',IBUF )
+          CALL PUTHIGH(  IG1,'IG1'  ,IBUF )
+          CALL PUTHIGH(  IG2,'IG2'  ,IBUF )
+          CALL PUTHIGH(  IG3,'IG3'  ,IBUF )
+          CALL PUTHIGH(  IG4,'IG4'  ,IBUF )
+
+          CALL SETLAB( IBUF, 'SUBA',0,'M',0,NI,NJ,HEM,-32 )
+
+      ELSE
+
+          CALL SETLAB( IBUF, 'GRID',0,'M',0,NI,NJ,HEM,-32 )
+
+      END IF
+
+***    ARCHIVER LE FACTEUR D'ECHELLE SUR FICHIER XOUT
+
+      CALL PUTFLD2( 2, SF, IBUF,MAXW )
+      CALL PRTLAB( IBUF )
+
+***    DEFINIR L'ETIQUETTE POUR LE FICHIER
+***    DE SORTIE DU PARAMETRE DE CORIOLIS
+
+      READ(CORN,0004) IBUF(3)
+
+***    ARCHIVER LE PARAMETRE DE CORIOLIS 
+
+      CALL PUTFLD2( 3, F, IBUF,MAXW )
+      CALL PRTLAB( IBUF )
+
+      CALL                                         XIT(' Calmap ', 0 )
+ 901  CALL                                         XIT(' Calmap ',-1 )
+*----------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5011 FORMAT(10X,2I5,3F10.1,I5,E10.0)
+
+ 6009 FORMAT(' Nombre de points de grille selon X =',I5/
+     +       ' Nombre de points de grille selon Y =',I5/
+     +       " Distance entre l'origine et le pole selon X =",F10.1/
+     +       " Distance entre l'origine et le pole selon Y =",F10.1/
+     +       ' Longueur de la maille D60=',F10.1/
+     +       ' Hemisphere =',I5)
+ 6010 FORMAT(' NI*NJ =',I7,' > ',I7,'= MAXW.')
+
+      END
+#     endif

@@ -1,0 +1,230 @@
+#if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      txtplot  INPUT OUTPUT [ -kind VALUE1 ]
+*
+*
+*     DESCRIPTION...
+*      txtplot - PLOT A TEXT RECORD ON A FRAME. THE GAPHIC OUTPUT
+*                IS WRITTEN TO FILE METACOD.
+*
+*
+*     AUTHOR   - R.Laprise, DEC 19/84.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/txtplot.ptn,v 4.4 2014/09/25 20:20:55 dugas Exp $
+*
+*
+*     INPUT PARAMETERS...
+*
+*      ISIZ (kind) = CHARACTER SIZE (DEFAULTS TO 2).
+*      LINE        = 132 CHARACTERS LINE OF TEXT. THE PROGRAM DOES NOT
+*                    SET A LIMIT TO THE NUMBER OF SUCH LINES.
+*
+*      READ( 5,5000 ) ISIZ
+*      DO I=1,FOREVER
+*         READ( 5,5010,END=1000 ) LINE
+*         ---> CODE TO PLOT LINE <---
+*      END DO
+*1000  CONTINUE       
+*5000  FORMAT(10X,I5)
+*5010  FORMAT(A)
+*
+*
+*     EXAMPLE OF INPUT CARD(S)...
+*
+*TXTPLOT    2
+* PLEASE SEND THESE PLOTS TO...
+*
+*                     R.LAPRISE
+*                     UQAM - DEP DE PHYSIQUE
+*                     MONTREAL
+*
+* END-END-END-END-END-END-END-END-END-END-END-END-END-END-END-END
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR ON FIRST LINE OF INPUT
+#endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#if !defined (NO_SOURCE)
+      PROGRAM txtplot
+*    +                (INPUT,       OUTPUT,
+*    +           TAPE5=INPUT, TAPE6=OUTPUT)
+*     -------------------------------------
+ 
+*     $Log: txtplot.ptn,v $
+*     Revision 4.4  2014/09/25 20:20:55  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.3  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.2  1998/06/11 17:06:52  armnrbd
+*     Corriger le calcul de YINC et YSTART.
+*
+*     Revision 4.1  1997/10/10  19:05:36  armnrbd
+*     Augmenter le nombre de caracteres par lignes.
+*     Espacement et positions verticales sont proportionnels
+*       a la taille des caracteres.
+*
+*     Revision 4.0  1994/11/17  14:22:16  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:20  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  93/06/29  13:23:43  armnrbd
+*     Implanter l'usage de RPBLOC avec ISIZ variable.
+*     
+*     Revision 1.3  93/05/29  23:37:41  armnrbd
+*     Ajouter le parametre kind.
+*     Lire la taille ISIZ sur la premiere ligne.
+*     
+*     Revision 1.2  92/03/17  15:32:37  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.1  92/03/16  09:14:42  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:01  armnrbd
+*     Initial revision
+*     
+*     AUG 26/91 - B.DUGAS, RPN (VERSION CY920/IRIX F77)
+*     DEC 19/84 - R.LAPRISE.
+
+*-----------------------------------------------------------------------
+*     NOTE THAT FOR 1 < ISIZ < 4 NOT ALL CHARACTERS WILL FIT ON ONE LINE
+
+      IMPLICIT     none
+
+      CHARACTER    LINE*132
+      LOGICAL      RPBLOC,OK
+      INTEGER      I,IO,IOR,ISIZ,NFF,LENLIN
+      REAL         Y,YINC,YMIN,YSTART,XSTART,SIZE
+
+      EXTERNAL     JCLPNT,SYSDAT,OPTN,SET,GETLIGN,
+     +             LOW2UP,PWRIT,FRAME,XIT,RPBLOC
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+ 
+      DATA         IOR   /  0  /, 
+     +             XSTART/ .00 /, 
+     +             YSTART/ .90 /, 
+     +             YINC  / .05 /, 
+     +             YMIN  / .05 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/txtplot.ptn,v $'
+
+*-----------------------------------------------------------------------
+      NFF = 2
+      CALL JCLPNT( NFF, 5,6 )
+
+      CALL SYSDAT
+      CALL OPTN( 4HCASE,4 )
+      CALL SET( 0.01,0.99,0.01,0.99, 0.,1.,0.,1., 1 )
+
+      I = 0
+      Y = YSTART
+
+      IF (RPBLOC( ' ',LINE ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ISIZ = -1
+
+          OK = RPBLOC('KIND',LINE)
+          IF (OK) READ( LINE,'(BN,I5)') ISIZ
+
+      ELSE
+
+***        READ ISIZ
+
+          CALL GETLIGN( 5,LINE,132,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LINE, 5000,ERR=901,END=901,IOSTAT=IO) ISIZ
+          END IF
+
+      END IF
+
+      IF (ISIZ.LT.0) ISIZ = 2
+
+      IF (ISIZ.LT.3)                                           THEN
+          SIZE = (ISIZ+1)*4+4
+      ELSE IF (ISIZ.EQ.3)                                      THEN 
+          SIZE = 24
+      ELSE
+          SIZE = ISIZ
+      END IF
+
+      YINC   = YINC*(SIZE/16.)
+      YSTART = 1.-(1.0-YSTART)*(SIZE/16.)
+
+***    READ AND PLOT LINES OF TEXT.
+
+  100 CALL GETLIGN( 5,LINE,132,OK )
+          IF (.NOT.OK) GOTO 700
+
+          I = I+1
+          CALL LOW2UP( LINE,LINE )
+          DO 200 LENLIN=132,2,-1
+              IF (LINE(LENLIN:LENLIN).NE.' ') GOTO 201
+  200     CONTINUE
+
+  201     WRITE(6,6010) I,LINE
+
+          IF (Y.LE.YMIN)                                       THEN
+              CALL PWRIT( .97,.97,1HX,4,ISIZ,IOR,0 )
+              CALL FRAME
+              Y = YSTART
+              CALL OPTN( 4HCASE,4 )
+          END IF
+
+          CALL PWRIT( XSTART,Y,LINE,LENLIN,ISIZ,IOR,0 )
+          Y = Y-YINC
+
+      GOTO 100
+
+***    INPUT SECTION IS FINISHED.
+
+  700 CALL PWRIT(.97,.97,1HX,4,ISIZ,IOR,0)
+      CALL FRAME
+      CALL                                         XIT(' Txtplot', 0 )
+
+***    E.O.F. ON INPUT.
+
+  901 CALL                                         XIT(' Txtplot',-1 )
+
+*-----------------------------------------------------------------------
+ 5000 FORMAT(10X,I5)
+ 6010 FORMAT(1X,I5,5X,A)
+
+      END
+#endif

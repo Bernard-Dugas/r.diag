@@ -1,0 +1,760 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      enleve IN OUT INPUT OUTPUT \ 
+*          [ -t1    VAL01 -t2  VAL02 -t3   VAL03 \ 
+*            -lv1   VAL04 -lv2 VAL05 -kind VAL06 \ 
+*            -name "VAL07"  ["VAL08"  ["VAL09" ["VAL10" ["VAL11" ... \ 
+*                  "VAL12"  ["VAL13"  ["VAL14" ["VAL15" ["VAL16" ]]]]]]]]] ]
+*                                                  
+*
+*     DESCRIPTION...
+*      ENLEVE  - DELETES UP TO FOUR VARIABLES FROM A FILE 
+* 
+*
+*     AUTHOR  - R.Laprise, NOV 07/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/enleve.ptn,v 4.15 2014/09/25 20:20:47 dugas Exp $
+* 
+*
+*     PURPOSE - DELETES RECORDS FROM FILE IN FOR ALL TIMESTEPS AND LEVELS 
+*               BETWEEN REQUESTED INTERVALS THEN PUTS THE RESULT ON FILE OUT. 
+*
+*     NOTES   - 1) LABEL RECORDS ARE IGNORED (PASSED DIRECTLY TO FILE OUT).
+*               2) STEP NUMBERS ARE ASSUMED TO BE INCREASING. 
+* 
+*
+*     INPUT FILE... 
+*      IN  = FILE TO BE COPIED. 
+*            (THIS FILE MUST BE ORDERED BY TIMESTEP NUMBER) 
+* 
+*     OUTPUT FILE... 
+*      OUT = FILE COPIED FROM IN WITH DELETIONS. 
+* 
+*
+*     INPUT PARAMETERS... 
+* 
+*      NT1,NT2 (t1,t2) = TIMESTEP INTERVAL TO BE DELETED, (INCLUSIVE). 
+*      INT      (t3)   = DATA IS DELETED EVERY INT STEPS FROM STEP NT1. 
+*      LV1,LV2         = LEVEL INTERVAL TO BE DELETED (LV2 >= LV1).
+*                        IN COMMAND-LINE MODE, LV1 AND LV2 MAY ALSO BE THE REAL
+*                        DECODED LEVEL VALUES. IN THAT CASE, THE KIND PARAMETER
+*                        *** ABSOLUTELY HAS TO BE SPECIFIED ***.
+*      KIND            = VERTICAL LEVEL TYPE. ONLY USE THIS WITH IN RPN STD FILES
+*                        AND WHEN LV1 AND LV2 CONTAIN DECODED VALUES. FURTHERMORE,
+*                        THIS PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
+*                        THE CURRENTLY SUPPORTED VALUES ARE:
+*                        'HAUTEUR'   , heights (m) with respect to sea level
+*                        'SIGMA'     , classical terrain following (0.0 -> 1.0)
+*                        'ETA'       , first version of the GEM ETA coordinate
+*                        'PRESSION'  , pressure (mb)
+*                        'ARBITRAIRE', arbitrary level (no units apply)
+*                        'HAUTEURS'  , heights (M) with respect to the surface
+*                        'HYBRIDE'   , hybrid GEM coordinate
+*                        'THETA'     , potential temperature coordinate
+*                        'GALCHEN'   , GalChen generalized coordinate
+*      NAME1,...,NAME10= NAMES TO BE DELETED, OF WHICH ONLY THE FIRST FOUR CAN
+*                        BE DEFINED USING INPUT CARD INPUT.
+*
+*      READ( 5,5010 ) NT1,NT2,ANT1,ANT2, LV1,LV2,
+*    +                NAME1,NAME2,NAME3,NAME4 
+*5010  FORMAT(10X,5X,2I10,2A5,2I5,5X,4(1X,A4)) 
+*
+* 
+*     EXAMPLE OF INPUT CARD... 
+* 
+* ENLEVE STEP           0        24    6 LEVS  100  950 NAME VORT  DIV 
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*       1 INCONSISTENT VALUES IN INPUT PARAMETERS
+*       2 NOT OK IN FILEV/GETSET2 AT THE FIRST SET
+*       4 MORE THAN ONE KIND OF INPUT LEVEL REQUESTED
+*
+*     NON-FATAL CONDITIONS...
+*     101 NO NAME,LEVEL OR TIMESTEP SPECIFIED
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ENLEVE 
+*     PROGRAM ENLEVE (IN,       OUT,       INPUT,       OUTPUT, 
+*    1          TAPE1=IN, TAPE2=OUT, TAPE5=INPUT, TAPE6=OUTPUT) 
+*     --------------------------------------------------------- 
+
+*     $Log: enleve.ptn,v $
+*     Revision 4.15  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.14  2010/05/06 16:24:37  dugas
+*     - Le format natif/interne des dates est maintenant le DateTimeStamp CMC/RPN.
+*     - Ainsi, les dates valides vont de l'an 0 a l'an 9999. La resolution
+*       temporelle de ces dates est de trois heures, sauf pout les periodes de
+*       1900 a 1979, ou elle est de une heure, et de 1980 a 2235 ou elle est
+*       de 5 secondes.
+*     - Le support des annees bisectyles peut etre desactive avec l'argument
+*       global de la ligne de command '-bisect'. Par defaut, sa valeur = ON.
+*     - Les arguments de type dates sur la ligne de commande peuvent avoir
+*       jusqu'a 20 caracteres de long (I20) et sont lus dans des variables
+*       de type INTEGER(8).
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2008/04/25 21:26:08  dugas
+*     Ne plus demander que les niveaux varient de facon monotone.
+*
+*     Revision 4.11  2007/12/20 21:01:45  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2007/08/29 17:18:23  dugas
+*     - Passer de 4 a 10 noms de variables sur la ligne de commande.
+*     - Verifier les noms immediatement apres la lecture des donnees.
+*
+*     Revision 4.9  2005/04/14 18:15:49  dugas
+*     Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.8  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.7  2003/05/23 20:08:29  dugas
+*     En mode "arguments de ligne de commande" seulement, permettre des
+*      valeurs de LV1 et LV2 reels.  Dans ce cas, le nouvel arguments
+*      -KIND doit etre specifie pour determiner le type de ces
+*      niveaux verticaux (VKIND).
+*
+*     Revision 4.6  1999/06/08 16:39:49  armnrbd
+*     Modifier le format 6010 pour les dates.
+*
+*     Revision 4.5  1998/10/19 19:45:10  armnrbd
+*     Modifier la documentation.
+*     Appeller la fonction Y2KDAT.
+*
+*     Revision 4.4  1998/05/21  20:20:47  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.3  1998/02/18  16:42:17  armnrbd
+*     Passer au mode I/O 64 bits.
+*     Utiliser HPALLOC plutot que MEMOIRH.
+*     Verifier les niveaux input avec CHKLVLC.
+*     Ne plus demander que LV! soit plus petit que LV2.
+*
+*     Revision 4.2  1997/12/10  18:11:47  armnrbd
+*     Utiliser GETLAB/PUTLAB pour le traitement des "LABL".
+*
+*     Revision 4.1  1996/11/27  14:43:19  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.1  1996/11/26  21:13:41  armnrbd
+*     Tenir compte des niveaux verticaux decroissants.
+*
+*     Revision 4.0  1994/11/17  14:19:54  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  93/11/02  13:10:31  armnrbd
+*     Remplacer NBRLVL par NBRLEV partout (BugFix).
+*     
+*     Revision 3.1  93/10/26  16:52:26  armnrbd
+*     Ignorer (mais garder) les enregistrements LABL.
+*     Differents changements cosmetiques.
+*     
+*     Revision 3.0  93/10/24  00:14:37  armnrbd
+*     Premiere version Unix-RPN.
+*     
+*     NOV 07/83 - R.LAPRISE. 
+
+*----------------------------------------------------------------------- 
+      IMPLICIT     none
+
+      INTEGER      MAXLEV       , HEAD
+      PARAMETER  ( MAXLEV = 999 , HEAD = taille_entete )
+
+      CHARACTER    LIGNE*256
+      CHARACTER*20 VALEUR,CKIND
+      REAL         RLV1,RLV2,HOLD,
+     +             ALEV(MAXLEV)
+      LOGICAL      ALTIM,ALLEV,INFORM,
+     +             INCREAS,HYPER,OK,RLV
+      CHARACTER*4  NAME(10),NOM,ALL,TYPE
+      CHARACTER*15 ALV1,ALV2
+      INTEGER*8 :: NT1,NT2,N,INT,CTIM
+      INTEGER*8 :: ZERO=0,MUN=-1
+      INTEGER      JBUF(HEAD),LEV2(MAXLEV),
+     +             LEV(MAXLEV),NBRLEV,LENLAB,IER,
+     +             NDEL,NLEVG,NLEV,I,IL,INC,LV1,
+     +             LV2,MAXW,LEN,NCOPY,KIND,VKIND,
+     +             L,IP1,PERIOD,IO,NREC,JPAK,NWDS,
+     +             NFF,NN,VKIND0,VKIND1,VKIND2,VK
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL*8,      DIMENSION(:), ALLOCATABLE :: F
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      CHARACTER*4  GETYP,PKTYP
+      EXTERNAL     GETYP
+
+      INTEGER*8    Y2KDAT8
+      LOGICAL      RPBLOC,SETIO64
+      INTEGER      GETSIZ2,GETKIND
+      EXTERNAL     GETSIZ2,JCLPNT,BURNF,
+     +             GETLAB,PUTLAB,SETIO64,Y2KDAT8,
+     +             XIT,RPBLOC,GETSET2,PUTSET2,LVACODE,
+     +             GETKIND,SETKIND,CONVPR,FILEV,
+     +             STAMP2DATE
+
+      DATA         ALL   / 'ALL'  /,
+     +             RLV   / .FALSE. /,
+     +             ALLEV / .FALSE. /,
+     +             ALTIM / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/enleve.ptn,v $'
+
+*---------------------------------------------------------------------
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4 
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+      PKTYP = PKTYP(1:2)
+
+      IF (PKTYP.EQ.'SQ')                                      THEN
+          CALL FILEV( LEV,NLEV,JBUF,1 )
+          IF (NLEV.LE.0) CALL                      XIT(' Enleve ',-2 )
+      END IF
+
+      VKIND0 = GETKIND( )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    READ THE CONTROL CARD. 
+***    NT1,NT2 = TIMESTEP INTERVAL TO BE DELETED. 
+***    INT =   DATA IS DELETED EVERY INT STEPS FROM STEP NT1. 
+***    LV1,LV2 = LEVEL INTERVAL TO BE DELETED. 
+***    NAME(1) TO NAME(10) = NAMES TO BE DELETED. 
+
+      NN    =  0
+      NAME  = ' '
+      CKIND = ' '
+      VKIND = VKIND0
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+          LIGNE = ' '
+
+***        CHECK PARAMETRE BLOCK.
+
+          NT1   = 0
+          NT2   = 0
+          INT   = 1
+          LV1   =-1
+          LV2   =-1
+          RLV1  =-1.0
+          RLV2  =-1.0
+
+          OK = RPBLOC('T1',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I20)',ERR=901,IOSTAT=IO) NT1
+          IF (OK) LIGNE(16:25) = VALEUR
+
+          OK = RPBLOC('T2',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I20)',ERR=901,IOSTAT=IO) NT2
+          IF (OK) LIGNE(26:35) = VALEUR
+
+          OK = RPBLOC('T3',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I20)',ERR=901,IOSTAT=IO) INT
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) CKIND = VALEUR
+
+          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+              CALL SETKIND( CKIND )
+              VKIND = GETKIND( )
+          ENDIF
+
+          VKIND1 = VKIND
+
+          OK = RPBLOC('LV1',VALEUR)
+          IF (OK)                                              THEN
+              LIGNE(46:50) = VALEUR
+              PERIOD = INDEX( VALEUR, '.' )
+              IF (PERIOD.EQ.0 .AND. CKIND.EQ.' ')              THEN
+                  READ(VALEUR,'(BN,I10)'  ,ERR=901,IOSTAT=IO)  LV1
+                  CALL  CONVPR( LV1, RLV1, VKIND1, -2 )
+              ELSE
+                  READ(VALEUR,'(BN,E10.0)',ERR=901,IOSTAT=IO) RLV1
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( LV1, RLV1, VKIND,  +2 )
+                  ELSE
+                      CALL LVCODE( LV1, RLV1/1000.,1 ) 
+                  END IF
+              END IF
+          END IF
+
+          VKIND2 = VKIND1
+
+          OK = RPBLOC('LV2',VALEUR)
+          IF (OK)                                              THEN
+              LIGNE(51:55) = VALEUR
+              PERIOD = INDEX( VALEUR, '.' )
+              IF (PERIOD.EQ.0 .AND. CKIND.EQ.' ')              THEN
+                  READ(VALEUR,'(BN,I10)'  ,ERR=901,IOSTAT=IO)  LV2
+                  CALL  CONVPR( LV2, RLV2, VKIND2, -2 )
+              ELSE
+                  READ(VALEUR,'(BN,E10.0)',ERR=901,IOSTAT=IO) RLV2
+                  IF (PKTYP.EQ.'SQ')                           THEN
+                      CALL CONVPR( LV2, RLV2, VKIND,  +2 )
+                  ELSE
+                      CALL LVCODE( LV2, RLV2/1000.,1 ) 
+                  END IF
+              END IF
+          ELSE
+               LV2 =  LV1
+              RLV2 = RLV1
+          END IF
+
+          OK = RPBLOC('NAME',VALEUR)
+          IF (OK) READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(1)
+          IF (NAME(1).NE.' ') CALL LEADBLK( NAME(1) )
+
+          IF (NAME(1).NE.' ' .AND. NAME(1).NE.'ALL')           THEN
+
+           NN = 1
+
+           OK = RPBLOC('NAME2',VALEUR)
+           IF (OK)
+     +     READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(2)
+
+           IF (NAME(2).NE.' ')                                 THEN
+
+            NN = 2
+
+            OK = RPBLOC('NAME3',VALEUR)
+            IF (OK)
+     +      READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(3)
+
+            IF (NAME(3).NE.' ')                                THEN
+
+             NN = 3
+
+             OK = RPBLOC('NAME4',VALEUR)
+             IF (OK)
+     +       READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(4)
+
+             IF (NAME(4).NE.' ')                               THEN
+
+              NN = 4
+
+              OK = RPBLOC('NAME5',VALEUR)
+              IF (OK)
+     +        READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(5)
+
+              IF (NAME(5).NE.' ')                              THEN
+
+               NN = 5
+
+               OK = RPBLOC('NAME6',VALEUR)
+               IF (OK)
+     +         READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(6)
+
+               IF (NAME(6).NE.' ')                             THEN
+
+                NN = 6
+
+                OK = RPBLOC('NAME7',VALEUR)
+                IF (OK)
+     +          READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(7)
+
+                IF (NAME(7).NE.' ')                            THEN
+
+                 NN = 7
+
+                 OK = RPBLOC('NAME8',VALEUR)
+                 IF (OK)
+     +           READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(8)
+
+                 IF (NAME(8).NE.' ')                           THEN
+
+                  NN = 8
+
+                  OK = RPBLOC('NAME9',VALEUR)
+                  IF (OK)
+     +            READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(9)
+
+                  IF (NAME(9).NE.' ')                          THEN
+
+                   NN = 9
+
+                   OK = RPBLOC('NAME10',VALEUR)
+                   IF (OK)
+     +             READ(VALEUR,'(A4)', ERR=901,IOSTAT=IO) NAME(10)
+
+                   IF (NAME(10).NE.' ') NN = 10
+
+                  END IF
+                 END IF
+                END IF
+               END IF
+              END IF
+             END IF
+            END IF
+           END IF
+          END IF
+
+      ELSE
+
+***        READ THE CONTROL CARD...
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+
+              READ( LIGNE, 5010,IOSTAT=IO,ERR=901,END=901) 
+     +                     NT1,NT2,INT, LV1,LV2,
+     +                     NAME(1),NAME(2),NAME(3),NAME(4) 
+
+              CALL BURNF
+
+              IF (NAME(1).NE.' ') CALL LEADBLK( NAME(1) )
+
+              IF (NAME(1).NE.' ' .AND. NAME(1).NE.'ALL')       THEN
+                  NN = 1
+                  IF (NAME(2).NE.' ')                          THEN
+                      NN = 2
+                      IF (NAME(3).NE.' ')                      THEN
+                          NN = 3
+                          IF (NAME(4).NE.' ')
+     +                        NN = 4
+                      END IF
+                  END IF
+              END IF
+
+              CALL  CONVPR( LV1, RLV1, VKIND1, -2 )
+              CALL  CONVPR( LV2, RLV2, VKIND2, -2 )
+
+          END IF
+
+      END IF
+
+      IF (VKIND1.NE.VKIND2) CALL                  XIT(' Enleve ',-4 )
+
+      DO  I=2,NN
+          CALL LEADBLK( NAME(I) )
+      END DO
+          
+***    CONSIDER OTHER PARTICULAR OR DEFAULT VALUES.
+
+      IF      (NT1         .EQ.MUN.OR.
+     +         LIGNE(16:35).EQ.' ' )                           THEN
+                                       ALTIM = .TRUE.
+      ELSE IF (LIGNE(16:25).EQ.' ' )                           THEN
+                                       NT1   =  NT2
+                                       INT   =   1
+      ELSE IF (LIGNE(26:35).EQ.' ' )                           THEN
+                                       NT2   =  NT1
+                                       INT   =   1
+      END  IF
+
+      IF      (LV1         .EQ.-1 .OR.
+     +         LIGNE(46:55).EQ.' ' )                           THEN
+                                       ALLEV = .TRUE.
+      ELSE IF (LIGNE(46:50).EQ.' ' )                           THEN
+                                       LV1   =  LV2
+                                      RLV1   = RLV2
+      ELSE IF (LIGNE(51:55).EQ.' ' )                           THEN
+                                       LV2   =  LV1
+                                      RLV2   = RLV1
+      END  IF
+
+      IF (NAME(1).EQ.' ')            NAME(1) =  ALL
+
+      IF(INT <= ZERO) INT=1 
+
+      IF (.NOT.ALTIM)                                          THEN
+           
+***        CHECK THAT THE DATE FORMAT HAS
+***        FOUR DIGITS FOR THE YEAR.
+
+          NT1 = Y2KDAT8( NT1 )
+          NT2 = Y2KDAT8( NT2 )
+
+          WRITE(6,6010) NT1,NT2, INT 
+
+      ELSE
+          WRITE(6,6011)
+      END IF
+
+      IF (.NOT.ALLEV)                                          THEN
+
+          CALL GET_IP1_STRING( LV1,ALV1 )
+          CALL GET_IP1_STRING( LV2,ALV2 )
+
+          CALL LEADBLK( ALV1 )
+          CALL LEADBLK( ALV2 )
+
+          IF (CKIND.EQ.' ' .AND. VKIND0.NE.VKIND1)             THEN
+              DO  I=LEN_TRIM( ALV1 ),1,-1
+                  IF (ALV1(I:I).EQ.' ') EXIT
+              END DO
+              IF (I.NE.0) ALV1 = ALV1(1:I)
+          END IF
+          IF (CKIND.EQ.' ' .AND. VKIND0.NE.VKIND2)             THEN
+              DO  I=LEN_TRIM( ALV2 ),1,-1
+                  IF (ALV2(I:I).EQ.' ') EXIT
+              END DO
+              IF (I.NE.0) ALV2 = ALV2(1:I)
+          END IF
+
+          WRITE(6,6020) TRIM( ALV1 ),TRIM( ALV2 )
+
+          IF (RLV1.GT.RLV2)                                    THEN
+              HOLD = RLV1
+              RLV1 = RLV2
+              RLV2 = HOLD
+              WRITE(6,6001)
+          END IF
+
+      ELSE
+          WRITE(6,6021)
+      END IF
+
+      IF (NN.GE.1) WRITE(6,6030) (NAME(N),N=1,NN)
+
+      IF (NAME(1).EQ.'ALL' .AND. ALTIM .AND. ALLEV)            THEN
+          WRITE(6,6101)
+          CALL                                     XIT(' Enleve ',-101)
+      END IF
+
+***    READ NEXT RECORD FROM FILE 1. 
+***    STOP AT THE END OF THE FILE. 
+
+      NREC  = 0 
+      NCOPY = 0 
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  250 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.EQ.0) CALL                          XIT(' Enleve ',-2 )
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(2*LEN),F(MAX( MAXW,NWDS*NLEV )) )
+
+***    READ THE NEXT SET OF GRIDS FROM FILE 1. 
+***    STOP AT EOF OR IF STEP NUMBER EXCEEDS NT2.
+
+  300 CALL GETSET2( 1, F,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF,F )
+              IF (MAXW.EQ.0)                       GOTO 250
+
+              NDEL = NREC-NCOPY 
+              WRITE(6,6040) NREC,NCOPY,NDEL 
+
+              IF (NREC .EQ. 0 ) CALL               XIT (' Enleve ',-2 ) 
+                                CALL               XIT (' Enleve ', 0 ) 
+
+          END IF
+
+          NREC = NREC+NLEVG
+
+          N = IBUF(2) 
+
+***        DEFINE CURRENT TIME (CTIM) IN "PRINTABLE" FORMAT.
+
+          IF (.NOT.ALTIM)                                     THEN
+              CALL STAMP2DATE( IBUF(2),CTIM )
+          ELSE
+              CTIM = N
+          END IF
+
+          WRITE(NOM,4) IBUF(3)
+          WRITE(TYPE,4) IBUF(1)
+
+***        CHECK VARIABLE NAMES IMMEDIATELY.
+
+          IF (NAME(01).NE.'ALL' .AND.
+     +        NAME(01).NE. NOM  .AND.
+     +        NAME(02).NE. NOM  .AND.
+     +        NAME(03).NE. NOM  .AND.
+     +        NAME(04).NE. NOM  .AND.
+     +        NAME(05).NE. NOM  .AND.
+     +        NAME(06).NE. NOM  .AND.
+     +        NAME(07).NE. NOM  .AND.
+     +        NAME(08).NE. NOM  .AND.
+     +        NAME(09).NE. NOM  .AND.
+     +        NAME(10).NE. NOM  )                              THEN
+              NBRLEV = NLEVG
+              LEV2   = LEV
+              GOTO 650
+          END IF
+
+          IF (TYPE.EQ.'LABL')                                  THEN
+              LENLAB = IBUF(5)
+              HYPER  = (NOM.EQ.'FILE')
+              INFORM = (NOM.EQ.'INFO')
+              CALL GETLAB( 0, LIGNE, IBUF,LENLAB, OK ) 
+              CALL PUTLAB( 2, LIGNE, IBUF,LENLAB, HYPER,INFORM )
+              GOTO 300
+          END IF
+
+          NBRLEV = NLEVG
+
+          DO  L=1,NLEVG
+              LEV2(L) = LEV(L)
+          END DO
+
+***        IF TIMESTEP AND LEVEL NUMBERS ARE NOT WITHIN THE REQUESTED 
+***        INTERVALS, COPY THIS RECORD TO FILE 2. 
+
+          IF (.NOT.ALTIM .AND.
+     +       (CTIM < NT1   .OR.
+     +        CTIM > NT2   .OR.
+     +        MOD(CTIM-NT1,INT) /= ZERO ) ) GOTO 650
+
+          IF (.NOT.ALLEV)                                      THEN
+
+              KIND = GETKIND( )
+
+              IF (KIND.NE.VKIND) GOTO 650
+
+              DO  L=1,NLEVG
+                  CALL CONVPR( LEV(L), ALEV(L), VK, -1 )
+              END DO
+
+***            SAVE APPROPRIATE LEVELS.
+
+              IL = 0
+              DO  L=1,NLEVG
+                  IF (ALEV(L) < RLV1 .OR. RLV2 < ALEV(L))      THEN
+                      DO  I=1,NWDS
+                          F(IL*NWDS+I) = F((L-1)*NWDS+I)
+                      END DO
+                      IL = IL+1
+                      LEV2(IL) = LEV(L)
+                  END IF
+              END DO
+
+              NBRLEV = IL
+
+          END IF
+
+          IF (TYPE.EQ.'ZONL')                                  THEN
+
+              IBUF(6) = NBRLEV
+
+              IF (MAXW.LT.NWDS*NBRLEV+4)                       THEN
+
+                  DO  I=1,HEAD
+                      JBUF(I) = IBUF(I)
+                  END DO
+
+                  DEALLOCATE( IBUF )
+                  MAXW = NWDS*NBRLEV+4
+                  ALLOCATE( IBUF(MAXW+HEAD) )
+
+                  DO  I=1,HEAD
+                      IBUF(I) = JBUF(I)
+                  END DO
+
+              END IF
+
+          END IF
+
+***        IF TIME AND LEVEL ARE OK, DELETE ONLY CORRECT NAMES. 
+***        NAME OF 'ALL' DELETES ALL VARIABLES. 
+
+          IF (NAME(01).EQ.'ALL' .OR.
+     +        NAME(01).EQ. NOM  .OR.
+     +        NAME(02).EQ. NOM  .OR.
+     +        NAME(03).EQ. NOM  .OR.
+     +        NAME(04).EQ. NOM  .OR.
+     +        NAME(05).EQ. NOM  .OR.
+     +        NAME(06).EQ. NOM  .OR.
+     +        NAME(07).EQ. NOM  .OR.
+     +        NAME(08).EQ. NOM  .OR.
+     +        NAME(09).EQ. NOM  .OR.
+     +        NAME(10).EQ. NOM  )                              THEN
+              IF (ALLEV)       GOTO 300
+              IF (NBRLEV.LE.0) GOTO 300
+          END IF
+
+***        COPY THIS RECORD TO FILE 2. 
+
+  650     IF (NBRLEV.EQ.1) IBUF(4)= LEV2(1)
+          CALL PUTSET2( 2, F, LEV2,NBRLEV, IBUF,MAXW )
+
+      NCOPY = NCOPY+NBRLEV
+      GOTO 300
+
+***    E.O.F. ON INPUT. 
+
+  901 CALL                                         XIT(' Enleve ',-1 ) 
+*--------------------------------------------------------------------- 
+
+    4 FORMAT(A4)
+
+ 5010 FORMAT(10X,5X,2I10,I5,5X,2I5,5X,4(1X,A4)) 
+
+ 6001 FORMAT(' Lv1 must be smaller or equal than lv2. Switching them.')
+ 6010 FORMAT('0Delete times ',I14,'  to',I14,' in steps of',I10) 
+ 6011 FORMAT('0Delete times  ... ALL TIMES.')
+ 6020 FORMAT(' Delete levels ',A,' to ',A) 
+ 6021 FORMAT(' Delete levels ... ALL LEVELS.')
+ 6030 FORMAT(' Variable names =',10(2X,A4)) 
+ 6040 FORMAT('0Records in =',I6,',  copied =',i6,',  deleted =',I6) 
+ 6101 FORMAT(' Please specify at least one name, timestep or level...')
+      END 
+#     endif
+
+
+
+
+
+
+
+
+
+
+
+
+

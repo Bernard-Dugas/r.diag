@@ -1,0 +1,694 @@
+#     if !defined (pression_au_toit)
+#         define   pression_au_toit 0.01
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      pgen  XIN POUT [LNSP] OUTPUT \ 
+*            [-kind VAL0 -a VAL1 -d VAL2 -i VAL3 -def [VAL4] ]
+*
+*
+*     DESCRIPTION...
+*      pgen   - CREATES A FILE WITH VALUES SET EQUAL TO PRESSURE LEVEL
+*
+*
+*     AUTHOR  - B.Dugas, NOV 29/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/pgen.ptn,v 4.20 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     PURPOSE - GENERATES A FILE WHOSE VALUES ARE SET TO THE PRESSURE 
+*               LEVEL VALUE FOUND IN IBUF(4).
+*
+*     NOTES     1) FOR SPECTRAL TYPE FILES, ONLY THE REAL PART OF
+*                  THE (0,0) COEFFICIENT RECORD VALUES IS SET.
+*               2) FOR CMPL TYPE FILES, ONLY THE REAL PART OF 
+*                  EACH WORD IS SET.
+*
+*
+*     INPUT FILE...
+*      XIN  = FILE CONTAINING RECORDS AT PRESSURE LEVEL(S), IT CAN BE
+*             OF TYPE SPECTRAL, ZONAL CROSS-SECTIONS, COMPLEX ARRAYS
+*             OR GAUSSIAN GRID(S).
+*      LNSP = (OPTIONAL) LOG OF SURFACE PRESSURE FIELD USED BY THE TERRAIN
+*             FOLLOWING COORDINATES TO DETERMINE THE LOCAL PRESSURE.
+*
+*     OUTPUT FILE...
+*      POUT = FILE OF THE SAME TYPE AS XIN WITH THE VALUE(S) OF EACH RECORD
+*             SET EQUAL TO THE LOCAL PRESSURE VALUES (IN MB). THIS DATA IS
+*             FOUND IN IBUF(4) WHEN THE VERTICAL COORDINATE IS ITSELF
+*             PRESSURE. 
+*
+*
+*     COMMAND-LINE PARAMETERS...
+*
+*      KIND      = INPUT VERTICAL COORDINATE: POSSIBLE OPTIONS ARE
+*                 'PRES'/'ETA' FOR PRESSURE/GCM-ETA AND 'GEM'/'GEM2'/
+*                 'GEM3' FOR DIFFERENT VERSIONS OF THE GEM COORDINATE.
+*      PTOIT (a) = PRESSURE (PA) AT THE LID OF MODEL. THE DEFAULT VALUE
+*                  IS 0.01 OTHERWISE. THIS VALUE IS ONLY REQUIRED WITH
+*                  THE CCCma GCM VERTICAL COORDINATES.
+*
+*      The next two parametres are only used when COORD='GEM2' or 'GEM3'.
+*
+*      PREF  (d) = REF PRESSURE (DEF 80000 PA).
+*      R     (i) = REFERENCE EXPONENT (DEF 1.0)
+*
+*
+*
+*     NOTES: 1) THE PROGRAM REQUIRES THAT DATA TYPES BE EITHER OF 'GRID',
+*               'SUBA' OR 'ZONL' WHEN OPERATING WITH ANY OF THE TERRAIN
+*               FOLLOWING VERTICAL COORDINATES. THE OTHER TYPES OF DATA
+*               ARE ONLY SUPPORTED WITH PRESSURE VERTICAL COORDINATES.
+*            2) 'GEM' IS THE ORIGINAL GEM ETA COORDINATE, WHILE 'GEM2' IS
+*               THE FIRST GEM HYBRID COORDINATE AS IMPLEMENTED BY EDOUARD
+*               & GRAVEL IN GEM/DM V2.2.0. 'GEM3' IS THE NORMALIZED VERSION
+*               THAT WAS IMPLEMENTED IN THE V2.3.1 GEM/DM.
+*            3) THE DEFAULT VALUE OF COORD IS DETERMINED BY THE FILE TYPE
+*               AND THE PROGRAM WILL ALSO TRY TO DETERMINE IT BY THE
+*               (INTERNAL) CODING USED FOR THE COORDINATE ITSELF.
+*            4) Specifying "-def AABB" will force the attempt to read
+*               a text file called aabb.nml, containing a FORTRAN
+*               namelist AABB_NML, which in turns will hold two arrays,
+*               A and B such that the local pressure at level K, PL(K),
+*               can be calculated as "A(K)+B(K)*PS". This then by-passes
+*               all of the normal COORD-related calculations for PL(K).
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO READ XIN
+*       2 MORE THAN ONE SIZE IN XIN
+*       3 UNKNOWN DATA TYPE
+*       4 ILLEGAL "KIND" VALUE
+*       5 LNSP FILE MISSING OR EMPTY
+*       6 LNSP AND XIN NOT THE SAME SIZE
+*       7 UNABLE TO CONTINUE (SEE NOTE 1)
+*       8 PROBLEM READING PARAMETRES
+*       9 UNSUPPORTED VERTICAL COORDINATE IN XIN
+*      10 KIND PARAMETRE AND XIN DATA MISMATCH
+*      11 UNABLE TO READ AABB NAMELIST
+*      12 LNSP DOES NOT CONTAIN LN(SURFACE PRESSURES) FOR EARTH
+*      13 WRONG NUMBER OF A,B IN AABB
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM pgen
+*    +             (XIN,       POUT,       OUTPUT,
+*    +        TAPE1=XIN, TAPE2=POUT, TAPE6=OUTPUT)
+*     --------------------------------------------
+
+*     $Log: pgen.ptn,v $
+*     Revision 4.20  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.19  2014/09/12 00:12:55  dugas
+*     Verifier la consistance des niveaux verticaux.
+*
+*     Revision 4.18  2014/09/02 22:29:03  dugas
+*     Verifier que le nombre de parametres lus dans aabb.nml est correct.
+*
+*     Revision 4.17  2013/12/18 21:56:33  bernard
+*      - Modifier le traitement des erreurs associees a la lecture du fichier
+*        namelist aabb.nml.
+*
+*     Revision 4.16  2013/10/16 18:43:27  bernard
+*     Ajouter des details au format d'erreur 6011.
+*
+*     Revision 4.15  2012/05/17 21:12:51  dugas
+*     - Verification que la pression de surface est appropriee pour notre terre.
+*     - Lecture du fichier namelist aabb.nml. Celui-ci doit contenir le
+*       namelist FORTRAN AABB_NML, qui contient a son tour les deux
+*       vecteurs verticaux A et B. Ces derniers sont utilises dans
+*       dans le calcul de la pression locale (PL=A+B*PS).
+*
+*     Revision 4.14  2011/09/16 17:54:03  dugas
+*     Ajouter la coordonnee ET16.
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2008/04/28 15:41:58  dugas
+*     Ne plus tenir compte du cas non-SQ98.
+*
+*     Revision 4.11  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.10  2006/04/26 22:31:06  dugas
+*     Ne plus compacter le donnees de type ZONL.
+*
+*     Revision 4.9  2005/04/14 18:07:36  dugas
+*     - Proteger PTOIT,PREF,R lors de l'appel a LIRPT.
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.8  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.7  2002/09/17 17:52:25  dugas
+*     Modifier/simplifier le traitement des coordonnees verticales hybrides
+*      de GEM (v2.2.0 et v2.3.1). Utilisation systematique de GETKIND et
+*      definition du type de coordonnee par defaut selon le genre de
+*      fichier rencontre (CCC ou RPN).
+*
+*     Revision 4.6  2002/02/02 00:42:03  dugas
+*     Ajouter le support de toutes les coordonnees ETA du GCM
+*
+*     Revision 4.5  2002/01/14 15:49:45  dugas
+*     Les coordonnees verticales de type SIG et ETxx du GCM/CCCma, de meme
+*      que la coordonnees GEM3 (v2.3.1) sont maintenant supportees.
+*
+*     Revision 4.4  1999/07/23 15:37:05  armnrbd
+*     Modifier les circonstance ou l'erreur -2 est presente.
+*     Utiliser HPALLOC pour faire l'allocation de memoire.
+*
+*     Revision 4.3  1997/09/26 17:39:11  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.2  1997/02/24  16:01:54  armnrbd
+*     Corriger le calcul dans le cas de donnees spectrales.
+*
+*     Revision 4.1  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.0  1994/11/17  14:21:19  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:40  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  92/11/23  14:26:07  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/11/10  13:09:26  armnrbd
+*     Implantation de GETSIZ/GETSIZ2.
+*     
+*     Revision 1.2  92/10/13  15:57:16  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.1  92/03/26  13:32:04  armnrbd
+*     Premier jeu de correction.
+*     
+*     Revision 1.0  92/03/26  12:15:19  armnrbd
+*     Initial revision
+*     
+ 
+*     NOV 29/83 - B. DUGAS.
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      HEAD
+      PARAMETER  ( HEAD   = taille_entete )
+      INTEGER      MAXLEV
+      PARAMETER  ( MAXLEV = 999 )
+      REAL         PTMIN
+      PARAMETER  ( PTMIN = pression_au_toit )
+
+      LOGICAL      OK,LNSP,MODETA,DEF,AABB
+      CHARACTER    PKTYP*2,LIGNE*20,VKINDC*16
+      CHARACTER*4  TYPE,PRES,COORD,CHECK*2
+      REAL         ALEV,ZERO,PR(MAXLEV),
+     +             PTOIT,PTOIT0,PREF,PREF0,R,
+     +             R0, BIGBIN, AMIN,AMAX,AMEAN
+      INTEGER      I,J,JL, ILAT,L,LL,LR, NF,NFF,IUN,
+     +             LEN,LEN3,JBUF(HEAD),KBUF(HEAD),NSL,
+     +             JPAK,KPAK,MAXW,MAX3,IER,LEV(MAXLEV),
+     +             NLEV,NLEVA,NWDS,NWDS1,IO,NST,VKIND
+
+      REAL,       DIMENSION(:),POINTER :: PR0
+      REAL,       DIMENSION(:),ALLOCATABLE,TARGET :: ETA
+
+      REAL         A(MAXLEV+1),B(MAXLEV+1)
+      NAMELIST    /AABB_NML/ A,B
+
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,        DIMENSION(:), ALLOCATABLE :: FF,LP
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      CHARACTER*4, EXTERNAL :: GETYP
+      LOGICAL,     EXTERNAL :: RPBLOC
+      INTEGER,     EXTERNAL :: GETSIZ,GETSIZ2,GETKIND
+      EXTERNAL     MACSPE,JCLPNT,GETSET2,
+     +             CMPLBL,XIT,PUTSET2,CONVPR,
+     +             GETPT,LIRPT,SETPT,GENAB,COORDAB,
+     +             SETKIND,FMMM2
+
+      INTEGER,     EXTERNAL :: FCLOS,FNOM
+
+      DATA         CHECK  /  ' '    /
+      DATA         MODETA / .FALSE. /
+      DATA         PRES   / 'PRES'  /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/pgen.ptn,v $'
+
+*-------------------------------------------------------------------
+      ALLOCATE( ETA(MAXLEV) )
+      PR0 => ETA ! PR0 and ETA are equivalent.
+
+      CALL SETRABT( '&NON' )
+
+***    ASSIGN I/O UNITS.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 6 )
+ 
+      PKTYP  = GETYP( 1 )
+
+      LNSP   = (NFF.EQ.3)
+      COORD  = 'DEF'
+      PTOIT  = PTMIN
+      PREF   = 80000.
+      R      =  1.0
+      AABB   =.FALSE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) COORD = LIGNE
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=900,ERR=900,IOSTAT=IO) PTOIT
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=900,ERR=900,IOSTAT=IO) PREF
+
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ(LIGNE,0020,END=900,ERR=900,IOSTAT=IO) R
+
+          DEF = RPBLOC('DEFAUT',LIGNE)
+          IF (DEF .AND. LIGNE == 'AABB') AABB = .TRUE.
+
+      END IF
+
+***    ACCOUNT FOR DEFAULT TREATMENT.
+
+      IF (COORD.NE.' ') CALL LEADBLK( COORD )
+      IF (COORD.EQ.' ') COORD = 'DEF'
+
+      IF (AABB .AND. COORD == 'DEF') COORD = 'GEM'
+
+      IF (COORD     .NE.'DEF'  .AND.
+     +    COORD     .NE.'SIG ' .AND.
+     +    COORD     .NE.'ETA ' .AND.
+     +    COORD     .NE.'ET10' .AND.
+     +    COORD     .NE.'ET15' .AND.
+     +    COORD     .NE.'ET16' .AND.
+     +    COORD(1:3).NE.'GEM'  .AND.
+     +    COORD     .NE.'PRES' )                               THEN
+          CALL                                     XIT('  Pgen  ',-4 )
+      ELSE 
+     +IF (PKTYP.EQ.'SQ'   .AND.
+     +   (COORD.EQ.'DEF'  .OR.
+     +    COORD.EQ.'GEM2' .OR.
+     +    COORD.EQ.'GEM3' ))                                   THEN
+          CALL SETPT( PTOIT,PREF,R )
+      END IF
+
+      NF = 0
+
+***    ASK FOR WORKING MEMORY. CHECK FIRST DATA BUFFER.
+
+  100 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW.EQ.0) CALL                          XIT('  Pgen  ',-1 )
+
+      IF (PKTYP.EQ.'SQ' .AND. .NOT.AABB)                       THEN
+
+          VKIND = GETKIND()
+
+          IF (VKIND.NE.1 .AND.
+     +        VKIND.NE.2 .AND.
+     +        VKIND.NE.5)                                      THEN
+              CALL                                 XIT('  Pgen  ',-9 )
+          ELSE IF (VKIND.EQ.1)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM3'
+              IF (COORD.EQ.'PRES') CALL            XIT('  Pgen  ',-10)
+              VKINDC = 'ETA'
+          ELSE IF (VKIND.EQ.2)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'PRES'
+              IF (COORD.NE.'PRES') CALL            XIT('  Pgen  ',-10)
+              VKINDC = 'PRESSION'
+          ELSE IF (VKIND.EQ.5)                                 THEN
+              IF (COORD.EQ.'DEF')  COORD = 'GEM2'
+              IF (COORD.NE.'GEM2') CALL            XIT('  Pgen  ',-10)
+              VKINDC = 'HYBRIDE'
+          END IF
+
+      ELSE IF (COORD.EQ.'DEF')                                 THEN
+
+          COORD  = 'PRES'
+
+      END IF
+
+      IF (COORD.EQ.'PRES')                                     THEN
+          LNSP = .FALSE.
+      ELSE IF (.NOT.LNSP)                                      THEN
+          CALL                                     XIT('  Pgen  ',-5 )
+      END IF
+
+      IF (LNSP)                                                THEN
+
+          MAX3 = GETSIZ ( 3, KBUF,LEN3,NWDS,KPAK )
+          IF (MAX3.EQ.0) CALL                      XIT('  Pgen  ',-5 )
+
+          MAXW = MAX( MAXW,MAX3 )
+          LEN  = MAX( LEN,LEN3 )
+
+          CALL CMPLBL( 0,JBUF, 0,KBUF, OK )
+          IF (.NOT.OK ) CALL                       XIT('  Pgen  ',-6 )
+
+      END IF
+
+      WRITE(TYPE,0004) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      IF (LNSP           .AND.
+     +   (TYPE.NE.'GRID' .AND.
+     +    TYPE.NE.'SUBA' .AND.
+     +    TYPE.NE.'ZONL' ))                                    THEN
+
+***        TERRAIN FOLLOWING COORDINATE CAN ONLY BE
+***        USED WITH GRID/SUBA/ZONL TYPE OF DATA.
+
+          CALL                                      XIT('  Pgen  ',-8 )
+
+      END IF
+
+      ALLOCATE( FF(MAX( MAXW,NWDS*NLEV ) ),LP(NWDS),IBUF(LEN) )
+
+      NSL = NLEV
+
+      DO  L=1,NLEV
+          CALL CONVPR( LEV(L), PR(L), VKIND, -2 )
+          IF (COORD.NE.'PRES' .AND. VKIND.EQ.2) PR(L) = PR(L) * 0.001
+      END DO
+
+      IF (COORD.NE.'PRES')                                     THEN
+
+          ETA(1:NSL) = PR(1:NSL)
+
+          IF (COORD.EQ.'SIG') PTOIT = 0.0
+
+          IF (AABB)                                            THEN
+
+***            A and B are read form namelist file 'aabb.nml'.
+
+              IUN = 0 ; IO = 0
+              IF (FNOM( IUN, 'aabb.nml', 'SQE+OLD', 0 ) == 0)  THEN
+
+                  BIGBIN = -524288. ! -(2^^9)
+                  ! BIGBIN = BIGBIN*BIGBIN*BIGBIN
+                  A(:) = BIGBIN ; B(:) = BIGBIN
+
+                  READ( IUN, NML=AABB_NML, END=911,ERR=911, IOSTAT=IO )
+                  IER = FCLOS( IUN )
+
+                  LL = 0 ; DO  L=1,MAXLEV+1
+                      IF (A(L) == BIGBIN .OR. B(L) == BIGBIN) EXIT
+                      LL = LL+1
+                  END DO
+
+                  ! Check the number of valid (A,B) pairs.
+
+                  IF (LL /= NSL .AND. LL /= NSL-1)             THEN
+                      WRITE(6,6013) NSL,LL
+                      CALL                         XIT('  Pgen  ',-13) 
+                  ELSE IF (LL == NSL-1)                        THEN
+                      A(LL+1) = 0. ; B(LL+1) = 1.0 ! Add surface values.
+                  END IF
+
+                  WRITE(6,6110)
+
+              ELSE
+                  GOTO 0911
+              END IF
+
+          ELSE IF (COORD(1:2).EQ.'ET')                         THEN
+
+***            EVALUATE THE PARAMETERS OF THE
+***            ETA VERTICAL DISCRETIZATION.
+ 
+              CALL COORDAB( A,B, NSL,ETA, COORD,PTOIT )
+
+          ELSE IF (COORD.EQ.'GEM2' .OR.
+     +             COORD.EQ.'GEM3')                            THEN
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+
+***                CHECK IF XIN HOLDS A SET OF
+***                VALUES OF PTOIT,PREF AND R.
+
+                  CALL LIRPT( 1 )
+                  CALL GETPT( 1 , PTOIT0,PREF0,R0 )
+
+                  IF (PTOIT0.NE.-1.)                           THEN
+                      PTOIT = PTOIT0
+                      PREF  = PREF0
+                      R     = R0
+                  END IF
+                  
+              END IF
+
+              IF (.NOT.MODETA .AND. COORD.EQ.'GEM3')           THEN
+
+                  MODETA      =.TRUE.
+                  ETA(1:NSL) = ETA(1:NSL)
+     +                       + ( 1.0 - ETA(1:NSL) ) * PTOIT / PREF
+
+              END IF
+
+              WRITE(6,6030) PTOIT,PREF,R
+
+              CALL GENAB( A,B, ETA, PTOIT,PREF,R, NSL )
+
+
+          ELSE IF (COORD.EQ.'GEM')                             THEN
+              
+***            For GEM, PRLOC = PTOIT + ETA(:) * ( PS(:) - PTOIT )
+
+              A(1:NSL) = PTOIT*(1.0-ETA(1:NSL))
+              B(1:NSL) = ETA(1:NSL)
+
+          END IF
+
+***       OUTPUT PRESSURES ARE SUPPOSED TO BE IN MB.
+
+          A(1:NSL) = 0.01 * A(1:NSL) ! A is originally in units of Pa.
+
+      END IF
+
+      NWDS1 = NWDS-1
+
+***    READ IN THE FIRST FIELD IN XIN.
+ 
+  150 CALL GETSET2( 1, FF,LEV,NLEVA, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( FF,LP,IBUF )
+                  GOTO 100
+              END IF
+              IF (NF.EQ.0)                                     THEN
+                 CALL                              XIT('  Pgen  ',-1 )
+              ELSE
+                  CALL PRTLAB2('  Output  ', IBUF )
+                  WRITE(6,6010) NF
+                  CALL                             XIT('  Pgen  ', 0 )
+              END IF
+          END IF
+
+***        IGNORE LABEL OR CHARACTER DATA RECORDS.
+
+          WRITE(TYPE,0004) IBUF(1)
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 150
+
+          IF (NF.EQ.0) CALL PRTLAB2('  Pgen on ', IBUF )
+
+***        MAKE SURE THAT THE FIELDS ARE STILL THE SAME KIND AND SIZE. 
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK ) 
+
+          IF (.NOT.OK .OR. NLEV /= NLEVA)                      THEN
+              WRITE(6,6002) NLEVA ; CALL PRTLAB( IBUF )
+              WRITE(6,6002) NLEV  ; CALL PRTLAB( JBUF )
+              CALL                                 XIT('  Pgen  ',-2 ) 
+          END IF
+
+          IF (LNSP .AND. COORD.NE.'PRES')                      THEN
+
+              NST = IBUF(2)
+
+***            GET LN(SF PRES) FOR THIS STEP.
+ 
+              CALL GETFLD2( 3, LP, TYPE,NST,' ',-1,IBUF,MAXW,OK )
+
+              IF (.NOT.OK) CALL                    XIT('  Pgen  ',-5 )
+              IF (NF.EQ.0) CALL PRTLAB2('  Read    ', IBUF )
+
+***            CHECK THAT FIELDS STILL ARE THE SAME SIZE.
+
+              CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+              IF (.NOT.OK)                                     THEN
+                  CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+                  CALL                             XIT('  Pgen  ',-6 )
+              END IF
+
+***            Convert to pressure BUT do not convert to Pa.
+
+              DO  I=1,NWDS
+                  LP(I) = EXP( LP(I) )
+              END DO
+
+***            Check that LP really contains earth surface pressures in mB.
+
+              IF (CHECK.EQ.' ')                                THEN
+                  CALL FMMM2( AMIN,AMAX,AMEAN, LP,NWDS )
+                  IF (AMIN <  330. .OR.
+     +                AMAX > 1212.) CALL           XIT('  Pgen  ',-12)
+                  CHECK = 'OK'
+              END IF
+
+          END IF
+
+***        DO IT BY LEVELS. TAKE CARE OF TYPES OF DATA.
+
+          IF (TYPE.EQ.'GRID' .OR.
+     +        TYPE.EQ.'SUBA' .OR.
+     +        TYPE.EQ.'ZONL' )                                 THEN
+
+              DO  200 L=1,NLEV
+                  ALEV = PR(L)
+                  JL = (L-1)*NWDS
+                  DO  J=1,NWDS
+                      IF (COORD.NE.'PRES')                     THEN
+                          IF (COORD.EQ.'SIG' )                 THEN
+                              ALEV = PTOIT + PR0(L) * ( LP(J) - PTOIT )
+                          ELSE
+                              ALEV = A(L) + B(L) * LP(J)
+                          END IF
+                      END IF
+                      FF(JL+J) = ALEV
+                  END DO
+  200         CONTINUE
+
+          ELSE IF (TYPE.EQ.'CMPL')                             THEN
+
+***        COMPLEX ARRAYS CASE.
+
+              DO  250 L=1,NLEV
+                  ALEV = PR(L)
+                  JL = (L-1)*NWDS
+                  DO  J=1,NWDS,2
+                      FF(JL+J)   = ALEV
+                      FF(JL+J+1) = 0.0
+                  END DO
+  250         CONTINUE
+
+          ELSE IF (TYPE.EQ.'SPEC')                             THEN
+
+***        SPECTRAL CASE.
+ 
+              DO  300 L=1,NLEV
+                  JL     = (L-1)*NWDS+1
+                  FF(JL) = PR(L) * SQRT(2.)
+                  DO  J=1,NWDS1
+                      FF(JL+J) = 0.
+                  END DO
+  300         CONTINUE
+
+          ELSE IF ( TYPE.EQ.'FOUR')                            THEN
+ 
+***        FOURIER CASE.
+ 
+              ILAT = IBUF(6)
+              LR   = IBUF(5) * 2
+
+              JL   = 0
+
+              DO 350 L=1,NLEV
+                  ALEV = PR(L)
+                  DO  J=1,ILAT
+                        JL       = JL + 1
+                      FF(JL)     = ALEV
+                      DO  I=2,LR
+                            JL   = JL + 1
+                          FF(JL) = 0.
+                      END DO
+                  END DO
+  350         CONTINUE
+
+          ELSE
+
+              CALL PRTLAB2('  Read    ', IBUF )
+              CALL                                 XIT('  Pgen  ',-3 )
+
+          END IF
+ 
+***        PUT F INTO OUTPUT FILE POUT = TAPE2.
+ 
+          IBUF(8) = -16
+          IF (TYPE.EQ.'ZONL') IBUF(8) = -32
+          READ(PRES,0004) IBUF(3)
+
+          IF (PKTYP.EQ.'SQ') CALL SETKIND( VKINDC )
+
+          CALL PUTSET2( 2, FF, LEV,NLEV, IBUF,MAXW )
+          NF = NF + NLEVA
+
+      GOTO 150
+
+***    E.O.F. ON INPUT.
+
+ 0900  CALL                                        XIT('  Pgen  ',-8 )
+
+ 0911 IF (IO.NE.0) WRITE(6,6011) IO
+      CALL                                         XIT('  Pgen  ',-14 )
+*----------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0020 FORMAT(BN,E20.0)
+
+ 6002 FORMAT('  Nlev=',I3,', ibuf= ')
+
+ 6010 FORMAT('  Pgen read ',I5,' fields.')
+ 6011 FORMAT('  Unable to read A,B in aabb.nml namelist file,',
+     +       '  error no.',I5/)
+ 6013 FORMAT(' Wrong number of A,B entries in AABB namelist.',
+     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+
+ 6030 FORMAT('  p.lid (pa)=',F10.3,', p.ref (pa)=',F10.3,
+     +       ', r (exponent)=',F10.3)
+
+ 6110 FORMAT('  Using A and B from file aabb.nml'/)
+
+      END
+#     endif

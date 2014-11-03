@@ -1,0 +1,708 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      spvdgx  SPU SPV SPX SPOUT INPUT OUTPUT [ -lon VAL1 -lat VAL2 ]
+*
+*
+*     DESCRIPTION...
+*      spvdgx - SPECTRAL V DOT GRAD X
+*
+*
+*     AUTHOR  - S.LAMBERT, NOV 1980.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spvdgx.ptn,v 4.17 2014/10/16 11:34:09 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES THE SPHERICAL HARMONIC COEFFICIENTS OF A TERM OF
+*               THE FORM V DOT GRAD X FROM THE GLOBAL SPHERICAL HARMONIC
+*               COEFFICIENTS OF U, V, AND X.
+*     NOTES   - 1) MANY APPLICATIONS OF THIS PROGRAM WILL REQUIRE THE
+*                  DIVERGENCE TO BE REMOVED FROM THE WIND FIELD.
+*               2) MAXIMUM DIMENSIONS ARE 1999 GAUSSIAN LONGITUDES
+*                  AND 999 GAUSSIAN LATITUDES.
+*               3) THE PROGRAM ASSUMES THAT THE SPU VARIABLE NAME BE
+*                  EITHER 'U' OR 'UU'. FOR SPV, THE CHOICES ARE 'V'
+*                  OR 'VV'. IF THESE NAMES ARE 'UU' AND 'VV', A KNOTS
+*                  TO M/S CONVERSION FACTOR IS APPLIED TO SPOUT.
+*
+*
+*     INPUT FILES...
+*      SPU   = GLOBAL SPECTRAL MODEL WIND U-COMPONENT
+*      SPV   = GLOBAL SPECTRAL MODEL WIND V-COMPONENT
+*      SPX   = GLOBAL SPECTRAL FIELDS OF SOME VARIABLE.
+*
+*     OUTPUT FILE...
+*      SPOUT = GLOBAL SPECTRAL COEFF OF V DOT GRAD X.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      ILAT (-lat) = NUMBER OF LATITUDES IN THE TRANSFORM GAUSSIAN GRID.
+*      LON  (-lon) = LENGTH OF A GAUSSIAN GRID ROW.
+*
+*      READ( 5,5000 ) ILAT,LON
+*5000  FORMAT(10X,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*   SPVDGX   52   64
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 LON AND/OR ILAT TOO LARGE
+*       2 SPU,SPV NOT THE SAME SIZE
+*       3 SPX IS NOT A SPECTRAL FILE
+*       4 SPECTRAL ARRAYS TOO LARGE
+*       5 SIZE MISMATCH BETWEEN WINDS AND SCALAR
+*       6 ERROR DECODING FIRST SPU
+*       7 ERROR READING SPV
+*       8 ERROR READING SPX
+*       9 ERROR READING INPUT
+*      10 ERROR READING FIRST SPX
+*      11 ERROR READING FIRST SPV
+*      12 ERROR READING FIRST SPU
+*      13 NOT ENOUGH MEMORY
+*      14 SPU/SPV NAME PROBLEMS
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spvdgx
+*    +               (SPU,        SPV,        SPX,          SPOUT,
+*    +                    INPUT,        OUTPUT,
+*    +         TAPE11=SPU, TAPE12=SPV, TAPE13=SPX,   TAPE14=SPOUT,
+*    +                                 TAPE5 =INPUT, TAPE6 =OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: spvdgx.ptn,v $
+*     Revision 4.17  2014/10/16 11:34:09  dugas
+*     Modifications commandees par la compilation avec GFORTRAN et IFORT.
+*
+*     Revision 4.16  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.15  2013/10/28 21:14:04  bernard
+*     Remplacer GAUSSG par GAUSSG16.
+*
+*     Revision 4.14  2013/10/16 21:12:08  bernard
+*     Utiliser les macros longitude_maximal, latitude_maximale et lm_maximal pour definir les parametres MAXI, MAXJ et MAXLM, respectivement.
+*
+*     Revision 4.13  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.12  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.11  2003/09/15 16:08:39  dugas
+*     Modifier le traitement des noms de variables de SPU et SPV
+*
+*     Revision 4.10  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.9  1999/11/17 20:39:18  armnrbd
+*     Ajouter un test pour verifier si l'allocation de memoire a reussi.
+*
+*     Revision 4.8  1999/11/03 20:33:33  armnrbd
+*     Ajouter la comparaison a UNDERFL dans SPVD.
+*     Faire appel a FASTX8 plutot qu'a FAST dans SPVD.
+*
+*     Revision 4.7  1998/07/03 02:26:41  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.6  1997/09/30  22:26:41  armnrbd
+*     Corriger une erreur de declaration.
+*
+*     Revision 4.5  1997/09/26  18:36:02  armnrbd
+*     Deuxieme phase de la generalisation de taille_entete.
+*
+*     Revision 4.4  1997/09/26  17:39:22  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.3  1997/05/30  18:06:03  armnrbd
+*     Conversions de noms/unites seulement pour fichiers SQ89.
+*
+*     Revision 4.2  1997/05/09  14:17:35  armnrbd
+*     Tentatives d'acceleration du calcul.
+*
+*     Revision 4.1  1995/10/26  18:15:16  armnrbd
+*     Utiliser HPALLOC plutot que MEMOIR.
+*     Corriger un bogue dans la lecture des champs.
+*
+*     Revision 4.0  1994/11/17  14:21:59  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  93/10/28  12:24:24  armnrbd
+*     Implanter le support des parametres RPBLOC.
+*     Implanter la variable CPP "nombre_de_taches"
+*     Differents changements cosmetiques.
+*     
+*     Revision 3.0  93/10/13  13:57:09  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.5  93/06/09  16:02:07  armnrbd
+*     Corriger l'allocation de memoire pour SPU.
+*     
+*     Revision 1.4  92/11/23  11:11:59  armnrbd
+*     Implanter le traitement par GETSIZ/GETSIZ2.
+*     
+*     Revision 1.3  92/10/13  15:57:20  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.2  92/03/17  15:09:43  armnrbd
+*     Ajouter "Header" dans documentation.
+*     
+*     Revision 1.1  92/03/13  17:37:09  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:59  armnrbd
+*     Initial revision
+*     
+
+*     FEV 21/91 - B.DUGAS. (PORT TO CY920/IRIX F77)
+*     AUG 13/85 - B.DUGAS. (AUGMENTER DIMENSION DE ALP, DALP, ETC.)
+*     NOV 1980  - S. LAMBERT
+
+*-----------------------------------------------------------------------
+*     NOTE CONCERNING SPACE ALLOCATION...
+
+***    ALL SPECTRAL INPUT ARRAYS ARE IN SP(), THEIR ORDER BEING
+***    U, V, X AND ANS  **** IN A CONTIGUOUS MANNER ****.   ALL
+***    SLICES ARRAYS ARE IN SLICE, THEIR ORDER BEING U, V, XLAT,
+***    XLNG, X AND ANS *** ALSO IN A CONTIGUOUS MANNER ***.
+
+*-----------------------------------------------------------------------
+      IMPLICIT  none
+
+      INTEGER, PARAMETER :: MAXLEV = 4
+      INTEGER, PARAMETER :: MAXI = longitude_maximale
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXLM = lm_maximal
+
+      REAL*8      WOCS(MAXJ),    SIA(MAXJ), RAD(MAXJ),
+     +            WEIGHT(MAXJ),  S(MAXJ),   ALP,DALP,EPSI
+      REAL        SLICE,ZERO,    WRKS,SP,   TRIGS(MAXI),CONVERT
+      INTEGER     LSR(2,MAXLM+1),IFAX(20),  IB(taille_entete,MAXLEV),
+     +            LRW(2,MAXLM+1),IBUF
+
+      LOGICAL     OK,RPBLOC
+      CHARACTER   VALEUR*10,TYPE*4,LIGNE*80,NOMU*4,NOMV*4
+      INTEGER     I,J,K,L,JBUF(taille_entete),JPAK,KBUF(taille_entete),KPAK,LBUF(taille_entete),LPAK,
+     +            NX,NR,NFF, LEN1,LEN2,LEN3,MAXW1,MAXW2,MAXW3,HEAD,
+     +            MAXW,LEN,NWDS,ILAT,ILATH,LON,ILH,ILEV,LA,LAW,LR,
+     +            LM,KTR,LRLMT,IR,MEMSP,MEMSLC,MEMALP,MEMWRK,IO,
+     +            MAXLG,M,N,IER,TOTAL
+
+      POINTER   ( PA,  ALP(1) )
+      POINTER   ( PD, DALP(1) )
+      POINTER   ( PE, EPSI(1) )
+      POINTER   ( PS,   SP(1) )
+      POINTER   ( PC,SLICE(1) )
+      POINTER   ( PW, WRKS(1) )
+      POINTER   ( PI, IBUF(8) )
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      INTEGER     GETSIZ
+      EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,GETSIZ,CMPLBL,
+     +            DIMGT2,HPALLOC,HPDEALLC,GAUSSG16,TRIGL,EPSCAL,
+     +            FTSETUP,GETFLD2,XIT,SPVD,SETLAB,PUTFLD2,
+     +            PRECEDE,RPBLOC
+
+      DATA        CONVERT / .514444 /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spvdgx.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    CONSTANTES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    OUVRIR LES UNITES D'E/S.
+
+      NFF = 6
+      CALL JCLPNT( NFF, 11,12,13,14, 5,6 )
+
+      NR   = 0
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          LON    = 0
+          ILAT   = 0
+
+          OK = RPBLOC('LON',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=900,IOSTAT=IO) LON
+
+          OK = RPBLOC('LAT',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I5)',ERR=900,IOSTAT=IO) ILAT
+
+          IF (ILAT.EQ.0 .OR. LON.EQ.0) GOTO 901
+
+      ELSE
+
+***        READ SIZE OF TRANSFORM GRID
+
+          CALL GETLIGN( 5, LIGNE,80, OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 901
+          ELSE
+              READ( LIGNE, 5000, ERR=900,END=901,IOSTAT=IO ) 
+     +                           ILAT,LON
+              CALL BURNF
+          END IF  
+
+      END IF
+
+      IF (LON.GT.MAXI-2 .OR. ILAT.GT.MAXJ)                     THEN
+          WRITE (6,6015) ILAT,LON
+          CALL                                     XIT(' Spvdgx ',-1 )
+      END IF
+      MAXLG = LON+2
+
+      WRITE(6,6010) LON,ILAT
+
+***    GET SIZE OF SPECTRAL FIELDS. ASK FOR NECESSARY MEMORY.
+
+  100 MAXW3 = GETSIZ( 11, LBUF,LEN3,NWDS,LPAK )
+      IF (MAXW3.EQ.0) GOTO 993
+      MAXW2 = GETSIZ( 12, KBUF,LEN2,NWDS,KPAK )
+      IF (MAXW2.EQ.0) GOTO 992
+      MAXW1 = GETSIZ( 13, JBUF,LEN1,NWDS,JPAK )
+      IF (MAXW1.EQ.0) GOTO 991
+
+      CALL CMPLBL( 0,KBUF, 0,LBUF, OK ) 
+
+      IF (.NOT.OK)                                             THEN
+          CALL PRTLAB( JBUF )
+          CALL PRTLAB( KBUF )
+          CALL PRTLAB( LBUF )
+          CALL                                     XIT(' Spvdgx ',-2 ) 
+      END IF
+
+      LEN  = MAX( LEN1, LEN2, LEN3  )
+      MAXW = MAX( MAXW1,MAXW2,MAXW3 )
+
+      WRITE(TYPE,0004) JBUF(1)
+      IF (TYPE.NE.'SPEC')
+     +    CALL                                     XIT(' Spvdgx ',-3 )
+
+      LRLMT  = JBUF(7)
+      CALL DIMGT2( LSR, LA,LR,LM,KTR,LRLMT, 0,0 )
+      IR     = LM-1
+      LAW    = LA+LM
+
+      IF (LM  .GT. MAXLM   ) CALL                  XIT(' Spvdgx ',-4 )
+      IF (LAW .NE. KBUF(5) ) CALL                  XIT(' Spvdgx ',-5 )
+
+      MEMALP =   (LAW+1)
+
+      TOTAL  = 3*MEMALP
+
+      CALL HPALLOC( PA,TOTAL,IER,8 )   ! DEFINE POINTER TO ALP
+
+      IF (IER.NE.0) CALL                           XIT(' Spvdgx ',-13 )
+
+      PD = LOC(   ALP(MEMALP+1) )      ! DEFINE POINTER TO DALP
+      PE = LOC(  DALP(MEMALP+1) )      ! DEFINE POINTER TO EPSI
+
+      MEMSP  = 4*(LA+LAW)*MAXLEV
+      MEMSLC = 6* MAXLG  *MAXLEV
+      MEMWRK =    MAXLG  *MAXLEV
+
+      TOTAL  = MEMSP + MEMSLC + MEMWRK + LEN +1
+
+      CALL HPALLOC( PS,TOTAL,IER,0 )   ! DEFINE POINTER TO SP
+
+      IF (IER.NE.0) CALL                           XIT(' Spvdgx ',-13 )
+
+      PC = LOC(    SP(MEMSP +1) )      ! DEFINE POINTER TO SLICE
+      PW = LOC( SLICE(MEMSLC+1) )      ! DEFINE POINTER TO WRKS
+      PI = LOC(  WRKS(MEMWRK+1) )      ! DEFINE POINTER TO IBUF
+
+***    CHECK SPU AND SPV VARIABLE NAMES FOR COHERENCY.
+
+      WRITE(NOMU,0004) LBUF(3)
+      WRITE(NOMV,0004) KBUF(3)
+
+      IF ((NOMU.EQ.'U'  .AND. NOMV.EQ.'VV') .OR.
+     +    (NOMU.EQ.'UU' .AND. NOMV.EQ.'V' ) .OR.
+     +    (NOMU.NE.'U'  .AND. NOMU.NE.'UU') .OR.
+     +    (NOMV.NE.'V'  .AND. NOMV.NE.'VV')) CALL  XIT(' Spvdgx ',-14) 
+
+***    LRW IS RELATIVE POSITION OF SPECTRAL WAVE NUMBER FOR
+***    MODEL WINDS.
+
+      DO 130 M=1,LM+1
+          LRW(1,M)  = LSR(2,M)
+          LRW(2,M)  = LSR(2,M)
+  130 CONTINUE
+
+***    CALCULATE CONSTANTS.
+
+      ILATH = ILAT/2
+      ILH   = MAXLG/2
+
+      CALL GAUSSG16( ILATH,S,WEIGHT,SIA,RAD,WOCS )
+      CALL TRIGL ( ILATH,S,WEIGHT,SIA,RAD,WOCS )
+      CALL EPSCAL( EPSI,LSR,LM )
+      CALL FTSETUP(TRIGS,IFAX,LON )
+
+*---------------------------------------------------------------------
+***    READ AS MANY FIELDS AS POSSIBLE.
+
+  150 ILEV = 0
+      NX   = 1
+
+      DO  L=1,MAXLEV
+
+          CALL GETFLD2( 11, SP(NX), 'SPEC',-1,NOMU,-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL                            HPDEALLC( PA,IER,0 )
+                  CALL PRECEDE( 11, L-1 )
+                  GOTO 100
+              ELSE IF (ILEV+NR.EQ.0)                           THEN
+                  CALL              XIT(' Spvdgx ', -6 )
+              ELSE IF (ILEV.EQ.0)                              THEN
+                  CALL                            HPDEALLC( PA,IER,0 )
+                  WRITE (6,6020) NR
+                  CALL                            XIT(' Spvdgx ',  0 )
+              ELSE
+                  GOTO 170
+              END IF
+          END IF
+
+          IF (NR+L.EQ.1) CALL PRTLAB( IBUF )
+
+          NX   = NX+LAW*2
+          NR   = NR+1
+          ILEV = ILEV+1
+
+      END DO
+  170 DO  L=1,ILEV
+
+          CALL GETFLD2( 12, SP(NX), 'SPEC',-1,NOMV,-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL                            HPDEALLC( PA,IER,0 )
+                  CALL PRECEDE( 11, ILEV )
+                  CALL PRECEDE( 12, L-1 )
+                  GOTO 100
+              END IF
+              CALL                                XIT(' SPVDGX ', -7 )
+          END IF
+
+          IF (NR+L.EQ.ILEV+1) CALL PRTLAB( IBUF )
+
+          NX = NX+LAW*2
+
+      END DO
+      DO  L=1,ILEV
+
+          CALL GETFLD2( 13, SP(NX), 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (MAXW.EQ.0)                                   THEN
+                  CALL                            HPDEALLC( PA,IER,0 )
+                  CALL PRECEDE( 11, ILEV )
+                  CALL PRECEDE( 12, ILEV )
+                  CALL PRECEDE( 13, L-1 )
+                  GOTO 100
+              END IF
+              CALL                                XIT(' SPVDGX ', -8 )
+          END IF
+
+          IF (NR+L.EQ.ILEV+1) CALL PRTLAB( IBUF )
+
+          NX = NX+LA*2
+
+          DO  N=1,taille_entete
+              IB(N,L) = IBUF(N)
+          END DO
+
+      END DO
+
+      CALL SPVD( SP,SLICE, ALP,DALP,EPSI,
+     +           WRKS,S,WEIGHT, TRIGS,IFAX,
+     +           LA,LAW,LR,LM,LSR,LRW,IR,
+     +           ILH,LON,MAXLG,ILAT,ILEV )
+
+***    ACCOUNT FOR POSSIBLE NON "MKS" UNITS IN RPN FILES.
+
+      IF (NOMV.EQ.'VV')                                    THEN
+          DO  I=NX,NX+ILEV*LA*2
+              SP(I) = SP(I)*CONVERT
+          END DO
+      END IF
+
+***    WRITE OUTPUT ON UNIT 14
+
+      CALL SETLAB( IBUF,'SPEC',-1,'VDGX',-1,LA,1,LRLMT,-1 )
+
+      DO  L=1,ILEV
+
+          IBUF(2) = IB(2,L)
+          IBUF(4) = IB(4,L)
+
+          DO  I=9,taille_entete
+              IBUF(I) = IB(I,L)
+          END DO
+
+          CALL PUTFLD2( 14, SP(NX),IBUF,MAXW )
+
+          IF (NR+L.EQ.ILEV+1) CALL PRTLAB( IBUF )
+
+          NX = NX+LA*2
+
+      END DO
+
+      GOTO 150
+
+***    E.O.F. ON INPUT.
+
+  900 IF (IO.NE.0) WRITE(6,6030) IO
+  901 CALL                                         XIT(' Spvdgx ', -9 )
+
+***    E.O.F. ON DATA FILES.
+
+  991 CALL                                         XIT(' Spvdgx ', -10) 
+  992 CALL                                         XIT(' Spvdgx ', -11) 
+  993 CALL                                         XIT(' Spvdgx ', -12) 
+
+*-----------------------------------------------------------------------
+ 0004 FORMAT(A4)
+
+ 5000 FORMAT(10X,2I5)
+
+ 6010 FORMAT('0 Lon,lat=',2I6)
+ 6015 FORMAT(' ** Warning ** ilat and/or lon are too large',2I6,
+     +       ' ** Warning **')
+ 6020 FORMAT('0Spvdgx produced ',I6,' records.')
+ 6030 FORMAT(' Spvdgx reports I/O error ',I4,' on unit 5.')
+
+      END
+      SUBROUTINE SPVD( SPR,SLICE,   ALP,DALP,EPSI,WRKS,S,WEIGHT, 
+     +                 TRIGS,IFAX, LA,LAW,LR,LM,LSR,LRW,IR, 
+     +                 ILH,LON,MAXLG,ILAT,ILEV )
+
+***    FEV 21/91 - B.Dugas, RPN.
+
+***    CECI EST UNE ROUTINE APPELLEE PAR SPVDGX, AFIN DE SIMPLIFIER
+***    L'UTILISATION DE LA MEMOIRE DYNAMIQUE (DU TYPE CALL MEMOIR).
+
+      IMPLICIT  none
+
+      REAL      SPR(*)
+      COMPLEX   SP
+      POINTER  (PSP,SP(*))
+
+      INTEGER   ISU,ISV,ISX,ISA,
+     +          LA,LAW,LR,LM,IR,
+     +          IGU,IGV,ILT,ILG,IGX,IGA,
+     +          ILH,LON,MAXLG,ILAT,ILEV,
+     +          I,IH,J,L,M,NUMBER,IREAL,IMAG
+
+      INTEGER   IFAX(20),     LSR(2,LM), LRW(2,LM)
+
+      REAL*8    A,B,AM,       UNDERFL
+      REAL      TRIGS(LON),   WRKS(1),   SLICE(MAXLG,1)
+      REAL*8    ALP(LAW),     DALP(LAW), EPSI(LAW), 
+     +          WEIGHT(ILAT), S(ILAT),   WLJ,COSSQ
+
+      REAL*8    ALPALL,DALPALL,SPOUT
+      INTEGER   LRLMT,HOLD,KTR,IER
+      POINTER ( P1, ALPALL(LAW+1,ILAT) )
+      POINTER ( P2, DALPALL(LAW+1,ILAT) )
+      POINTER ( P3, SPOUT(2,LA*ILEV) )
+      SAVE      LRLMT, P1,P2
+
+#     include  "machtype.cdk" 
+
+      EXTERNAL  FFGFW,FFWFG
+      EXTERNAL  ALPST2,ALPDY2,STAF,FASTX8,
+     +          HPALLOC,HPDEALLC
+
+      DATA      LRLMT / 0 /
+*---------------------------------------------------------------------
+      PSP = LOC( SPR(1) )
+
+      IF (MACHINE.EQ.1) UNDERFL = 1.D-300
+      IF (MACHINE.EQ.2) UNDERFL = 1.2D-38
+
+***    DETERMINE POSITION OF SPECTRAL FIELDS.
+
+      ISU = 1
+      ISV = ISU+LAW*ILEV
+      ISX = ISV+LAW*ILEV
+      ISA = ISX+LA*ILEV
+
+***    DETERMINE POSITION OF FIELDS ON SLICE ARRAY
+
+      IGU = 1
+      IGV = IGU+ILEV
+      ILT = IGV+ILEV
+      ILG = ILT+ILEV
+      IGX = ILG+ILEV
+      IGA = IGX+ILEV
+
+      IF (LM.GE.2 .AND.
+     +    LSR(1,2)-LSR(1,1).EQ.LSR(1,3)-LSR(1,2))              THEN
+          KTR = 0
+      ELSE
+          KTR = 2
+      END IF
+
+***    ALLOCATE ALPALL AND DALPALL.
+
+      HOLD = (LR*1000+LM)*1000+KTR
+
+      IF (LRLMT.NE.HOLD)                                       THEN
+
+          IF (LRLMT.NE.0) 
+     +    CALL HPDEALLC( P1,IER,0 )
+
+          LRLMT = HOLD
+
+          CALL HPALLOC( P1,2*(LAW+1)*ILAT,IER,8 )
+          P2 = LOC( ALPALL( LAW+2,ILAT) )
+          
+          DO  IH=1,ILAT
+
+              ALPALL(LAW+1,IH) = 0.
+
+              CALL ALPST2(  ALPALL(1,IH),LSR,LM,S(IH),EPSI )
+              CALL ALPDY2( DALPALL(1,IH),ALPALL(1,IH),LSR,LM,EPSI )
+
+**         ACCOUNT FOR POSSIBLE UNDERFLOWS.
+
+          DO  J=1,LAW
+              IF (ABS(  ALPALL(J,IH) ).LT.UNDERFL)  ALPALL(J,IH) = 0.0
+              IF (ABS( DALPALL(J,IH) ).LT.UNDERFL) DALPALL(J,IH) = 0.0
+          END DO
+
+          END DO
+
+      END IF
+
+***    ALLOCATE SPOUT AND INITIALISE SPOUT.
+
+      CALL HPALLOC( P3,2*LA*ILEV,IER,8 )
+
+      DO  J=1,2*LA*ILEV
+          SPOUT(J,1) = 0.0
+      END DO
+          
+***    LOOP OVER TRANSFORM GRID LATITUDES.
+
+      ALP(LAW+1) = 0.
+      DO 300 IH=1,ILAT
+
+          WLJ = WEIGHT(IH)
+
+***    COMPUTE FOURIER COEFFICIENTS AT ALL LEVELS FIRST FOR
+***    U,V AND THEN FOR X AND XLNG.
+
+          NUMBER = 2*ILEV
+          CALL STAF( SLICE(1,IGU),SP(ISU),LRW,LM,LAW,
+     +               ILH,NUMBER,  ALPALL(1,IH)  )
+          CALL STAF( SLICE(1,IGX),SP(ISX),LSR,LM,LA,
+     +               ILH,ILEV,    ALPALL(1,IH)  )
+          CALL STAF( SLICE(1,ILT),SP(ISX),LSR,LM,LA,
+     +               ILH,ILEV,    DALPALL(1,IH) )
+
+          DO 100 M=1,LM
+
+              AM    = FLOAT(M-1)
+              IREAL = 2*M-1
+              IMAG  = IREAL+1
+
+CDIR$ IVDEP
+
+              DO  L=0,ILEV-1
+                  SLICE(IREAL,ILG+L) =-AM*SLICE(IMAG, IGX+L)
+                  SLICE(IMAG, ILG+L) = AM*SLICE(IREAL,IGX+L)
+              END DO
+
+  100     CONTINUE
+
+***    COMPUTE GRID POINT VALUES
+
+          NUMBER = 4*ILEV
+          CALL FFGFW3( SLICE,MAXLG,IR,LON,WRKS,NUMBER,IFAX,TRIGS )
+
+          COSSQ = 1.-S(IH)*S(IH)
+          DO 200 L=0,ILEV-1
+
+***    COMPUTE PRODUCT ON THE GRID
+
+              DO  I=1,LON
+                  A              = SLICE(I,IGU+L)*SLICE(I,ILG+L)
+                  B              = SLICE(I,IGV+L)*SLICE(I,ILT+L)
+                  SLICE(I,IGA+L) = (A+B)/COSSQ
+              END DO
+
+  200     CONTINUE
+
+***    COMPUTE FOURIER COEFFICIENTS
+
+          CALL FFWFG3( SLICE(1,IGA),MAXLG,IR,LON,WRKS,ILEV,IFAX,TRIGS )
+
+***    COMPUTE SPHERICAL HARMONIC COEFFICIENTS
+
+          DO  L=1,LAW
+              ALP(L) = ALPALL(L,IH)*WLJ
+          END DO
+
+          CALL FASTX8( SPOUT,SLICE(1,IGA),LSR,LM,LA,ILH,ILEV,ALP )
+
+  300 CONTINUE
+
+      ISA = ISA-1
+      DO  I=1,LA*ILEV
+          SP(ISA+I) = CMPLX( SNGL( SPOUT(1,I) ),SNGL(SPOUT(2,I) ) )
+      END DO
+
+      CALL HPDEALLC( P3,IER,0 )
+
+      RETURN
+      END
+#     endif

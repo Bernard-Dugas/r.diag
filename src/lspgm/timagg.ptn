@@ -1,0 +1,987 @@
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 10000000
+#     endif
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      timagg  INFIL OUTFIL [ DATFIL ] OUTPUT [ -def ][ -delt VAL1 ]
+*
+*
+*     DESCRIPTION...
+*      timagg - CONVERT A SET OF TIME SERIES TO GRIDS.
+*
+*
+*     AUTHOR  - B.Dugas, JAN/87.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/timagg.ptn,v 4.18 2014/10/09 21:43:21 dugas Exp $
+*
+*
+*     PURPOSE - TRANSPOSE A  FILE OF TIME SERIES (OR TIME SPECTRAL COEF-
+*               FICIENTS,  IF KIND= 'FOUR') AT SINGLE  POINTS (OR SINGLE
+*               SPACE  SPECTRAL COEFFICIENTS) TO PRODUCE A FILE OF (REAL
+*               OR COMPLEX) GRIDS OR ZONAL OR TIME FOURIER PROFILES (OR
+*               SPECTRAL ARRAYS).
+*
+*
+*     INPUT FILE...
+*      INFIL:  A FILE OF TIME SERIES (ONE RECORD FOR EACH POINT)
+*              WITH THE STANDARD TIME SERIES LABEL -->
+*
+*                   IBIN(1) = THIS VALUE IS CONSERVED ON OUTPUT IF
+*                             'CMPL','GRID','SUBA' OR 'ZONL'. HOWEVER, IF
+*                             IT IS 'COEF', THE OUTPUT WILL BE 'SPEC'.
+*                             IF INPUT IS 'FOUR', OUTPUT IS SIMPLY
+*                             OF THE COMPLEX 'CMPL' TYPE.
+*                   IBIN(2) = LINEAR POSITION IN THE ORIGINAL ARRAY.
+*                   IBIN(3) = NAME
+*                   IBIN(4) = LEVEL
+*                   IBIN(5) = LENGTH OF SERIES.
+*                   IBIN(6) = 1
+*                   IBIN(7) = DIMENSIONS OF ARRAY KHEM (IN FORMAT CCCRRRK,
+*                             WHERE CCC IS THE NUMBER OF LONGITUDES AND RRR
+*                             IS THE NUMBER OF LATITUDES,  OR  LRLMT)
+*                   IBIN(8) = PACKING DENSITY
+*
+*      DATFIL: AN OPTIONAL REAL TIME SERIES (OF SAME LENGTH AS THOSE
+*              OF INFIL) THAT CONTAINS THE TIMESTEP INFORMATION TO BE
+*              USED FOR OUTFIL.
+*
+*      NOTES:  1) THE INPUT TIME SERIES ARE ALL SUPPOSED TO BE VALID FOR 
+*                 THE SAME TIME FRAME.
+*              2) BY DEFAULT, THE PROGRAM USES SCRATCH FILES TO SEPERATE
+*                 THE VARIABLES AND/OR THE LEVELS. EACH SYSTEM IMPOSES A
+*                 LIMIT TO THE NUMBER OF SUCH FILES. THIS IN TURN IMPOSES
+*                 A LIMIT ON THE NUMBER OF VARIABLES AND/OR LEVELS.
+*                 ACCORDINGLY, IF YOU KNOW THAT THE NUMBER OF LEVELS AND
+*                 VARIABLES IN DATFIL IS LARGER THAN THIS LIMIT, SPECIFY
+*                 THE "-def" KEY ON THE COMMAND LINE. THE PROGRAM WILL
+*                 THEN USE A SINGLE DIRECT-ACCESS SCRATCHFILE, APPENDING
+*                 TO IT AS NEED BE. THIS ALTERNATE PROCEDURE MAY TURN OUT
+*                 TO BE LESS EFFICIENT THAN THE MULTIPLE SCRATCH FILE
+*                 OPERATING MODE.
+*              3) IN THE COMPLEX 'CMPL' CASE, THE OPERATION ACTUALLY
+*                 YIELDS THE CONJUGATE TRANSPOSE MATRIX.
+*              4) TIMAGG IS THE FUNCTIONAL INVERSE OF GGATIM IN THE
+*                 SENSE THAT IT HAS THE BEST CHANCE TO RESTORE THE
+*                 DATA TO ITS ORIGINAL FORM (PRIOR TO GGATIM).
+*              5) THE SIZE OF THE ORIGINAL TIMESTEP or sample interval
+*                 (WHICH IS LOST WITH GGATIM) CAN BE RESTORED FOR RPN
+*                 STANDARD FILES BY USING THE "-delt" KEY.
+*
+*
+*     OUTPUT FILE...
+*      OUTFIL: A TIME SERIES OF GRID, ZONAL OR SPECTRAL PROFILES.
+*              THE FIRST VALUE IN ANY TIME SERIES FROM INFIL IS
+*              VALID AT TIME VALUE 0, THE SECOND IS VALID AT TIME
+*              VALUE ONE AND SO ON TO THE END OF INFIL.
+*
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ILLEGAL DATA TYPE
+*       2 OUTPUT GRID SIZE INCORRECT
+*       3 INFIL MAY NOT BE A TS FILE
+*       4 MORE THAN ONE SET OF VERTICAL LEVELS 
+*       5 TOO MANY VARIABLES AND/OR LEVELS
+*       6 ERROR ABORT READING INFIL IN GETFLD2
+*       7 MORE THAN ONE INPUT GRID SIZE
+*       8 MORE THAN ONE SET OF HORIZONTAL POSITIONS
+*       9 AT LEAST ONE INCOMPLETE SET IN INFIL
+*      10 ERROR ABORT READING INFIL IN GETSIZ
+*      11 ERROR ABORT WITH TEMPORARY FILES
+*      12 ERROR READING/USING DATFIL INFO
+*      13 ERROR ABORT READING DELT
+*      14 UNABLE TO ALLOCATE MEMORY
+#
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM timagg
+*    1              (INFIL,       OUTFIL,       OUTPUT,
+*    2         TAPE1=INFIL, TAPE2=OUTFIL, TAPE6=OUTPUT)
+ 
+*     $Log: timagg.ptn,v $
+*     Revision 4.18  2014/10/09 21:43:21  dugas
+*     Conserver les dates de validites pour les fichiers CMC/RPN.
+*
+*     Revision 4.17  2014/09/25 20:20:54  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.16  2013/10/16 20:52:37  bernard
+*     Utiliser le macro lm_maximal pour definir le parametre MAXLM.
+*
+*     Revision 4.15  2012/08/29 16:01:40  dugas
+*      - Ajouter certaines declarations de variables 'a la' F90.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.14  2010/12/01 17:36:23  dugas
+*     Correction de la declaration EXTERNAL de PUTHIGH.
+*
+*     Revision 4.13  2010/10/26 20:38:37  dugas
+*     Corriger le calcul de MAXW et l'allocation de IBUF.
+*
+*     Revision 4.12  2010/03/27 20:34:29  dugas
+*     - Gestion dynamique de la memoire via ALLOCATE/DEALLOCATE.
+*     - On utilise le fait que pour les fichiers CMC/RPN, DEET
+*       contient le nombre de secondes entre les deux premiers
+*       echantillons (et l'argument -delt devient superflux).
+*
+*     Revision 4.11  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.10  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.9  2003/10/24 20:57:43  dugas
+*     Remplacer les appels a PERROR par des appels a MESSYS
+*
+*     Revision 4.8  2002/01/14 15:26:20  dugas
+*     Specifier DEET=3600 si aucune autre valeur n'est deja donnee (autre que 0).
+*
+*     Revision 4.7  1999/06/30 15:38:29  armnrbd
+*     Ajouter l'option de restauration de la taille du pas-de-temps.
+*     Lire le fichier DATFIL en mode 64-bits (suite aus mods Y2K).
+*
+*     Revision 4.6  1998/07/03 02:26:43  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:53:45  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.3  1996/05/13  20:45:32  armnrbd
+*     Corriger une erreur de declaration de IBOUT.
+*
+*     Revision 4.2  1996/02/22  01:59:50  armnrbd
+*     Ajouter le mode "-def".
+*     Modifier le traitement des series de fourier.
+*
+*     Revision 4.1  1995/06/07  19:34:49  armnrbd
+*     LENGTH depend maintenant de JBUF(5) et de JBUF(6) plutot
+*     que de ne dependre que de JBUF(5).
+*
+*     Revision 4.0  1994/11/17  14:22:07  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/10/03  16:27:41  armnrbd
+*     Ajouter la possiblilite de lire le fichier DAT.
+*     
+*     Revision 3.1  94/04/12  13:28:52  13:28:52  armnrbd (Bernard Dugas)
+*     Version a plusieurs niveaux et/ou variables.
+*     
+*     Revision 3.0  93/10/13  13:57:14  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.4  93/06/29  12:08:53  armnrbd
+*     Ajouter des verifications du status des series temporelles.
+*     
+*     Revision 1.3  93/02/21  16:34:17  armnrbd
+*     Ajouter le support de RPBLOCK.
+*     Allouer le champs TS avec HPALLOC/HPDEALLC.
+*     
+*     Revision 1.2  92/11/18  15:50:31  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/04/29  15:08:38  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:42:00  armnrbd
+*     Initial revision
+*     
+***    B.DUGAS - JANVIER 21/87.
+ 
+***    MODIFIE LE 25 NOV/1987 PAR B.DUGAS ...
+***    ...  AJOUTER LE CAS KIND = 'FOUR'.
+ 
+***    MODIFIE LE 27 MARS/1990 PAR B.DUGAS ...
+***    ...  VERSION MS/DOS ET/OU SUN/OS.
+ 
+*----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: MAXLM  = lm_maximal
+      INTEGER,    PARAMETER :: MAXVAR = 999
+      INTEGER,    PARAMETER :: MAXTS  = memoire_maximale
+
+      INTEGER*8   DATE8
+      REAL*8      HOURS
+      REAL        C,CTS
+      LOGICAL     FIN,OK,SPC,TFR,ZON,DAT,ALT,OK64
+      CHARACTER*4 KIND,COMP,SPEC,VARIAB(MAXVAR),VALEUR*10
+      INTEGER     WHERE,WHER2,LEN,LENIN,LENOUT,NPACK,MAXW,
+     +            LENGTH,LONGUE,LRLMT,LA,LR,NF,IO,LM,KTR,IB,
+     +            NCOLS,ICCC,IRRR,IHEM,NROWS,NWDS,CMPL,
+     +            JBUF(HEAD),IBOUT(HEAD),LSR(2,MAXLM),IER,
+     +            NS,NS0,MEM,NHOLD,NUIN,NUOUT,N,NL,BASE,I,J,
+     +            NIV,IX,LEV(MAXLEV),NLEV,NLV,NVAR,NOM,DEET,
+     +            NLEVAR,CURENT,NIO(MAXVAR),NWDSI,REC,MAXD,
+     +            LEND,NPAKD,KBUF(HEAD),DATEV0
+
+      real(8),    dimension(:), allocatable :: DATEF
+      real,       dimension(:), allocatable :: TS,X
+      integer,    dimension(:), allocatable :: IBUF,POSIT
+      
+      POINTER   ( PT, CTS(2,1) )
+      POINTER   ( PX,   C(2,1) )
+
+      SAVE        IBOUT
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      CHARACTER*4 PKTYP*2,GETYP
+      LOGICAL     RPBLOC,SETIO64
+      INTEGER     GETSIZ,QQQR8SZ,GETHIGH
+      EXTERNAL    GETSIZ,MACSPE,JCLPNT,XIT,DIMGT2,
+     +            LBLCHK,GETFLD2,READF,WRITEF,PUTMSET,
+     +            PRECEDE,CMPLBL,
+     +            WRITLEV2,RPBLOC,QQQR8SZ,
+     +            READFD,WRITEFD,PUTHIGH,SETIO64,
+     +            GETYP,GETHIGH
+
+      DATA        COMP,  SPEC /
+     +           'CMPL','SPEC'/
+      DATA        CMPL / 1 /
+      DATA        DAT  / .FALSE. /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/timagg.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+                   NF  = 4
+      CALL JCLPNT( NF, 1,2,3, 6 )
+
+      IF (NF.EQ.3) DAT = .TRUE.
+
+      PKTYP = GETYP( 1 )
+
+***    CHECK FOR ALTERNATE OPERATING MODE.
+
+      ALT  = .FALSE.
+      DEET = -1
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+          OK  = RPBLOC('DELT',VALEUR)
+          IF (OK) READ(VALEUR,'(BN,I10)',ERR=9013,IOSTAT=IO) DEET
+
+          ALT = RPBLOC('DEFAUT',VALEUR)
+
+      END IF
+
+***    CHECK INPUT FILE.
+ 
+      MAXW = GETSIZ( 1, JBUF,LENIN,NWDSI,NPACK )
+      IF (MAXW.LE.0) GOTO 9000
+
+      IF (DAT)                                                 THEN
+          MAXD = GETSIZ( 3, KBUF,LEND,NWDS,NPAKD )
+          IF (MAXD.LE.0) GOTO 9014
+      END IF
+
+      WRITE(6,6100)
+      CALL PRTLAB( JBUF )
+
+      WRITE(KIND,0004) JBUF(1)
+      IF (KIND.EQ.'GRID' .OR. 
+     +    KIND.EQ.'SUBA' .OR.
+     +    KIND.EQ.'CMPL')                                      THEN
+          ZON  =.FALSE.
+          SPC  =.FALSE.
+          TFR  =.FALSE.
+          IF (KIND.EQ.'CMPL')
+     +    CMPL = 2
+      ELSE IF (KIND.EQ.'ZONL')                                 THEN
+          ZON  =.TRUE.
+          SPC  =.FALSE.
+          TFR  =.FALSE.
+      ELSE IF (KIND.EQ.'COEF')                                 THEN
+          WRITE(6,6120)
+          ZON  =.FALSE.
+          SPC  =.TRUE.
+          TFR  =.FALSE.
+      ELSE IF (KIND.EQ.'FOUR')                                 THEN
+          WRITE(6,6130)
+          ZON  =.FALSE.
+          SPC  =.FALSE.
+          TFR  =.TRUE.
+          CMPL = 2
+      ELSE
+          CALL                                    XIT(' Timagg ',-1 )
+      END IF
+ 
+      IBOUT(1:HEAD) = JBUF(1:HEAD)
+
+      NWDSI = NWDSI/CMPL
+
+      IF (PKTYP(1:2) == 'SQ')                                  THEN
+          IF (DEET < 0) DEET  = GETHIGH( 'DEET', JBUF )
+          DATEV0 = GETHIGH( 'DATEO', JBUF )
+      END IF
+
+***    SET UP OUTFFIL SERIES LABEL.
+ 
+      IF (SPC)                                                 THEN
+ 
+          READ(SPEC,0004) IBOUT(1)
+          LRLMT    = JBUF(7)
+          CALL       DIMGT2( LSR, LA,LR,LM,KTR,LRLMT, 0,0 )
+          NCOLS    = LA*2
+          IBOUT(5) = LA
+          IBOUT(6) = 1
+          IBOUT(7) = LRLMT
+ 
+      ELSE
+ 
+          IBOUT(1) = JBUF(1)
+          IB       = JBUF(7)
+
+          ICCC     = IB/10000
+          IRRR     = (IB-ICCC*10000)/10
+          IHEM     = MOD( IB,10 )
+          NCOLS    = ICCC
+ 
+          IF (ZON)                                             THEN
+              IBOUT(6) = NCOLS
+              NCOLS    = IRRR
+              IBOUT(5) = NCOLS
+          ELSE
+              IBOUT(5) = NCOLS
+              IBOUT(6) = IRRR
+          END IF
+
+          IBOUT(7) = IHEM
+
+          IF (TFR) READ(COMP,0004) IBOUT(1)
+ 
+      END IF
+ 
+      IBOUT(3)     = JBUF(3)
+      IBOUT(4)     = JBUF(4)
+      IBOUT(8)     = JBUF(8)
+      NROWS        = IBOUT(6)
+      NWDS         = NROWS*NCOLS
+ 
+      IF (NWDS.EQ.0)                                           THEN
+          WRITE(6,6002) NROWS,NCOLS
+          CALL                                     XIT( ' Timagg ',-2 )
+      END IF
+
+***    FILE INFIL WILL BE PROCESSED A
+***    MAXIMUM OF NS0 TIME SERIES AT A TIME.
+ 
+      LENGTH = JBUF(5)*JBUF(6)
+      LONGUE = LENGTH
+      NS0    = (MAXTS-1)/(LONGUE*CMPL)+1
+ 
+      IF (NS0.LT.1 .OR. LONGUE.LT.1)                           THEN
+          WRITE(6,6003) MAXTS,LONGUE
+          CALL                                     XIT(' Timagg ',-3 )
+      END IF
+ 
+      CALL LBLCHK( LENOUT, LEN,NPACK,IBOUT )
+
+      LEN  =  MAX( LENIN,LENOUT )
+      MAXW =  LEN-HEAD
+
+***    SIZE OF TS ARRAY.
+
+      NS0 = MIN( NS0,NWDS )
+      MEM = NS0*LONGUE
+
+      NOM = JBUF(3)
+      NIV = JBUF(4)
+
+***    ALLOUER LES CHAMPS DE TRAVAIL
+
+      allocate( IBUF(LEN),
+     +          POSIT(NWDS),
+     +          X ( CMPL * MAX( LONGUE,NWDS )),
+     +          TS( CMPL * MEM ),
+     +          STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT(' Timagg ',-14 )
+
+      PX = LOC( X(1) ) ; PT = LOC( TS(1) )
+*------------------------------------------------------------------------
+
+***    ASSIGN A FIRST WORK FILE.
+
+      NF = 11
+
+      IF (.NOT.ALT)                                            THEN
+
+          OPEN( NF ,FORM='UNFORMATTED',ACCESS='SEQUENTIAL',
+     +              STATUS='SCRATCH',ERR=9001,IOSTAT=IO )
+
+***        ASSIGN ANOTHER WORK FILE.
+ 
+          OPEN( NF+1 ,FORM='UNFORMATTED',ACCESS='SEQUENTIAL',
+     +                STATUS='SCRATCH',ERR=9001,IOSTAT=IO )
+
+      ELSE
+          
+          REC = NWDS * 8 / QQQR8SZ( )
+
+          OPEN( NF ,FORM='UNFORMATTED',ACCESS='DIRECT',RECL=REC,
+     +              STATUS='SCRATCH',ERR=9001,IOSTAT=IO )
+
+          NUIN  = NF
+          NUOUT = NF
+
+      END IF
+
+***    INITIALIZE LEVEL/VARIABLE COUNTERS.
+
+      NVAR = 1
+      NLEV = 1
+      NLV  = 1
+
+      FIN  = .FALSE.
+
+      IF (DAT)                                                 THEN
+
+***        ALLOCATE MEMORY FOR TIMESTEP INFO
+
+          allocate( DATEF(LENGTH),stat=IER ) ! DATEF
+          IF (IER /= 0) CALL                       XIT(' Timagg ',-12 )
+
+***        READ TIMESTEP INFORMATION
+
+          OK64 = SETIO64(.TRUE.)
+          CALL   GETFLD2( 3, DATEF, ' ',-1,' ',-1, IBUF,MAXD,OK )
+          OK64 = SETIO64(.FALSE.)
+
+          CALL PRTLAB( IBUF )
+
+          IF (.NOT.OK         .OR.
+     +       (IBUF(5)*IBUF(6)).NE.LENGTH)                       THEN
+              WRITE(6,6012)
+              CALL                                 XIT(' Timagg ',-12 )
+          END IF
+
+      END IF
+
+***    VARIABLE/LEVEL LOOP BEGINS HERE.
+
+  100 WRITE(VARIAB(NVAR),0004) NOM
+
+      IF (NVAR.NE.1)                                           THEN
+          IF (NIV.NE.LEV(NLV))                                 THEN
+              WRITE(6,6004) NIV,LEV(NLV),VARIAB(NVAR)
+              CALL                                 XIT(' Timagg ',-4 )
+          END IF
+      ELSE
+          LEV(NLEV) = NIV
+      END IF
+
+      NLEVAR = (NVAR-1)*NLEV+NLV
+
+      IF (NLEVAR.GT.MAXVAR)                                    THEN
+          WRITE(6,6005) NLEVAR
+          CALL                                     XIT(' Timagg ',-5 )
+      END IF
+
+***    READ TIME SERIES NBLOCK+1 AT A TIME.
+ 
+      CURENT = 0
+      WHERE  = 0
+      NS     = 0
+
+      IF (.NOT.ALT)                                            THEN
+          NUIN   = NF
+          NUOUT  = NF+1
+      END IF
+ 
+  200 DO 300 N=1,NS0
+ 
+          CALL GETFLD2( 1, X, ' ',-1,' ',-1, IBUF,MAXW,OK )
+ 
+          IF (.NOT.OK .OR. NOM.NE.IBUF(3) .OR.
+     +                     NIV.NE.IBUF(4) )                    THEN
+              IF (.NOT.OK)                                     THEN
+
+                  IF (N    .EQ.1 .AND. 
+     +                WHERE.EQ.0 )                             THEN
+                      IF (.NOT.ALT)                            THEN
+                          CLOSE( NF )
+                          CLOSE( NF+1 )
+                      END IF
+                      CALL                         XIT(' Timagg ',-6 )
+                  END IF
+
+                  FIN = .TRUE.
+                  WRITE(6,6140) NLEVAR,WHERE+NS
+
+                  IF (WHERE+NS.NE.0)                           THEN
+                      NIO(NLEVAR) = NUOUT
+                      IF (.NOT.ALT)
+     +                CLOSE(NUIN)
+                  END IF
+
+              ELSE IF (NOM.NE.IBUF(3) .OR.
+     +                 NIV.NE.IBUF(4) )                        THEN
+
+                  CALL PRECEDE( 1,1 )
+
+                  IF (N.EQ.1)                                  THEN
+
+                      IF (NOM.NE.IBUF(3))                      THEN
+                          NLV  = 1
+                          NVAR = NVAR+1
+                      ELSE
+                          IF (NVAR.EQ.1)
+     +                    NLEV = NLEV+1
+                          NLV  = NLV+1
+                      END IF
+
+                      NOM = IBUF(3)
+                      NIV = IBUF(4)
+
+                      IF (.NOT.ALT)                            THEN
+
+                          NIO(NLEVAR) = NUOUT
+                          CLOSE(NUIN)
+        
+                          NF       = NIO(NLEVAR)+1
+
+                          OPEN( NF  ,FORM='UNFORMATTED',
+     +                               ACCESS='SEQUENTIAL',
+     +                               STATUS='SCRATCH',
+     +                               ERR=9001,IOSTAT=IO )
+                          OPEN( NF+1,FORM='UNFORMATTED',
+     +                               ACCESS='SEQUENTIAL',
+     +                               STATUS='SCRATCH',
+     +                               ERR=9001,IOSTAT=IO )
+
+                      END IF
+
+***                    SAUVER VARIAB/LEV.
+
+                      GOTO 100
+
+                  END IF
+
+              END IF
+
+***            TRAITER LES DONNEES CONTENUES DANS TS.
+
+              GOTO 400
+
+          END IF
+
+***        CHECK SIZES.
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+          IF (.NOT.OK)                                         THEN
+              CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
+              CALL                                 XIT(' Timagg ',-7 )
+          END IF
+
+***        SAVE CURRENT TS.
+                
+          BASE = NS*LONGUE
+          IF (CMPL.EQ.1)                                       THEN
+              DO  J=1,LONGUE
+                  TS(BASE+J) = X(J)
+              END DO
+          ELSE
+              DO  J=1,LONGUE
+                  CTS(1,BASE+J) = C(1,J)
+                  CTS(2,BASE+J) = C(2,J)
+              END DO
+          END IF
+
+          NS = NS+1
+          
+***        DETERMINE TS POSITION.
+
+          IX = MOD( IBUF(2)-1,NWDS  )+1
+
+***        SAVE OR CHECK TS POSITION.
+
+          IF (NLEVAR .EQ. 1)                                   THEN
+              POSIT(WHERE+NS) = IX
+          ELSE IF (POSIT(WHERE+NS) .NE. IX)                    THEN
+              WRITE(6,6008) IX,POSIT(WHERE+NS),VARIAB(NVAR)
+              CALL                                 XIT(' Timagg ',-8 )
+          END IF
+             
+  300 CONTINUE
+ 
+***    ADD TS TO WORK NUOUT IN TRANSPOSED FORM.
+ 
+  400 CONTINUE
+ 
+      IF (NS.GT.0)                                             THEN
+ 
+***        TS CONTAINS NS TIME SERIES.
+ 
+          BASE  = WHERE
+          WHERE = WHERE+NS
+
+          IF (.NOT.ALT)                                        THEN
+
+              NHOLD = NUIN
+              NUIN  = NUOUT
+              NUOUT = NHOLD
+
+              REWIND(  NUIN, ERR=9001,IOSTAT=IO )
+              REWIND( NUOUT, ERR=9001,IOSTAT=IO )
+
+          END IF
+ 
+***        HAVE WE ALREADY USED BOTH WORK FILES ?
+ 
+          IF (BASE.GT.0)                                       THEN
+ 
+***            YES WE HAVE.
+  
+              DO 500 N=1,LENGTH
+ 
+                  NL  = N-LENGTH
+                  REC = (NLEVAR-1)*LENGTH+N
+
+                  IF (ALT)                                     THEN
+                      CALL READFD( NUIN, X,REC,BASE*CMPL,OK )
+                  ELSE
+                      CALL  READF( NUIN, X,    BASE*CMPL,OK )
+                  END IF
+
+                  IF (.NOT.OK) GOTO 9002
+ 
+                  IF (CMPL.EQ.1)                               THEN
+                      DO  I=1,NS
+                          X(BASE+I) = TS(I*LONGUE+NL)
+                      END DO
+                  ELSE
+                      DO  I=1,NS
+                          C(1,BASE+I) = CTS(1,I*LONGUE+NL)
+                          C(2,BASE+I) = CTS(2,I*LONGUE+NL)
+                      END DO
+                  END IF
+
+                  IF (ALT)                                     THEN
+                      CALL WRITEFD( NUOUT, X, REC, WHERE*CMPL )
+                  ELSE
+                      CALL  WRITEF( NUOUT, X,      WHERE*CMPL )
+                  END IF
+ 
+  500         CONTINUE
+ 
+          ELSE
+ 
+***            NO WE HAVEN'T.
+ 
+              DO 600 N=1,LENGTH
+ 
+                  NL  = N-LENGTH
+                  REC = (NLEVAR-1)*LENGTH+N
+
+                  IF (CMPL.EQ.1)                               THEN
+                      DO  I=1,NS
+                          X(I) = TS(I*LONGUE+NL)
+                      END DO
+                  ELSE
+                      DO  I=1,NS
+                          C(1,I) = CTS(1,I*LONGUE+NL)
+                          C(2,I) = CTS(2,I*LONGUE+NL)
+                      END DO
+                  END IF
+
+                  IF (ALT)                                     THEN 
+                      CALL WRITEFD( NUOUT, X, REC, WHERE*CMPL )
+                  ELSE
+                      CALL WRITEF( NUOUT, X,WHERE*CMPL )
+                  END IF
+ 
+  600         CONTINUE
+ 
+          END IF
+ 
+***        GET ANOTHER SET OF TIME SERIES,
+***        IF AN EOF WAS NOT HIT ON UNIT 1.
+
+          NS = 0
+
+          IF (.NOT.FIN)                                        THEN
+              GOTO 200
+          ELSE
+              NIO(NLEVAR) = NUOUT
+              IF (ALT)                                         THEN
+              ELSE
+                  CLOSE(NUIN)
+              END IF
+              GOTO 400
+          END IF
+
+      ELSE
+ 
+***        TS IS EMPTY. INPUT AND TRANSPOSITION ARE THEN
+***        FINISHED. OUTPUT TRANSPOSED SERIES TO OUTFIL.
+ 
+          IF (.NOT.ALT)                                        THEN
+              DO  J=1,NLEVAR
+                  REWIND( NIO(J), ERR=9001,IOSTAT=IO)
+              END DO
+          END IF
+
+***        IMPRIMER L'INFO SUR LES VARIABLES ET LES NIVEAUX.
+
+          WRITE(6,6150) (VARIAB(I),I=1,NVAR)
+          CALL WRITLEV2( LEV,NLEV,IBUF )
+
+***        CHECK THAT ALL SET HAVE THE SAME
+***        NUMBER OF VERTICAL LEVELS.
+
+          IF (MOD( NLEVAR,NLEV ).NE.0)                         THEN
+              WRITE(6,6009) NLEVAR,NLEV
+              CALL                                 XIT(' Timagg ',-9 )
+          END IF
+
+***        RE-ALLOCATE TS IF NEED BE.
+
+          IF (MEM.LT.NLEVAR*NWDS)                              THEN
+              DEALLOCATE( TS );ALLOCATE( TS(NLEVAR*NWDS*CMPL),STAT=IER )
+              IF (IER /= 0) CALL                   XIT(' Timagg ',-14)
+              PT = LOC( TS(1) )
+          END IF
+          
+          IF (ZON) IBOUT(6) = NLEV
+
+          IBUF(1:head) = IBOUT(1:head)
+
+          IF ( PKTYP.EQ.'SQ')                                  THEN 
+              IF (DEET.NE.-1)                                  THEN
+                  CALL PUTHIGH( DEET, 'DEET', IBUF )
+              ELSE IF (.NOT.DAT .AND.
+     +                 GETHIGH(       'DEET', IBUF ).EQ.0)     THEN
+                  CALL PUTHIGH( 3600, 'DEET', IBUF )
+              END IF
+          END IF
+
+          DO 700 N=1,LENGTH
+ 
+***            IF WE DO NOT HAVE A FULL ARRAY OF TIME
+***            SERIES START BY ZEROING THE WHOLE ARRAY.
+ 
+              IF (WHERE.NE.NWDS)                               THEN
+                  DO  I=1,NWDS*NLEVAR*CMPL
+                      TS(I) = 0.0
+                  END DO
+              END IF
+ 
+              DO  J=1,NLEVAR
+
+                  IF (.NOT.ALT)                                THEN
+                      NUIN = NIO(J)
+                  END IF
+
+                  BASE = (J-1)*NWDS
+                  REC  = (J-1)*LENGTH+N
+
+                  IF (ALT)                                     THEN
+                      CALL READFD( NUIN, X, REC, WHERE*CMPL,OK )
+                  ELSE
+                      CALL  READF( NUIN, X,      WHERE*CMPL,OK )
+                  END IF
+
+                  IF (.NOT.OK) GOTO 9002
+ 
+                  IF (CMPL.EQ.1)                               THEN
+                      DO  I=1,WHERE
+                          TS(BASE+POSIT(I)) = X(I)
+                      END DO
+                  ELSE
+                      DO  I=1,WHERE
+                          CTS(1,BASE+POSIT(I)) =  C(1,I)
+                          CTS(2,BASE+POSIT(I)) = -C(2,I)
+                      END DO
+                  END IF
+ 
+              END DO
+
+***            OUTPUT TS.
+
+              IF (DAT)                                         THEN
+                  IBUF(2) = NINT( DATEF(N) )
+              ELSE IF (PKTYP(1:2) /= 'SQ')                     THEN
+                  IBUF(2) = N
+              ELSE
+                  HOURS = ( N*( DBLE( DEET )/ 60) )/60
+                  CALL INCDATR( IBUF(2),DATEV0,HOURS )
+              END IF
+              
+              IF (PKTYP(1:2) == 'SQ' .and. KIND == 'SUBA')     THEN
+                  Call puthigh( 0, 'IG3', IBUF )
+                  Call puthigh( 0, 'IG4', IBUF )
+              END IF
+
+              CALL PUTMSET( 2, TS, LEV,NLEV, 
+     +                  VARIAB,NVAR, IBUF,MAXW )
+ 
+  700     CONTINUE
+
+          IF (ALT)                                             THEN
+              CLOSE( NUIN )
+          ELSE
+              DO  I=1,NLEVAR
+                  CLOSE( NIO(I) )
+              END DO
+          END IF
+
+          WRITE(6,6160) LENGTH ; CALL PRTLAB( IBUF )
+          CALL                                     XIT(' Timagg ', 0 )
+ 
+      END IF
+ 
+***    PREMATURE EOF ON FILE INFIL (FT01).
+ 
+ 9000 WRITE(6,6010)
+      CALL                                         XIT(' Timagg ',-10 )
+ 
+***    PROBLEMS WITH WORK FILES.
+
+ 9001 WRITE(6,6011) IO
+ 9002 CALL                                         XIT(' Timagg ',-11 )
+
+***    PROBLEMS READING DEET.
+
+ 9013 IF (IO.NE.0) WRITE(6,6013) IO
+      CALL                                         XIT(' Timagg ',-13 )
+
+***    PREMATURE EOF ON FILE DATFIL (FT03).
+ 
+ 9014 WRITE(6,6014)
+      CALL                                         XIT(' Timagg ',-14 )
+ 
+*-----------------------------------------------------------------------------
+ 
+ 0004 FORMAT(A4)
+
+ 6002 FORMAT(/' Output file rows,columns are ',2I5)
+ 6003 FORMAT(/' Input records contain too many, or not enough points'/
+     +        ' Maximum ts length is ',I9,', actual length is ',I6)
+ 6004 FORMAT(/' Found level ',I5,' while expecting ',
+     +         I5,' for variable ',A4)
+ 6005 FORMAT(/' Too many variable and/or levels, NVAR*NLEV =',I3.3)
+ 6008 FORMAT(/' Found position ',I5.5,' while expecting ',
+     +          I5,' for variable ',A4)
+ 6009 FORMAT(/' Not enough levels in a set, NLEVAR,NLEV =',2I5)
+ 6010 FORMAT(/' Timagg input file empty.')
+ 6011 FORMAT(/' Timagg found I/O error ',I3,' with work files.')
+ 6012 FORMAT(/' Timagg found a mismatch between datfil and infil.')
+ 6013 FORMAT(/' Timagg found I/O error ',I3,' while reading DELT')
+ 6014 FORMAT(/' Timagg DATFIL file empty.')
+
+ 6100 FORMAT(/' First record of the input file:')
+ 6120 FORMAT(/' Record conversion from COEF ==> SPEC.')
+ 6130 FORMAT(/' Record is time spectral coefficients (type FOUR).')
+ 6140 FORMAT(/' Input file contains ',I2,' sets of ',I9,' time series.')
+ 6150 FORMAT(/' Variable(s) : ',10(A4,1X))
+ 6160 FORMAT(/' Time series are of length ',I7,
+     +        ' Observations.'//' Last record of the output file:')
+ 
+      END
+      SUBROUTINE readfd ( NF, F, RECN,NWDS,OK)
+
+***    NOV 19/90 - B.DUGAS, RPN.
+
+***    readf LIT (AVEC ACCES DIRECT) UN BLOC COMPLET DE F.
+
+      IMPLICIT none
+
+      REAL     F(NWDS)
+      INTEGER  IO,NF,NWDS,RECN
+      LOGICAL  OK
+
+      LOGICAL           INFO
+      COMMON  /ZZVERBO/ INFO
+
+      EXTERNAL XIT
+*--------------------------------------------------------------------
+
+***    OK EST FAUX AU DEPART. IL EST VRAI APRES UNE LECTURE CORRECTE.
+
+      OK = .FALSE.
+
+      READ( NF, REC=RECN, ERR=100,IOSTAT=IO ) F
+
+      OK = .TRUE.
+
+***    BRANCHEMENT D'ERREUR OU DE FIN DE FICHIER.
+
+  100 IF (IO.NE.0)                                             THEN
+          IF (INFO) WRITE(6,6000) IO
+          CALL MESSYS( 'Erreur dans READFD' )
+      END IF
+
+      RETURN
+
+*---------------------------------------------------------------------
+ 6000 FORMAT('   Readfd on unit ',I3,' returns I/O error number ',I3)
+
+      END
+      SUBROUTINE writefd ( NF, F, RECN,NWDS)
+
+***    NOV 19/90 - B.DUGAS, RPN.
+
+***    writef ECRIT (AVEC ACCES DIRECT) UN BLOC COMPLET DE F.
+
+      IMPLICIT none
+
+      REAL     F(NWDS)
+      INTEGER  IO,NF,NWDS,RECN
+
+      LOGICAL           INFO
+      COMMON  /ZZVERBO/ INFO
+
+      EXTERNAL PERROR,XIT
+*--------------------------------------------------------------------
+
+      WRITE( NF, REC=RECN, ERR=100,IOSTAT=IO ) F
+
+***    BRANCHEMENT D'ERREUR.
+
+  100 IF (IO.NE.0)                                             THEN
+          IF (INFO) WRITE(6,6000) IO
+          CALL MESSYS( 'Erreur dans WRITEFD' )
+          CALL                                     XIT(' Writefd',-1 )
+      END IF
+
+      RETURN
+
+*---------------------------------------------------------------------
+ 6000 FORMAT('   Writefd on unit ',I3,' returns I/O error number ',I3)
+
+      END
+#     endif

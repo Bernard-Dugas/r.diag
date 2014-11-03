@@ -1,0 +1,957 @@
+#     if !defined (longitude_maximale)
+#         define   longitude_maximale 9999
+#     endif
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if !defined (pression_au_toit)
+#         define   pression_au_toit 0.01
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     gsomgah  SSLNSP SSTEMP SSVORT SSDIV GSOMEG INPUT OUTPUT \ 
+*     [ -lon VAL1 -lat VAL2 -npg VAL3 -kind VAL4 -lv1 VAL5 -l VAL6 ]
+*
+*
+*     DESCRIPTION...
+*     gsomgah - CONVERTS ETA (SIGMA/HYBRID) LEVEL Q,D FILES TO VERTICAL MOTION
+*
+*
+*     AUTHORS - M.LAZARE AND F.MAJAESS.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gsomgah.ptn,v 4.10 2014/10/16 11:34:06 dugas Exp $
+*
+*
+*     PURPOSE - COMPUTES A GRID FILE OF VERTICAL MOTION (DP/DT) FROM
+*               ETA (SIGMA/HYBRID) LEVEL SPECTRAL FILES OF VORTICITY
+*               AND DIVERGENCE.
+*
+*     NOTE    - INPUT IS SPECTRAL, OUTPUT IS GAUSSIAN GRIDS,
+*               ALL GLOBAL.
+*
+*
+*     INPUT FILES...
+*      SSLNSP = SPECTRAL LN(SF PRES) ON ETA (SIGMA/HYBRID) LEVELS
+*      SSTEMP = SPECTRAL TEMPERATURE ON ETA (SIGMA/HYBRID) LEVELS
+*      SSVORT = SPECTRAL VORTICITY   ON ETA (SIGMA/HYBRID) LEVELS
+*      SSDIV  = SPECTRAL DIVERGENCE  ON ETA (SIGMA/HYBRID) LEVELS
+*
+*     OUTPUT FILE...
+*      GSOMEG = GRIDS OF VERTICAL MOTION OMEGA (DP/DT) AT MID-LAYER
+*               POSITIONS. UNITS ARE NEWTONS/M**2/SEC.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      ILG   (lon)  = LENGTH OF A GAUSSIAN GRID ROW.
+*      ILAT  (lat)  = NUMBER OF GAUSSIAN LATITUDES.
+*      KPACK (npg)  = OUTPUT PACKING DENSITY (0 DEFAULT TO 4)
+*      COORD (kind) = 'SIG'/'ETA' FOR SIGMA/ETA VERTICAL COORDINATE
+*      PTOIT (lv1)  = PRESSURE (PA) OF THE RIGID LID OF THE MODEL.
+                      AS OF NOW, HAS TO BE GREATER THAN pression_au_toit PA.
+*      LAY   (l)    = ARRANGEMENT TYPE OF INTERFACES
+*                     WITH RESPECT TO MID_LAYERS =
+*                   0    , AS LAY=2 FOR MOMENTUM AND LAY=4 FOR THERMODYNAMICS,
+*                          (UPWARD COMPATIBILTY WITH EARLIER VERSIONS OF GCM)
+*             OR    1 / 2, LAYER INTERFACE PLACED AT AN EQUAL SIGMA/GEOMETRIC
+*                          DISTANCE FROM THE MIDDLE OF THE ADJACENT LAYERS
+*             OR    3 / 4, BASE LAYERS EXTRAPOLATED SO THAT THE MIDDLE OF THE
+*                          LAYERS ARE AT THE CENTRE OF THE SIGMA/GEOMETRIC LAYERS
+*
+*      READ(5,5010) ILG,ILAT,KPACK,COORD,PTOIT,LAY
+*5010  FORMAT(10X,3I5,1X,A4,E10.0,I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+** GSOMGAH   64   52    0  SIG        0.    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 ERROR RETREIVING FULL LEVELS FROM SSVORT
+*       2 ERROR RETREIVING HALF LEVELS FROM SSTEMP
+*       3 FIRST SSVORT AND SSTEMP NOT THE SAME TYPE/SIZE
+*       4 TOO MANY ZONAL WAVENUMBERS IN SPECTRAL FILES
+*       5 PREMATURE EOF ON SSLNSP
+*       6 MORE THAN ONE SIZE IN INPUT FILES
+*       7 PREMATURE EOF ON SSVORT
+*       8 PREMATURE EOF ON SSDIV
+*       9 ABORT READING INPUT
+*    20+L LEVEL L NOT THE SAME IN SSVORT AND SSDIV
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM gsomgah
+*     PROGRAM GSOMGAH (SSLNSP,       SSTEMP,       SSVORT,       SSDIV,
+*    1                               GSOMEG,       INPUT,       OUTPUT, )
+*    2          TAPE11=SSLNSP,TAPE12=SSTEMP,TAPE13=SSVORT,TAPE14=SSDIV,
+*    3                        TAPE15=GSOMEG, TAPE5=INPUT, TAPE6=OUTPUT)
+*     -----------------------------------------------------------------
+
+*     $Log: gsomgah.ptn,v $
+*     Revision 4.10  2014/10/16 11:34:06  dugas
+*     Modifications commandees par la compilation avec GFORTRAN et IFORT.
+*
+*     Revision 4.9  2014/09/25 20:20:49  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.8  2013/10/17 11:11:54  bernard
+*     Utiliser les macros longitude_maximale, latitude_maximale et lm_maximal pour definir les parametres MAXI, MAXJ et MAXM, respectivement.
+*
+*     Revision 4.7  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.6  2007/12/20 21:10:59  dugas
+*     Utiliser CONVPR pour decoder les niveaux verticaux.
+*
+*     Revision 4.5  2005/04/12 17:28:37  dugas
+*     - Account for CMC/RPN G-grid specifications (i.e. ILG1=ILG).
+*     - Add documentation concerning the smallest value of PTOIT.
+*
+*     Revision 4.4  1999/09/21 18:37:36  armnrbd
+*     Modifier la valeur de defaut de PTOIT pour le cas SIGMA.
+*
+*     Revision 4.3  1998/07/03 01:18:35  armnrbd
+*     Ignorer les espaces dans le parametres d'entree COORD.
+*
+*     Revision 4.2  1997/09/26  17:39:02  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.1  1997/06/02  20:36:15  armnrbd
+*     Remplacer le champs OMEGAG par OMEGA dans GSOMGAH.
+*     Modifications cosmetiques diverses.
+*
+*     Revision 4.0  1997/05/30  21:13:22  armnrbd
+*     Premiere version RPN.
+*
+*     FEB 15/94 - F.MAJAESS (REVISE FOR TRUNCATIONS > 99)
+*     JAN 13/93 - E. CHAN  (DECODE LEVELS IN 8-WORD LABEL)
+*     JUL 13/92 - E. CHAN  (DIMENSION SELECTED VARIABLES AS REAL*8)
+*     JAN 29/92 - E. CHAN  (CONVERT HOLLERITH LITERALS TO ASCII)
+*     JAN 24/91 - M.LAZARE, F.MAJAESS
+*
+*---------------------------------------------------------------------------
+      IMPLICIT      none
+
+      INTEGER, PARAMETER :: MAXI = longitude_maximale
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXM = lm_maximal , MAXLEV= 999
+      REAL,    PARAMETER :: PTMIN = pression_au_toit
+
+***    COMPLEX MULTILEVEL ARRAY FOR SURFACE PRESSURE,VORTICITY
+***    AND DIVERGENCE SPECTRAL COEFFICIENTS, IN THAT ORDER IN
+***    SP((1+2*ILEV)*LA).
+
+      REAL          SP,T(1),ES(1),TRAC(1)
+
+***    MULTILEVEL WORK ARRAY FOR SLICE VALUES OF PRESSG, P,
+***    C, PSDPG, UG, VG AND PSDLG, IN THAT ORDER IN SLICE.
+***    ALLOCATE SLICE(ILG+2,(4*ILEV+3)), OMEGA(ILG+2,ILEV)
+***    AND GGOM((ILG+1)*ILAT*ILEV).
+
+      REAL          SLICE,TG(1),ESG(1),TRACG(1),OMEGA
+
+      POINTER     ( PSP,   SP(1) ),( PSL,SLICE(1) )
+      POINTER     ( POM,OMEGA(1) ),( PGG, GGOM(1) )
+
+***    WORKS ARRAYS.
+***    ALP(LA+LM),DALP(LA+LM),DELALP(LA+LM),EPSI(LA+LM).
+
+      INTEGER       IBUF,JBUF
+      REAL          GGOM,WRKS(1)
+      REAL*8        ALP,DALP,DELALP,EPSI
+
+      POINTER     ( IAL,    ALP(1) ),( IDA,DALP(1) )
+      POINTER     ( IDE, DELALP(1) ),( IEP,EPSI(1) )
+      POINTER     ( IBU,   IBUF(8) ),( JBU,JBUF(8) )
+
+***    WORK FIELDS.
+***    TRIGS(MAXLG),LSR(2,LM+1),LETA(ILEV),...
+
+      LOGICAL       OK,LVECT
+      REAL          TRIGS(MAXI),SHBJ1(MAXI),DB (MAXLEV),D2B(MAXLEV),
+     +              SG (MAXLEV),SH (MAXLEV),SGB(MAXLEV),SHB(MAXLEV),
+     +              ACG(MAXLEV),BCG(MAXLEV),AG (MAXLEV),BG (MAXLEV),
+     +              AH (MAXLEV),BH (MAXLEV),ACH(MAXLEV),BCH(MAXLEV)
+      INTEGER       LETA(MAXLEV),LETT(MAXLEV),LSR(2,MAXM),KBUF(taille_entete),
+     +              LEVP(MAXLEV),LEVC(MAXLEV),IFAX(20),LBUF(taille_entete)
+
+      REAL*8        SL(MAXJ),CL(MAXJ),WL(MAXJ),WOSSL(MAXJ),RADL(MAXJ)
+
+      CHARACTER     COORD*4,LIGNE*80,PKTYP*2
+      REAL          ALFMOD,PTOIT,FVORT,PI,ZERO
+      INTEGER       NFF,IO,ILG,ILAT,KPACK,LAY,ILG1,ILG2,ILH,ILATH,
+     +              ILEV,L,ILVT,IP,IC,IT,IU,IV,IL,LRLMT,LA,LR,VKIND,
+     +              LM,KTR,LAC,LAM,LEN,LEN1,LEN2,NWDS,PACK,NSETS,
+     +              MAXW,IER,IK,J,NST,HEAD,ISP,ISC
+
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+***    THE FOLLOWING ARRAYS ARE FUNCTIONS OF (ILG,ILEV).
+
+      REAL          SGJ   ,SGBJ  ,DSGJ  ,
+     +              SHJ   ,SHBJ  ,DSHJ  ,
+     +              A1SGJ ,B1SGJ ,D1SGJ ,
+     +              A2SGJ ,B2SGJ ,D2SGJ ,
+     +              DLNSGJ,VGRPSJ
+
+      POINTER     ( PS1,   SGJ(1) ),( PS2,  SGBJ(1) ),
+     +            ( PS3,  DSGJ(1) ),( PS4,   SHJ(1) ),
+     +            ( PS5,  SHBJ(1) ),( PS6,  DSHJ(1) ),
+     +            ( PS7, A1SGJ(1) ),( PS8, B1SGJ(1) ),
+     +            ( PS9, D1SGJ(1) ),( PS0, A2SGJ(1) ),
+     +            ( PSA, B2SGJ(1) ),( PSB, D2SGJ(1) ),
+     +            ( PSC,DLNSGJ(1) ),( PSD,VGRPSJ(1) )
+
+      REAL          WW,TW,RAYON,ASQ,GRAV,RGAS,RGOCP,RGOASQ,CPRES
+      COMMON       /PARAMS/ WW,TW,RAYON,ASQ,GRAV,RGAS,RGOCP,RGOASQ,CPRES
+
+***    THE FOLLOWING IS A WORKING ARRAY FUNCTION OF ILG.
+
+      REAL          SSDRJK(MAXI)
+
+***    THE FOLLOWING IS A WORKING ARRAY FUNCTION OF ILEV.
+
+      COMPLEX       P2(MAXLEV)
+
+***    EXTERNAL MODULES.
+
+      CHARACTER*4   GETYP
+      LOGICAL       RPBLOC
+      EXTERNAL      RPBLOC,JCLPNT,GETLIGN,FILEV,XIT,CONVPR,
+     +              LBLCHK,CMPLBL,COORDAB,COORDDB,PRTLAB,
+     +              DIMGT2,HPALLOC,GETFLD2,GETSET2,QDTFPC,
+     +              ALPST2,ALPDY2,ALPDL2,MHEXP5,LEVCAL2,
+     +              SIGCALH,IMAVRAI,OMEGA3,IGGSL,SETLAB,
+     +              PUTSET2,MACSPE,SPWCON7,LEADBLK,
+     +              GETYP
+
+***    ALFMOD AND LVECT SHOULD BE THE SAME AS IN THE GCM.
+
+      DATA          ALFMOD / 1.0  /
+      DATA          LVECT  /.TRUE./
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gsomgah.ptn,v $'
+
+*-------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+
+      NFF = 7
+      CALL JCLPNT( NFF, 11,12,13,14,15, 5,6 )
+
+      PKTYP = GETYP( 11 )
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          ILG   = 0
+          ILAT  = 0
+          KPACK = 0
+          COORD = ' '
+          PTOIT = 0
+          LAY   = 0
+
+          OK = RPBLOC('LON',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=909,IOSTAT=IO) ILG
+
+          OK = RPBLOC('LAT',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=909,IOSTAT=IO) ILAT
+
+          OK = RPBLOC('NPG',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=909,IOSTAT=IO) KPACK
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) COORD = LIGNE
+
+          OK = RPBLOC('LV1',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=909,IOSTAT=IO) PTOIT
+
+          OK = RPBLOC('L',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=909,IOSTAT=IO) LAY
+
+      ELSE
+
+***        READ-IN DIRECTIVE CARD.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 909
+          ELSE
+              READ( LIGNE, 5010,END=909,ERR=909,IOSTAT=IO)
+     +                     ILG,ILAT,KPACK,COORD,PTOIT,LAY
+          END IF
+
+      END IF
+
+      IF (KPACK.EQ. 0 ) KPACK = -16
+      IF (COORD.NE.' ') CALL LEADBLK( COORD )
+      IF (COORD.EQ.' ') COORD = 'SIG'
+
+      PTOIT = MAX( PTOIT,PTMIN )
+
+      ILG1  = ILG+1
+      IF (PKTYP.EQ.'SQ') 
+     +ILG1 = ILG
+      IF (MOD( ILG1,2 ).EQ.0)
+     +ILG  = ILG1
+
+      ILG2  = ILG+2
+      ILH   = ILG2/2
+      ILATH = ILAT/2
+      WRITE(6,6000) COORD,PTOIT,LAY
+      WRITE(6,6010) ILG1,ILAT
+
+***    GET ETA (SG) LEVELS FROM VORT FILE ...
+
+      CALL FILEV( LETA,ILEV,LBUF, 13 )
+      IF ((ILEV.LT.1).OR.(ILEV.GT.MAXLEV)) CALL    XIT(' Gsomgah',-1 )
+
+      DO  L=1,ILEV
+          CALL  CONVPR( LETA(L), SG(L), VKIND, -2 )
+          IF (VKIND.EQ.2) SG(L) = SG(L) * 0.001
+      END DO
+
+      LIGNE = 'Input momentum mid-layer'
+      CALL writlev( SG,ILEV,LIGNE )
+
+      CALL LBLCHK( LEN1,NWDS,PACK,LBUF )
+
+***    ...  AND SH FROM TEMP FILE.
+
+      CALL FILEV( LETT,ILVT,KBUF, 12 )
+      IF (ILVT.NE.ILEV) CALL                       XIT(' Gsomgah',-2 )
+
+      DO  L=1,ILEV
+          CALL  CONVPR( LETT(L), SH(L), VKIND, -2 )
+          IF (VKIND.EQ.2) SH(L) = SH(L) * 0.001
+      END DO
+
+      LIGNE = 'Output OMEGA thermodynamics mid-layer'
+      CALL writlev( SH,ILEV,LIGNE )
+
+      CALL LBLCHK( LEN2,NWDS,PACK,KBUF )
+
+***    COMPARE VORTICITY AND TEMPERATURE SIZES.
+
+      CALL CMPLBL( 0,LBUF, 0,KBUF, OK )
+      IF (.NOT.OK) CALL                            XIT(' Gsomgah',-3 )
+
+***    COMPUTE BASE LAYERS FROM MID-LAYERS
+
+      CALL BASCAL( SGB,SHB,SG,SH,ILEV,LAY )
+
+***    DEFINE PARAMETERS OF THE VERTICAL DISCRETIZATION
+
+      CALL COORDAB( ACG,BCG,ILEV,SG ,COORD,PTOIT )
+      CALL COORDAB( ACH,BCH,ILEV,SH ,COORD,PTOIT )
+      CALL COORDAB( AG ,BG ,ILEV,SGB,COORD,PTOIT )
+      CALL COORDAB( AH ,BH ,ILEV,SHB,COORD,PTOIT )
+
+      CALL COORDDB( DB, D2B, BG, BH, ILEV )
+
+***    CALCULATE POINTERS
+
+      IP = 1 +ILG2
+      IC = IP+ILG2*ILEV
+      IT = IC+ILG2*ILEV
+      IU = IT+ILG2
+      IV = IU+ILG2*ILEV
+      IL = IV+ILG2*ILEV
+
+***    DEFINE SPECTRAL DIMENSIONS
+
+      LRLMT = LBUF(7)
+      CALL DIMGT2( LSR, LA, LR,LM,KTR,LRLMT, 0,0 )
+      IF (LR.GT.MAXM) CALL                        XIT(' Gsomgah',-4 )
+
+      LAC = LA*2
+      ISP = LAC+1
+      ISC = ISP+ILEV*LAC
+      LAM = LA+LM
+
+***    DYNAMICALLY ALLOCATE WORK FIELDS.
+
+      LEN = MAX( LEN1,LEN2 )
+      CALL HPALLOC( IBU, LEN * 2          ,IER,0 ) ! ALLOCATE IBUF,JBUF
+      JBU = LOC( IBUF(LEN+1) )
+
+      MAXW = LEN-HEAD
+
+      CALL HPALLOC( IAL, LAM*4            ,IER,8 ) ! ALLOCATE ALP,DALP,ETC...
+      IDA  = LOC( ALP(LAM+1) )
+      IDE  = LOC( DALP(LAM+1) )
+      IEP  = LOC( DELALP(LAM+1) )
+
+      CALL HPALLOC( PGG, ILG1 * ILAT*ILEV ,IER,0 ) ! ALLOCATE GGOM
+      CALL HPALLOC( POM, ILG2 * ILEV      ,IER,0 ) ! ALLOCATE OMEGA
+      CALL HPALLOC( PSL, ILG2 * (4*ILEV+3),IER,0 ) ! ALLOCATE SLICE
+      CALL HPALLOC( PSP, LAC  * (2*ILEV+1),IER,0 ) ! ALLOCATE SP
+
+      CALL HPALLOC( PS1, ILG2 * ILEV * 14  ,IER,0 ) ! ALLOCATE SGJ, ETC...
+      PS2 = LOC(    SGJ(ILG2*ILEV+1) )
+      PS3 = LOC(   SGBJ(ILG2*ILEV+1) )
+      PS4 = LOC(   DSGJ(ILG2*ILEV+1) )
+      PS5 = LOC(    SHJ(ILG2*ILEV+1) )
+      PS6 = LOC(   SHBJ(ILG2*ILEV+1) )
+      PS7 = LOC(   DSHJ(ILG2*ILEV+1) )
+      PS8 = LOC(  A1SGJ(ILG2*ILEV+1) )
+      PS9 = LOC(  B1SGJ(ILG2*ILEV+1) )
+      PS0 = LOC(  D1SGJ(ILG2*ILEV+1) )
+      PSA = LOC(  A2SGJ(ILG2*ILEV+1) )
+      PSB = LOC(  B2SGJ(ILG2*ILEV+1) )
+      PSC = LOC(  D2SGJ(ILG2*ILEV+1) )
+      PSD = LOC( DLNSGJ(ILG2*ILEV+1) )
+
+***    CALCULATE CONSTANTS.
+
+      CALL EPSCAL( EPSI,LSR,LM )
+      CALL GAUSSG( ILATH,SL,WL,CL,RADL,WOSSL )
+      CALL  TRIGL( ILATH,SL,WL,CL,RADL,WOSSL )
+      CALL FTSETUP( TRIGS,IFAX,ILG )
+
+***    RETREIVE FVORT.
+
+      CALL SPWCON7( FVORT,PI )
+
+*---------------------------------------------------------------------
+
+***    GET LN(SF PRES) FOR THE NEXT STEP. CONVERT MB TO N/M**2.
+
+      NSETS = 0
+  100 CALL GETFLD2( 11, SP,'SPEC',-1,'LNSP',-1, JBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              IF (NSETS.EQ.0)                                  THEN
+                  CALL                             XIT(' Gsomgah',-5 )
+              ELSE
+                  WRITE(6,6030) NSETS
+                  CALL                             XIT(' Gsomgah', 0 )
+              END IF
+          END IF
+
+          IF (NSETS.EQ.0) CALL PRTLAB( JBUF )
+
+          CALL CMPLBL( 0,JBUF, 0,LBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Gsomgah',-6 )
+
+          SP(1)=SP(1)+LOG(100.)*SQRT(2.)
+
+***        GET ILEV LEVELS OF VORTICITY AND DIVERGENCE.
+
+          NST = JBUF(2)
+          CALL GETSET2( 13, SP(ISP), LEVP,ILEV, IBUF,MAXW,OK )
+
+          IF (.NOT.OK          .OR.
+     +        IBUF(2).NE.NST   .OR.
+     +        ILEV   .GT.MAXLEV)
+     +        CALL                                 XIT(' Gsomgah',-7 )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+          CALL CMPLBL( 0,IBUF, 0,LBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Gsomgah',-6 )
+
+          CALL GETSET2( 14, SP(ISC), LEVC,ILEV, IBUF,MAXW,OK )
+
+          IF (.NOT.OK          .OR.
+     +        IBUF(2).NE.NST   .OR.
+     +        ILEV   .GT.MAXLEV)
+     +        CALL                                 XIT(' Gsomgah',-8 )
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+          CALL CMPLBL( 0,IBUF, 0,LBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' Gsomgah',-6 )
+
+          DO  L=1,ILEV
+              IF (LEVP(L).NE.LETA(L) .OR.
+     +            LEVC(L).NE.LETA(L) )
+     +            CALL                             XIT(' Gsomgah',-L-20)
+          END DO
+
+*---------------------------------------------------------------------
+***        CALCULATE PSI,CHI FROM VORT,DIV.
+
+          CALL QDTFPC( SP(ISP),SP(ISC),SP(ISP),SP(ISC),
+     +                 LA,LSR,LM,ILEV,-1 )
+
+***        ***************
+***        LATITUDE LOOP *
+***        ***************
+
+
+          DO  200 J=1,ILAT
+
+***            COMPUTE ALP,DALP AND DELALP.
+
+              CALL ALPST2(  ALP,LSR,LM,SL(J),EPSI )
+              CALL ALPDY2(  DALP,ALP,LSR,LM,EPSI )
+              CALL ALPDL2(  DELALP,ALP,LSR,LM )
+
+***            COMPUTE GRID POINT VALUES FROM SPECTRAL COEFF.
+***            (MOISTURE, TEMPERATURE AND TRACER ARE TURNED OFF).
+
+              CALL MHEXP5(  SLICE(IP),SLICE(IC),
+     +                      SLICE(IU),SLICE(IV),TG,ESG,
+     +                      SLICE(IL),SLICE(IT),SLICE, ILH, ILG,
+     +                      SP(ISP),SP(ISC),T,ES,SP,LA,LSR,LM,ILEV,
+     +                      0,P2,0, FVORT,ALP,DALP,DELALP,WRKS,IFAX,
+     +                      TRIGS,TRACG,TRAC, 0,1,LVECT )
+
+              DO  IK=1,ILG
+                  SLICE(IK) = EXP( SLICE(IK) )
+              END DO
+
+***            CALCULATE THE POSITION OF BASE/CENTRE
+***            LAYERS FOR THE PHYSICS.
+
+              CALL LEVCAL2( SGBJ,SHBJ,SGJ,SHJ,DSGJ,DSHJ,SHBJ1,
+     +                      AG,BG,AH,BH,ACG,BCG,ACH,BCH,SLICE,
+     +                      ILEV,ILEV+1,2*ILH,ILG,J,PTOIT )
+
+
+***            CALCULATE VERTICAL DISCRETIZATION PARAMETERS.
+
+              CALL SIGCALH( DSGJ,DSHJ,DLNSGJ,
+     +                      D1SGJ,A1SGJ,B1SGJ,
+     +                      D2SGJ,A2SGJ,B2SGJ,
+     +                      2*ILH,ILG,ILEV,
+     +                      PTOIT,
+     +                      SLICE,AG,BG,AH,BH,ALFMOD )
+
+***            CONVERT WIND IMAGES, D(PS)/DX AND D(PS)/DY TO REAL VALUES.
+
+              CALL IMAVRAI( SLICE(IU),SLICE(IV),
+     +                      SLICE(IL),SLICE(IT),
+     +                      CL(J),2*ILH,ILG,ILEV,RAYON )
+
+***            COMPUTE THE VERTICAL MOTION (NEWTONS PER SQ
+***            METER PER SEC) AT MID LAYERS.
+
+              CALL OMEGA3(  OMEGA,SLICE(IC),SLICE(IU),SLICE(IV),
+     +                            SLICE(IL),SLICE(IT),SLICE,
+     +                      SHJ, DSGJ, DSHJ, DLNSGJ,
+     +                      A1SGJ, B1SGJ, A2SGJ, B2SGJ,
+     +                      DB, VGRPSJ, SSDRJK, 2*ILH, ILG, ILEV)
+
+
+***            TRANSFER VERTICAL SLICE FOR LATITUDE J IN OMEGA
+***            TO THE MULTILEVEL GAUSSIAN GRID ARRAY GGOM.
+
+              CALL IGGSL( GGOM,ILG1,ILAT,ILEV, OMEGA,2*ILH,ILG, J )
+
+  200     CONTINUE
+*---------------------------------------------------------------------
+
+***        WRITE OUT OMEGA ON GAUSSIAN GRIDS.
+
+          CALL SETLAB( IBUF,'GRID',NST,'OMEG',-1,ILG1,ILAT,0,KPACK )
+          CALL PUTSET2( 15, GGOM, LETT,ILEV, IBUF,MAXW )
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+
+      NSETS = NSETS+1
+      GOTO 100
+
+***    E.O.F. ON INPUT.
+
+  909 CALL                                         XIT(' Gsomgah',-9 )
+
+*--------------------------------------------------------------------
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+ 5010 FORMAT(10X,3I5,1X,A4,E10.0,I5)
+
+ 6000 FORMAT(' Coord= ',A4,', p.lid (Pa)= ',F10.3,
+     +                     ', intrpl. type= ',I2/)
+ 6010 FORMAT(' Grid size =',2I6/)
+ 6015 format(' Input number of momentum       Mid-layer positions = ',
+     +       I5,' AT:',/,(10X,20I5))
+ 6017 FORMAT(/' Input number of thermodynamics mid-layer positions = ',
+     +       I5,' at:',/,(10X,20I5))
+ 6025 FORMAT(/' Omega on ',I3,' sigma levels at (*1000):',/,(15X,20I5))
+ 6030 FORMAT(/I5,' Sets of omega computed'/)
+
+      END
+      SUBROUTINE mhexp5( RQF,RDF,RUF,RVF,RTF,RESF,RPSDLF,RPSDPF,RPRESSF,
+     1                   ILH,LON,RP,RC,RT,RES,RPS,LA,LSR,LM,ILEV,LEVS,
+     2                   P2,LEVT,FVORT,ALP,DALP,DELALP,WRKS,IFAX,TRIGS,
+     3                   RTRACF,RTRAC,ITRAC,NTRAC,LVECT )
+
+***    JUL 14/92 - E. CHAN (ADD REAL*8 DECLARATIONS)
+***    JUN 14/90 - R.LAPRISE/J DE GRANDPRE.
+
+***    AS IN MHEXP4, EXCEPT FORMULATION FOR "N" TRACERS IMPLEMENTED.
+
+***    CONVERTS GLOBAL SPECTRAL ARRAYS OF STREAMFUNCTION (P) AND
+***    VELOCITY POTENTIAL (C) TO GRID POINT SLICES OF VORTICITY (QF),
+***    DIVERGENCE (DF), AND WINDS (UF,VF).
+
+***    ALSO CONVERTS LN(SURFACE PRESSURE) AND ITS DERIVATIVES.
+***    ALSO CONVERTS TEMPERATURE (T) AND DEW POINT DEPRESSION (ES).
+***    TRACER VARIABLE TRANSFORMED ONLY IF ITRAC.NE.0.
+
+***       ALP = LEGENDRE POLYNOMIALS AT GIVEN LATITUDE.
+***      DALP = COS(LAT) TIMES N-S DERIVATIVE OF ALP.
+***    DELALP = -N(N+1)*ALP
+***    ILH = FIRST DIMENSION OF COMPLEX FOURIER ARRAYS.
+***    ILG = ILH*2 = FIRST DIMENSION OF REAL GRID ARRAYS.
+***    LON = NUMBER OF DISTINCT LONGITUDES.
+
+      IMPLICIT REAL (A-H,O-Z), INTEGER (I-N)
+
+      REAL     RQF(*),RDF(*),RUF(*),RVF(*),RTF(*),RESF(*)
+      REAL     RPSDLF(*),RPSDPF(*),RPRESSF(*),RTRACF(*),RTRAC(*)
+      REAL     RP(*),RC(*),RT(*),RES(*),RPS(*)
+
+      COMPLEX  QF,DF,UF,VF,TF,ESF
+      COMPLEX  PSDLF,PSDPF,PRESSF,TRACF,TRAC
+      COMPLEX  P,C,T,ES,PS
+
+      POINTER (PQF,QF(ILH,*)),(PDF,DF(ILH,*)),(PUF,UF(ILH,*))
+      POINTER (PVF,VF(ILH,*)),(PTF,TF(ILH,*)),(PESF,ESF(ILH,*))
+      POINTER (PPSDLF,PSDLF(*)),(PPSDPF,PSDPF(*)),(PPRESSF,PRESSF(*))
+      POINTER (PTRACF,TRACF(ILH,ILEV,*)),(PTRAC,TRAC(ILH,ILEV,*))
+      POINTER (PP,P(LA,*)),(PC,C(LA,*)),(PT,T(LA,*)),(PES,ES(LA,*))
+      POINTER (PPS,PS(*))
+
+      REAL*8   ALP(*),DALP(*),DELALP(*)
+      REAL     WRKS(*),TRIGS(*)
+      INTEGER  LSR(2,*),IFAX(*)
+      COMPLEX  P2(ILEV)
+
+***    SWITCK TO CONTROL VECTORIZATION ACROSS VARIABLES.
+
+      LOGICAL LVECT
+
+*--------------------------------------------------------------------
+      PQF = LOC( RQF(1) ) ; PUF  = LOC( RUF (1) )
+      PDF = LOC( RDF(1) ) ; PVF  = LOC( RVF (1) )
+      PTF = LOC( RTF(1) ) ; PESF = LOC( RESF(1) )
+
+      PP  = LOC( RP (1) ) ; PC   = LOC( RC  (1) )
+      PES = LOC( RES(1) ) ; PT   = LOC( RT  (1) )
+      PPS = LOC( RPS(1) )
+
+      PTRACF  = LOC( RTRACF (1) )
+      PTRAC   = LOC( RTRAC  (1) )
+
+      PPSDLF  = LOC( RPSDLF (1) )
+      PPSDPF  = LOC( RPSDPF (1) )
+      PPRESSF = LOC( RPRESSF(1) )
+
+***    PART 1 - LEGENDRE TRANSFORMS FROM SPECTRAL TO FOURIER.
+
+      IR=LM-1
+      ILG=2*ILH
+      NILEV=ILEV*NTRAC
+
+***    DO ALL THE LEGENDRE TRANSFORMS AT ONCE IF LVECT IS .TRUE.
+***    THIS PRESUMES THAT GRID SLICES AND SPECTRAL FIELDS ARE
+***    LINED UP IN MEMORY, WITH PS AS THE FIRST OF THE SERIES.
+***    NUMBER = ILEV * 2 (FOR P,C)
+***            +LEVT * 1  (FOR T)
+***            +LEVS * 1 (FOR ES)
+***            +  1  * 1 (FOR PS).
+***            +ILEV * NTRAC (FOR TRAC, IF ITRAC.NE.0)
+
+      IF(LVECT) THEN
+      NUMBER = 2*ILEV+LEVT+LEVS+1
+      IF(ITRAC.NE.0)NUMBER=NUMBER+NILEV
+      CALL STAF (PRESSF,PS,LSR,LM,LA,ILH,NUMBER,ALP)
+
+      ELSE
+
+      CALL STAF (QF    ,P ,LSR,LM,LA,ILH,ILEV,ALP)
+      CALL STAF (DF    ,C ,LSR,LM,LA,ILH,ILEV,ALP)
+      IF(LEVT.EQ.0) GO TO 100
+      CALL STAF (TF    ,T ,LSR,LM,LA,ILH,LEVT,ALP)
+  100 IF(LEVS.EQ.0) GO TO 110
+      CALL STAF (ESF   ,ES,LSR,LM,LA,ILH,LEVS,ALP)
+  110 CALL STAF (PRESSF,PS,LSR,LM,LA,ILH,  1 ,ALP)
+      IF(ITRAC.NE.0)THEN
+      CALL STAF(TRACF,TRAC,LSR,LM,LA,ILH,NILEV,ALP)
+      ENDIF
+      ENDIF
+*-----------------------------------------------------------------------
+***    E-W DERIVATIVES OF PS AND P,C (IN QF,DF).
+
+      DO 200 M=1,LM
+      FMS =FLOAT(M-1)
+      PSDLF (M)=CMPLX(-FMS*AIMAG(PRESSF(M)), FMS*REAL(PRESSF(M)))
+      DO 200 L=1,ILEV
+      QF  (M,L)=CMPLX(-FMS*AIMAG(QF  (M,L)), FMS*REAL(QF  (M,L)))
+      DF  (M,L)=CMPLX(-FMS*AIMAG(DF  (M,L)), FMS*REAL(DF  (M,L)))
+  200 CONTINUE
+*-----------------------------------------------------------------------
+***    N-S DERIVATIVES OF PS AND P,C (IN UF,VF).
+***    ALL THE TRANSFORMS ARE DONE AT ONCE IF LVECT IS .TRUE.
+***    THIS PRESUMES THAT ALL ARRAYS ARE LINED UP IN MEMORY
+***    WITH PS AS THE FIRST OF THE SERIES.
+***    NUMBER = ILEV *2 (FOR P,C)
+***            +  1  *1 (FOR PS).
+
+      IF(LVECT) THEN
+      NUMBER = 2*ILEV+1
+      CALL STAF (PSDPF ,PS,LSR,LM,LA,ILH,NUMBER,DALP)
+
+      ELSE
+
+      CALL STAF (UF    ,P ,LSR,LM,LA,ILH,ILEV,DALP)
+      CALL STAF (VF    ,C ,LSR,LM,LA,ILH,ILEV,DALP)
+      CALL STAF (PSDPF ,PS,LSR,LM,LA,ILH,  1 ,DALP)
+      ENDIF
+*-----------------------------------------------------------------------
+***    U,V IN UF,VF.
+
+      DO 270 L=1,ILEV
+      DO 270 M=1,LM
+      UF(M,L)=DF(M,L)-UF(M,L)
+  270 VF(M,L)=QF(M,L)+VF(M,L)
+*-----------------------------------------------------------------------
+***    FOURIER COEFF OF Q,D IN QF,DF.
+***    NOTE USE OF ABSOLUTE VORTICITY.
+***    THE TWO SETS OF TRANSFORM CAN BE DONE AT ONCE IF LVECT IS .TRUE.
+***    FPSI IS THE INVERSE LAPLACIAN OF THE EARTH'S VORTICITY.
+
+      FPSI=-.5*FVORT
+      DO 290 L=1,ILEV
+      P2(L)=P(2,L)
+      P(2,L)=P(2,L)+CMPLX(FPSI,0.)
+  290 CONTINUE
+
+      IF(LVECT) THEN
+      NUMBER = 2*ILEV
+      CALL STAF (QF    ,P ,LSR,LM,LA,ILH,NUMBER,DELALP)
+
+      ELSE
+
+      CALL STAF (QF    ,P ,LSR,LM,LA,ILH,ILEV,DELALP)
+      CALL STAF (DF    ,C ,LSR,LM,LA,ILH,ILEV,DELALP)
+      ENDIF
+
+      DO 295 L=1,ILEV
+      P(2,L) = P2(L)
+  295 CONTINUE
+*-----------------------------------------------------------------------
+***    PART 2 - THE FOURIER TRANSFORMS FROM FOURIER TO GRID.
+
+***    ALL THE FFT ARE DONE AT ONCE IF LVECT IS .TRUE.
+***    THIS PRESUMES THAT ALL GRID SLICES ARE LINED UP
+***    IN MEMORY, AND THAT PRESSG AND PSDPF ARE FIRST OF THEIR SERIES.
+***    NUMBER = 2*ILEV (FOR Q,D),
+***            +1*LEVT (FOR T),
+***            +1*LEVS (FOR ES),
+***            +1*  1  (FOR PS),
+***            +NTRAC*ILEV (FOR TRAC, IF ITRAC.NE.0)
+***            +2*ILEV (FOR U,V),
+***            +2*  1  (FOR PSDL,PSDP).
+
+      IF(LVECT)THEN
+      NUMBER=4*ILEV+LEVT+LEVS+3
+      IF(ITRAC.NE.0)NUMBER=NUMBER+NILEV
+      CALL FFGFW (PRESSF,ILG,PRESSF,ILH,IR,LON,WRKS,NUMBER,IFAX,TRIGS)
+
+      ELSE
+
+      CALL FFGFW (    QF,ILG,    QF,ILH,IR,LON,WRKS,ILEV,IFAX,TRIGS)
+      CALL FFGFW (    DF,ILG,    DF,ILH,IR,LON,WRKS,ILEV,IFAX,TRIGS)
+      CALL FFGFW (    UF,ILG,    UF,ILH,IR,LON,WRKS,ILEV,IFAX,TRIGS)
+      CALL FFGFW (    VF,ILG,    VF,ILH,IR,LON,WRKS,ILEV,IFAX,TRIGS)
+      CALL FFGFW (PRESSF,ILG,PRESSF,ILH,IR,LON,WRKS,   1,IFAX,TRIGS)
+      CALL FFGFW ( PSDLF,ILG, PSDLF,ILH,IR,LON,WRKS,   1,IFAX,TRIGS)
+      CALL FFGFW ( PSDPF,ILG, PSDPF,ILH,IR,LON,WRKS,   1,IFAX,TRIGS)
+      IF(ITRAC.NE.0)THEN
+      CALL FFGFW(TRACF,ILG,TRACF,ILH,IR,LON,WRKS,NILEV,IFAX,TRIGS)
+      ENDIF
+      IF(LEVT.EQ.0) GO TO 300
+      CALL FFGFW (    TF,ILG,    TF,ILH,IR,LON,WRKS,LEVT,IFAX,TRIGS)
+  300 IF(LEVS.EQ.0) GO TO 310
+      CALL FFGFW (   ESF,ILG,   ESF,ILH,IR,LON,WRKS,LEVS,IFAX,TRIGS)
+      ENDIF
+  310 CONTINUE
+
+      RETURN
+*-------------------------------------------------------------------
+
+      END
+      SUBROUTINE omega3 ( OMEGAG, DJ, UJ, VJ, PSDLJ, PSDPJ, PRESSJ,
+     A                    SHJ, DSGJ, DSHJ, DLNSGJ,
+     B                    A1SGJ, B1SGJ, A2SGJ, B2SGJ,
+     C                    DB, VGRPSJ, SSDRJK, NI2, NI, NK)
+
+***    JAN 28/91- M.LAZARE, F.MAJAESS (BASED ON CODES EXTRACTED FROM DYNCAL3)
+
+***    THIS SUBROUTINE COMPUTES VERTICAL MOTION FOR ILG POINTS ABOUT A
+***    LATITUDE CIRCLE THE SAME WAY AS IT IS DONE IN DYNCAL3.
+***    THEN SCALE BY SF.PRES. AND "SHJ" TO GET UNITS OF (NEWTONS/M**2/SEC).
+
+***    NI2        : VECTOR LENGTH.
+***    NI         : NUMBER OF LONGITUDES.
+***    NK         : NUMBER OF LAYERS.
+
+***    OUTPUT:
+***    -------
+***
+***    OMEGAG(I,K) : VERTICAL MOTION (N/M**2/SEC) AT THERMODYNAMICS
+***                  MID-LAYER POSITIONS.
+
+***    INPUT PARAMETERS:
+***    -----------------
+
+***    DJ(I,K)    : DIVERGENCE AT LATITUDE J.
+***    UJ(I,K)    : ZONAL      REAL WIND AT LATITUDE J.
+***    VJ(I,K)    : MERIDIONAL REAL WIND AT LATITUDE J.
+***    PSDLJ(I)   : LONGITUDINAL DERIVATIVE AT LATITUDE J OF LOG OF SF. PRES.
+***    PSDPJ(I)   : LATITUDINAL  DERIVATIVE AT LATITUDE J OF LOG OF SF. PRES.
+***    PRESSJ(I)  : SURFACE PRESSURE AT LATITUDE J.
+
+***    VERTICAL DISCRETIZATION PARAMETERS:
+***    -----------------------------------
+
+***    SHJ(I,K)   : TEMP MID-LAYER VALUES.
+***    DSGJ(I,K)  : WIND SIGMA LAYER THICKNESS.
+***    DSHJ(I,K)  : TEMP SIGMA LAYER THICKNESS.
+***    DLNSGJ(I,K): THERMODYNAMIC LAYERS D LN(SIGMA).
+***    A1SGJ(I,K) : WEIGHT OF S-LAYER OF SIGMA THICKNESS BETWEEN UPPER WIND
+***                 LAYER AND LOWER TEMPERATURE LAYER USED IN THE CALCULATION
+***                 OF GEOPOTENTIAL.
+***    B1SGJ(I,K) : WEIGHT OF S-LAYER OF SIGMA THICKNESS BETWEEN UPPER WIND
+***                 LAYER AND LOWER TEMPERATURE LAYER USED IN THE CALCULATION
+***                 OF PRESSURE GRADIENT.
+***    A1SGJ(I,K) : WEIGHT OF S-LAYER OF SIGMA THICKNESS BETWEEN LOWER WIND
+***                 LAYER AND LOWER TEMPERATURE LAYER USED IN THE CALCULATION
+***                 OF GEOPOTENTIAL.
+***    B2SGJ(I,K) : WEIGHT OF S-LAYER OF SIGMA THICKNESS BETWEEN LOWER WIND
+***                 LAYER AND LOWER TEMPERATURE LAYER USED IN THE CALCULATION
+***                 OF PRESSURE GRADIENT.
+***    DB(K)      : DB PARAMETER OF THE VERTICAL DISCRETIZATION
+
+
+***    WORKING ARRAYS:
+***    ---------------
+
+***    VGRPSJ(I,K): V.GRAD(LPS) .
+***    SSDRJK(I)  : SUM OF LAYERS 1 TO K OF "D ROND" * DSIGMA.
+
+*     ------------------------------------------------------------------------
+
+      IMPLICIT REAL (A-H,O-Z), INTEGER (I-N)
+
+***    INPUT:
+
+      REAL  DJ   (NI2,NK), UJ   (NI2,NK), VJ     (NI2,NK)
+      REAL  PSDLJ(NI2   ), PSDPJ(NI2   ), PRESSJ (NI2   )
+
+***    VERTICAL DISCRETIZATION PARAMETERS:
+
+      REAL  SHJ   (NI2,NK), DSGJ  (NI2,NK), DSHJ  (NI2,NK)
+      REAL  DLNSGJ(NI2,NK)
+      REAL  A1SGJ (NI2,NK), B1SGJ (NI2,NK)
+      REAL  A2SGJ (NI2,NK), B2SGJ (NI2,NK)
+      REAL  DB (NK)
+
+***    WORKING ARRAYS:
+
+      REAL  VGRPSJ(NI2,NK), SSDRJK(NI2)
+
+***    OUTPUT ARRAY:
+
+      REAL  OMEGAG(NI2,NK)
+*-----------------------------------------------------------------------
+***    INITIALIZATION
+
+
+      DO 1000 I = 1,NI
+         SSDRJK (I)= 0.
+ 1000 CONTINUE
+
+*     -----------------------------------------------------------------
+***    DO THE INTERMEDIATE CALCULATION (RPS)
+
+
+      DO 2010 K = 1,NK
+        DO 2005 I = 1,NI
+            VGRPSJ(I,K) =  UJ(I,K)*PSDLJ(I) + VJ(I,K)*PSDPJ(I)
+ 2005   CONTINUE
+ 2010 CONTINUE
+
+*     -----------------------------------------------------------------
+***    DO THE CALCULATION OF OMEGA OVER P.
+
+
+      DO 3010 K=1,NK-1
+        DO 3005 I = 1,NI
+
+          DRJKI       =  DJ(I,K) + VGRPSJ(I,K)*DB(K)/DSGJ(I,K)
+          DRJKPI      =  DJ(I,K+1) + VGRPSJ(I,K+1)*DB(K+1)/DSGJ(I,K+1)
+
+          OMEGAG(I,K) = ( - SSDRJK(I)*DLNSGJ(I,K)
+     1                   - DRJKI*A1SGJ(I,K) - DRJKPI*A2SGJ(I,K+1)
+     2                   + VGRPSJ(I,K)*B1SGJ(I,K)
+     3                   + VGRPSJ(I,K+1)*B2SGJ(I,K+1) )/DSHJ(I,K)
+
+          SSDRJK(I)   = SSDRJK(I) +DRJKI*DSGJ(I,K)
+
+ 3005   CONTINUE
+ 3010 CONTINUE
+
+*     -----------------------------------------------------------------
+
+      K=NK
+
+      DO 3015 I = 1,NI
+
+        DRJKI       =  DJ(I,K) + VGRPSJ(I,K)*DB(K)/DSGJ(I,K)
+
+        OMEGAG(I,K) = ( - SSDRJK(I)*DLNSGJ(I,K) - DRJKI*A1SGJ(I,K)
+     1                     + VGRPSJ(I,K)*B1SGJ(I,K) )/DSHJ(I,K)
+
+ 3015 CONTINUE
+
+*     -----------------------------------------------------------------
+***    CALCULATE OMEGA (N/M**2/SEC)
+
+
+      DO 4010 K=1,NK
+        DO 4005 I = 1,NI
+
+*         VGRPSJ(I,K) = OMEGAG(I,K)
+          OMEGAG(I,K) = OMEGAG(I,K) * PRESSJ(I) * SHJ(I,K)
+
+ 4005   CONTINUE
+ 4010 CONTINUE
+
+      RETURN
+*-----------------------------------------------------------------------
+      END
+#     endif

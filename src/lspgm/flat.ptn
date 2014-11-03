@@ -1,0 +1,398 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      flat  IN OUT INPUT OUTPUT [ -a VAL -b VAL2 -c VAL3 -d VAL4 ]
+*
+*
+*     AUTHORS - B. Denis, mars 2001.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/flat.ptn,v 4.6 2014/09/25 20:20:47 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      FLAT -  FLATTEN THE LATERAL BOUNDARY IN THE NORMAL DIRECTION.
+*
+*
+*     PURPOSE - APPLY A SMOOTHING OVER A ZONE (TO BE DEFINED BELOW)
+*               ALONG THE LATERAL BOUNDARY. THE SMOOTHING IS DONE IN
+*               THE DIRECTION NORMAL TO THE BOUNDARY.
+*
+*
+*     INPUT FILE...
+*       IN = INPUT FILE ON INITIAL GRID
+*
+*     OUTPUT FILE...
+*       OUT = OUTPUT FILE ON OUTPUT GRID
+*
+*
+*     INPUT PARAMETERS...
+*       NBG (a) = NB OF GRIDPOINT FLATTEN ON THE LEFT BOUNDARY
+*       NBD (b) = NB OF GRIDPOINT FLATTEN ON THE RIGHT BOUNDARY
+*       NBB (c) = NB OF GRIDPOINT FLATTEN ON THE LOWER BOUNDARY
+*       NBH (d) = NB OF GRIDPOINT FLATTEN ON THE UPPER BOUNDARY
+*
+*      READ(5,5000) NBG,NBD,NBB,NBH
+*5000  FORMAT(10X,4I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+*FLAT         3    3    3    3
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 UNABLE TO REAL FIRST GRID OR SUBA ARRAY
+*       2 RATIO NBG/NI DANGEROUSLY HIGH
+*       3 RATIO NBD/NI DANGEROUSLY HIGH
+*       4 RATIO NBB/NI DANGEROUSLY HIGH
+*       5 RATIO NBH/NI DANGEROUSLY HIGH
+*       6 ERROR READING INPUT PARAMETERS
+*       7 PREMATURE EOF ON FILE IN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM flat
+*    +             (IN,       OUT,       INPUT,       OUTPUT,
+*    +        TAPE1=IN, TAPE2=OUT, TAPE5=INPUT, TAPE6=OUTPUT) 
+
+*     $Log: flat.ptn,v $
+*     Revision 4.6  2014/09/25 20:20:47  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.5  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.2  2006/09/19 19:01:32  dugas
+*     Corriger la lecture des parametres -b(NBD), -c(NBB) et -d(NBH).
+*
+*     Revision 4.1  2001/05/01 15:49:40  armnrbd
+*     Corriger la lecture des parametres NBD, NBB et NBH.
+*
+*     Revision 4.0  2001/03/29 02:24:46  armnrbd
+*     Initial version.
+*
+*---------------------------------------------------------------------
+      IMPLICIT    none
+
+      LOGICAL     OK
+      CHARACTER   LIGNE*80
+      REAL        CON,RATIOG,RATIOD,
+     +            RATIOB,RATIOH
+      INTEGER     MAXW,JBUF(taille_entete),
+     +            NFF,NBG,NBD,NBB,NBH,IO,
+     +            LEN,NWDS,JPAK,NRECS,NI,NJ,
+     +            I,J,IER
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: A,WRK
+
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ
+      EXTERNAL    RPBLOC,GETSIZ,JCLPNT,GETLIGN,BURNF,
+     +            RMDELG,RMDELD,RMDELB,RMDELH,PUTFLD2,
+     +            GETFLD2,XIT
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/flat.ptn,v $'
+
+*---------------------------------------------------------------------
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      NRECS = 0
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          NBG = 0
+          NBD = 0
+          NBB = 0
+          NBH = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 5,ERR=900,IOSTAT=IO ) NBG
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ( LIGNE, 5,ERR=900,IOSTAT=IO ) NBD
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ( LIGNE, 5,ERR=900,IOSTAT=IO ) NBB
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ( LIGNE, 5,ERR=900,IOSTAT=IO ) NBH
+
+      ELSE
+
+***        READ CARD CONTAINING INPUT AND OUTPUT GRID PARAMETERS 
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 903
+          ELSE
+              READ( LIGNE, 5000,ERR=900,END=903,IOSTAT=IO )
+     +                     NBG,NBD,NBB,NBH
+              CALL BURNF
+          END IF
+
+      END IF
+
+      WRITE(6,*) 'NBG = ', NBG
+      WRITE(6,*) 'NBD = ', NBD
+      WRITE(6,*) 'NBB = ', NBB
+      WRITE(6,*) 'NBH = ', NBH
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.LE.0) GOTO 904
+
+      ALLOCATE( IBUF(LEN),A(NWDS),WRK(NWDS) )
+
+***    READ ARRAYS FROM FILE 1 
+
+  100 CALL GETFLD2( 1, A, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN 
+              IF (NRECS.EQ.0)                                  THEN
+                  CALL                             XIT('  Flat  ',-1 )
+              ELSE
+                  WRITE(6,6010) NRECS 
+                  CALL                             XIT('  Flat  ', 0 ) 
+              END IF
+          END IF 
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          NI = IBUF(5)
+          NJ = IBUF(6)
+ 
+          RATIOG = FLOAT( NBG )/FLOAT( NI )
+          RATIOD = FLOAT( NBD )/FLOAT( NI )
+          RATIOB = FLOAT( NBB )/FLOAT( NJ )
+          RATIOH = FLOAT( NBH )/FLOAT( NJ )
+
+          IF (RATIOG.GT.0.1)                                   THEN
+              WRITE(6,*) 'RATIO NBG/NI DANGEROUSLY HIGH : ',RATIOG
+              CALL                                XIT('  Flat  ',-2 )
+          END IF
+
+          IF (RATIOD.GT.0.1)                                   THEN
+              WRITE(6,*) 'RATIO NBD/NI DANGEROUSLY HIGH : ',RATIOD
+              CALL                                XIT('  Flat  ',-3 )
+          END IF
+
+          IF (RATIOB.GT.0.1)                                   THEN
+              WRITE(6,*) 'RATIO NBB/NI DANGEROUSLY HIGH : ',RATIOB
+              CALL                                XIT('  Flat  ',-4 )
+          END IF
+
+          IF (RATIOH.GT.0.1)                                   THEN
+              WRITE(6,*) 'RATIO NBH/NI DANGEROUSLY HIGH : ',RATIOH
+              CALL                                XIT('  Flat  ',-5 )
+          END IF
+
+          DO  J=1,NJ
+              CALL RMDELG(A, WRK, J, NI,NJ,NBG)
+              CALL RMDELD(A, WRK, J, NI,NJ,NBD)
+          END DO
+      
+          DO  I=1,NI
+              CALL RMDELB(A, WRK, I, NI,NJ,NBB)
+              CALL RMDELH(A, WRK, I, NI,NJ,NBH)
+          END DO
+     
+          CALL PUTFLD2( 2, A, IBUF,MAXW ) 
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+      NRECS = NRECS+1 
+      GOTO 100 
+
+***    E.O.F. ON UNIT #5.
+ 
+  900 IF (IO.NE.0) WRITE(6,6100) IO
+  903 CALL                                         XIT('  Flat  ',-6 )
+
+***   E.O.F. ON UNIT #1.
+
+  904 CALL                                         XIT('  Flat  ',-7 )
+
+*-----------------------------------------------------------------------
+ 0005 FORMAT(BN,I5)
+ 5000 FORMAT(10X,4I5)
+
+ 6010 FORMAT('0',I6,' records processed.')
+
+ 6100  FORMAT(' Flat reports I/O error number ',I3,' on unit 5.')
+
+      END 
+      SUBROUTINE RMDELG( A,WRK, J, NI,NJ,NB )
+
+      IMPLICIT    none
+
+      INTEGER     J, NI,NJ,NB
+      REAL        A(NI,NJ), WRK(NI,NJ)
+
+      INTEGER     JJ,II,I,K
+
+*-------------------------------------------------------------------------
+      DO  JJ=1,NJ
+          DO  II=1,NI
+              WRK(II,JJ) = 0.0
+          END DO
+      END DO
+
+      DO  K=2,NB
+         
+          A(1,J)=A(2,J)
+         
+          DO  I=2,K
+              WRK(I,J) = (A(I-1,J)+A(I+1,J))/2.
+          END DO
+         
+          DO  I=2,K
+              A(I,J) = WRK(I,J)
+          END DO
+         
+      END DO
+      
+      RETURN
+*-------------------------------------------------------------------------
+
+      END
+      SUBROUTINE RMDELD( A,WRK, J, NI,NJ,NB )
+
+      IMPLICIT    none
+
+      INTEGER     J, NI,NJ,NB
+      REAL        A(NI,NJ), WRK(NI,NJ)
+      
+      INTEGER     JJ,II,I,K
+
+*-------------------------------------------------------------------------
+      DO  JJ=1,NJ
+          DO  II=1,NI
+              WRK(II,JJ) = 0.0
+          END DO
+      END DO
+
+      DO  K=2,NB
+         
+          A(NI,J) = A(NI-1,J)
+         
+          DO  I=NI-K,NI-1
+              WRK(I,J) = (A(I-1,J)+A(I+1,J))/2.
+          END DO
+         
+          DO  I=NI-K,NI-1
+              A(I,J) = WRK(I,J)
+          END DO
+
+      END DO
+
+      RETURN
+*-------------------------------------------------------------------------
+
+      END
+      SUBROUTINE RMDELB( A,WRK, I, NI,NJ,NB )
+
+      IMPLICIT    none
+
+      INTEGER     I, NI,NJ,NB
+      REAL        A(NI,NJ), WRK(NI,NJ)
+
+      INTEGER     JJ,II,J,K
+*-------------------------------------------------------------------------
+
+      DO JJ=1,NJ
+         DO II=1,NI
+            WRK(II,JJ)=0.0
+         ENDDO
+      ENDDO
+      
+      
+      DO K=2,NB
+         
+         A(I,1)=A(I,2)
+         
+         DO J=2,K
+            WRK(I,J)=(A(I,J-1)+A(I,J+1))/2.
+         ENDDO
+         
+         DO J=2,K
+            A(I,J)=WRK(I,J)
+         ENDDO
+
+      ENDDO
+
+      RETURN
+
+*-------------------------------------------------------------------------
+      END
+      SUBROUTINE RMDELH( A,WRK, I, NI,NJ,NB )
+
+      IMPLICIT    none
+
+      INTEGER     I,NI,NJ,NB
+      REAL        A(NI,NJ), WRK(NI,NJ)
+      
+      INTEGER     JJ,II,J,K
+
+*-------------------------------------------------------------------------
+      DO  JJ=1,NJ
+          DO  II=1,NI
+              WRK(II,JJ) = 0.0
+          END DO
+      END DO
+
+
+      DO  K=2,NB
+         
+          A(I,NJ) = A(I,NJ-1)
+         
+          DO  J=NJ-K,NJ-1
+              WRK(I,J) = (A(I,J-1)+A(I,J+1))/2.
+          END DO
+         
+          DO  J=NJ-K,NJ-1
+              A(I,J) = WRK(I,J)
+          END DO
+
+      END DO
+
+      RETURN
+*-------------------------------------------------------------------------
+
+      END
+#     endif
+

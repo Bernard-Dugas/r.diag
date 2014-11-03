@@ -1,0 +1,215 @@
+#if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      psgrid  INPUTC OUTPUTC OUTPUT
+*
+*
+*     DESCRIPTION...
+*      psgrid  CALCUL LES PARAMETRES POUR UNE GRILLE POLAIRE STEREO.
+*
+*
+*     AUTHOR  - Michel Giguere, 11 mars 1994.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/psgrid.ptn,v 4.5 2014/09/25 20:20:52 dugas Exp $
+*
+* 
+*     PURPOSE - CALCUL LES PARAMETRES DE GRILLE POUR UNE GRILLE POLAIRE 
+*               STEREOGRAPHIQUE NORD
+*
+*
+*     INPUT FILES... 
+*      INPUTC = FORTRAN NAMELIST CONTENANT 6 ITEMS: 
+*
+*      CLAT,CLON,NI,NJ,D60,XAXIS
+*      
+*      LA GRILLE EST CENTREE A LA LONGITUDE CLON (OUEST) ET
+*      A LA LATITUDE CLAT. L'ESPACEMENT (EN METRES) ENTRE
+*      LES POINTS DE GRILLE A 60 DEGRES NORD EST REPRESENTE
+*      PAR D60. L'AXE DES X EST ORIENTE SUIVANT LA LONGITUDE 
+*      XAXIS (OUEST). LA GRILLE EST COMPOSEE DE NI PAR NJ POINTS.
+*
+*     OUTPUT FILE...
+*      OUTPUTC : PETIT FICHIER DE SORTIE CARACTERE
+*                CONTENANT: PI,PJ,D60,DGRW,GRTYP
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TROP DE FICHIERS D'ENTREE
+*       2 PAS ASSEZ DE FICHIERS D'ENTREE
+*       3 PLATEFORME INCONNUE
+*
+#endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#if !defined (NO_SOURCE)
+      PROGRAM psgrid
+*     PROGRAM PSGRID (      INPUTC ,      OUTPUTC,       OUTPUT,
+*                     TAPE1=INPUTC, TAPE2=OUTPUTC, TAPE6=OUTPUT) 
+
+*     $Log: psgrid.ptn,v $
+*     Revision 4.5  2014/09/25 20:20:52  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2008/04/25 21:38:39  dugas
+*     Permettre 20 caracteres pour les parametres reels sur la ligne de commande.
+*
+*     Revision 4.2  2004/11/12 17:06:06  dugas
+*     Correction pour version AIX.
+*
+*     Revision 4.1  1999/04/08 21:59:36  armnrbd
+*     Ajouter un macro CPP pour la compilation sous LINUX.
+*
+*     Revision 4.0  1996/01/10 19:04:35  armnrbd
+*     Version initiale.
+*
+*     SEPT 14/95 - MICHEL GIGUERE ( LIMITATION DES VALEURS DE DGRW)
+*     MAR  11/94 - MICHEL GIGUERE  
+*                  BASE SUR LE PROGRAMME GRILLE (ANDRE ROBERT MARS 1986).
+
+*---------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER      NI,NJ,NFF
+      CHARACTER    FILNAM1*64
+      CHARACTER    GRTYP,STATUS*3
+      REAL         CLON,CLAT,D60,DIRX,XAXIS,XC,YC,PI,PJ
+
+      NAMELIST    /CONFIG/ CLON,CLAT,NI,NJ,D60,XAXIS
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+
+      EXTERNAL     JCLPNT,XIT,GETNAM,GETSTAT,PSPNT
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/psgrid.ptn,v $'
+
+*-----------------------------------------------------------------------
+      NFF = 3
+      CALL JCLPNT( NFF, -1,-2, 6 )
+
+      IF (NFF. GT. 2) CALL                         XIT(' Psgrid ',-1 ) 
+      IF (NFF. LT. 2) CALL                         XIT(' Psgrid ',-2 ) 
+
+      CALL GETNAM(  1,FILNAM1 )
+      CALL GETSTAT( 1,STATUS  )
+
+      IF (STATUS.EQ.'OLD')                                     THEN
+#     if !defined (CRAY) && !defined (NEC)
+          READ( 1, NML=CONFIG, END=10 )
+   10     CONTINUE
+          PRINT *, 'PSGRID  --- CONFIGURATION FROM :',FILNAM1
+#     endif
+#     if defined (CRAY)
+          READ( 1, CONFIG, END=10 )
+   10     CONTINUE
+          PRINT *, 'PSGRID  --- CONFIGURATION FROM :',FILNAM1
+#     endif
+#     if defined (NEC)
+          READ( 1, CONFIG )
+   10     CONTINUE
+#     endif
+      ELSE
+          PRINT *, 'ERROR IN PSGRID --- '
+          CALL                                     XIT(' Psgrid ',-3 ) 
+      END IF
+
+      PRINT *, '************************'
+
+      PRINT *, 'CLAT     = ',CLAT 
+      PRINT *, 'CLON     = ',CLON
+      PRINT *, 'NI       = ',NI
+      PRINT *, 'NJ       = ',NJ
+      PRINT *, 'D60      = ',D60
+      PRINT *, 'XAXIS    = ',XAXIS
+      PRINT *
+
+      PRINT *, '************************'
+
+***    UTILISER XAXIS=400.0 SI VOUS VOULEZ QUE L'AXE DES Y SOIT
+***    PARALLELE A CLON. 
+
+      IF (XAXIS.GT.360.0) XAXIS = CLON-90.0 
+
+***    DETERMINER LE VECTEUR (XC,YC) POINTANT DU POLE NORD 
+***    AU POINT (CLON,CLAT). 
+
+      CALL PSPNT( XC,YC,CLON,CLAT,D60,XAXIS )
+
+***    DETERMINER LES COORDONNEES DU POLE PAR RAPPORT AU 
+***    POINT INFERIEUR GAUCHE DE LA GRILLE.
+
+           PI    = 1.0+0.5*(NI-1.0)-XC
+           PJ    = 1.0+0.5*(NJ-1.0)-YC
+           DIRX  = XAXIS
+      IF ( DIRX.LT.0.0) 
+     +     DIRX  = DIRX+360.0
+           GRTYP ='N'
+
+      WRITE (2,1000) 'PI=',PI
+      WRITE (2,1000) 'PJ=',PJ
+      WRITE (2,1000) 'D60=',D60
+      WRITE (2,1000) 'DGRW=',DIRX
+      WRITE (2,1001) 'GRTYP=',GRTYP
+      WRITE (2,*) ' '
+
+      CALL                                         XIT(' Psgrid ', 0 ) 
+*-----------------------------------------------------------------------
+
+ 1000 FORMAT(A6,'''',F10.1,'''')
+ 1001 FORMAT(A6,'''',A1,'''') 
+
+      END 
+      SUBROUTINE pspnt (XC,YC,CLON,CLAT,D60,XAXIS)
+
+      IMPLICIT   none
+
+***    ANDRE ROBERT.     AVRIL 1986. 
+
+***    CE PROGRAMME GENERE LES COORDONNEES D'UN POINT C SUR
+***    UNE GRILLE POLAIRE STEREOGRAPHIQUE A PARTIR DE LA 
+***    LONGITUDE (OUEST) ET DE LA LATITUDE DE CE POINT.
+***    L'ORIGINE DE LA GRILLE (0,0) EST AU POLE NORD ET
+***    L'AXE DES X EST LA LONGITUDE XAXIS (OUEST). LA DISTANCE 
+***    ENTRE LES POINTS DE GRILLE EST DE D60 KM A 60 NORD. 
+
+      REAL       XC,YC,CLON,CLAT,D60,XAXIS
+      REAL       PI,SCF,RAD,DX,RE,ANG,R,X,Y
+
+      DATA       PI,      SCF,      RAD    /
+     +           3.14159, 1.866025, 6371.0 /
+*-----------------------------------------------------------------------
+
+      DX  = D60/1000.
+      RE  = SCF*RAD/DX 
+
+      ANG = PI*(90.0-CLAT )/360.0
+      R   = RE*TAN( ANG ) 
+      ANG = PI*(CLON-XAXIS)/180.0 
+      X   = R *COS( ANG )
+      Y   =-R *SIN( ANG ) 
+      XC  = X
+      YC  = Y
+
+      RETURN
+
+*-----------------------------------------------------------------------
+      END 
+#     endif

@@ -1,0 +1,361 @@
+#     if !defined (grille_maximale)
+#         define   grille_maximale 200000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      w2stat  TSIN W2STAT OUT
+*
+*
+*     AUTHOR  - B.Dugas, MARS 22/89.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/w2stat.ptn,v 4.4 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      W2STAT calcule la statistique de cramer-von mises evaluant la 
+*      normalite  de la distribution des points contenus dans chaque 
+*      enregistrement.  On traite ceux-ci comme des series temporel- 
+*      les prealablememt normalisees.  Une valeur est produite  pour 
+*      chaque TSIN. 
+*
+*      (Voir " EDF STATISTICS FOR GOODNESS  OF FIT AND SOME COMPARI- 
+*       SONS ", M.A. STEPHENS, Journal  of the American  Statistical 
+*       Association, September 1974, pp 730-737.) 
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 TSIN NOT A TIME SERIES FILE
+*      2 TIME SERIES TOO LONG
+*      3 PROBLEMS READING TSIN
+*      4 MORE THAN ONE SIZE
+*      5 TIME SERIES NOT NORMALIZED
+*      6 PREMATURE EOF ON TSIN
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM W2STAT 
+*    1              (      TSIN,       W2STAT,       OUTPUT, 
+*    2               TAPE1=TSIN, TAPE2=W2STAT, TAPE6=OUTPUT) 
+ 
+*     $Log: w2stat.ptn,v $
+*     Revision 4.4  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.3  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.2  2007/12/20 21:09:02  dugas
+*     - Corriger l'appel a JCLPNT.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.1  1998/05/21 20:20:57  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:22:38  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:25  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  93/03/05  22:31:51  armnrbd
+*     Remplacer VSRTA par CSORTD.
+*     
+*     Revision 1.0  93/02/04  09:13:55  armnrbd
+*     Initial revision
+*     
+***    MARS 22/89 - B.DUGAS (BASE SUR UNE PARTIE DU PROGRAMME STD). 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+ 
+      LOGICAL     OK
+      CHARACTER*4 NAME,TYPE
+      INTEGER     NIVEAU,LONG,I,L,
+     +            IER,IBUF,NF,NSERIE,INDEX
+      REAL*8      TSMEAN,TSINL,TSRMS,U,S,W2,VALEUR
+      REAL        TSIN,W2REC,ZERO,UN,DEUX,UNC,
+     +            OLG,OLGM1,O12LG,O2LG,OS
+
+      POINTER   ( IB,IBUF(8) )
+      POINTER   ( PI,INDEX(1) )
+      POINTER   ( PT,TSIN(1) )
+      POINTER   ( PV,VALEUR(1) )
+      POINTER   ( PW,W2REC(1) )
+
+      EXTERNAL    JCLPNT,GETBUF2,XIT,GETFLD2,
+     +            PUTFLD2,NORMAR,CSORTD,HPALLOC
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+ 
+      DATA        ZERO  /   0.0  /, 
+     +            UN    /   1.0  /, 
+     +            DEUX  /   2.0  /, 
+     +            UNC   /   0.01 / 
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/w2stat.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,1 )
+      CALL HPALLOC( PI,      MAXW, IER,1 )
+      CALL HPALLOC( PT,      MAXW, IER,1 )
+      CALL HPALLOC( PV,      MAXW, IER,8 )
+      CALL HPALLOC( PW,      MAXW, IER,1 )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 3 
+      CALL JCLPNT( NF, 1,2, 6 )
+ 
+***    LIRE LE PREMIER TAMPON D'INFORMATION DE TSIN. 
+ 
+      CALL GETBUF2( -1, IBUF,HEAD,OK )
+      IF (.NOT.OK) GOTO 901
+      IF (IBUF(6).NE.1) CALL                       XIT(' W2stat ',-1 ) 
+ 
+***    SAUVER CERTAINES VALEURS A DES FINS DE COMPARAISONS. 
+ 
+      WRITE(TYPE,4) IBUF(1) 
+      WRITE(NAME,4) IBUF(3) 
+
+      NIVEAU  = IBUF(4) 
+      LONG    = IBUF(5) 
+ 
+      IF (LONG.GT.MAXW) CALL                       XIT(' W2stat ',-2 ) 
+ 
+      OLG   = UN/FLOAT(LONG) 
+      OLGM1 = UN/ FLOAT(LONG-1) 
+      O12LG = OLG/12.0 
+      O2LG  = OLG/DEUX 
+ 
+***    IMPRIMER L'INFORMATION NECESSAIRE A L'INTERPRETATION 
+***    DES RESULTATS DU CALCUL. 
+ 
+      WRITE(6,6000) 
+ 
+*--------------------------------------------------------------------- 
+***    ALLER CHERCHER LA PROCHAINE SERIE. 
+ 
+      NSERIE = 0 
+  100 CALL GETFLD2( 1, TSIN, TYPE,-1,NAME,NIVEAU, IBUF,MAXW,OK ) 
+ 
+          IF (.NOT.OK)                                         THEN 
+ 
+              WRITE(6,6010) NSERIE 
+              IF (NSERIE.EQ.0) CALL                XIT(' W2stat ',-3 ) 
+ 
+***            SAUVER LES RESULTATS SUR UNIT 2. 
+ 
+              IBUF(5) = NSERIE 
+              IBUF(8) = -32
+              CALL PUTFLD2( 2, W2REC, IBUF,MAXW ) 
+ 
+              CALL                                 XIT(' W2stat ', 0 ) 
+ 
+          END IF 
+ 
+          IF (IBUF(5).NE.LONG .OR. IBUF(6).NE.1)               THEN 
+              WRITE(6,6020) NSERIE+1 ; CALL PRTLAB( IBUF )
+              CALL                                 XIT(' W2stat ',-4 ) 
+          END IF 
+ 
+***        VERIFIER QUE LA MOYENNE EST NULLE 
+***         ET QUE L'ECART TYPE EST UN. 
+ 
+          TSMEAN = ZERO 
+          DO  L=1,LONG 
+              TSMEAN = TSMEAN+TSIN(L) 
+          END DO
+          TSMEAN = TSMEAN*OLG 
+ 
+          TSRMS = ZERO 
+          DO  L=1,LONG 
+              TSINL = TSIN(L)-TSMEAN 
+              TSRMS = TSRMS+TSINL*TSINL 
+          END DO
+          TSRMS = SQRT(TSRMS*OLGM1) 
+ 
+***        TENIR COMPTE D'UNE CERTAINE IMPRECISION, POSSIBLEMENT 
+***        DUE A UNE COMPACTION DES DONNEES. 
+ 
+          IF (TSRMS-UN.GT.UNC .OR. ABS(TSMEAN).GT.UNC) 
+     +        CALL                                 XIT(' W2stat ',-5 ) 
+ 
+***        UTILISONS LA NOTATION DE STEVENS. 
+ 
+          U  = TSMEAN 
+          S  = TSRMS 
+          OS = UN/S 
+          W2 = ZERO 
+ 
+***        METTRE LES VALEURS DE TSIN EN ORDRE CROISSANT. 
+ 
+          DO  I=1,LONG 
+              INDEX (I) =  I
+              VALEUR(I) = (TSIN(I)-U)*OS 
+          END DO
+ 
+          CALL CSORTD( VALEUR,INDEX,LONG ) 
+
+          DO  I=1,LONG
+              TSIN(I)   = VALEUR(INDEX(I))
+          END DO
+          DO  I=1,LONG
+              VALEUR(I) = TSIN(I)
+          END DO
+
+***        CALCULER LES PROBABILITES NORMALES ASSOCIEES A 
+***        VALEUR PAR  APPROXIMATIONS  RATIONNELLES.  LES 
+***        METTRE DANS VALEUR. 
+ 
+          CALL NORMAR( VALEUR,LONG ) 
+ 
+***        EVALUER W2 ET APPLIQUER LA CORRECTION DUE A UNE 
+***        EVENTUELLE PETITESSE DE L'ECHANTILLON. 
+ 
+          DO 500 I=1,LONG 
+              W2 = W2+(VALEUR(I)-(DEUX*FLOAT(I)-UN)*O2LG)**2 
+  500     CONTINUE 
+          W2REC(NSERIE+1) = (W2+O12LG)*(1.0+O2LG) 
+ 
+          NSERIE = NSERIE+1 
+ 
+          WRITE(6,6030) NSERIE, W2 
+ 
+      GOTO 100 
+ 
+***    FIN PREMATUREE DU FICHIER TSIN. 
+ 
+  901 CALL                                         XIT(' W2stat ',-6 ) 
+ 
+*--------------------------------------------------------------------- 
+    4 FORMAT(A4)
+ 5000 FORMAT(10X,3I5) 
+ 6000 FORMAT(' The null hypothesis (H0: TS is normally distributed)'/ 
+     1       ' can be rejected if W2 > 0.091 : (15.0% uncertainty)'/ 
+     2       23X,'  0.104 :  10.0%' / 23X,'  0.126 :   5.0%'/ 
+     3       23X,'  0.148 :   2.5%' / 23X,'  0.178 :   1.0%'/) 
+ 6010 FORMAT('0W2stat read ',I5,' series.') 
+ 6020 FORMAT('0Record no,=',I5,', label = ')
+ 6030 FORMAT('0Serie No.',I4,', W2 =',F8.4) 
+
+      END 
+      SUBROUTINE NORMAR (VALEUR,NOMBRE) 
+ 
+***    DECEMBRE 16/85 - B. DUGAS 
+ 
+***    CETTE ROUTINE CALCULE LES PROBABILITES NORMALE (0,1) ASSO- 
+***    CIEES AUX NOMBRE DE VALEURS QUI  LUI SONT PASSEES.  VALEUR 
+***    DOIT ETRE EN ORDRE CROISSANT A L'ENTREE. 
+ 
+***    UNE APPROXIMATION RATIONNELLE EST UTILISEE. (VOIR  " HAND- 
+***    BOOK OF MATHEMATICAL FUNCTIONS ",  ABRAMOWITZ  ET  STEGUN, 
+***    NATIONAL BUREAU OF STANDARTS, 1964, PP. 931-933.)  LA PRE- 
+***    CISION DU CALCUL EST DE L'ORDRE DE 7.5E-8. 
+ 
+      IMPLICIT none
+
+      INTEGER  NOMBRE,NI,NF,I
+      REAL*8   VALEUR(NOMBRE), M1,P,OSQ2PI,DEMI,
+     +         B1,B2,B3,B4,B5, UN,ZERO,U,ZU,QU,
+     +         T1,T2,T3,T4,T5
+ 
+      DATA P  /  0.2316419   /, OSQ2PI / 0.3989422804 /, DEMI /  0.5  /, 
+     +     B1 /  0.319381530 /, B2 / -0.356563782 /, B3 / 1.781477937 /, 
+     +     B4 / -1.821255978 /, B5 /  1.330274429 /, UN / 1.0         /, 
+     +   ZERO /  0.0         /, M1 / -1.0         / 
+*-------------------------------------------------------------------- 
+ 
+***    SI ABS(VALEUR) > 15., LES VALEURS SONT DEFINIES PAR ZERO OU UN. 
+ 
+      NI = 0 
+      NF = NOMBRE+1 
+ 
+  050 NI =NI+1 
+      IF (VALEUR(NI).GE.-15.0)                                 THEN 
+          GOTO 100 
+      ELSE IF (NI.LT.NOMBRE)                                   THEN 
+          GOTO 050 
+      ELSE 
+          DO 060 I=1,NOMBRE 
+              VALEUR(I) = ZERO 
+  060     CONTINUE 
+      END IF 
+ 
+  100 NF = NF-1 
+      IF (VALEUR(NF).LE.+15.0)                                 THEN 
+          GOTO 200 
+      ELSE IF (NF.GT.1)                                        THEN 
+          GOTO 100 
+      ELSE 
+          DO 160 I=1,NOMBRE 
+              VALEUR(I) = UN 
+  160     CONTINUE 
+      END IF 
+ 
+  200 DO 300 I=NI,NF 
+ 
+          U  = ABS( VALEUR(I) ) 
+ 
+          ZU = OSQ2PI * EXP( M1 * U*U * DEMI ) 
+ 
+          T1 = UN / (UN + P*U) 
+          T2 = T1*T1 
+          T3 = T2*T1 
+          T4 = T3*T1 
+          T5 = T4*T1 
+ 
+          QU = ZU * (B1*T1 + B2*T2 + B3*T3 + B4*T4 + B5*T5) 
+ 
+          IF (VALEUR(I).GE.ZERO)                               THEN
+              VALEUR(I) = UN - QU
+          ELSE
+              VALEUR(I) =      QU
+          END IF
+ 
+  300 CONTINUE 
+ 
+***    DEFINIR LES VALEURS EXTREMES. 
+ 
+      IF (NI.GT.1)                                             THEN 
+          DO 400 I=1,NI-1 
+              VALEUR(I) = ZERO 
+  400     CONTINUE 
+      ELSE IF (NF.LT.NOMBRE)                                   THEN 
+          DO 500 I=NF+1,NOMBRE 
+              VALEUR(I) = UN 
+  500     CONTINUE 
+      END IF 
+ 
+      RETURN 
+*---------------------------------------------------------------------- 
+
+      END 
+#     endif

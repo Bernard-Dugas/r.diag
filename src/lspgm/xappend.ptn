@@ -1,0 +1,359 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      xappend  OLD ADD NEW OUTPUT
+*
+*
+*     AUTHOR  - B. Dugas (after F. Majaess), Sep 1998.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/xappend.ptn,v 4.5 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     PURPOSE - APPENDS SUPERLABELLED SETS IN FILE 'ADD' TO FILE 'OLD'. 
+*
+*
+*     INPUT FILES... 
+*
+*      OLD = FILE OF SUPERLABELED SETS (CAN BE EMPTY) 
+*      ADD = FILE CONTAINING THE NEW SUPERLABELLED SET(S) TO BE APPENDED 
+*
+*     OUTPUT FILE... 
+*
+*      NEW = COPY OF OLD WITH NEW SUPERLABELLED SET(S) APPENDED.
+*
+*
+*      NOTES: 1) FILE 'OLD' AND 'ADD' CONTAIN NO IDENTICAL SUPERLABELS,
+*                OR ONE OR BOTH OF THEM CONTAIN NO SUPERLABELS.
+*
+*                THE RESULT 'NEW' IS THE COMBINATION OF 'OLD'
+*                AND APPENDED 'ADD'.
+*
+*             2) FILE 'OLD' CONTAINS SUPERLABELLED SETS A, B, AND
+*                FILE 'ADD' CONTAINS SUPERLABELLED SETS A, B, AND C.
+*
+*                THE RESULT 'NEW' IS IDENTICAL TO 'ADD'.
+*
+*             3) FILE 'OLD' CONTAINS SUPERLABELLED SETS A, B, AND C.
+*                FILE 'ADD' CONTAINS SUPERLABELLED SETS A, B.
+*
+*                THE RESULT 'NEW' CONTAINS C FROM 'OLD'
+*                FOLLOWED BY A,B FROM 'ADD'.
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 TOO MANY SETS IN ADD
+*       2 CANNOT CHANGE/MIX PACKING TYPE
+*       3 NO RECORD SAVED FROM ADD
+*       4 PREMATURE EOF ON OLD OR ADD
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM xappend
+*    +     (      OLD,       ADD,       NEW,       OUTPUT, 
+*    +      TAPE1=OLD, TAPE2=ADD, TAPE3=NEW, TAPE6=OUTPUT) 
+*     ----------------------------------------------------
+
+*     $Log: xappend.ptn,v $
+*     Revision 4.5  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.2  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.1  1999/04/08 22:03:46  armnrbd
+*     Utiliser le comdeck MACHTYPE.CDK.
+*
+*     Revision 4.0  1998/09/17 03:03:37  armnrbd
+*     Version initiale.
+*
+
+*----------------------------------------------------------------------- 
+      IMPLICIT    none
+
+      INTEGER     MAXSETS
+      PARAMETER ( MAXSETS = 1000 )
+
+      REAL        ZERO
+      LOGICAL     CHNGTYP,OK,SCANLAB,ERR
+      CHARACTER*4 KIND,LABL,OUTTYP
+      CHARACTER   LABEL*256,ADDLAB(MAXSETS)*256
+      INTEGER     IER,NREC,NSEC,NWDS,JBUF(80),HEAD,
+     +            I,JPAK,LEN,NF,NLAB,MAXW,LENLAB,
+     +            NWRIT,NSKIP,NOLD
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+
+      CHARACTER            NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+#     include    "machtype.cdk"
+
+      INTEGER     GETSIZ
+      EXTERNAL    GETSIZ
+
+      LOGICAL     SETIO64
+      CHARACTER*4 GETYP,PKTYP,PKTYP1,PKTYP2,GETPARC*128
+      EXTERNAL    GETYP,MACSPE,JCLPNT,XIT,PUTYP,TYPSET,
+     +            RECGET,RECPUT,PUTLAB,GETPARC,GETLAB,
+     +            SETIO64
+
+      DATA        LABL   / 'LABL'   /,
+     +            SCANLAB/ .FALSE.  /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xappend.ptn,v $'
+
+*-------------------------------------------------------------------- 
+***    ACCESS MACHINE DEPENDANT CONSTANTS.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCESS I/O UNIT NAME AND ASSIGN
+***    THEM. SETUP FOR 64-BIT I/O.
+
+      NF = 4
+      CALL JCLPNT( NF, 1,2,3, 6 )
+
+      OUTTYP = GETYP( 0 )
+      PKTYP1 = GETYP( 1 )
+      PKTYP2 = GETYP( 2 )
+      PKTYP  = PKTYP1(1:2)
+
+      OK    = SETIO64(.TRUE.)
+
+      NF   = 1
+      NLAB = 0
+      NREC = 0 
+      NSEC = 0
+
+***    ASK FOR NECESSARY MEMORY. READ NEXT DATA INFO BUFFER.
+
+  050 MAXW = GETSIZ( NF, JBUF,LEN,NWDS,JPAK )   
+
+      IF (MAXW.EQ.0)                                           THEN
+          NF = NF+1
+          IF (NF.EQ.3) GOTO 999
+          GOTO 050
+      END IF
+
+      ALLOCATE( IBUF(LEN) )
+
+      IF (NF.EQ.2) GOTO 400
+      IF (SCANLAB) GOTO 250
+
+      SCANLAB = .TRUE.
+
+***    SCAN FILE ADD AND SAVE ALL ITS SUPERLABELS.
+
+  100 CALL SUIVANT( 2, JBUF, ERR,OK )
+
+          IF (.NOT.OK ) GOTO 150
+          IF (     ERR) GOTO 999
+
+          IF (PKTYP.EQ.' ' .OR. PKTYP.EQ.'PK')                 THEN 
+              WRITE(KIND,0004) JBUF(1)
+              IF (KIND.EQ.LABL)                                THEN
+                  CALL PRECEDE( 2,1 )
+                  LEN = JBUF(5)*JBUF(6)
+                  CALL GETLAB( 2, LABEL, JBUF,LEN,OK )
+              ELSE
+                  GOTO 100
+              END IF
+          ELSE
+              LABEL = GETPARC( 'ETIKET' )
+          END IF
+
+          DO  I=1,MIN( NLAB,MAXSETS )
+              IF (LABEL.EQ.ADDLAB(I)) GOTO 100
+          END DO
+
+          NLAB         = NLAB+1
+          ADDLAB(NLAB) = LABEL
+          IF (NLAB.GT.MAXSETS) CALL                XIT(' Xappend',-1 )
+
+      GOTO 100 
+
+  150 CALL PRECEDE( 2,-1 )
+ 
+***    READ THE NEXT RECORD FROM XFILE. 
+***    IF THIS SUPERLABEL IS NOT FOUND ON THE FILE, PRINT MESSAGE AND 
+***    GO BACK FOR THE NEXT ONE OR ABORT (DEPENDING ON ISWTCH VALUE). 
+
+      NWRIT = 0
+      NSKIP = 0
+      NOLD  = 0
+
+  250 CALL RECGET( 1, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN 
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF )
+                  GOTO 050
+              END IF
+
+              GOTO 400
+
+          END IF 
+
+          WRITE(KIND,0004) IBUF(1)
+          IF (KIND.EQ.LABL .OR. PKTYP.EQ.'SQ')                 THEN
+
+***            CHECK THE LABEL JUST READ. IF IT ALSO INCLUDED IN ADDLAB
+***             DO NOT COPY IT AND IT'S ASSOCIATED RECORDS TO UNIT 3.
+
+              IF (KIND.EQ.LABL)                                THEN
+
+                  LEN = MIN( 256, IBUF(5)*IBUF(6) )
+                  CALL GETLAB( 0, LABEL, IBUF,LEN, OK )
+
+              ELSE IF (PKTYP.EQ.'SQ')                          THEN
+
+                  LABEL  = GETPARC( 'ETIKET' )
+
+              END IF
+
+              NOLD = NOLD+1
+
+              DO  I=1,NLAB
+                  IF (LABEL.EQ.ADDLAB(I))                      THEN
+                      NSKIP = NSKIP+1
+                      GOTO 250
+                  END IF
+              END DO
+
+          END IF
+
+***        CONTINUE COPYING FROM UNIT 1.
+
+  350     NWRIT = NWRIT+1
+
+          IF (KIND.EQ.LABL)                                    THEN
+              CALL PUTLAB( 3, LABEL, IBUF,LEN, .FALSE.,.FALSE. )
+          ELSE
+              CALL RECPUT( 3,IBUF )
+          END IF
+
+      GOTO 250
+  400 CONTINUE
+
+***    AT THIS POINT, WE HAVE FINISHED READING OLD.
+***    LET'S COPY THE ADD SETS TO NEW (WITHOUT UNPACKING ANYTHING).
+
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          WRITE(6,6030) NOLD,'record',NSKIP,NWRIT
+      ELSE
+          WRITE(6,6030) NOLD,'set',NSKIP,NWRIT
+      END IF
+
+***    CHECK FOR PACKING TYPE CONSISTENCY. PKTYP1 IS ONLY
+***    CONSIDERED IF FILE OLD CONTAINED VALID RECORDS.
+
+      IF (NREC.EQ.0) PKTYP1 = PKTYP2
+
+      IF ((PKTYP1.NE.OUTTYP .OR.
+     +     PKTYP2.NE.OUTTYP .OR.
+     +     PKTYP1.NE.PKTYP2).AND.
+     +     PKTYP .NE.'SQ'   )                                  THEN
+          CALL TYPSET( CHNGTYP )
+          IF (PKTYP1.NE.PKTYP2 .OR. CHNGTYP)                   THEN
+              WRITE(6,6002) 
+              CALL                                 XIT(' Xappend',-2 )
+          ELSE
+              CALL PUTYP( 0, PKTYP2 )
+          END IF
+      END IF
+
+
+  401 CALL RECGET( 2, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  NF = 2
+                  DEALLOCATE( IBUF )
+                  GOTO 050
+              END IF
+
+              IF (NSEC.EQ.0)                                   THEN 
+                  WRITE(6,6003)
+                  CALL                             XIT(' Xappend',-3 ) 
+              ELSE 
+                  IF (NWRIT.LT.NLAB)                           THEN
+                      WRITE(6,6040) NLAB
+                      DO  I=1,NLAB
+                          LABEL  = ADDLAB(I)
+                          LENLAB = INDEX( LABEL // ' ' , ' ' ) - 1
+                          WRITE(6,6041) LABEL(1:LENLAB)
+                      END DO
+                      WRITE(6,6042) NSEC
+                  ELSE
+                      WRITE(6,6050) NLAB,NSEC
+                  END IF
+                  CALL                             XIT(' Xappend', 0 ) 
+              END IF 
+
+          END IF 
+
+          WRITE(KIND,0004) IBUF(1)
+
+          IF (KIND.EQ.LABL)                                    THEN
+
+              LEN = MIN( 256, IBUF(5)*IBUF(6) )
+              CALL GETLAB( 0, LABEL, IBUF,LEN, OK )
+              CALL PUTLAB( 3, LABEL, IBUF,LEN, .FALSE.,.FALSE. )
+
+              NSEC = NSEC+1
+              GOTO 401
+
+          END IF
+
+          CALL RECPUT( 3,IBUF )
+
+      NSEC = NSEC+1
+      GOTO 401
+
+***    PREMATURE E.O.F. ON UNITS 1 AND 2.
+
+  999 CALL                                         XIT(' Xappend',-4 ) 
+
+*-------------------------------------------------------------------- 
+ 0004 FORMAT(A4)
+
+ 6002 FORMAT(' Xappend cannot change and/or mix packing types.')
+ 6003 FORMAT('0Xappend did not save any sets from ADD to NEW...')
+
+ 6030 FORMAT(/' Out of  ',I5,1X,A,'(s) found in OLD,'/9X,I5,
+     +        ' skipped and'/9X,I5,' written out.')
+ 6040 FORMAT(/9X,I5,' superlabelled sets in ADD appended:')
+ 6041 FORMAT(15X,A)
+ 6042 FORMAT(' Holding ',I5,' record(s).'/)
+ 6050 FORMAT(/9X,I5,' superlabelled sets in ADD appended,'/
+     +        ' Holding ',I5,' record(s).'/)
+
+      END 
+#     endif

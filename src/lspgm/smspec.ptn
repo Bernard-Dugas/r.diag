@@ -1,0 +1,739 @@
+#     if defined (AUTO_DOC)
+*
+*     SEQUENCE D'APPEL...
+*      smspec  IN OUT [ FILTER ] INPUT OUTPUT [ -a VAL1 -b VAL2 -b VAL3 -d VAL4 ]
+*
+*
+*     AUTHOR  - B.DENIS, DECEMBER 1999.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/smspec.ptn,v 4.6 2014/10/16 11:37:06 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      smspec - SPECTRAL FILTERING USING DISCREET SIN AND COS TRANSFORMS.
+*
+*
+*     INPUT FILE...
+*      IN     = INPUT ARRAY FILE
+*
+*     OUTPUT FILES...
+*      OUT    = FILTERED ARRAY FILE
+*      FILTER = THE ACTUAL FILTER ARRAY (OPTIONAL)
+*
+*
+*     PARAMETERS...
+*      CAS (a) = TYPE OF (SUPPORTED) TRANSFORMS.
+*                3 => SIN SHIFTED ONLY.
+*                4 => COS SHIFTED ONLY.
+*                5 => REGULAR SIN & COS (DEFAULT)
+*      WXL (b) = LONG WAVELENGTH CUTOFF (DEFAULT=1.E-20)
+*                INFORMATION WITH WAVELENGTH LONGER OR EQUAL TO WXL WILL
+*                BE PRESERVE.
+*      WXS (c) = SHORT WAVELENGTH CUTOFF (DEFAULT=1.E-20)
+*                INFORMATION WITH WAVELENGTH SMALLER OR EQUAL THAN WXL WILL
+*                BE REMOVED.
+*      DX  (d) = GRID SPACING IN KILOMETERS (DEFAULT=1)
+*
+*
+*      Notes: 1) If WXL = WXS, then wavelength smaller (not equal) than WXL
+*                will be removed. WXL must always be .GE. than WXS.
+*             2) The filter function is equal to "1" at WXL and to "0" at WXS.
+*                In between it follows a "COS(WAVENUMBER)**2" function.
+*             3) As of now, grids have to be of even-sized dimensions.
+*
+*               ^    FILTER FUNCTION (RESPONSE)
+*               |
+*            1 -| ----
+*               |     \
+*               |      \
+*               |       \
+*               |        \
+*               |         \
+*               |          \
+*            0 -|-----|-----|------ SHORTEST-WAVES -->
+*                    WXL   WXS
+*
+*
+*      READ(5,5000) CAS,WXL,WXS,DX
+*5000  FORMAT(10X,I5,3E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* SMSPEC      4      1000       500        45
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 CAS PARAMETRE NOT VALID
+*       2 WXS AND/OR WXL INCORRECT
+*       3 DX IS SMALLER THAN 0
+*       4 PROBLEMS READING FILE IN
+*       5 FOUND UN-EVEN GRID SIZES
+*       6 PROBLEMS READING INPUT PARAMETRES
+*       7 MORE THAN ONE ARRAY SIZE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM smspec
+*    +              (      IN    ,       OUT    ,       FILTER ,
+*    +               TAPE1=IN    , TAPE2=OUT    , TAPE3=FILTER ,
+*    +                     INPUT ,       OUTPUT ,
+*    +               TAPE5=INPUT , TAPE6=OUTPUT ) 
+*     --------------------------------------------------------------
+
+*     $Log: smspec.ptn,v $
+*     Revision 4.6  2014/10/16 11:37:06  dugas
+*     Modifications commandees par la compilation avec GFORTRAN et IFORT.
+*
+*     Revision 4.5  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.4  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.3  2007/12/20 21:17:51  dugas
+*     Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.2  2002/02/02 00:33:14  dugas
+*     Renommer TRUNCATE a TRUNCAT
+*
+*     Revision 4.1  2001/05/01 15:50:53  armnrbd
+*     Premiere version fonctionnelle.
+*
+*     Revision 4.0  2001/04/09 17:19:35  armnrbd
+*     Version initiale.
+*
+
+      IMPLICIT    none
+
+      CHARACTER   LIGNE*80,FILT*4
+      REAL        SPREAD,WXL,WXS,DX
+      REAL*8      A,B,C,FILTER,R1,R2,R3 
+      LOGICAL     OK,FILTOUT, lsin,lcos,lqsin,lqcos,lrft
+      INTEGER     CAS,NTRUNC,MTRUNC,JBUF(taille_entete),LEN,NWDS,JPAK,MAXW,
+     +            NFF,NRECS,INI,NI,NJ,NID,NJD,MMAX,NMAX,NIT,
+     +            NJT,NIP,NJP,I,J,IJ,IJT,IWAY,IAXE,IJA,IJC,
+     +            NX,NY,IRC,ILC,ILR,ITR,IBUF,IER,IO,MAXL,
+     +            MTRUNCX,NFACT
+
+      POINTER   ( PA,A(1) ),( PR1,R1(1) ),( PF,FILTER(1) ),
+     +          ( PB,B(1) ),( PR2,R2(1) ),( PIB,IBUF(8) ),
+     +          ( PC,C(1) ),( PR3,R3(1) )
+
+      INTEGER     GETSIZ
+      LOGICAL     RPBLOC,SETIO64
+      EXTERNAL    JCLPNT,GETSIZ,RPBLOC,HPALLOC,GETLIGN,
+     +            BURNF,XIT,GETFLD2,BLDFILT1,BLDFILT2,
+     +            TRANS1D,TRUNCAT,PUTFLD2,SETIO64,
+     +            NGFFT
+
+      DATA        FILT / 'FILT' /
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/smspec.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ASSIGN I/O UNITS.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2,3, 5,6 )
+
+                    FILTOUT = .FALSE.
+      IF (NFF.EQ.3) FILTOUT = .TRUE.
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+***    =========
+***    SECTION 1: DETERMINE OPERATING PARASMETRES
+***    =========
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ(LIGNE,5,ERR=999,IOSTAT=IO) CAS
+
+          OK = RPBLOC('B',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=999,IOSTAT=IO) WXL
+
+          OK = RPBLOC('C',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=999,IOSTAT=IO) WXS
+
+          OK = RPBLOC('D',LIGNE)
+          IF (OK) READ(LIGNE,10,ERR=999,IOSTAT=IO) DX
+
+      ELSE
+
+***        READ CARD CONTAINING INPUT AND OUTPUT GRID PARAMETERS 
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+               GOTO 1000
+          ELSE
+               READ(5,5000, ERR=999,END=1000,IOSTAT=IO)
+     +                      CAS,WXL,WXS,DX
+               CALL BURNF
+          END IF
+
+      END IF
+
+***    QUALITY CHECKING OF THE INPUT
+
+      IF (CAS.EQ.0) CAS = 5
+      WRITE(6,6101) CAS 
+
+      lsin    = cas .eq. 1
+      lcos    = cas .eq. 2
+      lqsin   = cas .eq. 3
+      lqcos   = cas .eq. 4
+      lrft    = cas .eq. 5
+
+      IF ( LQSIN )                                             THEN 
+          WRITE(6,*) 'Using shifted SIN transform (QSFT8 or QSFFT8)'
+      ELSE IF ( LQCOS )                                        THEN
+          WRITE(6,*) 'Using shifted COS transform (QCFT8 or QCFFT8)'
+      ELSE IF ( LRFT )                                         THEN 
+          WRITE(6,*) 'Using standard fourier transform (RFT8 or FFFT8)'
+      END IF
+
+      IF (.NOT.(lrft .OR. lqsin .OR. lqcos))
+     +    CALL                                     XIT(' Smspec ',-1 )
+
+      IF (WXL.EQ.0.0) WXL = 1.E-20
+      IF (WXS.EQ.0.0) WXS = 1.E-20
+
+      WRITE(6,6102) WXL
+      WRITE(6,6103) WXS
+
+      IF (WXS.LT. 0 .OR.
+     +    WXL.LT. 0 .OR.
+     +    WXS.GT.WXL)                                          THEN
+          WRITE (6,*) 'Problem with WXS and/or WXL'
+          CALL                                     XIT(' Smspec ',-2 )
+      END IF
+
+      IF (DX.EQ.0.0) DX = 1.0
+      WRITE(6,6104)  DX
+
+      IF (DX.LT.0) THEN
+          WRITE (6,*) 'Problem: dx must be greater than zero'
+          CALL                                     XIT(' Smspec ',-3 )
+      END IF
+
+***    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+      NRECS = 0
+
+  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+      IF (MAXW.EQ.0) CALL                          XIT(' Smspec ',-4 )
+
+      NI   = JBUF(5)
+      NJ   = JBUF(6)
+      MAXL = (NI+2)*(NJ+2)
+
+      CALL HPALLOC( PA,8*MAXL+taille_entete,IER,8 )
+      PB  = LOC(      A(MAXL+1) )
+      PC  = LOC(      B(MAXL+1) )
+      PR1 = LOC(      C(MAXL+1) )
+      PR2 = LOC(     R1(MAXL+1) )
+      PR3 = LOC(     R2(MAXL+1) )
+      PF  = LOC(     R3(MAXL+1) )
+      PIB = LOC( FILTER(MAXL+1) )
+      
+***    SET THE MAXIMUM OF INTEGER WAVENUMBERS SUPPORTED BY THE GRID.
+
+      IF (lrft)                                                THEN
+
+***         ---------------------------------------------
+***         * STANDARD PERIODIC FOURIER TRANSFORM CASE. *
+***         ---------------------------------------------
+
+***        THE INPUT GRID IS ASSUMED TO BE PERIODIC SO THAT THE LAST
+***        COLUMN  AND LAST ROWS HAVE TO BE REMOVED BEFORE PASSING
+***        IT TO THE  TRANSFORMS WHICH WORKS ON VECTOR CONTANING
+***        DISTINCT DATA.
+
+          NIP  = 2
+          NJP  = 2
+
+          NID  = NI - 1     ! NUMBER OF DISTINCT POSITION IN X.
+          NJD  = NJ - 1     ! NUMBER OF DISTINCT POSITION IN X.
+
+***        SET THE MAXIMUM OF INTEGER WAVENUMBERS SUPPORTED BY THE GRID.
+      
+          MMAX = NID/2
+          NMAX = NJD/2
+
+***        WE NEED TO PADD THE ARRAYS LIKE THIS:
+***        VERIFIER QUE CA MARCHE POUR LES 5 CAS!!
+
+*          --------------------
+*          |o o o o o o o o o |
+*          |o o o o o o o o o |
+*          |x x x x x x x o o |
+*          |x x x x x x x o o |
+*          |x x x x x x x o o |
+*          |x x x x x x x o o |
+*          --------------------
+
+      ELSE IF (lqcos .OR. lqsin)                               THEN
+
+***             -------------------------------------
+***             * SHIFTED COS OR SIN TRANSFORM CASE.*
+***             -------------------------------------
+
+          NIP  = 0
+          NJP  = 0
+          NID  = NI
+          NJD  = NJ
+          MMAX = NID/2
+          NMAX = NJD/2
+
+      END IF
+
+      IF (MOD(NID,2).NE.0 .OR.
+     +    MOD(NJD,2).NE.0)                                     THEN
+
+***        THIS IS A RESTRICTION FOR THE MOMENT...
+
+          CALL                                     XIT(' Smspec ',-5 )
+
+      END IF
+
+      NIT = NID+NIP
+      NJT = NJD+NJP
+
+***    ISSUE A WARNING IF FAST TRANSFORMS CANNOT BE USED.
+
+      NFACT = NID
+      CALL NGFFT( NFACT )
+         
+      If (NFACT.NE.NID)                                        THEN 
+          WRITE(6,*) 'WARNING: A FAST TRANSFORM CANNOT BE USED IN X:'
+          WRITE(6,6100) NID,NFACT
+      END IF
+
+      NFACT = NJD
+      CALL NGFFT( NFACT )
+         
+      If (NFACT.NE.NJD)                                        THEN 
+          WRITE(6,*) 'WARNING: A FAST TRANSFORM CANNOT BE USED IN Y:'
+          WRITE(6,6100) NJD,NFACT
+      END IF
+
+***    =========
+***    SECTION 2: BUILD THE FILTER ARRAY
+***    =========
+
+***    FIND THE WAVENUMBER OF TRUNCATION BASED ON WAVELENGTH
+***    AND RESOLUTION GIVEN IN THE INPUT CARD. WRITE OUT TO
+***    THE USER THE EFFECTIVE WAVELENGTHS CUT OFF THAT WILL
+***    USED BY THE FILTER.
+
+      MTRUNC  = NINT( NID*DX/WXL )
+      NTRUNC  = NINT( NJD*DX/WXL )
+
+      MTRUNCX = NINT( NID*DX/WXS )
+      SPREAD  = MTRUNCX/FLOAT( MTRUNC ) - 1.
+
+      WXL     = NID*DX/FLOAT( MTRUNC )
+      WXS     = NID*DX/(MTRUNC*(1.+ SPREAD))
+
+      WRITE (6,6201) WXL
+      WRITE (6,6202) WXS
+
+***    DEFINE THE POSITION OF THE LAST
+***    WAVENUMBER TO BE UNTOUCHED.
+
+      IF (lrft)                                                THEN 
+
+          CALL BLDFILT1( FILTER, MMAX,NMAX, NIT,NJT,
+     +                           MTRUNC,NTRUNC,SPREAD )
+
+      ELSE IF (lqcos .OR. lqsin)                               THEN
+
+          CALL BLDFILT2( FILTER, MMAX,NMAX, NIT,NJT,
+     +                           MTRUNC,NTRUNC,SPREAD )
+
+      END IF
+
+***    READ GRID FROM UNIT 1.
+
+  100 CALL GETFLD2( 1, B, 'GRID'//'SUBA',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN 
+              IF (NRECS.EQ.0)                                  THEN
+                  CALL                             XIT(' Smspec ',-4 )
+              ELSE
+                  WRITE(6,6010) NRECS 
+                  CALL                             XIT(' Smspec ', 0 ) 
+              END IF 
+          END IF 
+
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+
+          IF (.NOT.OK)                                             THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT(' Smspec ',-7 )
+          END IF
+
+***        BUILT THE ARRAY "A" FOR THE TRANSFORMS.
+
+          IJ  = 0
+          IJT = 0
+
+          DO  J=1,NJT
+              DO  I=1,NIT
+
+                  IJT = IJT+1
+
+                  IF (I.gt.NID .OR.
+     +                J.gt.NJD)                                THEN
+                      A(IJT) = 0.0
+                  ELSE
+                      IJ     = IJ+1
+                      A(IJT) = B(IJ)
+                  END IF            
+
+              END DO
+          END DO
+
+***       =========
+***       SECTION 3: DO THE ACTUAL FILTERING
+***       =========
+
+***       ------------------------------
+
+          IWAY = -1             ! Reverse  transform (gridpoint to Fourier)
+
+          IAXE =  0             ! transform following x
+
+          IF (IAXE.EQ.0)                                       THEN
+              NX = NID          ! transform following x
+              NY = NJD
+          ELSE 
+              NX = NJD          ! transform following y
+              NY = NID
+          END IF
+
+          CALL TRANS1D( A,R1,R2,R3, MAXL,NX,NY, CAS,IAXE,IWAY )
+
+          IAXE=1                ! transform following y
+
+          IF (IAXE.EQ.0)                                       THEN
+              NX = NID          ! transform following x
+              NY = NJD          ! transform following x
+          ELSE 
+              NX = NJD          ! transform following y
+              NY = NID          ! transform following x
+          END IF
+
+          CALL TRANS1D( A,R1,R2,R3, MAXL,NX,NY, CAS,IAXE,IWAY )
+          CALL TRUNCAT( A, NIT,NJT, FILTER )
+
+***       ------------------------------
+
+          IWAY=+1               ! Forward transform (Fourier to grid point)
+
+          IAXE=1                ! transform following x
+
+          IF (IAXE.EQ.0)                                       THEN
+              NX=NID            ! transform following x
+              NY=NJD
+          else
+              NX=NJD            ! transform following y
+              NY=NID
+          END IF
+
+          CALL TRANS1D( A,R1,R2,R3, MAXL,NX,NY, CAS,IAXE,IWAY )
+
+          IAXE=0                ! transform following y
+
+          IF (IAXE.EQ.0)                                       THEN
+              NX=NID            ! transform following x
+              NY=NJD            ! transform following x
+          ELSE
+              NX=NJD            ! transform following y
+              NY=NID            ! transform following x
+          END IF
+
+          CALL TRANS1D( A,R1,R2,R3, MAXL,NX,NY, CAS,IAXE,IWAY )
+
+***       ------------------------------
+
+***        =========
+***        SECTION 4: OUTPUT MANIPULATIONS.
+***        =========
+
+***        TRANSFER THE RESULTS IN THE OUTPUT AREA C(NI,NJ).
+***        WHAT COMES OUT OF THE TRANSFORMS (A(NID,NJD) DOES NOT 
+***        POSSESS THE PERIODIC DATA ROW/COLUMN. THEY ARE ADDED
+***        (COPIED) AFTERWARD.
+
+          DO  J=1,NJD           ! loop on the output 
+              DO  I=1,NID       ! transform grid dimensions
+
+                  IJA    = (J-1)*NIT + I
+                  IJC    = (J-1)*NI + I
+
+                  C(IJC) = A(IJA)
+
+              END DO
+          END DO
+
+          IF (lrft)                                            THEN
+
+***            FILL THE RIGHT COLUMN OF THE OUTPUT GRID.
+
+              DO  J=1,NJ
+                  IRC    =  J   *NI      ! index for the right column elements.
+                  ILC    = (J-1)*NI + 1  ! index for the left column elements. 
+                  C(IRC) = C(ILC)
+              END DO
+
+***            FILL THE TOP ROW OF THE OUTPUT GRID.
+
+              DO  I=1,NI
+                  ILR    = I             ! index of the lower row elements.
+                  ITR    = (NJ-1)*NI + I ! index for the top row elements.
+                  C(ITR) = C(ILR)
+              END DO
+
+          END IF
+
+          CALL PUTFLD2( 2, C, IBUF,MAXW ) 
+          IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
+
+          IF (FILTOUT .AND. NRECS.EQ.0)                        THEN
+
+***            WRITE OUT THE FILTER USED FOR LATTER CONSULTATIONS.
+
+              READ( FILT,0004) IBUF(3)
+              IBUF(5) = NIT
+              IBUF(6) = NJT
+              IBUF(8) = -64
+
+              CALL PRTLAB( IBUF )
+              CALL PUTFLD2( 3, FILTER, IBUF,MAXW ) 
+
+          END IF
+
+      NRECS = NRECS+1 
+      GOTO 100 
+
+***    PREMATURE EOF ON UNIT#5.
+
+  999 IF (IO.NE.0) WRITE(6,6005) IO  
+ 1000 CALL                                         XIT(' Smspec ',-6 )
+  
+*-----------------------------------------------------------------------
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5000 FORMAT(10X3I5,3E10.0)
+
+ 6005 FORMAT(' Smspec reports I/O error number ',I4,' on unit 5.')
+ 6010 FORMAT('0',I6,' Records processed.')
+
+ 6100 FORMAT(' N = ',I4,' the nearest factorizable N=',I4)
+ 6101 FORMAT(' CAS=',I1)
+ 6102 FORMAT(' Input WXL=',F10.3)
+ 6103 FORMAT(' Input WXS=',F10.3)
+ 6104 FORMAT(' DX =',F10.3)
+ 6201 FORMAT(' Effective WXL = ',F10.3)
+ 6202 FORMAT(' Effective WXS = ',F10.3)
+
+      END
+
+      SUBROUTINE BLDFILT1(FILTER,MMAX,NMAX,NIT,NJT,MTRUNC,NTRUNC,SPREAD)
+
+      IMPLICIT    none
+
+***    BUILD THE SPECTRAL FILTER TO BE APPLIED SPECTRAL COEFFICIENT ARRAY.
+***    NB: THIS VERSION IS FOR THE PERIODIC FOURIER (SIN&COS) TRANSFORMS.
+
+      REAL        SPREAD
+      INTEGER     NIT,NJT
+      INTEGER     MMAX,NMAX,MTRUNC,NTRUNC
+      REAL*8      FILTER (NIT,NJT)
+
+      INTEGER     M,N,I,J
+      REAL*8      R,RCUT,PI
+      REAL*8      A,B,FACT
+
+*-----------------------------------------------------------------------
+      PI = 2.*ASIN( 1.0D0 )
+
+      DO  N=0,NMAX
+          DO  M=0,MMAX
+
+***    WE USE ELLIPTICAL TRUNCATION.THIS  REVERT TO CIRCULAR
+***    TRUNCATION WHEN THE GRID IS A PERFECT SQUARE.
+
+***    WE COMPUTE A ADIMENSIONAL RADIUS R.
+
+              A = M / DBLE( MTRUNC )
+              B = N / DBLE( NTRUNC )
+
+              R = SQRT( A**2 + B**2 )
+
+              RCUT=1.0 + SPREAD
+
+              IF (R.GT.RCUT)                                   THEN 
+
+                  I = 2*M+1
+                  J = 2*N+1
+
+                  FILTER(I  ,J  ) = 0.0
+                  FILTER(I+1,J  ) = 0.0
+                  FILTER(I  ,J+1) = 0.0
+                  FILTER(I+1,J+1) = 0.0
+
+              ELSE IF ((R.GT.1).AND.(R.LE.RCUT))               THEN
+
+                  FACT = ( COS( (PI/2.0) * ((R-1.)/(RCUT-1)) ) )**2
+                  I = 2*M+1
+                  J = 2*N+1
+
+                  FILTER(I  ,J  ) = FACT
+                  FILTER(I+1,J  ) = FACT
+                  FILTER(I  ,J+1) = FACT
+                  FILTER(I+1,J+1) = FACT
+
+              ELSE
+
+                  I=2*M+1
+                  J=2*N+1
+
+                  FILTER(I  ,J  ) = 1.0
+                  FILTER(I+1,J  ) = 1.0
+                  FILTER(I  ,J+1) = 1.0
+                  FILTER(I+1,J+1) = 1.0
+
+              END IF
+
+          END DO
+      END DO
+
+      RETURN
+*-----------------------------------------------------------------------
+
+      END
+      SUBROUTINE BLDFILT2(FILTER,MMAX,NMAX,NIT,NJT,MTRUNC,NTRUNC,SPREAD)
+
+      IMPLICIT    none
+
+***    BUILD THE SPECTRAL FILTER TO BE APPLIED SPECTRAL COEFFICIENT ARRAY.
+***    NB: THIS VERSION IS FOR COS SHIFTED AND SIN SHIFTED TRANSFORMS.
+
+      REAL        SPREAD
+      INTEGER     NIT,NJT
+      INTEGER     MMAX,NMAX,MTRUNC,NTRUNC
+      REAL*8      FILTER (NIT,NJT)
+
+      INTEGER     M,N,I,J
+      REAL*8      R,RCUT,PI
+      REAL*8      A,B,FACT
+
+*-----------------------------------------------------------------------
+      PI = 2.*ASIN( 1.0D0 )
+
+***    QUALITY CHECKING OF THE INPUT
+      
+      IF(NTRUNC.LT.1) CALL                         XIT(' Bldfilt2',-1 )
+      IF(MTRUNC.LT.1) CALL                         XIT(' Bldfilt2',-2 )
+      
+      DO  N=0,2*NMAX-1
+          DO  M=0,2*MMAX-1
+
+***    WE USE ELLIPTICAL TRUNCATION.THIS  REVERT TO CIRCULAR
+***    TRUNCATION WHEN THE GRID IS A PERFECT SQUARE.
+
+***    WE COMPUTE A ADIMENSIONAL RADIUS R.
+
+              A = M / DBLE( 2*MTRUNC )
+              B = N / DBLE( 2*NTRUNC )
+
+              R = SQRT( A**2 + B**2 )
+
+              RCUT = 1.0 + SPREAD
+
+              IF (R.GT.RCUT)                                   THEN 
+
+                  I = M+1
+                  J = N+1
+
+                  FILTER(I,J)  = 0.0
+
+              ELSE IF ((R.GT.1).AND.(R.LE.RCUT))               THEN
+
+                  FACT = ( COS((PI/2.0) * ((R-1.)/(RCUT-1)) ) )**2  
+                  I = M+1
+                  J = N+1
+
+                  FILTER(I,J)  = FACT
+
+              ELSE
+
+                  I = M+1
+                  J = N+1
+
+                  FILTER(I,J)  = 1.0
+
+              END IF
+
+          END DO
+      END DO
+
+      RETURN
+*-----------------------------------------------------------------------
+
+      END
+      SUBROUTINE TRUNCAT( A, NIT,NJT, FILTER )
+
+      IMPLICIT    none
+
+      INTEGER     NIT,NJT, I,J
+      REAL*8      A(NIT,NJT), FILTER(NIT,NJT)
+
+*-----------------------------------------------------------------------
+      DO  J=1,NJT
+          DO  I=1,NIT
+              A(I,J)  = FILTER(I,J) * A(I,J)
+          END DO
+      END DO
+
+      RETURN
+*-----------------------------------------------------------------------
+
+      END
+#     endif

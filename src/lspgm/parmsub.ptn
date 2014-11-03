@@ -1,0 +1,607 @@
+#if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      parmsub  IN OUT IN2 OUTPUT
+*
+*
+*     DESCRIPTION...
+*      parmsub - PARAMETER SUBSTITUTION PROGRAM 
+*
+*
+*     AUTHORS  - R.Laprise, B.Dugas AND J.D.Henderson, MAY 15/83.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/parmsub.ptn,v 4.3 2014/09/25 20:20:51 dugas Exp $
+*
+*
+*     PURPOSE  - PARAMETER SUBSTITUTION PROGRAM. 
+*                ANY CHARACTER STRING ENCLOSED IN A PAIR OF DOLLAR SIGNS IN 
+*                FILE "IN" IS CONSIDERED TO BE THE NAME OF A PARAMETER TO BE 
+*                REPLACED IN FILE "OUT" BY A SUBSTITUTION VALUE FROM FILE "IN2 
+*
+*     NOTES    - 1) ONLY FILE "IN" IS REWOUND DURING EXECUTION.
+*                2) OUTPUT IS ON FILE "OUT" FOR ALL PARAMETER SETS. 
+*                3) IF A FATAL ERROR OCCURS IN ANY SET,THE PROGRAM ABORTS. 
+*
+*
+*     INPUT FILES... 
+*      IN    = INPUT FILE WITH (256 CHARACTERS MAX) LINES CONTAINING STRING(S)
+*              ENCLOSED IN A PAIR OF DOLLAR SIGNS. TWO CONSECUTIVE DOLLAR SIGNS
+*              ARE REPLACED BY ONE OF 36 CHARACTERS SPECIFIED IN SUBROUTINE
+*              PARINS, BASED ON THE SUBSTITUTION SET NUMBER. THREE CONSECUTIVE
+*              DOLLAR SIGNS MEANS THAT A DOLLAR SIGNS IS TO BE LEFT IN OUT.
+*              
+*      IN2   = INPUT FILE CONTAINING VALUES OF THE FORM  "NAME=VALUE," (THE
+*              COMMA IS PART OF THE SYNTAX).  THERE CAN BE MANY SUBSTITUTION 
+*              VALUES ON A CARD.  DO NOT USE THE CHARACTER ASCII(3C), i.e. "<".
+*              A SUBSTITUTION CARD WHICH STARTS WITH ",=X " IN COLUMNS 1 TO 4 
+*              CHANGES THE SEPARATOR FROM COMMA TO THE CHARACTER X FOR THAT 
+*              CARD ONLY.  THIS PERMITS THE INSERTION  OF VALUES THAT CONTAIN
+*              COMMAS.  IF A NAME IS REDEFINED, THE LAST VALUE IS USED. MORE
+*              THAN ONE SUBSTITUTION SET CAN BE READ.  THEY ARE THEN SEPARATED 
+*              BY A SLASH CARD ("/" IN COLUMN 1). THERE SHOULD BE NO MORE THAN
+*              A MAXIMUM OF 999 NAMES IN A SET.
+*
+*     OUTPUT FILE... 
+*      OUT   = CONTAINS THE SUBSTITUTED FILE UPON TERMINATION. 
+*              OUTPUT IS ON FILE OUT FOR ALL PARAMETER SETS. 
+*
+*
+*     EXAMPLE OF INPUT/OUTPUT FILES... 
+*
+*      INPUT FILE IN... 
+*                           "A $B$ CD $E$ F"
+*      INPUT FILE IN2... 
+*                           "B=XY,  E=Z,"
+*      OUTPUT FILE OUT... 
+*                           "A XY CD Z F"
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 NO SUBSTITUTION SET FOUND ON FILE IN2
+*       2 ABORT DUE TO ERROR(S) IN PARAMETER INSERTION
+*       3 FILE IN SEEMS EMPTY
+*       4 TOO MANY PARAMETER NAMES (FROM PARDEC)
+*       5 INCOMPLETE LINE IMAGE    (FROM PARINS)
+#endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#if !defined (NO_SOURCE)
+      PROGRAM parmsub
+*    +                (IN,       OUT,       IN2,       OUTPUT, 
+*    +           TAPE1=IN, TAPE2=OUT, TAPE3=IN2, TAPE6=OUTPUT) 
+*     -------------------------------------------------------- 
+
+*     $Log: parmsub.ptn,v $
+*     Revision 4.3  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.2  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.1  2007/12/20 21:09:34  dugas
+*     Corriger l'appel a JCLPNT.
+*
+*     Revision 4.0  1994/11/17 14:21:17  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:39  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.1  92/03/25  15:55:00  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:52  armnrbd
+*     Initial revision
+*     
+
+*     JAN 14/92 - B.DUGAS, RPN. (CHANGE MULTI-$ CODE IN PARINS)
+*     JAN 15/91 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+*     MAY 15/83 - R.LAPRISE,B.DUGAS,J.D.HENDERSON. 
+
+*----------------------------------------------------------------------- 
+***    NPS   = NUMBER OF SUBSTITUTION SETS ON IN2. 
+***    NPCDS = NUMBER OF REPLACEMENT PARAMETER CARDS IN A SET ON IN2. 
+***    NPARM = NUMBER OF REPLACEMENT PARAMETERS IN A SET ON IN2. 
+***    NCARDS= NUMBER OF CARDS TO PROCESS IN FILE IN. 
+***    NUS   = NUMBER OF TIMES A REPLACEMENT PARAMETER HAS BEEN USED 
+***    OK    = .FALSE.  IF NO MORE CARDS TO BE READ IN FROM IN2. 
+
+      IMPLICIT        NONE
+
+      INTEGER         MAXPM
+      PARAMETER     ( MAXPM = 999 )
+
+      LOGICAL         ALLOK,OK 
+      CHARACTER*257   IMAGE
+      CHARACTER*256   INPUT,OUTCR,NAME(MAXPM),VALUE(MAXPM)
+      CHARACTER*1     DUMMY,SLASH,BLANK
+      INTEGER         NUS(MAXPM),LINLEN,
+     +                NFF,NPS,IPARM,NPARM,NCARDS,NPCDS,I,J,K
+
+      EXTERNAL        PARDEC,PARINS,JCLPNT,XIT
+
+      CHARACTER       NOMPRG*256
+      COMMON         /PROGNAM/ NOMPRG
+
+      DATA            LINLEN / 256 /
+
+      DATA            SLASH  / '/' /,
+     +                BLANK  / ' ' /,
+     +                DUMMY  / '<' /
+
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/parmsub.ptn,v $'
+
+*-------------------------------------------------------------- 
+      NFF = 4 
+      CALL JCLPNT( NFF, -1,-2,-3, 6 )
+
+      IMAGE(257:257) = BLANK
+
+      WRITE(6,6000) 
+      NPS   = 0 
+      ALLOK =.TRUE. 
+      OK    =.TRUE. 
+
+***    LOOP ON ALL SUBSTITUTION SETS. 
+***    (FILE IN IS REWOUND AND READ IN FOR EACH SET) 
+
+  110 CONTINUE 
+
+          IPARM = 1 
+          NPCDS = 0 
+          NPS   = MOD(NPS,36) + 1 
+          IF (.NOT.OK) GOTO 125 
+
+***        READ AND DECODE THE NEXT SUBSTITUTION SET FROM IN2. 
+***        A SET MUST END WITH A / CARD OR EOF. 
+
+  120     READ( 3,1313,END=121) INPUT 
+
+              OK =.TRUE. 
+              GOTO 122 
+
+  121         OK =.FALSE. 
+
+  122         IF (.NOT.OK .OR. INPUT(1:1).EQ.SLASH) GOTO 125 
+
+              DO 123 J=LINLEN,1,-1
+                  IF (INPUT(J:J).NE.' ') GOTO 124
+  123         CONTINUE
+  124         WRITE(6,6030) (INPUT(I:I),I=1,J) 
+
+              CALL PARDEC( INPUT,NAME,VALUE,MAXPM,IPARM,LINLEN ) 
+              NPCDS = NPCDS+1 
+
+          GOTO 120 
+
+***        STOP HERE IF A SUBSTITUTION SET IS EMPTY. 
+
+  125     IF (NPCDS.LE.0)                                      THEN
+
+              IF (NPS.EQ.1)                                    THEN 
+                  WRITE(6,6025) 
+                  CALL                             XIT(' Parmsub',-1 ) 
+              END IF 
+
+              IF (ALLOK) CALL                      XIT(' Parmsub', 0 ) 
+              WRITE(6,6050) 
+              CALL                                 XIT(' Parmsub',-2 ) 
+
+          END IF
+
+***         READ FILE IN AND DO THE SUBSTITUTION CARD BY CARD. 
+
+          NPARM = IPARM-1 
+          WRITE(6,6032) NPARM 
+
+          DO 190 J=1,NPARM 
+              NUS(J) = 0 
+  190     CONTINUE
+
+          REWIND   1 
+          NCARDS = 0 
+  200     CONTINUE 
+
+              READ( 1,1313,END=250) IMAGE
+
+              NCARDS = NCARDS+1 
+              CALL PARINS( OUTCR,IMAGE, NCARDS,NAME,VALUE,
+     +                     NUS,NPARM,NPS, ALLOK,LINLEN )
+
+              DO 201 J=LINLEN,1,-1
+                  IF (OUTCR(J:J).NE.' ') GOTO 202
+  201         CONTINUE
+
+  202         WRITE(2,2000) (OUTCR(I:I), I=1,J)
+*             WRITE(6,6030) (OUTCR(I:I), I=1,J)
+
+          GOTO 200 
+
+***        STOP IF FILE IN IS EMPTY. 
+
+  250     WRITE(6,6020) NCARDS 
+          WRITE(6,6035) NPS 
+          IF (NCARDS.EQ.0) CALL                    XIT(' Parmsub',-3 ) 
+
+***        LIST ANY PARAMETER NAMES THAT DID NOT GET USED. 
+
+          DO 330 J=1,NPARM 
+              IF (NUS(J).NE.0) GOTO 330 
+              DO 325 I=LINLEN,1,-1
+                  IF (NAME(J)(I:I).NE.DUMMY) GOTO 326
+  325         CONTINUE
+  326         WRITE(6,6060) (NAME(J)(K:K),K=1,I) 
+  330     CONTINUE 
+
+      WRITE(6,6065) 
+      GOTO 110 
+
+*-------------------------------------------------------------------- 
+ 1313 FORMAT(A256) 
+ 2000 FORMAT(256A1)
+ 6000 FORMAT(/'   CCC PRODUCT -81/01/01-'/) 
+ 6020 FORMAT('0Number of input card images = ',I6//) 
+ 6025 FORMAT('0...No substitution set found.') 
+ 6030 FORMAT(11X,256A1) 
+ 6032 FORMAT('0   Number of parameter names in this set = ',I5//) 
+ 6035 FORMAT('0Processing completed for parameter set ',I6/) 
+ 6050 FORMAT('0...Abort due to error(s) in parameter insertion.') 
+ 6060 FORMAT(' ...Name not used = ',256A1) 
+ 6065 FORMAT('0',9('==========')/) 
+
+      END 
+      SUBROUTINE PARDEC( INPUT,NAME,VALUE,MAXPM,IPARM,LINLEN ) 
+
+***    JAN 15/91 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+***    JAN 20/83 - R.LAPRISE,B.DUGAS,J.D.HENDERSON. 
+
+***    PARAMETER DECODER SUBROUTINE FOR PROGRAM PARMSUB. 
+
+***    INPUT  = LINLEN CHARACTER CARD IMAGE FROM THE SUBSTITUTION SET 
+***             HAVING THE FORM  NAM1=VAL1, NAM2=VAL2, ETC. 
+***    NAME   = OUTPUT LIST OF PARAMETER NAMES (MAX LINLEN CHARACTERS). 
+***    VALUE  = OUTPUT LIST OF SUBSTITUTION VALUES FOR THE 
+***             PARAMETERS IN ARRAY NAME (MAX LINLEN CHARACTERS). 
+***    MAXPM  = MAXIMUM NUMBER OF PARAMETERS ALLOWED. 
+***    IPARM  = THE NUMBER OF THE NEXT PARAMETER. 
+***    LINLEN = LINE LENGHT.
+
+      IMPLICIT    NONE
+
+      LOGICAL     INANAM 
+      INTEGER     MAXPM,IPARM, I,K,CHAR,LCOL,LINLEN
+      CHARACTER*1 INPUT(LINLEN),NAME(LINLEN,MAXPM),VALUE(LINLEN,MAXPM),
+     +            CH,SEP, DUMMY,COMMA,BLANK,EQUAL
+
+      EXTERNAL    XIT
+
+      DATA        DUMMY / '<' /, 
+     +            COMMA / ',' /,
+     +            BLANK / ' ' /,
+     +            EQUAL / '=' /
+
+*-------------------------------------------------------------------- 
+***    FILL NEXT NAME AND VALUE WITH A DUMMY CHARACTER. 
+***    THE CHARACTER USED HERE ACTS AS AN END DELIMITER. 
+
+      DO 110 K=1,LINLEN 
+          NAME (K,IPARM) = DUMMY
+          VALUE(K,IPARM) = DUMMY
+  110 CONTINUE
+
+***    IF COLUMNS 1-3 CONTAIN (,=X) THEN THE SEPARATOR IS CHANGED 
+***    FROM A COMMA TO THE CHARACTER (X) FOR THIS CARD ONLY. 
+***    IN THIS CASE SCANNING STARTS IN COLUMN 5. 
+
+      SEP  = COMMA
+      LCOL = 1 
+
+      IF (INPUT(1).EQ.SEP   .AND. 
+     +    INPUT(2).EQ.EQUAL .AND.
+     +    INPUT(3).NE.BLANK )                                  THEN
+          SEP  = INPUT(3) 
+          LCOL = 5 
+      END IF
+
+***    SCAN THE INPUT CARD ONE COLUMN AT A TIME. 
+
+      INANAM =.TRUE. 
+      CHAR   = 1 
+      DO 290 I=LCOL,LINLEN 
+          CH = INPUT(I) 
+
+***        BLANKS ARE SIGNIFICANT INSIDE A SUBSTITUTION VALUE ONLY. 
+***        INANAM = TRUE INSIDE A NAME, FALSE INSIDE A VALUE. 
+
+          IF (.NOT.INANAM .OR. CH.NE.BLANK)                    THEN
+
+              IF (CH.EQ.SEP .AND. .NOT.INANAM)                 THEN
+
+***            A SEPARATION CHARACTER IS ALLOWED INSIDE A NAME BUT
+***            IT TERMINATES A VALUE.  IN THIS CASE, FILL THE NEXT
+***            NAME AND VALUE.  STOP IF MORE THAN MAXPM  PARAMETER 
+***            NAMES ARE ENCOUNTERED. 
+
+                  INANAM =.TRUE. 
+                  CHAR   = 1 
+                  IPARM  = IPARM+1 
+
+                  IF (IPARM.GT.MAXPM)                          THEN
+                      WRITE(6,6010) MAXPM 
+                      CALL                         XIT(' Pardec ',-4 ) 
+                  END IF
+
+                  DO 215 K=1,LINLEN 
+                      NAME (K,IPARM) = DUMMY
+                      VALUE(K,IPARM) = DUMMY
+  215             CONTINUE
+
+              ELSE IF (CH.EQ.EQUAL .AND. INANAM)               THEN
+
+***            AN EQUAL SIGN (=) IS ALLOWED INSIDE A VALUE 
+***            BUT IT TERMINATES A NAME. 
+
+                  INANAM =.FALSE. 
+                  CHAR   = 1 
+
+              ELSE
+
+***            INSERT THE CURRENT CHARACTER INTO NAME OR VALUE. 
+
+                  IF (INANAM)                                  THEN
+                      NAME(CHAR,IPARM)  = CH 
+                  ELSE
+                      VALUE(CHAR,IPARM) = CH 
+                  END IF
+
+                  CHAR=CHAR+1 
+
+              END IF
+
+          END IF
+
+  290 CONTINUE 
+
+***    WRITE A WARNING IF THE LAST VALUE ON THE CARD IS MISSING. 
+
+      IF (.NOT.INANAM) WRITE(6,6020) 
+
+      RETURN 
+
+*-------------------------------------------------------------------- 
+ 6010 FORMAT('0...Number of parameters exceeds ',I6) 
+ 6020 FORMAT('0...WARNING - Last value on this card is missing.'//) 
+
+      END 
+      SUBROUTINE PARINS( OUTCR,IMAGE, NIM,NAME,VALUE,
+     +                   NUS,NPARM,NPS, ALLOK,LINLEN )
+
+***    JAN 14/92 - B.DUGAS, RPN: THREE "$" NOW MEANS ONE "$".
+***    JAN 15/91 - B.DUGAS, RPN. (PORT TO CY920/IRIX F77)
+***    JAN 20/83 - R.LAPRISE,B.DUGAS,J.D.HENDERSON. 
+
+***    PARAMETER INSERTION SUBROUTINE FOR PROGRAM PARMSUB. 
+
+***    OUTCR  = OUTPUT CARD IMAGE COPIED FROM IMAGE WITH 
+***             SUBSTITUTION VALUES INSERTED. 
+***    IMAGE  = INPUT LINLEN CHARACTER CARD IMAGE WITH 
+***             PARAMETER NAMES BETWEEN DOLLAR SIGNS. 
+***    NIM    = CARD IMAGE NUMBER. 
+***    NAME   = INPUT LIST OF PARAMETER NAMES. 
+***    VALUE  = INPUT LIST OF SUBSTITUTION VALUES FOR THE 
+***             PARAMETERS IN ARRAY NAME. 
+***    NUS    = NAME USE ARRAY (INCREMENTED EACH TIME USED). 
+***    NPARM  = NUMBER OF PARAMETERS IN THIS SET. 
+***    NPS    = PARAMETER SET NUMBER. 
+***    LINLEN = INPUT LINE LENGHT.
+***    OUTPTR = OUTPUT LINE LENGHT.
+***    ALLOK IS SET TO .FALSE. IF ANY ERROR OCCURS. 
+
+      IMPLICIT     NONE
+
+      INTEGER      NIM,NPARM,NPS,LINLEN,NUS(NPARM),
+     +             NXTPNC,OUTPTR,IMPTR,I,N,L,LPN,IC
+      CHARACTER*1  IMAGE(LINLEN),OUTCR(LINLEN),PN(256),DDOL(36),
+     +             NAME(LINLEN,NPARM),VALUE(LINLEN,NPARM),
+     +             DUMMY,DOLLAR,BLANK
+      LOGICAL      ALLOK,INSIDE 
+
+      EXTERNAL     XIT
+
+      DATA         DUMMY  / '<' /, 
+     +             DOLLAR / '$' /,
+     +             BLANK  / ' ' /
+
+      DATA         DDOL /
+     +             'A','B','C','D','E','F','G','H','I','J','K','L','M', 
+     +             'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+     +             '0','1','2','3','4','5','6','7','8','9'
+     +                  /
+ 
+*-------------------------------------------------------------------- 
+***    PN HOLDS THE PARAMETER NAME READ FROM THE CARD. 
+***    CLEAR THE PREVIOUS CHARACTERS BEFORE INPUTTING NEW DATA. 
+ 
+      DO 110 I=1,LINLEN 
+          OUTCR(I) = BLANK
+          PN(I)    = DUMMY
+  110 CONTINUE
+
+***    SET COUNTERS AND START SCAN OF CARD IMAGE. 
+
+      INSIDE =.FALSE. 
+      NXTPNC = 1 
+      OUTPTR = 1 
+      IMPTR  = 0 
+
+***    INCREMENT IMAGE POINTER. RETURN AT END OF CARD. 
+***    STOP IF CARD ENDS INSIDE A NAME. 
+
+  300 IMPTR = IMPTR+1 
+
+          IF (IMPTR.GT.LINLEN)                                 THEN
+
+              IF (.NOT.INSIDE) RETURN 
+              WRITE(6,6005) 
+              WRITE(6,6030) NIM,IMAGE,OUTCR,PN
+              CALL                                 XIT(' Parins ',-5 ) 
+
+          END IF
+
+***        IF WE ARE NOT INSIDE A PARAMETER NAME THEN WE JUST COPY
+***        THE CURRENT  CHARACTER TO THE OUTPUT CARD IMAGE.  IF WE  
+***        ARE COPYING A BLANK AND THE OUTPUT CARD  IMAGE IS FULL,
+***        WE ASSUME THAT INFO ON THE INPUT CARD HAS TERMINATED. 
+
+          IF (.NOT.INSIDE)                                     THEN
+
+              IF (IMAGE(IMPTR).NE.DOLLAR)                      THEN
+
+                  IF (OUTPTR.GT.LINLEN)                        THEN
+                      IF (IMAGE(IMPTR).EQ.BLANK) GOTO 300
+                                                 GOTO 510 
+                  END IF
+
+                  OUTCR(OUTPTR) = IMAGE(IMPTR) 
+                  OUTPTR        = OUTPTR+1 
+ 
+***            IF WE HAVE JUST ENCOUNTERED A DOLLAR SIGN 
+***            A NEW PARAMETER NAME IS JUST STARTING. 
+
+              ELSE
+
+                  INSIDE =.TRUE. 
+ 
+***                THREE DOLLAR SIGNS IN A ROW MEANS THAT ONE DOLLAR
+***                SIGN IS TO BE RETAINED. IF THERE ARE ONLY TWO DOLLAR 
+***                SIGNS IN A ROW  A SPECIAL CHARACTER IS INSERTED THAT 
+***                IS GENERATED FROM THE PARAMETER SET NUMBER (NPS). 
+
+                  IF (IMAGE(IMPTR+1).EQ.DOLLAR)                THEN
+                      IF (OUTPTR.GT.LINLEN) GOTO 510 
+                      INSIDE            =.FALSE. 
+                      IF (IMAGE(IMPTR+2).EQ.DOLLAR)            THEN
+                          OUTCR(OUTPTR) = DOLLAR
+                          IMPTR         = IMPTR+1 
+                      ELSE
+                          OUTCR(OUTPTR) = DDOL(NPS) 
+                      END IF
+                      OUTPTR            = OUTPTR+1 
+                      IMPTR             = IMPTR+1 
+                  END IF
+
+              END IF
+
+          ELSE
+
+***            IF WE ARE INSIDE A PARAMETER NAME THEN WE 
+***            COPY THIS CHARACTER OF THE NAME TO ARRAY PN. 
+
+              IF (IMAGE(IMPTR).NE.DOLLAR)                      THEN
+
+                  PN(NXTPNC) = IMAGE(IMPTR) 
+                  NXTPNC     = NXTPNC+1 
+
+***            IF WE ENCOUNTER THE SECOND DOLLAR SIGN, FIND WHERE
+***            THAT NAME IS LOCATED IN THE NAME ARRAY. USE THE VERY
+***            LAST OCCURENCE.
+
+              ELSE
+
+                  INSIDE =.FALSE.
+                  N      = -1
+
+                  DO 440 L=1,NPARM 
+                      DO 430 I=1,LINLEN 
+                          IF (NAME(I,L).NE.PN(I)) GOTO 440 
+  430                 CONTINUE 
+                      N = L 
+  440             CONTINUE 
+
+***                IF IT IS MISSING WRITE A MESSAGE AND CONTINUE. 
+
+                  IF (N.EQ.-1)                                 THEN
+
+                      LPN = NXTPNC-1 
+                      WRITE(6,6010) (PN(I), I=1,LPN) 
+                      WRITE(6,6030) NIM, (IMAGE(I), I=1,IMPTR) 
+                      WRITE(6,6040)      (OUTCR(I), I=1,OUTPTR)
+
+                      DO 445 I=1,LPN 
+                          PN(I) = DUMMY
+  445                 CONTINUE
+
+                      NXTPNC = 1 
+                      ALLOK  =.FALSE. 
+
+***                OTHERWISE, COPY THE VALUE TO THE OUTPUT CARD IMAGE. 
+
+                  ELSE
+
+                      IC = 1
+
+  450                 IF (VALUE(IC,N).NE.DUMMY)                THEN
+
+                          IF (OUTPTR.GT.LINLEN) GOTO 510 
+                          OUTCR(OUTPTR) = VALUE(IC,N) 
+                          OUTPTR        = OUTPTR+1 
+                          IC            = IC+1 
+                          GOTO 450 
+
+                      ELSE
+
+                          NUS(N)    = NUS(N)+1 
+                          DO  470 I = 1,NXTPNC 
+                              PN(I) = DUMMY
+  470                     CONTINUE
+                          NXTPNC = 1 
+
+                      END IF
+
+                  END IF
+
+              END IF
+
+          END IF
+
+      GOTO 300
+
+***    RETURN IF THE OUTPUT CARD IMAGE IS TOO LARGE. 
+
+  510 WRITE(6,6020) LINLEN
+      WRITE(6,6030) NIM,IMAGE
+      WRITE(6,6040)      (OUTCR(I), I=1,OUTPTR)
+      ALLOK =.FALSE. 
+
+      RETURN
+ 
+*-------------------------------------------------------------------- 
+ 6005 FORMAT('0...Input card ends inside a name.') 
+ 6010 FORMAT('0...Missing value for parameter - ',256A1) 
+ 6020 FORMAT('0...Output card image exceeds ',I3,' characters.') 
+ 6030 FORMAT('0',5X,'On card ',     6X,I5,' - ',256A1)
+ 6040 FORMAT(    6X,'Output image', 7x,   ' - ',256A1)
+
+      END 
+#endif

@@ -1,0 +1,533 @@
+#     if !defined (latitude_maximale)
+#         define   latitude_maximale 4999
+#     endif
+#     if !defined (lm_maximal)
+#         define   lm_maximal 4999
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      cofaps  SPEC PSGRID INPUT OUTPUT [-lx VAL1 -i VAL3 -d60  VAL5 -nhem VAL7
+*                                        -ly VAL2 -j VAL4 -dgrw VAL6] 
+*
+*
+*     DESCRIPTION...
+*      cofaps  - CONVERT SPECTRAL HARMONIC FILE TO POLAR STEREOGRAPHIC GRID FILE 
+*
+*
+*     AUTHOR   - J.D.Henderson,  Nov 28/80.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/cofaps.ptn,v 4.11 2014/10/16 11:34:03 dugas Exp $
+*
+*
+*     PURPOSE  - CONVERTS A FILE OF GLOBAL SPECTRAL HARMONIC FIELDS (SPEC)
+*                TO HEMISPHERIC POLAR STEREOGRAPHIC GRIDS (PSFILE).
+*
+*     NOTE     - THERE SHOULD BE ONLY ONE SPECTRAL SIZE IN A GIVEN FILE
+*
+*
+*     INPUT FILE...
+*      SPEC    = INPUT FILE OF GLOBAL SPECTRAL FIELDS
+*
+*     OUTPUT FILE...
+*      PSGRID  = OUTPUT FILE OF POLAR STEREOGRAPHIC GRIDS
+*               (EITHER NORTH OR SOUTH HEMISPHERE)
+*
+*
+*     INPUT PARAMETERS...
+*
+*      LX,LY = P.S. GRID DIMENSIONS
+*              IF LX=0 THE DEFAULT VALUES FOR THE GRID DESCRIPTION
+*              ARE USED. THIS PRODUCES A STANDARD CMC GRID.
+*              DEFAULT FOR LX,LY ARE 51,55.
+*      IP,JP = COORDINATES OF POLE IN THE P.S. GRID
+*              DEFAULTS FOR IP,JP ARE 26,28.
+*      D60   = GRID LENGTH AT 60 DEGREES LATITUDE (METERS))
+*              DEFAULT VALUE IS 381 KM = 3.81E5 M
+*      DGRW  = ORIENTATION OF GREENWICH LONGITUDE IN THE P.S. GRID
+*              DEFAULT VALUE IS 350. DEG.
+*      NHEM  = 1 OR N FOR N.HEM., 2 OR S FOR S. HEM.
+*              THIS PARAMETER HAS NO DEFAULT VALUE.
+*
+*      READ(5,5010,END=902) LX,LY,IP,JP,D60,DGRW,NHEM
+*5010  FORMAT(10X,4I5,2E10.0,I5) 
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* COFAPS     51   55   26   28    3.81E5      350.    1
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*     (THIS CARD WILL PRODUCE A 51,55 GRID WITH POLE AT 26,28.
+*      GRID SIZE AT 60 DEG IS 381 KM AND ORIENTATION OF THE
+*      GREENWICH MERIDIAN IS -10 DEGREES. IT IS A N.HEM. GRID.
+*      THIS IS ACTUALLY THE OLD STANDARD CMC GRID).
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON SPEC
+*       2 DATA TYPE NOT SPECTRAL
+*       3 MORE THAN ONE SIZE IN SPEC
+*       4 ERROR ABORT READING INPUT
+*       5 UNABLE TO ALLOCATE WORKING MEMORY
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM COFAPS
+!     PROGRAM COFAPS (SPEC,       PSGRID,       INPUT,       OUTPUT, \
+!               TAPE1=SPEC, TAPE2=PSGRID, TAPE5=INPUT, TAPE6=OUTPUT)
+!     --------------------------------------------------------------
+!
+!     $Log: cofaps.ptn,v $
+!     Revision 4.11  2014/10/16 11:34:03  dugas
+!     Modifications commandees par la compilation avec GFORTRAN et IFORT.
+!
+!     Revision 4.10  2014/09/25 20:20:46  dugas
+!     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+!
+!     Revision 4.9  2013/11/01 21:47:40  dugas
+!     Correction aux declarations de PKTYP,TYPE (AIX).
+!
+!     Revision 4.8  2013/10/16 20:06:59  bernard
+!      - Declarations 'a la' F90
+!      - Utiliser les macros latitude_maximale et lm_maximal pour definir MAXJ et MAXM, respectivement
+!      - Utiliser APLCAL2/STAF3 plutot que ALPST2 /STAF2 pour la transformee spectrale (modif. Belousov)
+!      - Tous les calculs se font en mode 64 bits, de meme que l'I/O.
+!
+!     Revision 4.7  2008/05/03 21:06:30  dugas
+!     Modification generale pour r.gppf.
+!
+!     Revision 4.6  2007/12/20 21:17:51  dugas
+!     Faire appel aux routines PRTLAB/PRTLAB2.
+!
+!     Revision 4.5  2003/07/05 14:43:09  dugas
+!     Implanter SETRABT pour le traitement de RECABT.
+!
+!     Revision 4.4  2003/06/23 14:50:11  dugas
+!     Corriger la documentation automatique.
+!
+!     Revision 4.3  1999/11/10 21:00:42  armnrbd
+!     Corriger les transferts d'arguments de RPBLOC.
+!     Permettre N et S comme valeurs de NHEM en entree.
+!
+!     Revision 4.2  1998/07/03 02:26:21  armnrbd
+!     Allonger le format d'ecriture de la date sur le listing.
+!
+!     Revision 4.1  1997/09/26  17:38:46  armnrbd
+!     Remplacer buf(16) par buf(taille_entete).
+!
+!     Revision 4.0  1994/11/17  14:19:31  armnrbd
+!     Messages informatifs quand au passage de la version 3.x a 4.0...
+!     1) Les espaces en debut des noms de variables de sont plus pertinents.
+!     2) Les grilles complexes de type CMPL sont maintenant supportees.
+!     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+!     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+!
+!     Revision 3.0  93/10/13  13:55:39  armnrbd
+!     Premiere version compatible HP-UX.
+!     
+!     Revision 1.2  93/08/04  15:54:43  armnrbd
+!     Utiliser CLRLMT dans les calculs de lrlmt.
+!     
+!     Revision 1.1  93/06/25  15:35:26  armnrbd
+!     Correction d'un premier bogue dans STAPS2.
+!     
+!     Revision 1.0  93/06/25  14:35:55  armnrbd
+!     Initial revision
+!     
+!     MAY 06/83 - R.LAPRISE.
+!     NOV 28/80 - J.D.HENDERSON
+!
+!--------------------------------------------------------------------
+      IMPLICIT     none
+
+      INTEGER, PARAMETER :: HEAD = taille_entete
+      INTEGER, PARAMETER :: MAXJ = latitude_maximale
+      INTEGER, PARAMETER :: MAXM = lm_maximal
+
+      LOGICAL      OK 
+      REAL         D60,DGRW
+      CHARACTER(4) PKTYP,TYPE
+      CHARACTER    LIGNE*8,GRTYP*1,AHEM*5
+      INTEGER      JPAK,JBUF(HEAD),IER,NFF,            \
+                   NR, LX,LY, IP,JP, NHEM,LSR(2,MAXM), \
+                   LA,LR,LM,KTR,LRLMT,I,IO,LEN,        \
+                   MAXW,NWDSP,NWDPS
+
+      integer,     allocatable, dimension(:) :: IBUF
+      real(8),     allocatable, dimension(:) :: PS,WRKL
+      COMPLEX*16,  allocatable, dimension(:) :: SP
+
+      CHARACTER    NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
+ 
+      CHARACTER(4),EXTERNAL :: GETYP
+      INTEGER,     EXTERNAL :: CLRLMT,GETSIZ
+      LOGICAL,     EXTERNAL :: RPBLOC,SETIO64
+      EXTERNAL     MACSPE,JCLPNT,GETLIGN,BURNF,XIT,        \
+                   HPALLOC,HPDEALLC,EPSCAL,GETFLD2,STAPS2, \
+                   SETLAB,PUTFLD2,DIMGT2
+!===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/cofaps.ptn,v $'
+
+!---------------------------------------------------------------------- 
+      CALL SETRABT( '&NON' )
+
+!**    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      PKTYP = GETYP( 1 )
+
+!**    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+!**        CHECK PARAMETRE BLOCK.
+
+          LX   = 0
+          LY   = 0
+          IP   = 0
+          JP   = 0
+          D60  = 0.0
+          DGRW = 0.0
+          AHEM = ' '
+
+          OK = RPBLOC('LX',LIGNE)
+          IF (OK) READ( LIGNE, 05,ERR=901,IOSTAT=IO) LX
+          
+          OK = RPBLOC('LY',LIGNE)
+          IF (OK) READ( LIGNE, 05,ERR=901,IOSTAT=IO) LY
+          
+          OK = RPBLOC('I',LIGNE)
+          IF (OK) READ( LIGNE, 05,ERR=901,IOSTAT=IO) IP
+          
+          OK = RPBLOC('J',LIGNE)
+          IF (OK) READ( LIGNE, 05,ERR=901,IOSTAT=IO) JP
+          
+          OK = RPBLOC('NHEM',LIGNE)
+          IF (OK) AHEM = LIGNE
+          
+          OK = RPBLOC('D60',LIGNE)
+          IF (OK) READ( LIGNE, 10,ERR=901,IOSTAT=IO) D60
+          
+          OK = RPBLOC('DGRW',LIGNE)
+          IF (OK) READ( LIGNE, 10,ERR=901,IOSTAT=IO) DGRW
+          
+      ELSE
+
+!**        READ THE GRID SIZE FROM A CARD.
+!**        GRID IS (LX,LY) WITH POLE AT (IP,JP).
+!**        GRID SIZE IS D60(M) AND ORIENTATION IS DGRW (DEG).
+!**        NHEM = 1,2 FOR N,S HEMISPHERE.
+!**        BLANK CARD DEFAULTS TO STANDARD CMC GRID.
+
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 902
+          ELSE
+              READ( LIGNE, 5010,ERR=901,END=902,IOSTAT=IO) \
+                           LX,LY,IP,JP,D60,DGRW,AHEM
+              CALL BURNF
+          END IF
+
+      END IF
+
+      IF      (AHEM.EQ.' ')                                    THEN
+          NHEM = 0
+      ELSE IF (AHEM.EQ.'N')                                    THEN
+          NHEM = 1
+      ELSE IF (AHEM.EQ.'S')                                    THEN
+          NHEM = 2
+      ELSE
+          READ( AHEM, 05,ERR=901,IOSTAT=IO) NHEM
+      END IF
+
+!**    CONSIDER DEFAULT VALUES.
+
+      IF (NHEM.EQ.0) NHEM = 1
+
+      IF (LX  .LE.0)                                           THEN
+          LX   = 51
+          LY   = 55
+          IP   = 26
+          JP   = 28
+          D60  = 3.81E5
+          DGRW = 350.
+      END IF
+
+      IF (NHEM.EQ.1) GRTYP = 'N'
+      IF (NHEM.EQ.2) GRTYP = 'S'
+
+      NWDPS = LX*LY
+      WRITE(6,6010) LX,LY,IP,JP,D60,DGRW,NHEM
+
+      NR=0
+
+!**    ASK FOR NECESSARY MEMORY. READ FIRST INFO BUFFER.
+
+  100 MAXW = GETSIZ( 1, JBUF,LEN,NWDSP,JPAK )
+      IF (MAXW.EQ.0) CALL                          XIT(' Cofaps ',-1 )
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.NE.'SPEC') CALL                     XIT(' Cofaps ',-2 ) 
+
+      CALL PRTLAB( JBUF )
+
+      LRLMT = JBUF(7)
+      CALL DIMGT2( LSR, LA,LR,LM,KTR, LRLMT, 0,0 )
+
+      allocate( IBUF(LEN),SP(NWDSP),PS(NWDSP),WRKL(LA+LM), STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT(' Cofaps ',-5 )
+
+!**    GET THE NEXT SPECTRAL FIELD.
+
+  200 CALL GETFLD2( 1, SP, 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+              deallocate( IBUF,SP,PS,WRKL )
+              IF (MAXW.EQ.0) GOTO 100
+              WRITE(6,6015) NR
+              IF (NR.EQ.0.) CALL                   XIT(' Cofaps ',-1 )
+              CALL                                 XIT(' Cofaps ', 0 )
+          END IF
+
+          IF (IBUF(7).NE.CLRLMT(LR,LM,KTR,.TRUE.).AND. \
+              IBUF(7).NE.CLRLMT(LR,LM,KTR,.FALSE.))    \
+              CALL                                 XIT(' Cofaps ',-3 )
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+!**        CONVERT SPECTRAL COEFF TO P.S. GRID FIELD.
+
+          CALL STAPS3( PS, LX,LY,IP,JP,D60,DGRW,NHEM, \
+                       SP, LSR,LM, WRKL )
+
+!**        SAVE THE GRIDS. PACKING IS 16 BITS/WORD.
+
+          IF (PKTYP(1:2).EQ.'SQ')                              THEN
+              CALL putparc( 'GRTYP',GRTYP )
+              CALL putxgi( FLOAT(IP),FLOAT(JP),D60,DGRW )
+              CALL SETLAB( IBUF,'SUBA',-1,' ',-1,LX,LY,NHEM,-16 )
+          ELSE
+              CALL SETLAB( IBUF,'GRID',-1,' ',-1,LX,LY,NHEM,-16 )
+          END IF
+              
+          CALL PUTFLD2( 2, PS, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+1
+      GOTO 200
+
+!**    E.O.F. ON INPUT.
+
+  901 IF (IO.NE.0) WRITE(6,6100) IO
+  902 CALL                                         XIT(' Cofaps ',-4 )
+!---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5010 FORMAT(10X,4I5,2E10.0,A5)
+ 6010 FORMAT('0Lx,ly,ip,jp,d60,dgrw,nhem =',4I6,E12.4,F8.2,I6)
+ 6015 FORMAT(1X,I6,' records read.')
+ 6100 FORMAT(' Cofaps reports I/O error number ',I3,' on unit 5.')
+
+      END
+      SUBROUTINE CFVAL2(VAL,CFC,NW,RLON)
+
+!**   ****   FEB 1975  -  JOHN D. HENDERSON  ****
+
+!**    EVALUATES COMPLEX FOURIER SERIES IN CFC TO
+!**    WAVE NUMBER NW AT POINT RLON (RADIANS).
+
+!**    CFC ACTUALLY CONTAINS THE POSITIVE HALF OF THE 
+!**    COMPLETE COMPLEX SERIES. THE MEAN IS IN CFC(1).
+
+      IMPLICIT  none
+
+      REAL(8)   VAL
+      INTEGER   NW,NWP1,MM,MP
+      REAL(8)   CFC(1),RLON,SINMX,COSMX,FMX
+!-----------------------------------------------------------------------
+
+      NWP1 = NW+1
+      VAL  = 0.0
+      FMX  = 0.0
+      DO  100 MP=2,NWP1
+          MM    = MP+MP
+          FMX   = FMX+RLON
+          SINMX = SIN(FMX)
+          COSMX = COS(FMX)
+          VAL   = VAL+COSMX*CFC(MM-1)-SINMX*CFC(MM)
+  100 CONTINUE
+
+      VAL = 2.*VAL+CFC(1)
+
+      RETURN
+      END
+
+      SUBROUTINE STAPS3( G, NI,NJ,IP,JP,D60,DGRW,NHEM, \
+                         P, LSR,LM, WRKL )
+
+!**    DEC  8/80 - J.D.HENDERSON
+
+!**    CALCULATES POLAR STEREOGRAPHIC GRID G(NI,NJ) WITH POLE 
+!**    AT (IP,JP) FROM COMPLEX SPECTRAL COEFF IN P(LR,LM).
+
+!**    GRID SIZE IS D60 (M) AT LATITUDE 60 DEG.
+!**    GRID ORIENTATION HAS GREENWICH MERIDIAN AT DGRW (DEGREES).
+
+!**    WRKL IS A WORK FIELD OF LM COMPLEX WORDS.
+
+      IMPLICIT    none
+
+      INTEGER     NI,NJ,IP,JP,NHEM,LM,LSR(2,*)
+      REAL(8)     G(NI,NJ), WRKL(*)
+      REAL        D60,DGRW
+      COMPLEX*16  P(*)
+
+!**    LOCAL VARIABLES.
+
+      INTEGER     MAXF,I,J,II,JJ,IX,JY,NPT
+      REAL(8)     DRCON,SINLAT,RLON,GFILL
+      REAL        XP,YP,DLAT,DLON,X,Y
+
+      EXTERNAL    ALPCAL2,STAF3,LLFXY,CFVAL2
+
+!-----------------------------------------------------------------------
+      DRCON = 4.0*ATAN(1.0D0)/180. ; MAXF  = LM-1
+
+!**    SET GRID TO LARGE INITIAL VALUE.
+
+      GFILL = 1.11E+37 ; G(:,:) = GFILL
+
+!**    LOOP OVER THE ENTIRE GRID.
+
+      DO  J=1,NJ
+          JY = J-JP
+          YP = JY
+          DO  20 I=1,NI
+              IX = I-IP
+              XP = IX
+
+              IF (G(I,J) == GFILL)                             THEN
+
+!**                OBTAIN THE LATITUDE OF POINT (I,J) AND GET 
+!**                THE FOURIER COEFF FOR THAT LAT FROM THE
+!**                SPECTRAL COEFF IN P.
+
+                  CALL LLFXY( DLAT,DLON,XP,YP,D60,DGRW,NHEM )
+                  SINLAT = SIN( DLAT*DRCON )
+                  CALL ALPCAL2( LSR,LM,SINLAT )
+                  CALL STAF3( WRKL,P,LSR,LM )
+
+!**                GET THE COORDINATES OF EACH OF THE POSSIBLE 
+!**                EIGHT POINTS IN THE GRID THAT LIE ON THE 
+!**                GIVEN LAT CIRCLE.
+
+                  II = IP+IX
+                  JJ = JP+JY
+                  X  = XP
+                  Y  = YP
+                  NPT = 12 ! ASSIGN 12 TO NPT
+                  GOTO 19
+   12             II = IP-IX
+                  X  =-XP
+                  NPT = 13 ! ASSIGN 13 TO NPT
+                  GOTO 19
+   13             JJ = JP-JY
+                  Y  =-YP
+                  NPT = 14 ! ASSIGN 14 TO NPT
+                  GOTO 19
+   14             II = IP+IX
+                  X  = XP
+                  NPT = 15 ! ASSIGN 15 TO NPT
+                  GOTO 19
+
+   15             II = IP+JY
+                  JJ = JP+IX
+                  X  = YP
+                  Y  = XP
+                  NPT = 16 ! ASSIGN 16 TO NPT
+                  GOTO 19
+   16             II = IP-JY
+                  X  =-YP
+                  NPT = 17 ! ASSIGN 17 TO NPT
+                  GOTO 19
+   17             JJ = JP-IX
+                  Y  =-XP
+                  NPT = 18 ! ASSIGN 18 TO NPT
+                  GOTO 19
+   18             II = IP+JY
+                  X  = YP
+                  NPT = 20 ! ASSIGN 20 TO NPT
+
+!**                MAKE SURE POINT IS BOTH INSIDE GRID AND 
+!**                NOT ALREADY DONE. GET LONGITUDE AND EVALUATE
+!**                FOURIER SERIES AT THAT POINT.
+
+   19             IF (II >= 1 .AND. II <= NI .AND. \
+                      JJ >= 1 .AND. JJ <= NJ .AND. \
+                      G(II,JJ).EQ.GFILL)                       THEN
+                      CALL LLFXY( DLAT,DLON,X,Y,D60,DGRW,NHEM )
+                      RLON = DLON*DRCON
+                      CALL CFVAL2( G(II,JJ), WRKL, MAXF,RLON )
+                  END IF
+
+ !CC              GOTO NPT,(12,13,14,15,16,17,18,20)
+
+                  SELECT CASE( NPT )
+                      CASE   ( 12 )
+                          GOTO 12
+                      CASE   ( 13 )
+                          GOTO 13
+                      CASE   ( 14 )
+                          GOTO 14
+                      CASE(    15 )
+                          GOTO 15
+                      CASE   ( 16 )
+                          GOTO 16
+                      CASE   ( 17 )
+                          GOTO 17
+                      CASE   ( 18 )
+                          GOTO 18
+                      CASE   ( 20 )
+                          GOTO 20
+                  END SELECT
+                        
+              END IF
+
+   20     CONTINUE
+      END DO
+
+      RETURN
+      END
+#     endif
+

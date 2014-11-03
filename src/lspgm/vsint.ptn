@@ -1,0 +1,457 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      vsint  XIN XOUT INPUT OUTPUT [ -kind VAL1 -a VAL2 -def ]
+*
+*
+*     DESCRIPTION...
+*      vsint  - VERTICAL SIGMA INTEGRAL OF A FILE (FULL OR HALF LEVELS)
+*
+*     AUTHOR  - B.Dugas, FEB 25/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/vsint.ptn,v 4.12 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     PURPOSE - VERTICAL INTEGRATION OF A FILE OF SETS ON SIGMA LEVELS
+
+*     NOTES   - 1) MINIMUM NUMBER OF LEVELS IS 3, MAX IS 999. THEY SHOULD
+*                  ALSO BE MONOTONICALLY INCREASING.
+*               2) WHEN THE -def KEY IS SPECIFIED, THE DOMAIN TOP AND BOTTOM
+*                  ARE GIVEN BY THE FIRST AN LAST DATA LEVEL, RESPECTIVELY.
+*                  OTHERWISE, VSINT WILL USE 0.0 AND 1.0.
+*
+*
+*     INPUT FILE...
+*      XIN  = FILE OF SIGMA LEVEL SETS ON EITHER FULL OR HALF LEVELS.
+*
+*     OUTPUT FILE...
+*      XOUT = OUTPUT SERIES OF SIGMA VERTICAL INTEGRALS OF XIN.
+*
+*
+*     INPUT PARAMETERS...
+*
+*      SIGTYP (kind) = TYPE OF SIGMA LEVELS. 'FULL' FOR FULL LEVELS,
+*                      'HALF' FOR HALF LEVELS. DEFAULT IS 'FULL'.
+*      CONST  (a)    = MULTIPLICATIVE CONSTANT FOR THE INTEGRALS.
+*                      BLANK INPUT DEFAULTS TO 1.0.
+*
+*      READ( 5,5010 ) SIGTYP,CONST
+*5010  FORMAT(11X,A4,E10.0)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* VSINT    FULL       1.0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON XIN
+*       2 NOT ENOUGH OR TOO MANY LEVELS IN FIRST SET OF XIN
+*       3 MORE THAN ONE SIZE FOR ARRAYS IN XIN
+*       4 NOT ENOUGH LEVELS IN LAST SET READ
+*       5 ERROR READING INPUT PARAMETERS
+*       6 LEVELS ARE NOT INCREASING MONOTONICALLY
+*       7 XIN DOES NOT CONTAIN SIGMA LEVELS
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM VSINT
+*     PROGRAM VSINT (XIN,       XOUT,       INPUT,       OUTPUT,
+*    1         TAPE1=XIN, TAPE2=XOUT, TAPE5=INPUT, TAPE6=OUTPUT)
+*     ----------------------------------------------------------
+
+*     $Log: vsint.ptn,v $
+*     Revision 4.12  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.11  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.10  2008/04/25 21:38:39  dugas
+*     Permettre 20 caracteres pour les parametres reels sur la ligne de commande.
+*
+*     Revision 4.9  2007/12/20 21:07:19  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Utiliser CONVPR pour decoder les niveaux verticaux.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.8  2005/04/14 18:30:27  dugas
+*     - Ignorer les enregistrements de type LABL/CHAR.
+*     - Assurer une allocation minimale a la lecture de MAXW mots.
+*
+*     Revision 4.7  2003/07/05 14:52:24  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.6  1998/07/03 02:26:46  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.5  1997/09/26  17:39:30  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.4  1996/05/15  17:41:50  armnrbd
+*     Ajouter un second jeux de conditions frontieres (avec "-def").
+*     Verifier que les niveaux croissent de facon monotone.
+*
+*     Revision 4.3  1996/02/29  20:44:21  armnrbd
+*     Imprimer plus d'informations lors du traitement du cas MAXW=0
+*     et aussi quand le programme se mets a ignorer les LABLs.
+*
+*     Revision 4.2  1995/06/02  20:19:55  armnrbd
+*     Supposer que si le dernier niveau sigma (entier) est egal
+*     a 1, on voudrait vraiment que sigma (reel) soit egal a 1.0
+*
+*     Revision 4.1  1995/05/29  19:33:27  armnrbd
+*     Corriger un bogue dans l'appel a PUTFLD2.
+*
+*     Revision 4.0  1994/11/17  14:22:24  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.1  94/08/16  21:08:38  armnrbd
+*     Enlever certaines references aux routines I/O Fortran.
+*     
+*     Revision 3.0  93/10/13  13:57:24  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.3  93/07/01  14:27:52  armnrbd
+*     Meilleure distinction entre sorties d'erreur et changements cosmetiques.
+*     
+*     Revision 1.2  92/11/18  22:51:36  armnrbd
+*     Deuxieme iteration avec GETSIZ/GETSIZ2.
+*     
+*     Revision 1.1  92/10/13  15:57:28  armnrbd
+*     Definir JBUF(8)=-32, plutot que JBUF(8)=1.
+*     
+*     Revision 1.0  92/03/23  12:04:40  armnrbd
+*     Initial revision
+*     
+
+*     FEB 25/85 - B.DUGAS
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+ 
+      LOGICAL     OK,ALTB
+      CHARACTER*4 SIGTYP,NAME,TYPE
+      CHARACTER   LIGNE*80,MESSAG*10
+      CHARACTER   CONST4*10,CONST8*20
+      REAL        C,SH(MAXLEV),DS(MAXLEV),
+     +            SF(MAXLEV),ZERO,CONST
+      INTEGER     HEAD,JBUF(taille_entete),JPAK,LEV(MAXLEV),
+     +            IO,I,L,MAXW,LEN,NWDS,NLEV,NLEVG,IER,
+     +            NLEVM,NSETS,NFF,DEBUT,VKIND,LEVS
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: GG,ACC
+
+      INTEGER     GETSIZ2
+      EXTERNAL    GETSIZ2
+
+      LOGICAL     RPBLOC
+      EXTERNAL    RPBLOC
+      CHARACTER   GETYP*4,PKTYP*2
+      EXTERNAL    MACSPE,XIT,GETSET2,GETYP,
+     +            PUTFLD2,CMPLBL,GETLIGN,BURNF,
+     +            CONVPR,WRITLEV
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+
+      DATA        MESSAG / 'AUCUN' /
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vsint.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF=4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+ 
+***    GET PACKING TYPE.
+
+      PKTYP = GETYP( 1 )
+
+      NSETS = 0
+      ALTB  =.FALSE.
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          SIGTYP = ' '
+          CONST8 = ' '
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) CONST8 = LIGNE
+
+          OK = RPBLOC('KIND',LIGNE)
+          IF (OK) SIGTYP = LIGNE
+
+          ALTB = RPBLOC('DEFAUT',LIGNE)
+
+      ELSE
+
+***        READ SIGMA LEVEL TYPE (FULL OR HALF) AND THE SCALING FACTOR.
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO) SIGTYP,CONST4
+              CALL BURNF
+          END IF
+
+          CONST8 = CONST4
+
+      END IF
+
+***    CONSIDER DEFAULT VALUES.
+
+      IF (CONST8.EQ.' ') CONST8 = '1.0'
+      IF (SIGTYP.EQ.' ') SIGTYP = 'FULL'
+
+      READ(CONST8,20) CONST
+
+      WRITE(6,6100) SIGTYP,CONST
+      IF (ALTB) WRITE(6,6140)
+
+*---------------------------------------------------------------------
+***    READ FIRST SET OF INFO BUFFERS...
+***     ... TO GET SIGMA VALUES
+***     ... TO DETERMINE THE FIELD SIZE AND ASK FOR THE NECESSARY MEMORY.
+
+  050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+
+      IF (MAXW.LE.  0   ) CALL                     XIT('  Vsint ',-1 )
+      IF (NLEV.LT.  2     .OR.
+     +    NLEV.GT.MAXLEV) CALL                     XIT('  Vsint ',-2 )
+
+      WRITE(TYPE,4) JBUF(1)
+      WRITE(NAME,4) JBUF(3)
+
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(LEN),GG(MAX( MAXW,NWDS*NLEV) ),ACC(NWDS) )
+
+      NLEVM = NLEV-1
+
+      DO  L=1,NLEV
+          CALL CONVPR( LEV(L), SF(L), VKIND, -2 )
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              IF (VKIND.NE.1) CALL                 XIT('  Vsint ',-7 ) 
+          ELSE IF (VKIND.EQ.2)                                 THEN
+              SF(L) = SF(L) * 0.001
+          END IF
+      END DO
+
+      IF (NSETS.NE.0) CALL PRTLAB( JBUF )
+
+***    SUPPOSE THAT LEV = 1 MAY ACTUALLY BE THE SURFACE.
+
+      IF (VKIND.EQ.2 .AND. LEV(NLEV).EQ.1) SF(NLEV) = 1.0
+
+      IF (NSETS.EQ.0) CALL WRITLEV( SF,NLEV,'SIGM' )
+
+***    SETUP FOR OUTPUT SURFACE LEVEL.
+
+      LEVS = 1000
+      IF (PKTYP.EQ.'SQ') CALL CONVPR( LEVS, 1.0, VKIND, +2 )
+
+***    CHECK THAT LEVELS ARE INCREASING MONOTONICALLY.
+
+      DO  L=2,NLEV
+          IF (SF(L).LE.SF(L-1))                                THEN
+              WRITE(6,6006)
+              CALL                                 XIT('  Vsint ',-6 )
+          END IF
+      END DO
+*---------------------------------------------------------------------
+
+      IF (NSETS.EQ.0)                                          THEN
+
+***        COMPUTE THE INTEGRATION INCREMENTS DS
+
+          IF (SIGTYP.EQ.'HALF')                                THEN
+
+***        FOR HALF LEVELS, COMPUTE FULL LEVELS FIRST.
+
+              DO  L=1,NLEV
+                  SH(L)    = SF(L)
+              END DO
+
+              SF(NLEV)     = SH(NLEV)**2
+              DO  L=NLEVM,1,-1
+                  SF(L)    = SH(L)**2/SF(L+1)
+              END DO
+
+              IF (ALTB)                                        THEN
+                  DS(1)    = SF(2)-SH(1)
+              ELSE
+                  DS(1)    = SF(2)-SF(1)
+              END IF
+
+              DO  L=2,NLEVM
+                  DS(L)    = SF(L+1)-SF(L)
+              END DO
+
+              IF (ALTB)                                        THEN
+                  DS(NLEV) = SH(NLEV)-SF(NLEV)
+              ELSE
+                  DS(NLEV) = 1.-SF(NLEV)
+              END IF
+
+          ELSE
+
+***        FOR FULL LEVELS, COMPUTE HALF LEVELS FIRST.
+
+              DO  L=1,NLEVM
+                  SH(L)    = SQRT(SF(L)*SF(L+1))
+              END DO
+
+              IF (ALTB)                                        THEN
+                  DS(1)    = SH(1)-SF(1)
+              ELSE
+                  DS(1)    = SH(1)
+              END IF
+
+              DO  L=2,NLEVM
+                  DS(L)    = SH(L)-SH(L-1)
+              END DO
+
+              IF (ALTB)                                        THEN
+                  DS(NLEV) = SF(NLEV)-SH(NLEVM)
+              ELSE
+                  DS(NLEV) = 1.-SH(NLEVM)
+              END IF
+
+          END IF
+      END IF
+
+*---------------------------------------------------------------------
+***    READ THE NEXT SET AND COMPUTE SIGMA VALUES.
+ 
+  100 CALL GETSET2( 1, GG,LEV,NLEVG, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              IF (MAXW.EQ.0)                                   THEN
+                  DEALLOCATE( IBUF,GG,ACC )
+                  GOTO 050
+              END IF
+
+              CALL PRTLAB( IBUF )
+              WRITE(6,6000) NSETS
+
+              CALL                                XIT('  Vsint ', 0 ) 
+
+          END IF
+
+***        BY-PASS (I.E. STRIP) LABEL/CHARACTER RECORDS.
+
+          WRITE(TYPE,4) IBUF(1) 
+          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR')              THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  WRITE(6,6130)
+                  MESSAG  = 'deja donne'
+              END IF
+              GOTO 100
+          END IF
+
+***        VERIFY SIZES.
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK .OR. NLEV.NE.NLEVG)                      THEN
+              CALL PRTLAB( IBUF )
+              CALL                                 XIT('  Vsint ',-3 ) 
+          END IF
+
+***        CHECK THAT WE STILL HAVE ENOUGH LEVELS.
+
+          IF (NLEVG.LT.3)                                      THEN
+              WRITE(6,6004) NSETS+1,NLEVG
+              CALL                                 XIT('  Vsint ',-4 )
+          END IF
+
+***        INTEGRATE IN SIGMA.
+ 
+          C = CONST*DS(1)
+          DO  I=1,NWDS
+              ACC(I) = GG(I)*C
+          END DO
+ 
+          DO  500 L=2,NLEV
+              C     = CONST*DS(L)
+              DEBUT = (L-1)*NWDS
+              DO  I=1,NWDS
+                  ACC(I) = ACC(I)+GG(DEBUT+I)*C
+              END DO
+  500     CONTINUE
+ 
+***        PUT THE RESULT ONTO FILE 2.
+ 
+***        SAVE ACC ON FILE XOUT.
+
+                              IBUF(4) = LEVS
+          IF (TYPE.EQ.'ZONL') IBUF(6) = 1
+
+          IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
+          CALL PUTFLD2( 2, ACC, IBUF,MAXW )
+
+      NSETS = NSETS+1
+      GOTO 100 
+ 
+***    E.O.F. ON INPUT.
+ 
+  900 CALL                                         XIT('  Vsint ',-5 )
+*---------------------------------------------------------------------
+
+    4 FORMAT(A4)
+   20 FORMAT(BN,E20.0)   
+
+ 5010 FORMAT(11X,A4,A)
+
+ 6004 FORMAT(' At set no. ',I5,', vsint found NLEV=',I6)
+ 6006 FORMAT(' Levels should be increasing monotonically.')
+
+ 6000 FORMAT('0',I6,' sets were processed.')
+ 6100 FORMAT(' Vsint  ',A4,1PE20.12)
+ 6130 FORMAT(' Vsint is stripping label/character records...')
+ 6140 FORMAT(' Vsint will use its alternate boundary conditions.')
+
+
+      END
+#     endif

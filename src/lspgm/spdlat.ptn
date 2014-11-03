@@ -1,0 +1,258 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*     spdlat  SPFILE LATDER OUTPUT
+*
+*
+*     DESCRIPTION...
+*     spdlat  - SPECTRAL LATITUDE DERIVATIVE OF A SPECTRAL ARRAY
+*
+*
+*     AUTHOR  - B.Dugas, RPN, FEB 09/94.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spdlat.ptn,v 4.8 2014/09/25 20:20:53 dugas Exp $
+*
+*
+*     PURPOSE - READS A FILE OF SPECTRAL COEFFICIENTS (SPFILE),
+*               CONVERTS THEM TO THE LATITUDE DERIVATIVE BY
+*               APPLYING THE ANALYTIC FORMULA...
+*
+*                       D P(N,M)
+*              COS(LAT) ------- = - N    B(N+1,M) P(N+1,M) +
+*                        D LAT     (N+1) B(N,  M) P(N-1,M)
+*
+*                                   /  N**2 - M**2 \
+*               WHERE B(N,M) = SQRT( -------------- ) .
+*                                   \   4N**2 - 1  /  
+*
+*               (AFTER S.KUBOTA, 1960)
+*
+*     NOTES   - 1) THE RESULTING ARRAYS HAVE ONE EXTRA DEGREES OF FREEDOM
+*                  IN THE N DIRECTION WHEN THIS FORMULA IS USED. THE ARRAYS
+*                  ARE THUS LARGER BY ONE ROW (N ==> N+1).
+*               2) LATDER WILL ACTUALLY BE THE LATITUDE DERIVATIVE 
+*                  MULTIPLIED BY COS(LAT)
+*
+*
+*     INPUT FILE...
+*      SPFILE = INPUT FILE OF SPECTRAL COEFFICIENTS
+*
+*     OUTPUT FILE...
+*      LATDER = OUTPUT FILE OF SPECTRAL LATITUDINALLY DERIVED ARRAYS
+*
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PREMATURE EOF ON SPFILE
+*       2 INTERNAL SPECTRAL REPRESENTATION ERROR
+*       3 LM GREATER THAN MAXM (999)
+*       4 ERROR READING SPFILE. CHANGING SIZE
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM spdlat 
+*    +               (SPFILE,       LATDER,       OUTPUT,
+*    +          TAPE1=SPFILE, TAPE2=LATDER, TAPE6=OUTPUT)
+*     ----------------------------------------------------------------
+
+*     $Log: spdlat.ptn,v $
+*     Revision 4.8  2014/09/25 20:20:53  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.7  2013/10/16 20:31:02  bernard
+*     Modifier les formats des message pour tenir compte des LRLMT a 9 chiffres
+*
+*     Revision 4.6  2010/03/19 21:25:06  dugas
+*     Corriger la declaration de IBUF.
+*
+*     Revision 4.5  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.4  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.3  2003/05/23 21:28:30  dugas
+*     Augmenter la taille du macro grille_maximale a 300K mots.
+*
+*     Revision 4.2  1998/07/03 02:26:38  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1998/05/21  20:20:54  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.0  1994/11/17  14:21:44  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/02/14  14:27:10  armnrbd
+*     Corriger un bogue dans l'appel a CLRLMT.
+*     
+*     Revision 3.1  94/02/14  09:13:47  09:13:47  armnrbd (Bernard Dugas)
+*     Correction d'un bogue dans la formule utilisee.
+*     Correction d'un bogue dans la declaration des tableaux.
+*     
+*     Revision 3.0  94/02/13  21:33:59  armnrbd
+*     Premiere version.
+*     
+*--------------------------------------------------------------------------
+      IMPLICIT      none
+
+      INTEGER       HEAD
+      PARAMETER   ( HEAD = taille_entete )
+      INTEGER       MAXM
+      PARAMETER   ( MAXM = 999 )
+
+      LOGICAL       OK
+      REAL          NS
+      INTEGER       NR,NFF,JBUF(HEAD),IER
+      INTEGER       NMA,NMB,I,M,N,LSR(2,MAXM+1)
+      INTEGER       LAA,LAB,LR,LM,LRLMT,KTR,MAXW
+
+      INTEGER,      DIMENSION(:),   ALLOCATABLE :: IBUF
+      REAL,         DIMENSION(:,:), ALLOCATABLE :: A,B
+      REAL*8,       DIMENSION(:),   ALLOCATABLE :: C
+
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+      INTEGER       CLRLMT
+      EXTERNAL      JCLPNT,XIT
+      EXTERNAL      CLRLMT,DIMGT2,CMPLBL
+      EXTERNAL      GETFLD2,PUTFLD2,EPSCAL,SETLAB
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/spdlat.ptn,v $'
+
+*-------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+                   NFF  = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+***    READ THE FIRST INFORMATION FIELD TO GET THE SIZE (LA)
+***    OF THE SPECTRAL INPUT ARRAYS.
+  
+      CALL GETBUF2( -1, JBUF,HEAD,OK )
+      CALL PRTLAB( JBUF )
+      IF (.NOT.OK) CALL                            XIT(' Spdlat ',-1 )
+
+      LRLMT = JBUF(7)
+      CALL DIMGT2( LSR, LAA,LR,LM,KTR,LRLMT, 0,0 )  
+      WRITE(6,6150) LAA,LR,LM,KTR,LRLMT
+
+***    PROBLEM WITH SPECTRAL PARAMETRES: EITHER WE DO NOT HAVE 
+***    RHOMBOIDAL OR TRIANGULAR TRUNCATIONS, OR THE LM VALUE IS
+***    GREATER THAN MAXM.
+  
+      IF (KTR .NE.0 .AND. KTR .NE.2) CALL          XIT(' Spdlat ',-2 )
+      IF (LM.GT.MAXM) CALL                         XIT(' Spdlat ',-3 )
+
+***    CALCULATE NEW/MODIFIED CONSTANTS ONCE AND FOR ALL.
+
+      LAB   = LAA+LM
+      LRLMT = CLRLMT( LR+1,LM,KTR,.TRUE. )
+      WRITE(6,6200) LAB,LRLMT
+
+***    ALLOCATE THE WORKING MEMORY.
+
+      MAXW = 4*LAB
+
+      ALLOCATE( IBUF(MAXW+HEAD) )
+      ALLOCATE( A(2,LAA),B(2,LAB),C(LAB) )
+
+      CALL EPSCAL( C,LSR,LM )
+
+***    READ SPECTRAL ARRAYS.
+
+      NR = 0
+
+  100 CALL GETFLD2( 1, A, 'SPEC',-1,' ',-1, IBUF,MAXW,OK )
+  
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6000) NR
+              CALL                                 XIT(' Spdlat ', 0 )
+          END IF
+
+          CALL CMPLBL( 0,JBUF, 0,IBUF, OK )
+
+          IF (.NOT.OK) CALL PRTLAB( IBUF )
+          IF (.NOT.OK) CALL                        XIT(' Spdlat ',-4 )
+
+***        DO THE DERIVATIVE.
+
+          DO  200 M=0,LM-1
+              NMA    = LSR(1,M+1)
+              NMB    = LSR(2,M+1)
+              NS     = M
+
+***            DO THE DIAGONAL TERM.
+
+              IF (NMA+1.LT.LSR(1,M+2))                         THEN
+                  B(1,NMB) = (NS+2)*C(NMB+1)*A(1,NMA+1)
+                  B(2,NMB) = (NS+2)*C(NMB+1)*A(2,NMA+1)
+              ELSE
+                  B(1,NMB) = 0.0
+                  B(2,NMB) = 0.0
+              END IF
+
+***            DO THE MIDDLE TERMS.
+
+              DO  N=2,(LSR(1,M+2)-LSR(1,M+1))-1
+                  NS     = NS +1
+                  NMA    = NMA+1
+                  NMB    = NMB+1
+                  B(1,NMB) = -(NS-1)*C(NMB)  *A(1,NMA-1)
+     +                     +  (NS+2)*C(NMB+1)*A(1,NMA+1)
+                  B(2,NMB) = -(NS-1)*C(NMB)  *A(2,NMA-1)
+     +                     +  (NS+2)*C(NMB+1)*A(2,NMA+1)
+              END DO
+
+***            DO THE TOP TWO TERMS.
+
+              NS     = NS +1
+              NMA    = NMA+1
+              NMB    = NMB+1
+              B(1,NMB) = -(NS-1)*C(NMB)*A(1,NMA-1)
+              B(2,NMB) = -(NS-1)*C(NMB)*A(2,NMA-1)
+
+              IF (NMB.LT.LAB)                                  THEN
+                  NMB    = NMB+1
+                  B(1,NMB) = -NS*C(NMB)*A(1,NMA)
+                  B(2,NMB) = -NS*C(NMB)*A(2,NMA)
+              END IF
+
+  200     CONTINUE
+
+          CALL SETLAB( IBUF, ' ',-1,' ',-1, LAB ,-1, LRLMT ,-1 )
+          CALL PUTFLD2( 2, B, IBUF,MAXW )
+
+      NR = NR+1
+      GOTO 100
+*===================================================================
+
+ 6000 FORMAT('0',I6,' Records derived')
+ 6150 FORMAT('0LA,LR,LM,KTR,LRLMT=',4I8,I10)
+ 6200 FORMAT(' Spdlat output LA,LRLMT=',I8,I10)
+  
+      END 
+#     endif

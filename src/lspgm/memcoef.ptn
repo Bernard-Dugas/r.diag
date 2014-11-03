@@ -1,0 +1,292 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      memcoef  SERI COEFF INPUT OUTPUT [ -a VAL0 -kind VAL1 ]
+*
+*
+*     DESCRIPTION...
+*      memcoef  - Power Spectrum Estimation by the Maximum Entropy Method
+*
+*
+*     AUTHOR  - G. Brunet,  07/94.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/memcoef.ptn,v 4.7 2014/09/25 20:20:50 dugas Exp $
+*
+*
+*     PURPOSE - READS A TIME-SERIES AND CALCULATES THE COEFFICIENTS OF 
+*               THE MAXIMUM ENTROPY METHOD OR ITS POWER SPECTRUM.
+*              
+*
+*
+*     INPUT FILE...
+*      ZXIN  = CROSS-SECTIONS WITH ONE LEVEL
+*
+*     OUTPUT FILE...
+*      ZXOUT = CROSS-SECTIONS WITH ONE LEVEL
+*
+*     PARAMETERS...
+*
+*     ORDER (a)    =   ORDER OF THE MODEL (defaults to the length-1 of SERI).
+*     KIND  (kind) = 0 INPUT IS A TIME SERIES. OUTPUT ARE THE MEM COEFFICIENTS.
+*                  > 0 INPUT ARE THE MEM COEFFICIENTS. OUTPUT IS THE POWER 
+*                      SPECTRUM BETWEEN THE NYQUIST FREQUENCY AND 0. KIND
+*                      IS THEN THE NF NUMBER OF REQUESTED FREQUENCIES.
+*
+*      READ( 5,5010 ) ORDER,KIND
+*5010  FORMAT(10X,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* MEMCOF     10    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*       0 NO PROBLEMS
+*       1 PROBLEMS READING SERI
+*       2 FOUND DATA TYPE NOT ZONAL
+*       3 ABORT ERROR READING SERI
+*       4 MORE THAN ONE SIZE IN SERI
+*       5 ABORT ERROR READING INPUT
+#    endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#    if !defined (NO_SOURCE)
+      PROGRAM memcoef
+*     PROGRAM MEMCOEF(SERI,       COEFF,       INPUT,       OUTPUT,
+*    1          TAPE1=SERI, TAPE2=COEFF, TAPE5=INPUT, TAPE5=OUTPUT)
+*     -----------------------------------------------
+
+*     $Log: memcoef.ptn,v $
+*     Revision 4.7  2014/09/25 20:20:50  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  2003/07/05 14:50:28  dugas
+*     Implanter SETRABT pour le traitement de RECABT.
+*
+*     Revision 4.3  2000/09/27 21:14:56  armnrbd
+*     Comparer la taille de CORDER avec NWDS.
+*
+*     Revision 4.2  1998/07/03 02:26:32  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.1  1997/09/26  17:39:08  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:01  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.3  94/08/31  19:15:52  armnrbd
+*     Enlever la derniere modifs sur XMEM.
+*     
+*     Revision 3.2  94/08/11  16:05:02  16:05:02  armnrbd (Bernard Dugas)
+*     Modifier XMEM avant l'appel a EVLMEM.
+*     Ne pas compacter les champs de sortie.
+*     
+*     Revision 3.1  94/07/14  13:58:38  armnrbd
+*     Premiere version fonctionnelle.
+*     
+*     Revision 3.0  94/07/13  12:51:42  armnrbd
+*     Premiere version.
+*     
+
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      CHARACTER   LIGNE*80
+      REAL        ZERO,XMEM
+      LOGICAL     OK,RPBLOC
+      CHARACTER*5 VALEUR,CORDER
+      INTEGER     NFF, MAXW,NWDS,LEN,HEAD,JBUF(taille_entete),JPAK,
+     +            LEV, NR, ORDER,NLEV,KIND, IER,IO,I
+
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: TS,COEF
+
+      CHARACTER*4  TYPE
+
+      INTEGER     GETSIZ
+      EXTERNAL    GETSIZ,MACSPE,JCLPNT,XIT,GETFLD2,CMPLBL,
+     +            PUTFLD2,RPBLOC
+
+      REAL        EVLMEM
+      EXTERNAL    MEMCOF,EVLMEM
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*===================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/memcoef.ptn,v $'
+
+*---------------------------------------------------------------------
+***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
+
+      CALL MACSPE( HEAD,ZERO )
+      CALL SETRABT( '&NON' )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NFF = 4
+      CALL JCLPNT( NFF, 1,2, 5,6 )
+
+      IF (RPBLOC( ' ',VALEUR ))                                THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          CORDER = ' '
+          KIND   =  0
+
+          OK = RPBLOC('A',VALEUR)
+          IF (OK) CORDER = VALEUR
+
+          OK = RPBLOC('KIND',VALEUR)
+          IF (OK) READ( VALEUR,5, ERR=900,END=900,IOSTAT=IO ) KIND
+
+      ELSE
+
+***        READ ORDER AND KIND FROM UNIT 5 (STDIN).
+ 
+          CALL GETLIGN( 5,LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5010,ERR=900,END=900,IOSTAT=IO)
+     +                     CORDER,KIND
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    DETERMINE THE INPUT ARRAY SIZE.
+
+  100 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
+
+      IF (MAXW.EQ.0) CALL                          XIT(' MemCoef',-1 )
+
+      WRITE(TYPE,4) JBUF(1)
+      LEV  = JBUF(4)
+      NLEV = JBUF(6)
+
+      IF (TYPE.NE.'ZONL' .OR. NLEV.NE.1)                       THEN
+          WRITE(6,6002) TYPE,NLEV
+          CALL                                     XIT(' MemCoef',-2 )
+      END IF
+
+***    ACCOUNT FOR DEFAULT PARAMETRES.
+
+      IF (CORDER.EQ.' ')                                       THEN
+          ORDER = NWDS-1
+      ELSE
+          READ( CORDER,5, ERR=900,END=900,IOSTAT=IO ) ORDER
+          IF (ORDER.GE.NWDS)                                   THEN
+              ORDER = NWDS-1
+              WRITE(6,6130) ORDER
+          END IF
+      END IF
+
+***    ASK FOR WORKING MEMORY.
+
+      LEN  = MAX( LEN,  ORDER+1, KIND )
+
+      ALLOCATE( IBUF(LEN),TS  (MAX( NWDS,KIND )),
+     +                    COEF(MAX( NWDS,KIND )) )
+
+***    READ THE NEXT TIME SERIES IN TS. STOP AT EOF.
+
+  200 CALL GETFLD2( 1, TS, 'ZONL',-1,' ',LEV, IBUF,MAXW,OK )
+
+          IF (.NOT.OK)                                         THEN
+
+              DEALLOCATE( IBUF,TS,COEF )
+              IF (MAXW.EQ.0) GOTO 100
+
+              WRITE(6,6110) NR
+              IF (NR.EQ.0) CALL                    XIT(' MemCoef',-3 )
+              CALL                                 XIT(' MemCoef', 0 )
+
+          END IF
+
+          CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
+          IF (.NOT.OK) CALL                        XIT(' MemCoef',-4 )
+
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+***        DO WHATEVER NEEDS TO BE DONE HERE...
+           
+          IF (KIND.EQ.0)                                       THEN
+              CALL MEMCOF( TS,NWDS,ORDER,XMEM,COEF )
+              TS(1) = XMEM
+              DO  I=1,ORDER
+                  TS(I+1)=COEF(I)
+              END DO
+              IBUF(5) = ORDER+1
+          ELSE
+              DO  I=2,ORDER+1
+                  COEF(I-1)=TS(I)
+              END DO
+              COEF(ORDER+1) = TS(1)
+              DO  I=1,KIND
+                  XMEM  = FLOAT(I-1)/(2.*FLOAT(KIND-1))
+                  TS(I) = EVLMEM( XMEM,COEF,ORDER,COEF(ORDER+1) )
+              END DO
+              IBUF(5) = KIND
+          END IF
+              
+***        PUT THE RESULT ON FILE COEF.
+
+          IBUF(8) = -32
+          Call PUTFLD2( 2, TS, IBUF,MAXW )
+          IF (NR.EQ.0) CALL PRTLAB( IBUF )
+
+      NR = NR+NLEV
+      GOTO 200
+
+***    E.O.F. ON UNIT #5.
+ 
+  900 IF (IO.NE.0) WRITE(6,6100) IO
+      CALL                                         XIT(' Memcoef',-5 )
+
+*---------------------------------------------------------------------
+    4 FORMAT(A4)
+    5 FORMAT(BN,I5)
+
+ 5010 FORMAT(10X,2I5)
+
+ 6002 FORMAT(' First file should be typed single level ZONL,',
+     +       ' found ',A4,I6)
+
+ 6100 FORMAT(' Memcoef reports I/O error number ',I3,' on unit 5.')
+ 6110 FORMAT(1X,I6,' records processed.')
+ 6130 FORMAT(' Parametre ORDER has been reset to ',I6)
+
+      END
+#     endif

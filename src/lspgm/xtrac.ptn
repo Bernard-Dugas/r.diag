@@ -1,0 +1,941 @@
+#     if !defined (memoire_maximale)
+#         define   memoire_maximale 10000000
+#     endif
+#     if !defined (grille_maximale)
+#         define   grille_maximale 200000
+#     endif
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCES...
+*      xtrac   IN MASK OUT OUTPUT
+*     (xtrac2  IS OUTDATED)
+*      xtrac3  IN MASK OUT OUTPUT
+*      xtrac4  IN MASK OUT OUTPUT
+*
+*
+*     AUTHOR  - B.Dugas, MARS 27/1987.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/xtrac.ptn,v 4.10 2014/09/25 20:20:56 dugas Exp $
+*
+*
+*     DESCRIPTION OF THE DIFFERENT PROGRAMS...
+*      ALL PROGRAMS EXTRAC RECORDS IN  A MULTI RECORD FILE DEPENDING
+*      ON A MASKING VALUE  FOUND ON UNIT 2 (MASK). A RECORD IS KEPT
+*      IF THE  CORRESPONDING  VALUE IN THE SINGLE MASK RECORD IS NON-
+*      ZERO.  SO THAT, FOR EXAMPLE, IF THE SECOND VALUE IN MASK IS
+*      ZERO, SECOND TIME-STEPS RECORDS IN THE FILE "IN" ARE NOT 
+*      KEPT ... . THE MASKING RECORD *SHOULD* NOT HAVE  ANY MORE 
+*      (REAL) DATA POINTS THAN THE IN FILE HAS TIME-STEPS. 
+*
+*      A) XTRAC2 IS AN EMPTY SHELL LEFT OVER FROM AN OLD VERSION. 
+*         IT ONLY POINTS TO MKMASK1, THE PROGRAM THAT SUPERSEEDS
+*         XTRAC2, AND THEN ABORTS ... 
+*
+*      B) XTRAC3 IS DIFFERENT FROM THE OTHER XTRAC'S IN THAT THE
+*         OUT FILE CONTAINS EVENT MEANS, ONE RECORD PER STRING OF 
+*         EVENTS...
+*
+*      C) XTRAC4 IS DIFFERENT FROM THE OTHER XTRAC'S IN THAT THE 
+*         OUT FILE CONTAINS THE TOTAL RETAINED EVENT MEANS, ONE 
+*         RECORD PER MASKING RECORD ... 
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*
+*     FATAL CONDITIONS...
+*      1 PROBLEM READING FILE MASK
+*      2 MEMORY ALLOCATION PROBLEMS
+*      3 PROBLEMS READIN FILE IN OR SET INCOMPLETE
+*      4 NO RECORDS KEPT
+*      5 XTRAC2 SHOULD NO LONGER BE INVOKED
+*      6 XTRAC CANNOT CHANGE PACKING TYPE
+*
+*     NON-FATAL CONDITION...
+*     101 FILE IN IS INCOMPLETE (BUT NON EMPTY)
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM xtrac_driver
+
+***  Ceci est le programme d'appel des routines de type xtrac
+***  tel qu'implante a RPN (SEA/Dorval) par B.Dugas, en 1993.
+
+*     $Log: xtrac.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:56  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2013/02/07 21:57:11  bernard
+*     Corrections pour GFORTRAN.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2004/11/12 16:45:07  dugas
+*     Enlever la definition du macro taille_entete.
+*
+*     Revision 4.6  1999/04/08 21:58:46  armnrbd
+*     Enlever la declaration reelle du pointeur PR.
+*
+*     Revision 4.5  1998/10/19 15:33:43  armnrbd
+*     Modifier la documentation.
+*
+*     Revision 4.4  1998/06/08  02:32:20  armnrbd
+*     Tenir compte des enregistrements ++.
+*
+*     Revision 4.3  1998/05/21  20:20:58  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.2  1998/02/17  21:32:39  armnrbd
+*     Seconde iteration des modifs associes a la cle OPKTYP.
+*
+*     Revision 4.1  1997/12/10  18:14:59  armnrbd
+*     Avertir si la cle OPKTYP ne peut etre satisfaite.
+*
+*     Revision 4.0  1994/11/17  14:22:48  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:57:32  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/24  15:22:06  armnrbd
+*     Initial revision
+*     
+
+      IMPLICIT  none
+
+      INTEGER   i,j,k
+      CHARACTER nom*256,nomprg*8
+
+      EXTERNAL  qqexit,
+     +          xtrac,  xtrac2, xtrac3, xtrac4
+
+      data      nomprg / ' ' /
+
+*------------------------------------------------------------------
+***    Recuperer le nom du programme. S'assurer de sa validite.
+
+      Call getarg( 1,nom )
+
+      If (nom(256:256).EQ.'/')                                 Then
+          Write(6,'(" Pas trouve le nom du programme dans"/A256)') nom
+          Call qqexit( -11 )
+      End If
+
+***    Enlever tout prefixe.
+
+      Do i=255,1,-1
+          If (nom(i:i).EQ.'/')                                 Then
+              Do j=i+1,Min( i+8,256 )
+                  k           = j-i
+                  nomprg(k:k) = nom(j:j)
+              End Do
+              GoTo 100
+          End If
+      End Do
+
+***    S'assurer que le nom du programme est dans nomprg.
+
+      nomprg = nom
+
+***    Enlever tout postfixe.
+
+  100 Do i=1,8
+          If (nomprg(i:i).EQ.'.')                              Then
+              Do j=i,8
+                  nomprg(j:j) = ' '
+              End Do
+              GoTo 200
+          End If
+      End Do
+
+  200 IF (nomprg.EQ.'xtrac' ) CALL xtrac
+      IF (nomprg.EQ.'xtrac2') CALL xtrac2
+      IF (nomprg.EQ.'xtrac3') CALL xtrac3
+      IF (nomprg.EQ.'xtrac4') CALL xtrac4
+
+      Write(6,'(" Programme ",A8," inconnu.")') nomprg
+      Call qqexit( -12 )
+
+      Stop
+      End
+      SUBROUTINE XTRAC 
+*    1             (IN,       MASK,       OUT,       OUTPUT, 
+*    2        TAPE1=IN, TAPE2=MASK, TAPE3=OUT, TAPE6=OUTPUT) 
+ 
+***    MARS 27/1987 - B. DUGAS. 
+ 
+***    HISTORIQUE DES MODIFICATIONS : 
+***     ...  18 MAI/1989 - XIT(-101) SI MASK EST TROP LONG. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+ 
+      REAL        MASK
+      CHARACTER   SAVLEV*10
+      LOGICAL     OK,CHNGTYP
+      CHARACTER*4 TYPE,NAME,NEWL,HNEWL
+      INTEGER     IBUF,IER,LEVL(MAXLEV),
+     +            NLEV,NF,MAXR,NREC,I,L,
+     +            NLEVZ 
+
+      POINTER   ( IB,IBUF(HEAD) )
+      POINTER   ( PM,MASK(1) )
+ 
+      CHARACTER*4 GETYP,INTYP,OUTYP,TYPE1
+      EXTERNAL    JCLPNT,GETFLD2,FILEV,RECGET,
+     +            GETYP,RECPUT,XIT,HPALLOC,
+     +            PUTYP,TYPSET,PUTLEV,PUTHIC
+
+      DATA        SAVLEV / 'Pas encore' /,
+     +            NEWL   / 'NEWL' /
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xtrac.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,0 )
+      CALL HPALLOC( PM,      MAXW, IER,0 )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2,3, 6 )
+ 
+      OUTYP = GETYP( 0 )
+      TYPE1 = GETYP( 1 )
+      INTYP = TYPE1(1:2)
+
+      IF (TYPE1.NE.OUTYP .AND.
+     +    INTYP.NE.'SQ' )                                      THEN
+          CALL TYPSET( CHNGTYP )
+          IF (CHNGTYP)                                         THEN
+              CALL                                 XIT(' Xtrac  ',-6 )
+          ELSE
+              CALL PUTYP( 0, TYPE1 )
+          END IF
+      END IF
+              
+***    GET THE MASKING RECORD. 
+ 
+      CALL GETFLD2( 2, MASK, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+      IF (.NOT.OK)                                             THEN 
+          WRITE(6,6001) 
+          CALL                                     XIT(' Xtrac  ',-1 ) 
+      END IF 
+ 
+      WRITE(TYPE,0004) IBUF(1) 
+ 
+          MAXR = IBUF(5)*IBUF(6) 
+      IF (TYPE.EQ.'SPEC' .OR.
+     +    TYPE.EQ.'FOUR' .OR.
+     +    TYPE.EQ.'CMPL')
+     +    MAXR = MAXR*2 
+
+      WRITE(6,6100) MAXR 
+ 
+***    CHECK FOR MULTI-LEVEL DATA ON UNIT 1. 
+ 
+      CALL FILEV( LEVL,NLEV,IBUF, -1 ) 
+ 
+      WRITE(TYPE,0004) IBUF(1) 
+
+      NLEVZ = NLEV
+
+      IF (TYPE.EQ.'ZONL' .AND. IBUF(6).EQ.NLEV) NLEV = 1
+
+***    GET THE NEXT MAXR*NLEV FIELDS FROM THAT UNIT 
+***    (AND DO NOT UNPACK THEM...). 
+ 
+      NREC = 0 
+      DO 300 I=1,MAXR 
+ 
+          DO 200 L=1,NLEV 
+ 
+  100         CALL RECGET( 1, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+              IF (.NOT.OK)                                     THEN 
+                  IF (I.EQ.1 .OR. L.NE.1)                      THEN 
+                      WRITE(6,6003) I,LEVL(L) 
+                      CALL                         XIT(' Xtrac  ',-3 ) 
+                  ELSE 
+                      WRITE(6,6150) I-1 
+                      WRITE(6,6200) NREC, NLEV 
+                      CALL                         XIT(' Xtrac  ',-101) 
+                  END IF 
+              END IF 
+ 
+***            CHECK MASK(I) TO SEE IF THIS RECORD IS KEPT. 
+ 
+              WRITE(NAME,0004) IBUF(3)
+
+              IF (NAME.EQ.'++')                                THEN
+
+                  GOTO 100
+
+              ELSE IF (MASK(I).NE.0.)                          THEN 
+
+                  IF (NLEV.NE.NLEVZ)                           THEN
+                      IF (SAVLEV.EQ.'Pas encore')              THEN
+                          HNEWL = NEWL
+                      ELSE
+                          HNEWL = ' '
+                      END IF
+                      IBUF(4)   = 0
+                  ELSE
+                      HNEWL     = ' '
+                      IBUF(4)   = LEVL(L)
+                  END IF
+
+                  CALL PUTHIC( HNEWL,'NEWL',IBUF )
+
+                  CALL RECPUT( 3, IBUF ) 
+
+                  IF (NLEV.NE.NLEVZ .AND. 
+     +                SAVLEV.EQ.'Pas encore')                  THEN
+                      CALL PUTLEV( 3, LEVL,NLEVZ, IBUF,MAXW )
+                      SAVLEV = 'On a sauve'
+                  END IF
+
+                  NREC = NREC+1 
+
+              END IF 
+ 
+  200     CONTINUE 
+ 
+  300 CONTINUE 
+ 
+      WRITE(6,6200) NREC, NLEV 
+      IF (NREC.EQ.0) CALL                          XIT(' Xtrac  ',-3 ) 
+      CALL                                         XIT(' Xtrac  ', 0 ) 
+*----------------------------------------------------------------------- 
+ 
+ 0004 FORMAT(A4) 
+
+ 6001 FORMAT('0Xtrac aborting for lack of masking record...') 
+ 6003 FORMAT('0Could not read time-step No ',I5,' at level ',I5) 
+
+ 6100 FORMAT('0Xtrac will read ',I5,' records from unit 1.') 
+ 6150 FORMAT('0Stopping after ',I5,' timesteps.') 
+ 6200 FORMAT('0',I5,' Records from ',I2,' level(s) written to unit 3.') 
+ 
+      END 
+      PROGRAM XTRAC2 
+
+***    MARS 22/1989 - B.DUGAS 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     NF
+      EXTERNAL    JCLPNT,XIT
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xtrac.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 1 
+      CALL JCLPNT( NF, 6 )
+
+      WRITE(6,6005) 
+      CALL                                         XIT(' Xtrac2 ',-5 ) 
+ 
+*------------------------------------------------------------ 
+ 6005 FORMAT('0Xtrac2 is now outdated, please use mkmask1 ...') 
+ 
+      END 
+      SUBROUTINE XTRAC3 
+*    1              (IN,       MASK,       OUT,       OUTPUT, 
+*    2         TAPE1=IN, TAPE2=MASK, TAPE3=OUT, TAPE6=OUTPUT) 
+ 
+***    JUIN 10/1987 - B. DUGAS. 
+ 
+***    HISTORIQUE DES MODIFICATIONS : 
+***     ...  22 DEC/1987 - AJOUTER PLUS D'INFO SUR OUTPUT. 
+***     ...  14 NOV/1988 - IBUF(2) = NBLCK A LA SORTIE. 
+***     ...  18 MAI/1989 - XIT(-101) SI MASK EST TROP LONG. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXMEM
+      PARAMETER ( MAXMEM= memoire_maximale )
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+
+      CHARACTER   SAVLEV*10
+      LOGICAL     OK, LAST(MAXLEV) 
+      CHARACTER*4 TYPE,NAME,NEWL,HNEWL
+      REAL        MASK,REC,DATA,CORECT
+      INTEGER     IBUF,LEVL(MAXLEV),NLEV,NS(MAXLEV),
+     +            NWDS,MEM,I,J,IL,JL,L,NBLCK,NSKIP,
+     +            NKEEP,NREC,MAXR,NF,IER,NLEVZ
+ 
+      POINTER   ( IB,IBUF(HEAD) )
+      POINTER   ( PD,DATA(1) )
+      POINTER   ( PM,MASK(1) )
+      POINTER   ( PR,REC(1) )
+
+      EXTERNAL    JCLPNT,GETFLD2,PUTFLD2,XIT,FILEV,
+     +            HPALLOC,PUTLEV,PUTHIC
+ 
+      DATA        SAVLEV / 'Pas encore' /,
+     +            NEWL   / 'NEWL' /
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xtrac.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,0 )
+      CALL HPALLOC( PM,      MAXW, IER,0 )
+      CALL HPALLOC( PR,      MAXW, IER,0 )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 4 
+      CALL JCLPNT( NF, 1,2,3, 6 )
+ 
+***    GET THE MASKING RECORD. 
+ 
+      CALL GETFLD2( 2, MASK, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+      IF (.NOT.OK)                                             THEN 
+          WRITE(6,6001) 
+          CALL                                     XIT(' Xtrac3  ',-1 ) 
+      END IF 
+ 
+      WRITE(TYPE,0004) IBUF(1) 
+ 
+          MAXR = IBUF(5)*IBUF(6) 
+      IF (TYPE.EQ.'SPEC' .OR.
+     +    TYPE.EQ.'FOUR' .OR.
+     +    TYPE.EQ.'CMPL')
+     +    MAXR = MAXR*2 
+
+      WRITE(6,6100) MAXR 
+ 
+***    CHECK FOR MULTI-LEVEL DATA ON UNIT 1 AND DETERMINE 
+***    SIZE OF DATA RECORDS. 
+ 
+      CALL FILEV( LEVL,NLEV,IBUF, -1 ) 
+ 
+      WRITE(TYPE,0004) IBUF(1) 
+
+      NLEVZ = NLEV
+
+      IF (TYPE.EQ.'ZONL' .AND. IBUF(6).EQ.NLEV) NLEV = 1
+
+          NWDS = IBUF(5)*IBUF(6) 
+      IF (TYPE.EQ.'SPEC' .OR.
+     +    TYPE.EQ.'FOUR' .OR.
+     +    TYPE.EQ.'CMPL') 
+     +    NWDS = NWDS*2 
+ 
+***    ASK FOR REQUIRED MEMORY, IF POSSIBLE ... 
+ 
+      MEM = NWDS*NLEV 
+ 
+      IF (MEM.GT.MAXMEM)                                       THEN 
+          WRITE(6,6002) MEM-MAXMEM 
+          CALL                                     XIT(' Xtrac3 ',-2 ) 
+      END IF 
+ 
+      Call hpalloc( PD, MEM, IER,0 )
+ 
+***    INITIALISE DATA. 
+ 
+      DO  L=1,NLEV 
+          NS(L)   = 0 
+          LAST(L) = .FALSE. 
+          IL      = (L-1)*NWDS 
+          DO  I=1,NWDS 
+              DATA(IL+I) = 0. 
+          END DO
+      END DO
+ 
+***    GET THE NEXT MAXR*NLEV FIELDS FROM THAT UNIT. 
+ 
+      NBLCK = 0 
+      NSKIP = 0 
+      NKEEP = 0 
+      NREC  = 0 
+ 
+      DO 300 I=1,MAXR 
+ 
+          DO 200 L=1,NLEV 
+
+              JL = (L-1)*NWDS 
+ 
+  100         CALL GETFLD2( 1, REC, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+              IF (.NOT.OK)                                     THEN 
+                  IF (I.EQ.1 .OR. L.NE.1)                      THEN 
+                      WRITE(6,6003) I,LEVL(L) 
+                      CALL                         XIT(' Xtrac3 ',-3 ) 
+                  ELSE 
+                      WRITE(6,6150) I-1 
+                      WRITE(6,6200) NREC, NLEV 
+                      CALL                         XIT(' Xtrac3 ',-101) 
+                  END IF 
+              END IF 
+ 
+              WRITE(NAME,0004) IBUF(3)
+
+***            CHECK MASK(I) TO SEE IF THIS RECORD IS KEPT. 
+
+              IF (NAME.EQ.'++')                                THEN
+
+                  GOTO 100
+ 
+              ELSE IF (MASK(I).NE.0.)                          THEN 
+ 
+                  IF (.NOT.LAST(L))                            THEN 
+                      LAST(L) = .TRUE. 
+                      IF (L.EQ.NLEV) WRITE(6,6250) NREC+1, NSKIP 
+                  END IF 
+ 
+***                SUM IT WITH THE OTHERS IN THE STRING. 
+ 
+                  NS(L) = NS(L)+1 
+                  DO  J=1,NWDS 
+                      DATA(JL+J) = DATA(JL+J)+REC(J) 
+                  END DO
+ 
+                  NKEEP = NKEEP+1 
+ 
+              ELSE IF (LAST(L))                                THEN 
+ 
+                  IF (L.EQ.1) NBLCK = NBLCK+1 
+                  LAST(L) = .FALSE. 
+                  CORECT  = 1./FLOAT(NS(L)) 
+ 
+                  DO  J=1,NWDS 
+                      DATA(JL+J) = DATA(JL+J)*CORECT 
+                  END DO
+ 
+                  IBUF(2) = NBLCK 
+
+                  IF (NLEV.NE.NLEVZ)                           THEN
+                      IF (SAVLEV.EQ.'Pas encore')              THEN
+                          HNEWL = NEWL
+                      ELSE
+                          HNEWL = ' '
+                      END IF
+                      IBUF(4)   = 0
+                  ELSE
+                      HNEWL     = ' '
+                      IBUF(4)   = LEVL(L) 
+                  END IF
+
+                  CALL PUTHIC( HNEWL,'NEWL',IBUF )
+
+                  CALL PUTFLD2( 3, DATA(JL+1), IBUF,MAXW ) 
+
+                  IF (NLEV.NE.NLEVZ .AND. 
+     +                SAVLEV.EQ.'Pas encore')                  THEN
+                      CALL PUTLEV( 3, LEVL,NLEVZ, IBUF,MAXW )
+                      SAVLEV = 'On a sauve'
+                  END IF
+
+                  NS(L) = 0 
+                  NSKIP = 1 
+                  NREC  = NREC+1 
+ 
+                  IF (L.EQ.NLEV)                               THEN 
+                      WRITE(6,6300) NKEEP 
+                      NKEEP = 0 
+                  END IF 
+ 
+                  DO  J=1,NWDS 
+                      DATA(JL+J) = 0. 
+                  END DO
+ 
+              ELSE 
+ 
+                  NSKIP = NSKIP+1 
+ 
+              END IF 
+ 
+  200     CONTINUE 
+ 
+  300 CONTINUE 
+ 
+      IF (LAST(NLEV))                                          THEN 
+ 
+          WRITE(6,6300) NKEEP 
+ 
+          DO 400 L=1,NLEV 
+ 
+              NREC    = NREC+1 
+              JL      = (L-1)*NWDS 
+              CORECT  = 1./FLOAT(NS(L)) 
+              DO  J=1,NWDS 
+                  DATA(JL+J) = DATA(JL+J)*CORECT 
+              END DO
+ 
+              IF (NLEV.NE.NLEVZ)                               THEN
+                  IF (SAVLEV.EQ.'Pas encore')                  THEN
+                      HNEWL = NEWL
+                  ELSE
+                      HNEWL = ' '
+                  END IF
+                  IBUF(4)   = 0
+              ELSE
+                  HNEWL     = ' '
+                  IBUF(4)   = LEVL(L) 
+              END IF
+
+              CALL PUTHIC( HNEWL,'NEWL',IBUF )
+
+              CALL PUTFLD2( 3, DATA(JL+1), IBUF,MAXW ) 
+ 
+              IF (NLEV.NE.NLEVZ .AND. 
+     +            SAVLEV.EQ.'Pas encore')                      THEN
+                  CALL PUTLEV( 3, LEVL,NLEVZ, IBUF,MAXW )
+                  SAVLEV = 'On a sauve'
+              END IF
+
+  400     CONTINUE 
+ 
+      END IF 
+ 
+      WRITE(6,6200) NREC, NLEV 
+      IF (NREC.EQ.0) CALL                          XIT(' Xtrac3 ',-4 ) 
+      CALL                                         XIT(' Xtrac3 ', 0 ) 
+*----------------------------------------------------------------------- 
+ 
+ 0004 FORMAT(A4) 
+
+ 6001 FORMAT('0Xtrac3 aborting for lack of masking record...') 
+ 6002 FORMAT(' Missing at least ',I6,'words of available memory.')
+ 6003 FORMAT('0could not read time-step No ',I5,' at level ',I5) 
+
+ 6100 FORMAT('0Xtrac3 will read ',I5,' records from unit 1.') 
+ 6150 FORMAT('0Stopping after ',I5,' timesteps.') 
+ 6250 FORMAT('0In block No. ',I5,',     skipped ',I5,' timesteps ...') 
+ 6200 FORMAT('0',I5,' records from ',I2,' level(s) written to unit 3.') 
+ 6300 FORMAT('0                       and kept    ',I5,'.') 
+ 
+      END 
+      SUBROUTINE XTRAC4 
+*    1              (IN,       MASK,       OUT,       OUTPUT, 
+*    2         TAPE1=IN, TAPE2=MASK, TAPE3=OUT, TAPE6=OUTPUT) 
+
+***    MARS 29/1988 - B. DUGAS. 
+ 
+***    HISTORIQUE DES MODIFICATIONS : 
+***     ...  01 JUIN/1988 - INVERSER L'ORDRE DU TEST MASK ET 
+***                         DE LA LECTURE ILEV 
+***     ...  18  MAI/1989 - NE PLUS DECROCHER SI MASK EST UN 
+***                         PEU TROP LONG. 
+ 
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+      INTEGER     MAXMEM
+      PARAMETER ( MAXMEM= memoire_maximale )
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale ) 
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
+ 
+      CHARACTER   SAVLEV*10
+      LOGICAL     OK,LAST,ERR
+      CHARACTER*4 TYPE,NAME,NEWL,HNEWL
+      REAL        MASK,REC,DATA,CORECT
+      INTEGER     IBUF,LEVL(MAXLEV),NLEV,NF,NS,NMASK,IER,MAXR,
+     +            MASKT,NWDS,MEM,I,J,IL,JL,L,NSKIP,NKEEP,NREC,
+     +            NLEVZ
+ 
+      POINTER   ( IB,IBUF(HEAD) )
+      POINTER   ( PD,DATA(1) )
+      POINTER   ( PM,MASK(1) )
+      POINTER   ( PR,REC(1) )
+ 
+      EXTERNAL    JCLPNT,PRECEDE,SUIVANT,GETFLD2,XIT,PUTHIC,
+     +            FILEV,PUTFLD2,HPALLOC,PUTLEV
+
+      DATA        SAVLEV / 'Pas encore' /,
+     +            NEWL   / 'NEWL' /
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xtrac.ptn,v $'
+
+*-----------------------------------------------------------------------
+      CALL HPALLOC( IB, HEAD+MAXW, IER,0 )
+      CALL HPALLOC( PM,      MAXW, IER,0 )
+      CALL HPALLOC( PR,      MAXW, IER,0 )
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF    = 4 
+      CALL JCLPNT( NF, 1,2,3, 6 )
+
+      NMASK =        0 
+  100 CALL PRECEDE( 1,-1 )
+ 
+***    GET THE CURRENT MASKING RECORD. 
+ 
+      CALL GETFLD2( 2, MASK, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+ 
+      IF (.NOT.OK)                                             THEN 
+          IF (NMASK.EQ.0)                                      THEN 
+              WRITE(6,6001) 
+              CALL                                 XIT(' Xtrac4 ',-1 ) 
+          END IF 
+          WRITE(6,6100) NMASK, NLEV 
+          CALL                                     XIT(' Xtrac4 ', 0 ) 
+      END IF 
+ 
+      MASKT = IBUF(2) 
+      IF (MASKT.GT.1000) MASKT = (IBUF(2)-(MASKT/1000)*1000) 
+      NMASK = NMASK+1 
+ 
+      IF (NMASK.EQ.1)                                          THEN 
+ 
+          WRITE(TYPE,0004) IBUF(1) 
+ 
+              MAXR = IBUF(5)*IBUF(6) 
+          IF (TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR' .OR.
+     +        TYPE.EQ.'CMPL')
+     +        MAXR = MAXR*2 
+
+          WRITE(6,6150) MAXR 
+ 
+***        CHECK FOR MULTI-LEVEL DATA ON UNIT 1 AND DETERMINE 
+***        SIZE OF DATA RECORDS. 
+ 
+          CALL FILEV( LEVL,NLEV,IBUF, 1 ) 
+
+          WRITE(TYPE,0004) IBUF(1) 
+
+          NLEVZ = NLEV
+
+          IF (TYPE.EQ.'ZONL' .AND. IBUF(6).EQ.NLEV) NLEV = 1
+ 
+              NWDS = IBUF(5)*IBUF(6) 
+          IF (TYPE.EQ.'SPEC' .OR.
+     +        TYPE.EQ.'FOUR' .OR.
+     +        TYPE.EQ.'CMPL') 
+     +        NWDS = NWDS*2 
+ 
+***        ASK FOR REQUIRED MEMORY, IF POSSIBLE ... 
+ 
+          MEM = NWDS*NLEV 
+ 
+          IF (MEM.GT.MAXMEM)                                   THEN 
+              WRITE(6,6002) MEM-MAXMEM 
+              CALL                                 XIT(' Xtrac4 ',-2 ) 
+          END IF 
+ 
+          Call hpalloc( PD, MEM, IER,0 )
+ 
+      END IF 
+ 
+***    INITIALISE DATA. 
+ 
+      NS   = 0 
+      LAST = .FALSE. 
+      DO  L=1,NLEV 
+          IL = (L-1)*NWDS 
+          DO  I=1,NWDS 
+              DATA(IL+I) = 0. 
+          END DO
+      END DO
+ 
+***    CHECK THE NEXT MAXR*NLEV FIELDS FROM THAT UNIT. 
+ 
+      NSKIP = 0 
+      NKEEP = 0 
+      NREC  = 0 
+ 
+      DO 500 I=1,MAXR 
+ 
+***        CHECK MASK(I) TO SEE IF THIS (ILEV) SET OF RECORDS IS KEPT. 
+ 
+          IF (MASK(I).NE.0.)                                   THEN 
+ 
+              IF (.NOT.LAST)                                   THEN 
+                  LAST = .TRUE. 
+                  WRITE(6,6200) NREC+1, NSKIP 
+              END IF 
+ 
+***            SUM IT WITH THE OTHERS IN THE STRING. 
+ 
+              DO 300 L=1,NLEV 
+                  JL = (L-1)*NWDS 
+ 
+  200             CALL GETFLD2( 1, REC, ' ',-1,' ',-1, IBUF,MAXW,OK ) 
+
+                  IF (.NOT.OK) GOTO 999 
+ 
+                  WRITE(NAME,0004) IBUF(3)
+
+                  IF (NAME.EQ.'++') GOTO 200
+
+                  DO  J=1,NWDS 
+                      DATA(JL+J) = DATA(JL+J)+REC(J) 
+                  END DO
+ 
+  300         CONTINUE 
+ 
+              NS    = NS+1 
+              NKEEP = NKEEP+1 
+ 
+          ELSE 
+ 
+              IF (LAST)                                        THEN 
+ 
+                  WRITE(6,6250) NKEEP 
+                  LAST  = .FALSE. 
+                  NSKIP = 1 
+                  NREC  = NREC+1 
+                  NKEEP = 0 
+ 
+              ELSE 
+ 
+                  NSKIP = NSKIP+1 
+ 
+              END IF 
+ 
+              DO 400 L=1,NLEV 
+                  CALL SUIVANT( 1, IBUF, ERR,OK )
+                  IF (.NOT.OK .OR. ERR) GOTO 999
+                  WRITE(NAME,0004) IBUF(3)
+                  IF (NAME.EQ.'++')                            THEN
+                      CALL PRECEDE
+                  END IF
+  400         CONTINUE 
+ 
+          END IF 
+ 
+  500 CONTINUE 
+ 
+  600 IF (LAST) WRITE(6,6250) NKEEP 
+ 
+***    SAVE EVENT MEAN (IF ANY). TIME = MASK TIME. 
+ 
+      WRITE(6,6300) NS,NMASK 
+ 
+      IF (NREC.NE.0)                                           THEN
+ 
+          IBUF(2) = MASKT 
+          DO 700 L=1,NLEV 
+ 
+              JL      = (L-1)*NWDS 
+              CORECT  = 1./FLOAT(NS) 
+ 
+              DO  J=1,NWDS 
+                  DATA(JL+J) = DATA(JL+J)*CORECT 
+              END DO
+ 
+              IF (NLEV.NE.NLEVZ)                               THEN
+                  IF (SAVLEV.EQ.'Pas encore')                  THEN
+                      HNEWL = NEWL
+                  ELSE
+                      HNEWL = ' '
+                  END IF
+                  IBUF(4)   = 0
+              ELSE
+                  HNEWL     = ' '
+                  IBUF(4)   = LEVL(L) 
+              END IF
+
+              CALL PUTHIC( HNEWL,'NEWL',IBUF )
+
+              CALL PUTFLD2( 3, DATA(JL+1), IBUF,MAXW ) 
+ 
+              IF (NLEV.NE.NLEVZ .AND. 
+     +            SAVLEV.EQ.'Pas encore')                      THEN
+                  CALL PUTLEV( 3, LEVL,NLEVZ, IBUF,MAXW )
+                  SAVLEV = 'On a sauve'
+              END IF
+
+  700     CONTINUE 
+ 
+      END IF 
+ 
+      GOTO 100 
+ 
+***    POSSIBLE READ ERROR ON UNIT 1. 
+ 
+  999 IF (I.EQ.1 .OR. L.NE.1)                                  THEN 
+
+          WRITE(6,6003) I,LEVL(L) 
+          CALL                                     XIT(' Xtrac4 ',-3 ) 
+
+      ELSE IF (NMASK.EQ.1)                                     THEN 
+
+          WRITE(6,6350) I-1 
+          GOTO 600 
+
+      END IF 
+*----------------------------------------------------------------------- 
+ 
+ 0004 FORMAT(A4) 
+
+ 6001 FORMAT('0Xtrac4 aborting for lack of masking record...') 
+ 6002 FORMAT('0Missing at least ',I6,'words of available memory.')
+ 6003 FORMAT('0Could not read time-step no ',I5,' at level ',I5) 
+
+ 6100 FORMAT('0',I5,' masking records, ',I2,' level(s)  treated.') 
+ 6150 FORMAT('0Xtrac4 will read ',I5,' records from unit 1.') 
+ 6200 FORMAT('0In block No. ',I5,',     skipped ',I5,' timesteps ...') 
+ 6250 FORMAT('0                       and kept    ',I5,'.') 
+ 6300 FORMAT('0',I4,' events found for mask No.',I3) 
+ 6350 FORMAT('0Found only ',I5,' timesteps.') 
+ 
+      END 
+#     endif

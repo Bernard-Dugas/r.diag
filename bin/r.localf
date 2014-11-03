@@ -1,0 +1,17 @@
+#! /bin/sh
+LOCAL=`pwd`
+TMPDIRN=`r.which_tmpdir`
+cd ${TMPDIRN} 2> /dev/null
+STATUS=$?
+LANGUE=${CMCLNG:-english}
+if [ $STATUS != 0 ]; then
+     if [ ${LANGUE} = english  ]; then echo ${TMPDIRN} 'not found' ; fi
+     if [ ${LANGUE} = francais ]; then echo ${TMPDIRN} 'non trouve' ; fi
+     exit $STATUS
+else
+     echo ${TMPDIRN}
+fi
+ls -lt $*
+STATUS=$?
+cd $LOCAL
+exit $STATUS

@@ -1,0 +1,385 @@
+#if defined (AUTO_DOC)
+*
+*** This is an extensively modified version of BVE, a barotropic
+*** spectral model programmed by J. Tribbia, NCAR and originaly
+*** found in "An introduction to three-dimensional Climate
+*** modelinf" by W.M. Washington and C.L. Pakinson, 1986.
+*
+#endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it 
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#if !defined (NO_SOURCE)
+      PROGRAM nspec
+C    +              ( VORT, OUTPUT, TAPE1=VORT, TAPE6=OUTPUT )
+
+*     $Log: nspec.ptn,v $
+*     Revision 4.5  2014/10/10 19:56:13  dugas
+*     Corriger les declarations de la variable TRIG.
+*
+*     Revision 4.4  2014/09/25 20:20:51  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.3  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.2  2007/12/20 21:22:17  dugas
+*     Corriger l'appel a JCLPNT.
+*
+*     Revision 4.1  1997/09/26 17:39:11  armnrbd
+*     Remplacer buf(16) par buf(taille_entete).
+*
+*     Revision 4.0  1994/11/17  14:21:16  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:56:38  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.2  92/10/13  15:00:17  armnrbd
+*     Compaction par defaut passe a 32 bits/mots (-32).
+*     
+*     Revision 1.1  92/04/29  01:34:20  armnrbd
+*     Ajouter la documentation automatique.
+*     
+*     Revision 1.0  92/02/24  14:41:52  armnrbd
+*     Initial revision
+*     
+C     * MODIFIED BY B.DUGAS (UQAM, JAN. 1990) ...
+C     *   ... NOW RUNS COMPLETELY IN DOUBLE PRECISION;
+C     *   ... COMPLEX EXPRESSIONS ARE FORMULATED AS TWO REAL WORDS;
+C     *   ... FFT LOOP ORDER CHANGED (IN PASSG) TO SPEED EXECUTION;
+C     *   ... USES FTSET INSTEAD OF FFTIN TO SETUP FFT'S;
+C     *   ... STORES SIN/COS IN FIRST SET OF CALLS TO PASSG.
+
+C     * MODIFIED BY B.DUGAS (RPN, OCT. 1990) ...
+C     *   ... ADDED NP PARALLEL PARAMETER FOR CT, SO THAT THERE IS
+C     *       A POSSIBLE PARALLEL EXECUTION IN COFG,DDM AND GCOF;
+C     *   ... SPECTRAL LINES ARE DETERMINED BY LSR RATHER THAN NL;
+C     *   ... FFTini DOES SIN/COS INITIALIZING FOR PASSG.
+
+C     * MODIFIED BY B.DUGAS (RPN, NOV. 1990) ...
+C     *   ... BLOCK /PASW/ IS EXACTLY DIMENSIONNED ONLY IN main();
+C     *   ... GOING BACK TO SINGLE PRECISION REAL NUMBERS;
+C     *   ... SINGLE PRECISION PACKER NOW USED, SO THAT THE OUTPUT
+C     *       SHOULD NOT BE PACKED (THE PACKER RE-SCALES VALUES).
+
+C     * MODIFIED BY B.DUGAS (RPN, OCT. 1991) ...
+C     *   ... USES NEW SFFT/LGTST/FFTINI;
+C     *   ... PACKING RESTRICTION REMOVED WITH NEW PACCRN.
+
+      IMPLICIT   REAL (A-H,O-Z), INTEGER (I-N)
+
+      COMMON /C/   CZL(97,80),     CZM(97,80), DZL(97,80),
+     +             DZM(97,80),      FZ(97,80),  AZ(97,80)
+
+      COMMON /D/    V(2,1024),     PS(2,1024),  F(2,1024), AKP(2,1024),
+     +            AP(2,80,49),     CT(2,97,4),  W(2,97,4),    CA(1024),
+     +             VM(2,1024),     VS(2,1024),   BF(1024)
+
+      COMMON /G/   P(1024,80),    DP(1024,80)
+
+      REAL*8        GUSW,GUSL,   SIA,RAD,WOCS, ALP,DALP,EPSI
+      COMMON /L/     GUSW(80),       GUSL(80),      
+     +                SIA(80),        RAD(80),   WOCS(80),
+     +            ALP(1056,4),   DALP(1056,4), EPSI(1056)
+
+      COMMON /X/     IFAC(20),      LSR(2,33)
+
+C     * STORAGE AREA FOR TRIGONOMETRIC VALUES USED IN SFFT.
+C     * IT'S SIZE IS: 2*ILG + 4*ILG
+
+      REAL*8        TRIG 
+      COMMON /PASW/ TRIG(576)
+
+C     * I/O BUFFER AREA.
+
+      COMMON /ICOM/ IBUF(taille_entete),IDAT(4000)
+
+      REAL          INFINI
+
+      CHARACTER     NOMPRG*256
+      COMMON       /PROGNAM/ NOMPRG
+
+      DATA MAXW   /   4000   /,
+     +     RADIUS / 6371220. /,
+     +     JOUR   /  86400   /,
+     +     INFINI / 3.40E+38 /
+*====================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/nspec.ptn,v $'
+
+C-----------------------------------------------------------------
+
+      ILG   = 96
+      ILON  = 97
+      ILH   = 49
+      ILAT  = 80
+      LRLMT = 320320
+      NP    = 4
+
+C------------------------------------------------------------------------
+      NF = 2
+      CALL JCLPNT (NF, 1, 6 )
+
+      PI     = 4.0*ATAN(1.0)
+      ROT    = 4.0*PI/FLOAT(JOUR)
+      TERRE2 = RADIUS*RADIUS
+
+C *** PRE-COMPUTE LEGENDRE POLYNOMIALS, GAUSSIAN WEIGHTS,
+C *** AND LATITUDES.  FFT FACTOR DECOMPOSITION OF ILG AND
+C *** POSSIBLY RE-DEFINE NP (DOWNWARD) AND, INITIALIZING
+C *** OF /PASW/ BY FFTini.
+
+      CALL FFTini( ILG, IFAC,NP,TRIG )
+  
+      CALL LGTST( ILAT,LRLMT, GUSL,GUSW, CA,P,DP, SIA,RAD,WOCS,
+     +            ALP,DALP,EPSI, LSR,LA,LM, .TRUE.,.TRUE., 0,NP )
+
+      DO 100 K=1,LA
+         V(1,K) = 0.0
+         V(2,K) = 0.0
+  100 CONTINUE
+
+C *** SET INITIAL CONDITION FOR 5 EAST-WEST ROSSBY WAVES, V(100),
+C *** ON A CONSTANT WESTERLY FLOW, V(2)
+
+      S = 1.E-5
+
+      V(1,2)   = S/26.0
+c     V(1,4)   = S/4.0
+      V(1,34)  = S/10.0
+      V(1,162) = S/8.0
+
+C *** ZONAL WAVE NUMBER GOES IN BF.
+
+      DO 300 M=0,LM-1
+         NLI = LSR(1,M+1)
+         NLF = LSR(1,M+2)-1
+         XM2 = ROT*FLOAT(M)/TERRE2
+         DO 300 N=NLI,NLF
+            BF(N) = XM2
+  300 CONTINUE
+
+      CALL VORPSI(V,PS,CA,LA)
+
+      DT = FLOAT(JOUR/48)
+
+C *** TO MAKE 20-DAY RUN, KTMAX=49*20
+      KTMAX = 49*10
+
+C *** TO MAKE PLOT EVERY 5 DAYS, KINC=5
+      KINC = 1
+C     KPL  = 49*KINC
+      KPL  = 1
+      KRS  = 10
+      DTF  = DT/2.0
+
+      DO 400 K=1,LA
+         VM(1,K) = V(1,K)
+         VM(2,K) = V(2,K)
+  400 CONTINUE
+
+      DO 1000 KT=1,KTMAX
+
+         KR = MOD(KT,KRS)
+
+         CALL JAC( V,PS,F, CZL,DZL,CZM,DZM,FZ, AKP,AP,P,DP,SIA,GUSW,
+     +             ILON,ILAT,LA,ILH, NP,LM,ILG,CT,LSR,IFAC,W,TRIG )
+
+         DO 501 K=1,LA
+            VS(1,K) = V(1,K)
+            VS(2,K) = V(2,K)
+            V(1,K)  = VM(1,K)+DTF*(F(1,K)+BF(K)*PS(2,K))
+            V(2,K)  = VM(2,K)+DTF*(F(2,K)-BF(K)*PS(1,K))
+  501    CONTINUE
+
+         IF(KR.LT.3) THEN
+            DTF = 2.0*DTF
+         ELSE
+            DO 600 KK=1,LA
+               VM(1,KK) = VS(1,KK)
+               VM(2,KK) = VS(2,KK)
+  600       CONTINUE
+         ENDIF
+
+         CALL VORPSI(V,PS,CA,LA)
+
+         IF (KR.EQ.0) THEN    
+            DO 700 KK=1,LA
+               VM(1,KK) = V(1,KK)
+               VM(2,KK) = V(2,KK)
+  700       CONTINUE
+            DTF = DT/2.0
+         ENDIF
+
+         KPZ  = MOD(KT,KPL)
+         DAY  = ( FLOAT(KT)/FLOAT(KPL) ) * FLOAT(KINC)
+         IDAY = NINT( DAY )
+
+         ENS= 0.0
+         DO 800 KK=1,LA
+            ENS = ENS+V(1,KK)*V(1,KK)+V(2,KK)*V(2,KK)
+  800    CONTINUE
+         ENS = ENS
+         
+         WRITE(6,6000) IDAY,KPZ,ENS
+         IF (ENS.GT.INFINI) CALL XIT('   BVE  ',-1)
+
+         IF (KPZ.EQ.0) THEN
+ 
+            WRITE(6,2001)
+            CALL PLOTS (PS,60,KT,KTMAX,DAY)
+
+c           CALL COFG (PS,AZ,  AP,P,      ILON,ILAT,LA,ILH,
+c    +                         NP,LM,ILG, CT,LSR,IFAC,W,TRIG)
+c           CALL SETLAB( IBUF,'GRID',IDAY,' PSI',0,ILON,ILAT,0,-32 )
+c           CALL PUTFLD2( 1, AZ, IBUF,MAXW )
+
+            CALL SETLAB( IBUF,'SPEC',IDAY,'VORT',0,LA,1,LRLMT,-32 )
+            CALL PUTFLD2( 1, V, IBUF,MAXW )
+
+         END IF
+ 
+ 1000 CONTINUE
+
+      WRITE (6,2002)
+
+      CALL XIT('   BVE  ',0) 
+
+C----------------------------------------------------------------------
+ 6000 FORMAT (1X,' IDAY=',I5,', KPZ=',I2,', ENSTROPHY=',D19.11)
+ 2001 FORMAT('0','STREAMFUNCTION VALUES:')
+ 2002 FORMAT ('0',' **************  END OF PROGRAM BVE  **************')
+
+      END
+
+      SUBROUTINE PLOTS (V,LA,KT,KTMAX,DAY)
+
+C *** SUBROUTINE TO MAKE PLOTS OF SPECTRAL FIELDS
+
+      IMPLICIT REAL   (A-H,O-Z), INTEGER(I-N)
+
+      DIMENSION V(2,LA)
+
+C-----------------------------------------------------------------------
+      WRITE(*,100) KT,KTMAX,DAY
+      WRITE (6,400) V
+
+      RETURN
+
+C-----------------------------------------------------------------------
+  100 FORMAT(1X,' KT=',I4,'   KTMAX=',I5,'    DAY=',F5.1,' SPECTRAL')
+  400 FORMAT(1X,6(D12.6,1X))
+
+      END
+
+      SUBROUTINE PSIVOR(PS,V,CA,LA)
+
+C *** SUBROUTINE TO COMPUTE LAPLACIAN OF STREAMFUNCTION
+
+      IMPLICIT REAL   (A-H,O-Z), INTEGER(I-N)
+
+      DIMENSION CA(LA),V(2,LA),PS(2,LA)
+
+C-----------------------------------------------------------------------
+      V(1,1)=0.0
+      V(2,1)=0.0
+      DO 10 K=2,LA
+         V(1,K)=PS(1,K)/CA(K)
+         V(2,K)=PS(2,K)/CA(K)
+   10 CONTINUE
+
+      RETURN
+      END
+
+      SUBROUTINE VORPSI(V,PS,CA,LA)
+
+C *** SUBROUTINE TO COMPUTE STREAMFUNCTION FROM THE LAPLACIAN
+C *** OF STREAMFUNCTION
+
+      IMPLICIT REAL   (A-H,O-Z), INTEGER(I-N)
+
+      DIMENSION CA(LA),V(2,LA),PS(2,LA)
+
+C-----------------------------------------------------------------------
+      DO 10 K=1,LA
+         PS(1,K)=CA(K)*V(1,K)
+         PS(2,K)=CA(K)*V(2,K)
+   10 CONTINUE
+
+      RETURN
+      END
+
+      SUBROUTINE JAC (C,D,F, CZL,DZL,CZM,DZM,FZ, SP,AP,P,DP,CL,GUSW,
+     +                ILON,ILAT,LA,ILH, NP,LM,ILG,CT,LSR,IFAC,W,TRIG)
+
+C *** SUBROUTINE TO COMPUTE THE JACOBIAN TERM
+
+      IMPLICIT REAL (A-H,O-Z), INTEGER(I-N)
+
+      DIMENSION C(2,LA),D(2,LA),F(2,LA),SP(2,LA),
+     +          CT(2,ILG+1,NP), W(2,ILG+1,NP),
+     +          CZL(ILON,ILAT), CZM(ILON,ILAT),   DZL(ILON,ILAT),
+     +          DZM(ILON,ILAT), FZ(ILON,ILAT)
+
+      DIMENSION AP(2,ILAT,ILH),
+     +          IFAC(1),        LSR(2,1),
+     +          P(ILAT,LA),     DP(ILAT,LA)
+
+      REAL*8    ACOSL,ACOSL2,RADIUS,   GUSW(ILAT),CL(ILAT), TRIG(*)
+
+      DATA RADIUS / 6371220.0 /
+
+C-----------------------------------------------------------------------
+
+      CALL COFG( C, CZM, AP,DP,     ILON,ILAT,LA,ILH,
+     +                   NP,LM,ILG, CT,LSR,IFAC,W,TRIG)
+
+      CALL COFG( D, DZM, AP,DP,     ILON,ILAT,LA,ILH,
+     +                   NP,LM,ILG, CT,LSR,IFAC,W,TRIG)
+
+      CALL DDL ( C,  SP,            LA,LM,LSR)
+      CALL COFG(SP, CZL, AP,P,      ILON,ILAT,LA,ILH,
+     +                   NP,LM,ILG, CT,LSR,IFAC,W,TRIG)
+
+      CALL DDL ( D,  SP,            LA,LM,LSR)
+      CALL COFG(SP, DZL, AP,P,      ILON,ILAT,LA,ILH,
+     +                   NP,LM,ILG, CT,LSR,IFAC,W,TRIG)
+
+      CONTINUE
+
+C$doacross local(I,J,ACOSL,ACOSL2)
+
+      DO 15 J=1,ILAT
+         ACOSL  = RADIUS*CL(J)
+         ACOSL2 = 1./(ACOSL*ACOSL)
+         DO 10 I=1,ILG
+            FZ(I,J) = ( CZL(I,J)*DZM(I,J) - CZM(I,J)*DZL(I,J) ) * ACOSL2
+   10    CONTINUE
+         IF (ILG.LT.ILON) FZ(ILG+1,J) = FZ(1,J)
+   15 CONTINUE
+
+      CALL GCOF (FZ,F, AP,P,      ILON,ILAT,LA,ILH,
+     +                 NP,LM,ILG, CT,LSR,IFAC,W,TRIG,GUSW)
+
+      RETURN
+      END
+#endif

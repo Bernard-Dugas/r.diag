@@ -1,0 +1,422 @@
+#     if defined (AUTO_DOC)
+*
+*     CALL SEQUENCE...
+*      anomali  TSIN GGOUT MASK INPUT OUTPUT [-a VAL1 -t1 VAL2 -t2 VAL3]
+*
+*
+*     AUTHOR   - B.Dugas, DECEMBRE 22/85.
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/anomali.ptn,v 4.10 2014/09/25 20:20:45 dugas Exp $
+*
+*
+*     DESCRIPTION...
+*      anomali - TESTING A SET OF CONDITIONS ON SETS OF TIME SERIES
+*
+*
+*     PURPOSE  - DETERMINE LE NOMBRE DE FOIS QU'UN ENSEMBLE DE CRITERES EST
+*                VERIFIE. DE PLUS LES POSITIONS DANS L'ESPACE ET DANS LE TEMPS
+*                DE CES POINTS SONT IMPRIMES. UN POINT EST RETENU SSI LA VALEUR
+*                DU CHAMPS Y EST PLUS GRANDE QUE M DEPUIS AU MOINS T1 INTERVALLES
+*                ET POUR MOINS QUE T2 INTERVALLES. M, T1 ET T2 SONT LUS EN ENTREE
+*
+*              ( EACH VALUE OF A TIME SERIES OF TSIN IS COMPARED WITH THE
+*                VARIABLE M. IF THE NUMBER OF CONSECUTIVE DATA POINTS WHOSE
+*                VALUES ARE GREATER THAN OR EQUAL TO M FALLS BETWEEN T1 AND
+*                T2 (>=T1 AND <T2), IT IS RECORDED AS ONE EVENT. THE MASK FOR
+*                THE DATA POINTS OF AN EVENT IS SET TO 1. ALL OTHER DATA POINTS
+*                HAVE A MASK OF VALUE ZERO. EVENT NUMBER IS RECORDED FOR THE
+*                'GEORGRAPHICAL' LOCATION THE TIME SERIES REPRESENTS. IT IS
+*                ACCUMULATED OVER ALL TIME SERIES IN THE INPUT FILE )
+*
+*
+*     INPUT FILE...
+*      TSIN  = LE CHAMPS D'ENTREE TSIN EST SUPPOSE NE CORRESPONDRE QU'A
+*              UN NIVEAU DE PRESSION ET LES ENREGISTREMENTS INDIVIDUELS
+*              SONT DES SERIES TEMPORELLES (UNE SERIE PAR POINT DANS LA
+*              GRILLE SPACIALE).
+*            ( CONTAINS RECORDS OF GEOGRAPHIC POSITION TIME SERIES ON
+*              A SINGLE PRESSURE LEVEL )
+*
+*     OUTPUT FILES...
+*      GGOUT = CONTIENT LE NOMBRE DE FOIS QUE LE CRITERE A ETE VERIFIE
+*              A CHAQUE POSITION GEOGRAPHIQUE.
+*            ( CONTAINS A RECORD FOR GEOGRAPHIC POSITIONS WITH VALUES
+*              CONSISTING OF THE NUMBER OF TIMES THE TEST CONDITIONS
+*              ARE SATISFIED )
+*      MASK  = EST UN FICHIER DE SERIES TEMPORELLES CONTENANT DES "1.0"S
+*              AUX MOMENTS VERIFIANT LE CRITERE ET ZERO AILLEUR.
+*            ( CONTAINS RECORDS OF TIME SERIES CONSISTING OF 1'S FOR
+*              POINTS PASSING THE TEST AND O'S OTHERWISE )
+*
+*
+*     INPUT PARAMETERS...
+*      M  = VALUE AGAINST WHICH THE VALUES READ ARE TO BE TESTED.
+*           (M.GT.0.0)
+*      T1 = LOWER LIMIT OF THE TIME RANGE (T1.GE.1)
+*      T2 = UPPER LIMIT OF THE TIME RANGE (T2.GT.T1).
+            DEFAULTS TO THE LENGTH OF THE FIRST TIME SERIES.
+*
+*      NOTE - A POINT PASSES THE VALUE TEST IF ITS POSITIONAL VALUE IS
+*             GREATER OR EQUAL TO M AND ITS TIME STAMP (TS) FALLS WITHIN
+*             THE TIME RANGE (T1,T2); (I.E., TS.GE.T1 .AND. TS.LT.T2).
+*
+*      READ(5,5000) M,T1,T2
+*5000  FORMAT(10X,E10.0,2I5)
+*
+*
+*     EXAMPLE OF INPUT CARD...
+*
+* ANOMALI.        1.    1    0
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*
+*     EXIT CONDITIONS...
+*      0 NO PROBLEMS
+*      1 ILLEGAL INPUT PARAMETERS
+*      2 DATA TYPE NOT SUPPORTED
+*      3 UNABLE TO READ TSIN
+*      4 ILLEGAL GRID POSITION FOR TIME-SERIES
+*      5 PREMATURE END OF FILE ON INPUT
+*      6 PREMATURE END OF FILE ON TSIN
+*      7 MEMORY ALLOCATION PROBLEM
+*
+#     endif
+#     if defined (RDIAG_LICENCE)
+!---------------------------------- LICENCE BEGIN -------------------------------
+! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
+! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
+!                       Environnement Canada
+! This code is free software; you can redistribute it and/or modify it
+! under the terms of the GNU Lesser General Public License as published by
+! the Free Software Foundation, version 2.1 of the License. This library is
+! distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+! without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+! PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+! You should have received a copy of the GNU Lesser General Public License
+! along with this library; if not, write to the Free Software Foundation, Inc.,
+! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+!---------------------------------- LICENCE END ---------------------------------
+#     endif
+#     if !defined (NO_SOURCE)
+      PROGRAM ANOMALI
+*     PROGRAM ANOMALI (TSIN,       GGOUT,       MASK,       INPUT,
+*    1                                                      OUTPUT,
+*    2           TAPE1=TSIN, TAPE2=GGOUT, TAPE3=MASK, TAPE5=INPUT,
+*    3                                                TAPE6=OUTPUT)
+*     -------------------------------------------------------------
+
+*     $Log: anomali.ptn,v $
+*     Revision 4.10  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.9  2012/08/29 15:51:34  dugas
+*      - Declarations de variables 'a la' F90.
+*      - Allocations dynamiques via ALLOCATE plutot que HPALLOC.
+*      - Mise-a-jour du traitement des series temporelles pour les grilles GEM.
+*
+*     Revision 4.8  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.7  2007/12/20 21:19:13  dugas
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.6  2002/01/14 16:11:54  dugas
+*     Corriger la documentation automatique
+*
+*     Revision 4.5  1998/07/03 02:26:20  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.4  1998/05/21  20:20:44  armnrbd
+*     Modifier la valeur par defaut de taille_entete
+*
+*     Revision 4.3  1996/02/27  18:06:15  armnrbd
+*     Modifier la DOC anglaise selon une suggestion de Damin Liu.
+*
+*     Revision 4.2  1996/02/27  09:48:33  armnrbd
+*     Corriger une erreur dans la derniere boucle (notee par B.Denis).
+*
+*     Revision 4.1  96/02/12  17:29:30  17:29:30  armnrbd (Bernard Dugas)
+*     Corriger le calcul des positions geographiques.
+*     Refaire l'allocation de memoire dynamique.
+*     Implanter le support de RPBLOC.
+*     
+*     Revision 4.0  1994/11/17  14:19:16  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.0  93/10/13  13:55:32  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  93/02/04  09:13:49  09:13:49  armnrbd (Bernard Dugas)
+*     Initial revision
+*     
+*     JUL 21/86 - J.HASLIP (CORRECTION IN DO 350 LOOP.
+*                            MASK(L)=UN CHANGED FROM MASK(I)=UN)
+*     DEC 22/85 - B.DUGAS.
+*
+*-----------------------------------------------------------------------
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXM = 999
+
+      REAL(8)     HOURS
+      LOGICAL     OK,SPEC
+      CHARACTER   LIGNE*80
+      REAL        M,VALEUR,MAXL
+      CHARACTER(4) :: IB1,IB3,PKTYP
+      REAL,       SAVE :: ZERO=0.0, UN=1.0
+      CHARACTER(4),SAVE :: CSPEC='SPEC', CANOM='ANOM'
+      INTEGER     IBOUT(HEAD),POSIT,T1,T2,LSR( 2,MAXM),
+     +            NF,IO,I,L,IB7,LA,LR,LM,KTR,LEN,
+     +            ICCC,IRRR,IHEM,NWDS,KOUNT,IPAK,
+     +            NSERIE,LAST,LENB,MAXW,
+     +            DATEO,DEET,IER
+ 
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL,       DIMENSION(:), ALLOCATABLE :: EVENT,TSIN,MASK
+ 
+      CHARACTER*4,EXTERNAL :: GETYP
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ,GETHIGH
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,DIMGT2,XIT,GETFLD2,PUTFLD2
+
+      CHARACTER   NOMPRG*256
+      COMMON     /PROGNAM/ NOMPRG
+*=======================================================================
+
+      NOMPRG =
+     +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/anomali.ptn,v $'
+
+*-----------------------------------------------------------------------
+***    ACCEDER LES FICHIERS D'E/S.
+
+      NF = 5
+      CALL JCLPNT( NF, 1,2,3, 5,6 )
+ 
+***    GET DEFAULT PACKING TYPE.
+
+      PKTYP  = GETYP( 1 )
+      PKTYP  = PKTYP(1:2)
+
+      IF (RPBLOC( ' ',LIGNE ))                                 THEN
+
+***        CHECK PARAMETRE BLOCK.
+
+          M  = 0.0
+          T1 = 0
+          T2 = 0
+
+          OK = RPBLOC('A',LIGNE)
+          IF (OK) READ( LIGNE, 10, ERR=900,END=900,IOSTAT=IO ) M
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ( LIGNE, 05, ERR=900,END=900,IOSTAT=IO ) T1
+
+          OK = RPBLOC('T2',LIGNE)
+          IF (OK) READ( LIGNE, 05, ERR=900,END=900,IOSTAT=IO ) T2
+
+      ELSE
+
+***        LIRE LA CARTE DE CONTROLE.
+ 
+          CALL GETLIGN( 5, LIGNE,80,OK )
+
+          IF (.NOT.OK)                                         THEN
+              GOTO 900
+          ELSE
+              READ( LIGNE, 5000, ERR=900,END=900,IOSTAT=IO ) M,T1,T2
+              CALL BURNF
+          END IF
+
+      END IF
+
+***    LIRE LE PREMIER TAMPON INFORMATIF.
+
+      MAXW = GETSIZ( 1, IBOUT,LENB,NWDS,IPAK )
+      IF (MAXW.LE.0) GOTO 901
+ 
+      LEN = IBOUT(5)
+ 
+      IF (T2.EQ.0) T2 = LEN+1
+      IF (M.LE.0.0.OR.T1.LT.1.OR.T2.LE.T1) CALL    XIT(' Anomali',-1 )
+      WRITE(6,6000) M,T1,T2
+ 
+      CALL PRTLAB2(' Anomali on :', IBOUT ) ; WRITE(6,6200)
+
+***    CONSTRUIRE LE TAMPON INFORMATIF DE SORTIE.
+
+      WRITE(IB1,4) IBOUT(1)
+      WRITE(IB3,4) IBOUT(3)
+
+      IF (IB1.EQ.'COEF')                                       THEN
+
+          SPEC       = .TRUE.
+
+          CALL DIMGT2(  LSR,LA,LR,LM,KTR, IBOUT(7), 0,0 )
+
+          READ(CSPEC,4) IBOUT(1)
+
+          IBOUT(5)   =  LA
+          IBOUT(6)   =  1
+
+      ELSE IF (IB1.EQ.'GRID' .OR.
+     +         IB1.EQ.'SUBA' .OR.
+     +         IB1.EQ.'ZONL' )                                 THEN
+
+          SPEC       = .FALSE.
+
+          IB7        =  IBOUT(7)
+          ICCC       =  IB7/10000
+          IRRR       = (IB7-ICCC*10000)/10
+          IHEM       =  MOD( IB7,10 )
+
+          IBOUT(5)   = ICCC
+          IBOUT(6)   = IRRR
+          IBOUT(7)   = IHEM
+
+          IF (PKTYP == 'SQ')                                   THEN
+              CALL PUTHIGH( 0,'IG3', IBOUT )
+              CALL PUTHIGH( 0,'IG4', IBOUT )
+          END IF
+ 
+      ELSE
+
+          CALL                                     XIT(' Anomali',-2 )
+
+      END IF
+
+      READ(CANOM,4) IBOUT(3)
+
+      IBOUT(2)       = 0
+      IBOUT(8)       = -32
+
+      IF (PKTYP == 'SQ')                                       THEN
+
+          ! Definir les parametres temporels de sortie.
+
+          CALL PUTHIGH( LEN,'NPAS', IBOUT )
+
+          DEET  = GETHIGH( 'DEET' , IBOUT )
+          DATEO = GETHIGH( 'DATEO', IBOUT )
+          HOURS = ((DEET*1.0_8)*LEN)/3600.
+          CALL INCDATR( IBOUT(2),DATEO,HOURS )
+
+      END IF
+
+                NWDS = IBOUT(5)*IBOUT(6)
+      IF (SPEC) NWDS = NWDS*2
+ 
+***    ALLOUER L'ESPACE DE TRAVAIL.
+
+      MAXW = MAX( NWDS,MAXW )
+
+      ALLOCATE( IBUF(HEAD+MAXW),EVENT(NWDS),
+     +          TSIN(LEN),MASK(LEN), STAT=IER )
+
+      IF (IER /= 0) CALL                           XIT(' Anomali',-7 )
+
+***    INITIALISER LE CHAMPS EVENT.
+
+      EVENT(:) = 0.
+ 
+*---------------------------------------------------------------------
+***    ALLER CHERCHER LA PROCHAINE SERIE.
+ 
+      KOUNT  = 0
+      NSERIE = 0
+
+  100 CALL GETFLD2( 1, TSIN, IB1,-1,IB3,-1, IBUF,MAXW,OK )
+ 
+          IF (.NOT.OK)                                         THEN
+              WRITE(6,6030) NSERIE,TRIM( IB3 )
+              IF (NSERIE.EQ.0) CALL                XIT(' Anomali',-3 )
+              IBUF(1:HEAD) = IBOUT(1:HEAD)
+              CALL PUTFLD2( 2, EVENT, IBUF,MAXW )
+              CALL                                 XIT(' Anomali', 0 )
+          END IF
+ 
+***        A QUEL POINT CETTE SERIE EST-T-ELLE VALABLE ?
+ 
+          POSIT = IBUF(2)
+
+          IF (POSIT.GT.NWDS .OR.POSIT.LE.0)                    THEN
+              WRITE(6,6004) NSERIE+1,POSIT
+              CALL                                 XIT(' Anomali',-4 )
+          END IF
+
+***        INITIALISER LA GRILLE MASK ET LES VARIABLES
+***        MAXL ET LAST A ZERO.
+ 
+          MASK(:) = ZERO ; MAXL = ZERO ; LAST = 0
+ 
+***        CHERCHER LES MOMENTS OU LES CRITERES SONT SATISFAITS.
+ 
+          DO  200 I=1,LEN
+ 
+              VALEUR = TSIN(I)
+              IF (VALEUR.GE.M)                                 THEN
+                  LAST             = LAST+1
+                  MAXL             = MAX( MAXL, VALEUR )
+              ELSE
+                  IF (LAST.GE.T1 .AND. LAST.LT.T2)             THEN
+                      KOUNT        = KOUNT+1
+                      EVENT(POSIT) = EVENT(POSIT)+1.
+                      WRITE(6,6300) KOUNT,IBUF(2),I,LAST,MAXL
+                      DO  L=I-1,I-LAST,-1
+                          MASK(L)  = UN
+                      END DO
+                  END IF
+                  LAST             = 0
+                  MAXL             = ZERO
+              END IF
+ 
+  200     CONTINUE
+ 
+          IF (LAST.GE.T1 .AND. LAST.LT.T2)                     THEN
+              KOUNT        = KOUNT+1
+              EVENT(POSIT) = EVENT(POSIT)+1.
+              WRITE(6,6300) KOUNT,IBUF(2),LEN,LAST,MAXL
+              DO  L=LEN,LEN-LAST+1,-1
+                  MASK(L)  = UN
+              END DO
+          END IF
+ 
+          CALL PUTFLD2( 3, MASK, IBUF,MAXW )
+ 
+      NSERIE = NSERIE+1
+      GOTO 100
+ 
+***    E.O.F. SUR INPUT ($IN).
+ 
+  900 IF (IO /= 0) WRITE(6,6005) IO
+      CALL                                         XIT(' Anomali',-5 )
+ 
+***    FIN PREMATUREE DU FICHIER TSIN.
+ 
+  901 CALL                                         XIT(' Anomali',-6 )
+*---------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 0005 FORMAT(BN,I5)
+ 0010 FORMAT(BN,E10.0)
+
+ 5000 FORMAT(10X,E10.0,2I5)
+
+ 6000 FORMAT(' searching for anomalies of ',E11.4,
+     +       ' units'/'0Lasting at least ',I5,' intervals,',
+     +               /'0But no more than ',I5,' intervals.')
+ 6004 FORMAT(' Anomali found position ',I10,', for time-series #',I5)
+ 6005 FORMAT(' Anomali reports I/O error number ',I3,' on unit 5.')
+ 6030 FORMAT(' Anomali read ',I6,' series of ',A,' .')
+ 6200 FORMAT(//
+     + '   N       POSITION      TIME         LENGHT     MAXIMUM '//)
+ 6300 FORMAT(1X,I7,3X,I6,3X,I10,7X,I5,5X,E11.4)
+
+      END
+#     endif
