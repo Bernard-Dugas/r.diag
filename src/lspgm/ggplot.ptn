@@ -1,4 +1,3 @@
-#     include "diagmacros.cdk"
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
@@ -11,7 +10,7 @@
 *
 *
 *     AUTHORS - J.D.Henderson, L.Lefaivre AND R.Laprise.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggplot.ptn,v 4.32 2014/09/25 20:20:48 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggplot.ptn,v 4.34 2015/01/07 19:34:38 dugas Exp $
 *
 *
 *     PURPOSE - PLOT MAPS OF Z, Z AND X, VECTOR FIELD OF (U,V), Z AND (U,V),
@@ -336,6 +335,12 @@
 *     ------------------------------------------------------------
 
 *     $Log: ggplot.ptn,v $
+*     Revision 4.34  2015/01/07 19:34:38  dugas
+*     Enlever les dernieres races de PERROR.
+*
+*     Revision 4.33  2014/12/22 19:24:53  dugas
+*     Utiliser la fonction CHAR2INT qui se trouve dans char2int.cdk.
+*
 *     Revision 4.32  2014/09/25 20:20:48  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -533,25 +538,24 @@
 *-----------------------------------------------------------------------
       IMPLICIT     REAL (A-H,O-Z), INTEGER (I-N)
 
-      INTEGER      NPAT0
-      PARAMETER  ( NPAT0   = 21 )
+      INTEGER,     PARAMETER :: HEAD = taille_entete, NPAT0 = 21
 
       LOGICAL      OK1,OK2,OK3,OK4
       LOGICAL      OK,FLIP,SUBAREA,MP,PUB,CONT,CONT1,CONT2,
      +             SHAD,SHAD1,SHAD2,ALL,MAP,CRNLAB,PS,SECOND,
      +             NZERO,NZERO1,NZERO2,SQUARE,TICK,EX,ERR,GREP
-      INTEGER      IPAT(NPAT0),IPAT1(NPAT0),IPAT2(NPAT0),HEAD,PJPS
+      INTEGER      IPAT(NPAT0),IPAT1(NPAT0),IPAT2(NPAT0),PJPS
       REAL         ZLEV(NPAT0),ZLEV1(NPAT0),ZLEV2(NPAT0),ASCAL1,ASCAL2
       INTEGER      IBUF1(8),IBUF2(8),IBUFV(8), VKIND0,VKIND1,VKIND2
-      INTEGER      MAXW,LENI,NWDS,KPAK
+      INTEGER      MAXW,LENI,NWDS,KPAK, IER
 
-      INTEGER      IOS1,IOS2,IOV1,IOV2, KBUF(taille_entete)
+      INTEGER      IOS1,IOS2,IOV1,IOV2, KBUF(HEAD)
       INTEGER      MAJR,MINR,NORM,VALU,LABL,VTIK(4),VHIC(5)
       CHARACTER*4  ETIK(4),THIC(5)
 
       CHARACTER    GRTYP
       INTEGER      IG1,IG2,IG3,IG4
-      REAL         TP,RLV1,RLV2
+      REAL         RLV1,RLV2
 
       LOGICAL      MVALUE
       REAL*8       SPVAL8,EPSIL8
@@ -563,34 +567,27 @@
       CHARACTER*4  PNAME1 ,PNAME2 ,PNAMEV
       CHARACTER*12 ETIKET1,ETIKET2,ETIKETV
 
-      CHARACTER*4  NAME,NAME1,NAME2,TYPE
+      CHARACTER*4  NAME,NAME1,NAME2,TYPE,PKTYP
       CHARACTER*12 NIVEAU1,NIVEAU2,NIVEAUV
       CHARACTER*88 LABEL,LABEL1,LABEL2,LABELV,LIGNE
       CHARACTER    EVALUE*256,LNAME*256,TMPDIR*6
       CHARACTER    ANSTEP*20,ALEVEL*10,SLEVEL*15
 
-      POINTER    ( IB,IBUF(8) )
-      POINTER    ( JB,JBUF(8) )
-
-      POINTER    ( BN,GG2(1) )
-      POINTER    ( IU,U(1) )
-      POINTER    ( IV,V(1) )
-      POINTER    ( IT,TP(1) )
+      INTEGER,     ALLOCATABLE,DIMENSION(:) :: IBUF,JBUF
+      REAL,        ALLOCATABLE,DIMENSION(:) :: GG2,U,V,TP
 
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
 
-      LOGICAL     RPBLOC
-      INTEGER*8   Y2KDAT8
-      CHARACTER*4 GETYP,GETHIC,PKTYP
-      INTEGER     GETSIZ,GETHIGH,GETKIND
-      EXTERNAL    JCLPNT,GETYP,SYSDAT,BNDLSET,ISPSET,GETLIGN,VELSET,
-     +            PRECON3,ISPGET,CONISP,HAFLVS,HAFTONP,GETSIZ,
-     +            PRECEDE,SUIVANT,LEADBLK,GETFLD2,XIT,BURNF,CIGAXG,
-     +            DSCOPY,GETMPN,GETHIC,LLFXY,POLSTR,CYLEQ,Y2KDAT8,
-     +            VELVCT,OPTN,GETSET,LOW2UP,PWRIT,FRAME,RPBLOC,
-     +            HPALLOC,HPDEALLC,GETHIGH,ROWORDS,
-     +            MISPAR,GETKIND
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER(8), EXTERNAL :: Y2KDAT8
+      CHARACTER(4), EXTERNAL :: GETYP,GETHIC
+      INTEGER,    EXTERNAL :: GETSIZ,GETHIGH,GETKIND
+      EXTERNAL    JCLPNT,SYSDAT,BNDLSET,ISPSET,GETLIGN,VELSET,
+     +            PRECON3,ISPGET,CONISP,HAFLVS,HAFTONP,PRECEDE,
+     +            SUIVANT,LEADBLK,GETFLD2,XIT,BURNF,CIGAXG,DSCOPY,
+     +            GETMPN,LLFXY,POLSTR,CYLEQ,VELVCT,OPTN,GETSET,
+     +            LOW2UP,PWRIT,FRAME,ROWORDS,MISPAR
 
       DATA         OK1,OK2,OK3,OK4 / 4*.FALSE. /
 
@@ -642,8 +639,6 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggplot.ptn,v $'
 
 *--------------------------------------------------------------------
-      CALL MACSPE( HEAD,ZERO )
-
 ***    ASSIGN I/O UNITS.
 
       NF=6
@@ -717,11 +712,11 @@
       CALL BNDLSET('THIC',  2, 1,MINR)
       CALL BNDLSET( ETIK, VTIK,4,LABL)
 
-      CALL ISPSET(4HLABL, LABL )
-      CALL ISPSET(4HRNDV, 1.0  )
-      CALL ISPSET(3HNHL,   5   )
-      CALL ISPSET(3HNLB,   5   )
-      CALL ISPSET(3HNPV,   5   )
+      CALL ISPSET(CHAR2INT('LABL'), LABL )
+      CALL ISPSET(CHAR2INT('RNDV'), 1.0  )
+      CALL ISPSET(CHAR2INT('NHL'),   5   )
+      CALL ISPSET(CHAR2INT('NLB'),   5   )
+      CALL ISPSET(CHAR2INT('NPV'),   5   )
 
 ***    CARD 1 ******************************
 
@@ -785,16 +780,16 @@
 *     CALL ISPSET('ECLR',.TRUE.) 
 *     CALL ISPSET('IETI',  1   )
 
-      CALL ISPSET(4HMAJR, NORM )
-      CALL ISPSET(4HMINR, -1   )
-      CALL ISPSET(3HNHI,   1   )
-      CALL ISPSET(4HECOL,  0   )
-      CALL ISPSET(4HVALU, LABL )
-      CALL ISPSET(4HILAB,  1   )
-      CALL ISPSET(4HNULB,  1   )
-      CALL ISPSET(4HOFFM,  0   )
-      CALL VELSET(4HOFFM,  0   )
-      CALL ISPSET(4HBNDS, 1010101 )
+      CALL ISPSET(CHAR2INT('MAJR'), NORM )
+      CALL ISPSET(CHAR2INT('MINR'), -1   )
+      CALL ISPSET(CHAR2INT('NHI'),   1   )
+      CALL ISPSET(CHAR2INT('ECOL'),  0   )
+      CALL ISPSET(CHAR2INT('VALU'), LABL )
+      CALL ISPSET(CHAR2INT('ILAB'),  1   )
+      CALL ISPSET(CHAR2INT('NULB'),  1   )
+      CALL ISPSET(CHAR2INT('OFFM'),  0   )
+      CALL VELSET(CHAR2INT('OFFM'),  0   )
+      CALL ISPSET(CHAR2INT('BNDS'), 1010101 )
 
 *     CALL VELSET(4HBNDS, 1010101 )
 *     CALL ISPSET('SIDE', 0.9  )
@@ -806,9 +801,9 @@
 
       SPVAL = SPVAL8 ; EPSIL = EPSIL8 ; EPSIL = EPSIL*SPVAL
 
-      CALL ISPSET(4HOFFP,   1    )
-      CALL ISPSET(4HSPVA, SPVAL  )
-      CALL ISPGET(4HSPVA, SSPVAL )
+      CALL ISPSET(CHAR2INT('OFFP'),   1    )
+      CALL ISPSET(CHAR2INT('SPVA'), SPVAL  )
+      CALL ISPGET(CHAR2INT('SPVA'), SSPVAL )
       WRITE(6,6000)   SSPVAL
 
 ***    INITIALIZE PLOT OPTIONS
@@ -899,13 +894,13 @@
         IF (MS.EQ.0)
      1  LHI1  = -1
         NSETS =  2*NSETS
-        CALL ISPSET(4HMAJR, MAJR )
-        CALL ISPSET(4HMINR, MINR )
+        CALL ISPSET(CHAR2INT('MAJR'), MAJR )
+        CALL ISPSET(CHAR2INT('MINR'), MINR )
         IF (MS.EQ.0)
-     1  CALL ISPSET(3HNHI,   -1  )
-        CALL ISPSET(4HECOL,   1  )
-        CALL ISPSET(4HOFFM,   1  )
-*       CALL VELSET(4HOFFM,   1  )
+     1  CALL ISPSET(CHAR2INT('NHI'),   -1  )
+        CALL ISPSET(CHAR2INT('ECOL'),   1  )
+        CALL ISPSET(CHAR2INT('OFFM'),   1  )
+*       CALL VELSET(CHAR2INT('OFFM'),   1  )
       END IF
 
 ***    REWIND NECESSARY FILES ONCE
@@ -1180,21 +1175,12 @@
         MAXW = GETSIZ( IOS1, KBUF,LENI,NWDS,KPAK )
       END IF
 
-      IF (NPLOT.NE.0)                                          THEN
-        CALL HPDEALLC( IB,IER,0 )
-      END IF
+      IF (NPLOT /= 0) DEALLOCATE( IBUF,JBUF,GG2,U,V,TP, STAT=IER )
 
-      ALLOC_NABT
-      CALL HPALLOC( IB, 2*HEAD+6*MAXW, IER,0 )
-      ALLOC_ABT
+      IF (IER == 0) ALLOCATE( IBUF(MAXW+HEAD),JBUF(MAXW+HEAD),
+     +          GG2(MAXW),U(MAXW),V(MAXW),TP(MAXW), STAT=IER )
 
-      IF (IER.EQ.0)                                            THEN
-          JB = LOC( IBUF(MAXW+1+HEAD) )
-          BN = LOC( JBUF(MAXW+1+HEAD) )
-          IU = LOC(  GG2(MAXW+1) )
-          IV = LOC(    U(MAXW+1) )
-          IT = LOC(    V(MAXW+1) )
-      ELSE
+      IF (IER /= 0)                                            THEN
           WRITE(6,6017) 2*HEAD+6*MAXW
           CALL                                     XIT(' Ggplot ',-17 )
       END IF
@@ -1525,8 +1511,8 @@
       IF (TICK)                                                THEN
 
         ASPECT = FLOAT(LY)/FLOAT(LX)
-        IF (ASPECT.GE..95.OR.SQUARE) CALL ISPSET(4HSIDE, 0.8 )
-        IF (SQUARE)                  CALL ISPSET(3HEXT , 1.0 )
+        IF (ASPECT.GE..95.OR.SQUARE) CALL ISPSET(CHAR2INT('SIDE'), 0.8 )
+        IF (SQUARE)                  CALL ISPSET(CHAR2INT('EXT') , 1.0 )
 
       ELSE
 
@@ -1992,11 +1978,11 @@
 *    * DRAW THE VECTOR PLOT.
 *      --------------------
 
-        IF (PUB) CALL OPTN('TH', 3 )
+        IF (PUB) CALL OPTN(CHAR2INT('TH'), 3 )
 
         CALL VELVCT( U,LXR, V,LXR, LXR,LY, VLO,VI,NSETV,0,SPV )
 
-        IF (PUB) CALL OPTN('TH', 1 )
+        IF (PUB) CALL OPTN(CHAR2INT('TH'), 1 )
 *
       END IF
 
@@ -2144,7 +2130,7 @@
 ***    ERROR OPENING/OPERATING FILE PLTINFO.
 
   999 IF (IO.NE.0) 
-     +  CALL PERROR(' Please check file pltinfo ')
+     +  CALL MESSYS(' Please check file pltinfo ')
         CALL                                       XIT(' Ggplot ',-16 )
 
 *------------------------------------------------------------------
@@ -2178,6 +2164,8 @@
  6060 FORMAT(' After HAFLVS, nl=',I2,', npats=',20I4)
  6061 FORMAT(22X,'zlev='/(22X,5E12.5))
 
+#     include "char2int.cdk"
+
       END
       SUBROUTINE CYLEQ(CO,LAB,PB,IDT,DLAT1,DLON1,DLAT2,DLON2,DGRW,MP)
 
@@ -2209,10 +2197,18 @@
       EXTERNAL    MAPOPT,MAPLBL,MAPFST,MAPSET,MAPVEC,GETSET,SET,
      +            MAPINT,MAPROJ,MAPLT,MAPDRW
 
-      DATA          CE, COIN, OUTL,   CL,  CH,  DOT, LABL, PERI,   GR /
-     +            2HCE, 2HCO, 2HOU, 2HCL,2HCH, 2HDO, 2HLA, 2HPE, 2HGR /
-
 *---------------------------------------------------------------------
+  
+      CE   = transfer( 'CE  ', 1 )
+      COIN = transfer( 'CO  ', 1 )
+      OUTL = transfer( 'OU  ', 1 )
+      CL   = transfer( 'CL  ', 1 )
+      CH   = transfer( 'CH  ', 1 )
+      DOT  = transfer( 'DO  ', 1 )
+      LABL = transfer( 'LA  ', 1 )
+      PERI = transfer( 'PE  ', 1 )
+      GR   = transfer( 'GR  ', 1 )
+
       CALL MAPROJ( CE, 0.0,DGRW,0.0 )
       CALL MAPSET( COIN, DLAT1,DLON1,DLAT2,DLON2 )
 
@@ -2350,10 +2346,17 @@
       EXTERNAL MAPOPT,MAPLBL,MAPFST,MAPSET,MAPVEC,GETSET,SET,
      +         MAPINT,MAPROJ,MAPLT,MAPDRW
 
-      DATA       ST, COIN, OUTL,   CL,   CH,  DOT, LABL, PERI,   GR  /
-     +         2HST, 2HCO, 2HOU, 2HCL, 2HCH, 2HDO, 2HLA, 2HPE, 2HGR  /
-
 *-----------------------------------------------------------------------
+      ST   = transfer( 'ST  ', 1 )
+      COIN = transfer( 'CO  ', 1 )
+      OUTL = transfer( 'OU  ', 1 )
+      CL   = transfer( 'CL  ', 1 )
+      CH   = transfer( 'CH  ', 1 )
+      DOT  = transfer( 'DO  ', 1 )
+      LABL = transfer( 'LA  ', 1 )
+      PERI = transfer( 'PE  ', 1 )
+      GR   = transfer( 'GR  ', 1 )
+
       IF (IP.EQ.2)                                             THEN
         CALL MAPROJ( ST, -90.,0.0,90.-DGRW ) 
       ELSE 

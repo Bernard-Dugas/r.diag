@@ -22,7 +22,7 @@
 *
 *
 *     AUTHORS - Nils Ek, Bernard Dugas, RPN: Sept 1998 (after GSAPL)
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gpasg.ptn,v 4.29 2014/09/25 20:20:49 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gpasg.ptn,v 4.30 2014/12/03 23:57:22 dugas Exp $
 *
 *
 *     PURPOSE - INTERPOLATES FROM PRESSURE OR ETA (SIGMA/HYBRID/GEM/GEM2/GEM3/GEM4)
@@ -203,6 +203,9 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gpasg.ptn,v $
+*     Revision 4.30  2014/12/03 23:57:22  dugas
+*     Correction aux declarations de AO et BO.
+*
 *     Revision 4.29  2014/09/25 20:20:49  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -338,15 +341,16 @@
 
       INTEGER     LEV(MAXLEV)
       REAL        A  (MAXLEV),B    (MAXLEV),
-     +            AI (MAXLEV),BI   (MAXLEV),
-     +            AO (MAXLEV),BO   (MAXLEV)
-
-      NAMELIST    /AABB_NML/ AI,BI
-
-      EQUIVALENCE (A,AO), (B,BO)
+     +            AI (MAXLEV),BI   (MAXLEV)
 
       REAL                    FPC  (MAXLEV),DFLNP(MAXLEV+2)
       REAL        PR (MAXLEV),PRLOG(MAXLEV),DLNP (MAXLEV)
+
+      REAL        AO,BO
+      POINTER   ( IA,AO(1) )
+      POINTER   ( IB,BO(1) )
+
+      NAMELIST    /AABB_NML/ AI,BI
 
       LOGICAL,    EXTERNAL :: RPBLOC
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
@@ -393,6 +397,9 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gpasg.ptn,v $'
 
 *-----------------------------------------------------------------------
+      IA = LOC( A(1) ) ; IB = LOC( B(1) ) ! EQUIVALENCE (A,AO), (B,BO)
+
+
 ***    ACCEDER LES FICHIERS D'E/S.
 
       NF = 6 ; NFOUT = 3

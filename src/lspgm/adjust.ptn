@@ -10,7 +10,7 @@
 *
 *
 *     AUTEUR: B.Dugas, RPN - 22 fevrier 1993.
-*     DERNIERE REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/adjust.ptn,v 4.18 2014/09/26 21:26:15 dugas Exp $
+*     DERNIERE REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/adjust.ptn,v 4.19 2015/01/07 19:34:38 dugas Exp $
 *
 *
 *     DESCRIPTION...
@@ -85,6 +85,9 @@
       PROGRAM adjust
 
 *     $Log: adjust.ptn,v $
+*     Revision 4.19  2015/01/07 19:34:38  dugas
+*     Enlever les dernieres races de PERROR.
+*
 *     Revision 4.18  2014/09/26 21:26:15  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -191,15 +194,11 @@
       Common         /ZZVERBO/ info
       Common         /ZZZDATE/ date,keepip2,datval
 
-      Logical         is_on
-      Character*4     getyp
-      Integer         getsiz2,fnom,clrlmt,wkoffit
-      External        macspe,xit,getenvc,ccard,fnom,
-     +                low2up,up2low,qqqdoc,perror,getyp,
-     +                getsiz2,recget,
-     +                wkoffit,recput,dimgt2,clrlmt,
-     +                getset2,putfld2,is_on
-
+      Logical,        External :: is_on
+      Character(4),   External :: getyp
+      Integer,        External :: getsiz2,fnom,clrlmt,wkoffit
+      External        qqqdoc,recget,recput,dimgt2,getset2,putfld2,
+     +                macspe,xit,getenvc,ccard,low2up,up2low
 
       Character*256            nomprg
       Common         /PROGNAM/ nomprg

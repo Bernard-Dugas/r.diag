@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: get.ftn,v $
+C     Revision 3.96  2014/12/03 23:24:37  dugas
+C     Enlever les enonces EQUIVALENCE.
+C
 C     Revision 3.95  2014/10/16 12:08:10  dugas
 C     Modifications commandees par la compilation avec GFORTRAN et IFORT.
 C
@@ -571,14 +574,17 @@ C
       integer(8), save :: D8=1 00 00 00 00
       integer(8), save :: MinDat8=30 01 01 00 
       integer(8), save :: bit33=X'100000000' ! = 1 0000 0000
-      integer(8) :: YYYYMMDD8, HHMMSSHH8 , ENTIER8, date64
-      integer    :: YYYYMMDD , HHMMSSHH  , ENTIER,  NPAS
-      equivalence ( ENTIER8  , ENTIER )
+      integer(8) :: YYYYMMDD8, HHMMSSHH8, ENTIER8, date64
+      integer    :: YYYYMMDD , HHMMSSHH , ENTIER,  NPAS
+
+      pointer     ( IEN4,ENTIER(2))
 
       CHARACTER(LEN=4), SAVE :: NEWL='NEWL'
       CHARACTER(LEN=4)       :: IBUF4
 
 *---------------------------------------------------------------------
+      IEN4 = LOC( ENTIER8 ) !!!  equivalence ( ENTIER8  , ENTIER )
+
       NF     =  ABS( NFL )
       OK     = .FALSE.
       IO     =  00
@@ -675,7 +681,7 @@ C
 ***            LE TAMPON D'INFORMATION PASSE
 ***            DE 64 BITS/MOT A 32 BITS/MOT.
 
-              ENTIER8 = 0 ; ENTIER  = IBUF(4)
+              ENTIER8 = 0 ; ENTIER(1)  = IBUF(4)
 
               if (BIGENDI == 1)
      +        ENTIER8 = ishft( ENTIER8,-32 )
@@ -816,7 +822,7 @@ C
 
               IF (YYYYMMDD /=0 .or. HHMMSSHH /= 0)             THEN
                   err = newdate( IBUF(2), YYYYMMDD,HHMMSSHH, +3 )
-                  IF (err /= 0) IBUF(2) = ENTIER
+                  IF (err /= 0) IBUF(2) = ENTIER(1)
               ELSE
                   err = 0
               END IF

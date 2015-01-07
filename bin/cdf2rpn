@@ -6,7 +6,9 @@ print_usage() {
     ${0##*/} -cdf fichier_netcdf -rpn fichier_rpn [-dir] -attr [fichier_attributs_netcdf] [-autres_arguments]
        "
 }
-Location=${DIAGNOSTIQUE}
+Location=$(true_path $0)
+Location=${Location%/bin/*}
+Location=${DIAGNOSTIQUE:-${Location}}
 case ${1:-*} in
 --help | -h )
   print_usage
@@ -31,8 +33,8 @@ case ${1:-*} in
   exit 0
   ;;
 * )
-  CDF2RPN=${CDF2RPN:-${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.cdf2rpn}
-  if [ `echo ${CDF2RPN} | cut -c1` != "/" ]; then CDF2RPN=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/${CDF2RPN} ; fi
+  CDF2RPN=${CDF2RPN:-${Location}/bin/${BASE_ARCH}/stable.cdf2rpn}
+  if [ `echo ${CDF2RPN} | cut -c1` != "/" ]; then CDF2RPN=${Location}/bin/${BASE_ARCH}/${CDF2RPN} ; fi
   if [[ -x ${CDF2RPN} ]] ; then
     if [ ! "${launched_by_cdf2rpn_script}" ]; then
       export launched_by_cdf2rpn_script=YES
@@ -46,7 +48,7 @@ case ${1:-*} in
       exit 99
     fi
   else
-    ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.cdf2rpn "$@"
+    ${Location}/bin/${BASE_ARCH}/stable.cdf2rpn "$@"
     exit $?
   fi
   ;;

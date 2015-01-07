@@ -8,7 +8,7 @@
 * 
 *
 *     AUTHOR  - J.D.Henderson AND R.Laprise, MAY 13/83.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/repack.ptn,v 4.17 2014/09/25 20:20:52 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/repack.ptn,v 4.18 2014/12/04 00:25:58 dugas Exp $
 * 
 *
 *     PURPOSE - REPACKS A COMPLETE FILE WITH A NEW PACKING DENSITY. 
@@ -86,6 +86,9 @@
 *    +          TAPE1= XIN, TAPE2= XOUT, TAPE5=INPUT, TAPE6=OUTPUT)
  
 *     $Log: repack.ptn,v $
+*     Revision 4.18  2014/12/04 00:25:58  dugas
+*     Correction de l'allocation du champs G.
+*
 *     Revision 4.17  2014/09/25 20:20:52  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -323,7 +326,7 @@ CCC           IF (KIND2.EQ.'BEST')         COMPRESSION_LEVEL = 1
       LEN  = MAX( LENIN,LENOUT )
       MAXW = LEN-HEAD
 
-      ALLOCATE( IBUF(2*LEN),G(NWDS) )
+      ALLOCATE( IBUF(2*LEN),G(MAX( MAXW,NWDS )) )
 
 ***    READ THE NEXT FIELD FROM FILE XIN.
  

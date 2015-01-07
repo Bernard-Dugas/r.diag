@@ -1,7 +1,7 @@
 
 DIAGNOSTIQUE = $(CURDIR)/../../..
 BINDIR       = $(DIAGNOSTIQUE)/bin/$(BASE_ARCH)
-CC           = gcc
+CC           = s.cc
 
 default: r.echo
 
@@ -11,4 +11,4 @@ r.echo:	r.echo.c
 	/bin/rm -f $@.o
 
 clean:
-	/bin/rm -f *.o
+	/bin/rm -f *.o 

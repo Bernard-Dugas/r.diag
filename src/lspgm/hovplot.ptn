@@ -18,7 +18,7 @@
 *
 *
 *     AUTHOR  - F. Zwiers, APR 07/86.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/hovplot.ptn,v 4.12 2014/09/25 20:20:50 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/hovplot.ptn,v 4.13 2014/12/22 19:24:53 dugas Exp $
 *
 *
 *     INPUT FILE...
@@ -132,6 +132,9 @@
 *     ----------------------------------------------
 
 *     $Log: hovplot.ptn,v $
+*     Revision 4.13  2014/12/22 19:24:53  dugas
+*     Utiliser la fonction CHAR2INT qui se trouve dans char2int.cdk.
+*
 *     Revision 4.12  2014/09/25 20:20:50  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -311,11 +314,11 @@
       CALL BNDLSET('THIC',  2, 1,MINR )
       CALL BNDLSET( ETIK, VTIK,4,LABL )
 
-      CALL ISPSET(4HLABL, LABL )
-      CALL ISPSET(4HRNDV, 1.0  )
-      CALL ISPSET(3HNHL,   5   )
-      CALL ISPSET(3HNLB,   5   )
-      CALL ISPSET(3HNPV,   5   )
+      CALL ISPSET(CHAR2INT('LABL'), LABL )
+      CALL ISPSET(CHAR2INT('RNDV'), 1.0  )
+      CALL ISPSET(CHAR2INT('NHL'),   5   )
+      CALL ISPSET(CHAR2INT('NLB'),   5   )
+      CALL ISPSET(CHAR2INT('NPV'),   5   )
 
       NPLOT=0
  
@@ -416,33 +419,33 @@
 *         CALL ISPSET('EXT' , 0.25 )
 *         CALL ISPSET('ECLR',.TRUE.) 
 *         CALL ISPSET('IETI',  1   )
-          CALL ISPSET(4HMAJR, NORM )
-          CALL ISPSET(4HMINR, -1   )
-          CALL ISPSET(3HNHI,   1   )
-          CALL ISPSET(4HECOL,  0   )
-          CALL ISPSET(4HVALU, LABL )
-          CALL ISPSET(4HILAB,  1   )
-          CALL ISPSET(4HNULB,  1   )
-          CALL ISPSET(4HOFFM,  0   )
+          CALL ISPSET(CHAR2INT('MAJR'), NORM )
+          CALL ISPSET(CHAR2INT('MINR'), -1   )
+          CALL ISPSET(CHAR2INT('NHI'),   1   )
+          CALL ISPSET(CHAR2INT('ECOL'),  0   )
+          CALL ISPSET(CHAR2INT('VALU'), LABL )
+          CALL ISPSET(CHAR2INT('ILAB'),  1   )
+          CALL ISPSET(CHAR2INT('NULB'),  1   )
+          CALL ISPSET(CHAR2INT('OFFM'),  0   )
 *         CALL ISPSET('SIDE', 0.9  )
 
 ***        SET THE MASK VALUE FOR CONISP
 
           IF (.NOT.PRBLOC) SPVAL = 10.E37
 
-          CALL ISPSET(4HOFFP,   1    )
-          CALL ISPSET(4HSPVA, SPVAL  )
+          CALL ISPSET(CHAR2INT('OFFP'),   1    )
+          CALL ISPSET(CHAR2INT('SPVA'), SPVAL  )
 
 ***        CHECK FOR PUBLICATION QUALITY OPTION.
  
           IF (MS.LT.0)                                             THEN
               PB=.TRUE.
               MS=IABS(MS+1)
-              CALL ISPSET(4HMAJR, MAJR )
-              CALL ISPSET(4HMINR, MINR )
-              CALL ISPSET(3HNHI,   -1  )
-              CALL ISPSET(4HECOL,   1  )
-              CALL ISPSET(4HOFFM,   1  )
+              CALL ISPSET(CHAR2INT('MAJR'), MAJR )
+              CALL ISPSET(CHAR2INT('MINR'), MINR )
+              CALL ISPSET(CHAR2INT('NHI'),   -1  )
+              CALL ISPSET(CHAR2INT('ECOL'),   1  )
+              CALL ISPSET(CHAR2INT('OFFM'),   1  )
           ELSE
               PB=.FALSE.
           END IF
@@ -762,6 +765,8 @@
  6070 FORMAT(' Hovplot flipped Y-Axis information (first at top).')
  6100 FORMAT(' Hovplot reports I/O error number ',I3,' on unit 5.')
  6110 FORMAT(' I/O error no. ',I3,' detected.')
+
+#     include "char2int.cdk"
 
       END
 #     endif

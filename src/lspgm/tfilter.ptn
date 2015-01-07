@@ -6,7 +6,7 @@
 *
 *
 *     AUTHORS - F. Zwiers, N.E. Sargent AND B. Dugas, OCT 31/85.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/tfilter.ptn,v 4.11 2014/09/25 20:20:54 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/tfilter.ptn,v 4.12 2014/12/04 15:55:09 dugas Exp $
 *
 *
 *     DESCRIPTION...
@@ -123,6 +123,9 @@
 *     -----------------------------------------------------------------
 
 *     $Log: tfilter.ptn,v $
+*     Revision 4.12  2014/12/04 15:55:09  dugas
+*     Appeller FWGHTSS pour le cas moyenne courante symmetrique.
+*
 *     Revision 4.11  2014/09/25 20:20:54  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -197,9 +200,8 @@
       CHARACTER,   EXTERNAL :: GETYP*4
       INTEGER,     EXTERNAL :: GETSIZ3,GETHIGH
       EXTERNAL     JCLPNT,GETLIGN,BURNF,GETMSET,
-     +             PUTMSET,XIT,FWGHTS,GAINSQ,
-     +             PUTFLD2,WRITLEV2,SUIVANT,
-     +             PRECEDE
+     +             PUTMSET,XIT,FWGHTS,FWGHTSS,GAINSQ,
+     +             PUTFLD2,WRITLEV2,SUIVANT,PRECEDE
 
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
@@ -251,8 +253,6 @@
 
       END IF
 
-      WRITE(6,6050) F,K,FILTER
-  
       IF (F.LT.0.0)                                            THEN 
           LOPASS = .FALSE.
           F      = ABS(F) 
@@ -283,7 +283,10 @@
       ALLOCATE( W(NWGHTS),IW(NWGHTS) )
 
       IF (K.GE.0)                                              THEN 
+ 
+          WRITE(6,6050) 'IDEAL FILTER',F,K0,FILTER
   
+          ! IDEAL FILTER
           CALL FWGHTS( L0, K,W,LOPASS,SUMW )
 
           IF (FILTER.LT.0)                                     THEN
@@ -301,7 +304,10 @@
   
       ELSE
   
-          CALL FWGHTS( L0, K,W,LOPASS,SUMW )
+          WRITE(6,6050) 'SEQUENTIAL MOVING AVERAGE FILTER',F,K0,FILTER
+  
+          ! SEQUENTIAL MOVING AVERAGE FILTER
+          CALL FWGHTSS( L0, K0,W,LOPASS,SUMW )
   
       ENDIF 
 
@@ -542,7 +548,7 @@
  6020 FORMAT(/' First record of the input file:')
  6025 FORMAT(/' Variable(s) : ',10(A4,1X))
  6030 FORMAT(/'The input card is missing or incomplete.')
- 6050 FORMAT(/'Tfilter: F=',E13.4,', K=',I5,', FILTER=',I3)
+ 6050 FORMAT(/'Tfilter: ',A,', F=',E13.4,', K=',I5,', FILTER=',I3)
  6060 FORMAT(/'Tfilter: parameter out of range.'/)
  6110 FORMAT(/'The input time series is empty.'/)
  6160 FORMAT(/'Insufficient data on infil to begin filtering.'/ 

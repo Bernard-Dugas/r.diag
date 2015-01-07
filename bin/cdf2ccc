@@ -6,7 +6,9 @@ print_usage() {
     ${0##*/} -cdf fichier_netcdf -ccc fichier_cccma [-dir] -attr [fichier_attributs_netcdf] [-autres_arguments]
        "
 }
-Location=${DIAGNOSTIQUE}
+Location=$(true_path $0)
+Location=${Location%/bin/*}
+Location=${DIAGNOSTIQUE:-${Location}}
 case ${1:-*} in
 --help | -h )
   print_usage
@@ -31,8 +33,8 @@ case ${1:-*} in
   exit 0
   ;;
 * )
-  CDF2CCC=${CDF2CCC:-${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.cdf2ccc}
-  if [ `echo ${CDF2CCC} | cut -c1` != "/" ]; then CDF2CCC=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/${CDF2CCC} ; fi
+  CDF2CCC=${CDF2CCC:-${Location}/bin/${BASE_ARCH}/stable.cdf2ccc}
+  if [ `echo ${CDF2CCC} | cut -c1` != "/" ]; then CDF2CCC=${Location}/bin/${BASE_ARCH}/${CDF2CCC} ; fi
   if [[ -x ${CDF2CCC} ]] ; then
     if [ ! "${launched_by_cdf2ccc_script}" ]; then
       export launched_by_cdf2ccc_script=YES
@@ -46,7 +48,7 @@ case ${1:-*} in
       exit 99
     fi
   else
-    ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.cdf2ccc "$@"
+    ${Location}/bin/${BASE_ARCH}/stable.cdf2ccc "$@"
     exit $?
   fi
   ;;

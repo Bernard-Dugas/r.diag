@@ -1,7 +1,9 @@
 .SUFFIXES :
 .SUFFIXES : .ptn90 .ptn .txt .f90 .f .c .o .a
 
-ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
+# LSPGM Makefile
+
+ifeq "$(BAtail -f ../../Resultats.make.pgi13xx.ST1SE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
 endif
 
@@ -28,18 +30,18 @@ BINDIR  = $(DIAGS)/bin/$(BASE_ARCH)
 INCLUDE = $(DIAGS)/include
 LIBDIR  = $(DIAGS)/lib/$(EC_ARCH)
 MANDIR  = $(DIAGS)/man/pdoc
-MODDIR  = $(DIAGS)/lib/mods/$(EC_ARCH)
+MODDIR  = $(INCLUDE)/$(EC_ARCH)
 
 CODEBETA=
-FIXES   = 
 #OBJ    = $(LIBDIR)/msg.o
 #OBJ    = $(LIBDIR)/stubs.o
+OBJ     =
 
 BLAS    = blas
 DDFUN90 = ddfun90
 DIAGLIB = diag_sq$(STD)
+GRAFLIB =
 LAPACK  = lapack
-#LIBGRAPH = -libgraph graphbeta_014
 PROGLIB = prog_sq$(STD)
 RMNLIB  = rmn_015
 VGDLIB  = descrip
@@ -244,6 +246,8 @@ convert.f : convert.ptn \
 	 $(INCLUDE)/machtype.cdk
 cosf.f    : cosf.ptn \
 	 $(INCLUDE)/diagmacros.cdk
+crvplot.f : crvplot.ptn \
+	 $(INCLUDE)/char2int.cdk
 dertim.f  : dertim.ptn \
 	 $(INCLUDE)/diagmacros.cdk  $(INCLUDE)/machtype.cdk 
 diftim.f  : diftim.ptn \
@@ -257,13 +261,15 @@ gadd.f    : gadd.ptn \
 ggatim.f  : ggatim.ptn \
 	 $(INCLUDE)/diagmacros.cdk
 ggplot.f  : ggplot.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	 $(INCLUDE)/char2int.cdk
 gpdpd.f   : gpdpd.ptn \
 	 $(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk $(INCLUDE)/fintern.cdk
 gphum.f   : gphum.ptn \
 	 $(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk $(INCLUDE)/fintern.cdk
 gpvtat.f  : gpvtat.ptn \
 	 $(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk $(INCLUDE)/fintern.cdk
+hovplot.f : hovplot.ptn \
+	 $(INCLUDE)/char2int.cdk
 inttim.f  : inttim.ptn \
 	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 invntry.f : invntry.ptn \
@@ -292,6 +298,8 @@ sinf.f    : sinf.ptn \
 	 $(INCLUDE)/diagmacros.cdk
 sortf.f   : sortf.ptn \
 	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+spplot.f : spplot.ptn \
+	 $(INCLUDE)/char2int.cdk
 spvdgx.f  : spvdgx.ptn \
 	 $(INCLUDE)/machtype.cdk 
 tfilter.f : tfilter.ptn \
@@ -314,6 +322,8 @@ ttesta.f  : ttesta.ptn \
 	 $(INCLUDE)/zlabel.cdk
 tteste.f  : tteste.ptn \
 	 $(INCLUDE)/zlabel.cdk
+txtplot.f : txtplot.ptn \
+	 $(INCLUDE)/char2int.cdk
 xappend.f : xappend.ptn \
 	 $(INCLUDE)/machtype.cdk
 xfind.f   : xfind.ptn \
@@ -322,6 +332,8 @@ xsave.f   : xsave.ptn \
 	 $(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 zoncov.f  : zoncov.ptn \
 	 $(INCLUDE)/diagmacros.cdk
+zxplot.f : zxplot.ptn \
+	 $(INCLUDE)/char2int.cdk
 
 #LISTE DES CIBLES DU FICHIER recettes
 
@@ -402,8 +414,8 @@ driver: driver.ptn $(LIBP) $(LIBS)
 #Section de creation du binaire proprement dit
 	$(CPPT) $(DEFINE) $@.ptn > $@.f
 	$(FC) $@.f  -o $@ -libpath $(DIAGS)/lib/$(EC_ARCH) \
-	-libappl "$(PROGLIB) $(DIAGLIB) $(VGDLIB) $(MYLAP)" \
-   -librmn $(RMNLIB) $(LIBGRAPH) $(CODEBETA) -obj "$(OBJ) $(FIXES)" \
+	-libappl "$(PROGLIB) $(DIAGLIB) $(VGDLIB) $(GRAFLIB)" \
+	-librmn $(RMNLIB) $(CODEBETA) -obj "$(OBJ)" \
 	-libsys "$(DDFUN90) $(LAPACK) $(BLAS)"
 	if [ -x $@ ] ; then \
 		/bin/mv driver $(BINDIR)/r.diag_$(DIAG_VERSION) ; \
@@ -422,35 +434,30 @@ info.lspgm: driver.ptn
 	done
 
 AIX: #Section appropriee pour les fichiers STD saveur 1998 sur IBM AIX
-	$(MAKE) driver OBJ="$(OBJ)" FIXES="$(FIXES)" RMNLIB=$(RMNLIB) \
-	NOPLOT="-DNOPLOT" LIBGRAPH=" " VGDLIB=$(VGDLIB) \
-	MANDIR=$(MANDIR) DDFUN90=" "
+	$(MAKE) driver OBJ="$(OBJ)" RMNLIB=$(RMNLIB)  DDFUN90=" " \
+	NOPLOT="-DNOPLOT" GRAFLIB=" " VGDLIB=$(VGDLIB) \
+	MANDIR=$(MANDIR)
 
 AIX-powerpc7: #Section appropriee pour les fichiers STD saveur 1998 sur AIX-powerpc7
-	$(MAKE) driver OBJ="$(OBJ)" FIXES="$(FIXES)" RMNLIB=$(RMNLIB) \
-	NOPLOT="-DNOPLOT" LIBGRAPH=" " LAPACK=lapack_340 DDFUN90=" " \
+	$(MAKE) driver OBJ="$(OBJ)" RMNLIB=$(RMNLIB) DDFUN90=" " \
+	NOPLOT=$(NOPLOT) GRAFLIB=$(GRAFLIB) LAPACK=lapack_340 \
 	VGDLIB=$(VGDLIB) MANDIR=$(MANDIR)
 
 Linux:
 #Section appropriee pour les fichiers STD saveur 1998 sur Linux INTEL
-	$(MAKE) driver OBJ="$(OBJ)" FIXES="$(FIXES)" RMNLIB=$(RMNLIB) \
-	NOPLOT=$(NOPLOT) VGDLIB=$(VGDLIB) LIBGRAPH="$(LIBGRAPH)" \
-	MANDIR=$(MANDIR)
+	$(MAKE) driver OBJ="$(OBJ)" RMNLIB=$(RMNLIB) MANDIR=$(MANDIR) \
+	NOPLOT=$(NOPLOT) GRAFLIB=$(GRAFLIB) VGDLIB=$(VGDLIB)
 
 Linux_x86-64:
 #Section appropriee pour les fichiers STD saveur 1998 sur Linux INTEL 64 bits
-	$(MAKE) driver OBJ="$(OBJ)" FIXES="$(FIXES)" RMNLIB=$(RMNLIB) \
-	NOPLOT=$(NOPLOT) VGDLIB=$(VGDLIB) LIBGRAPH="$(LIBGRAPH)" \
-	MANDIR=$(MANDIR)
+	$(MAKE) driver OBJ="$(OBJ)" RMNLIB=$(RMNLIB) MANDIR=$(MANDIR) \
+	NOPLOT=$(NOPLOT) VGDLIB=$(VGDLIB) GRAFLIB=$(GRAFLIB)
 
 NoPlot:
 #Section appropriee pour les fichiers STD saveur 1998 sur Linux 64 bits
 # mais sans les modules graphiques
-	$(MAKE) driver OBJ="$(OBJ)" FIXES="$(FIXES)" RMNLIB=$(RMNLIB) \
-	NOPLOT="-DNOPLOT" LIBGRAPH=" " VGDLIB=$(VGDLIB) \
-	MANDIR=$(MANDIR)
-
-GFORTRAN: NoPlot
+	$(MAKE) driver OBJ="$(OBJ)" RMNLIB=$(RMNLIB) MANDIR=$(MANDIR) \
+	NOPLOT="-DNOPLOT" GRAFLIB=" " VGDLIB=$(VGDLIB)
 
 clean:
 # Faire un petit menage. On enleve tous les .o

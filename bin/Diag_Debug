@@ -35,12 +35,12 @@ eval `cclargs   $0              "[Genere un module pouvant etre utilise en mode 
       -o1+      "NON"  "OUI"    "[Parametres supplementaires de compilation]"\
       -echo     " "    "=-echo" "[Demande un listing detaille lors du travail]"\
       -fixes    " "    ",,,,"   "[Correctifs supplementaire sous forme de fichiers pre-compiles]"\
-      -graph    "=-libgraph" "" "[Utiliser ou pas les routines graphiques NCARlib]"\
+      -graph    ""     "graph"  "[Librairie contenant les routines graphiques NCARlib]"\
       -nodebug  "NON"  "OUI"    "[Ne pas generer un code de type debug -g]"\
       -f90+     "NON"  "OUI"    "[Chercher une source .f90 de preference ?]"\
-      -rmnlib   "rmnbeta_015" ",,,," "[Librairie rmnlib]"\
-      -vgdlib   "descrip"     ",,,," "[Code vgrid_descriptors"\
-      -ddfun90  "ddfun90"     ",,,," "[Code precision etendue F90]"\
+      -rmnlib   "rmn_015" ",,,," "[Librairie rmnlib]"\
+      -vgdlib   "descrip" ",,,," "[Code vgrid_descriptors"\
+      -ddfun90  "ddfun90" ",,,," "[Code precision etendue F90]"\
       ++ $*`
 #
 # Description...
@@ -73,6 +73,9 @@ eval `cclargs   $0              "[Genere un module pouvant etre utilise en mode 
 #                            precision etendue F90 (ddfun90)
 #    013  - fevrier  2014: - Utiliser rmn_014 mais encore avec un moduledate.o different
 #                          - Remplacer r.compile par s.compile et ${ARCH} par ${EC_ARCH}
+#    014  - novembre 2014: - Passer a rmn_015
+#                          - Renommer a Diag_Debug et integrer la script
+#                            explicitement a la livraison de r.diag
 #
 CODEBETA=""
 #
@@ -94,12 +97,21 @@ fi
 libsrc=lspgm_STD98.f.zip
 DIAGLIB=diag_sq98${std}
 #
-INCLUDE=${DIAGNOSTIQUE}/include/${EC_ARCH}
-FIXPATH=${DIAGNOSTIQUE}/lib/${EC_ARCH}
-LIBPATH=${DIAGNOSTIQUE}/lib/${EC_ARCH}
+Location=$(true_path $0)
+Location=${Location%/bin/*}
+Location=${DIAGNOSTIQUE:-${Location}}
+#
+INCLUDE=${Location}/include/${EC_ARCH}
+FIXPATH=${Location}/lib/${EC_ARCH}
+LIBPATH=${Location}/lib/${EC_ARCH}
 LIBSRC=${LIBPATH}/${libsrc}
 #
-fixes="${fixes} ${FIXPATH}/*.o ${LIBPATH}/rdiag_version.o"
+if [[ "${FIXPATH}" == "${LIBPATH}" ]]; then
+    fixes="${fixes} ${FIXPATH}/*.o"
+else
+    fixes="${fixes} ${FIXPATH}/*.o ${LIBPATH}/program_version.o"
+fi
+#
 LAPACK=lapack
 BLAS=blas
 DDFUN90=${ddfun90}
@@ -172,8 +184,8 @@ cat > ${source} <<EOF
 EOF
 cat ${main_source} >> ${source} 2> /dev/null
 s.compile -o ${progname}.Abs -libpath ${LIBPATH} \
-          -libappl ${DIAGLIB} ${vgdlib} ${FIXES} -librmn ${rmnlib} \
-          ${graph} ${o2} -libsys "${DDFUN90} ${LAPACK} ${BLAS}" \
+          -libappl "${DIAGLIB} ${vgdlib} ${graph}" -librmn ${rmnlib} \
+          ${o2} -libsys "${DDFUN90} ${LAPACK} ${BLAS}" \
           -includes ${INCLUDE} -obj "${fixes}" \
           -src ${source} ${CODEBETA}
 #

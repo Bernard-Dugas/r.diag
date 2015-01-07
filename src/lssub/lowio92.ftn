@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: lowio92.ftn,v $
+C     Revision 3.10  2014/12/03 23:26:35  dugas
+C     Enlever les enonces EQUIVALENCE.
+C
 C     Revision 3.9  2014/10/16 12:00:43  dugas
 C     Modifications commandees par la compilation avec GFORTRAN et IFORT.
 C
@@ -84,8 +87,8 @@ C
       PARAMETER  (  IAMIEEE=1073127582 )
 
       REAL*8        A,B
-      INTEGER       I,J,K(2)
-      EQUIVALENCE ( A,I ),( B,J ),( A,K )
+      INTEGER       I,J,K
+      POINTER     ( PI,I(1) ),( PJ,J(1) ),( PK,K(2) )
 
 #     include      "machtype.cdk"
 
@@ -93,6 +96,8 @@ C
       INTEGER      IDATUM(2)
       EQUIVALENCE ( DATUM,IDATUM )
 *------------------------------------------------------------------------------
+!!!   EQUIVALENCE ( A,I ),( B,J ),( A,K )
+      PI = LOC( A ) ; PJ = LOC( B ) ; PK = PI
 
 ***    INITIALIZATION.
 
@@ -107,20 +112,20 @@ C
       IF (BIGENDI.EQ.1 .OR.
      +   (BIGENDI.EQ.0 .AND. MACHINE*INTSIZE.EQ.1))            THEN
 
-          J    = I
-          IF (A .EQ. B) J = ISHFT(J,-32)
+          J(1)    = I(1)
+          IF (A .EQ. B) J(1) = ISHFT(J(1),-32)
 
       ELSE
 
-          J = K(2)
+          J(1) = K(2)
 
       END IF
 
 ***    TEST FOR IBM, CRAY OR IEEE MACHINE.
 
-      IBM  = J .EQ. IAMIBM
-      CRAY = J .EQ. IAMCRAY
-      IEEE = J .EQ. IAMIEEE
+      IBM  = J(1) .EQ. IAMIBM
+      CRAY = J(1) .EQ. IAMCRAY
+      IEEE = J(1) .EQ. IAMIEEE
 
       RETURN
       END
@@ -136,17 +141,18 @@ C
       IMPLICIT     INTEGER (A-Z)
 
       INTEGER      BF(*),IEEEF(*)
-      REAL*8       ZERO
+      REAL*8,      SAVE :: ZERO=0.0
       INTEGER      IZERO
-      EQUIVALENCE (ZERO,IZERO)
+      POINTER     (PIZ,IZERO(1))
       INTEGER      IEXP(15),IMAN(15)           !IEEE NORMALIZATION FACTORS.
 
 #     include     "machtype.cdk"
 
-      DATA         ZERO/0.0/
       DATA         IEXP/-4,-3,-3,-2,-2,-2,-2,-1,-1,-1,-1,-1,-1,-1,-1/
       DATA         IMAN/ 0,-1,-1,-2,-2,-2,-2,-3,-3,-3,-3,-3,-3,-3,-3/
 *------------------------------------------------------------------------
+      PIZ = LOC( ZERO ) !!!   EQUIVALENCE (ZERO,IZERO)
+
       MASK2 = IBITS(-1,0,7)               !7 BIT MASK FOR IBM EXPONENT.
       MASK4 = IBITS(-1,0,4)               !4 BIT MASK FOR FIRST HEX DIGIT.
       MASK5 = IBITS(-1,0,11)              !11 BIT MASK FOR IEEE EXPONENT.
@@ -155,7 +161,7 @@ C
       MASK1 = IBSET(0,63)                 !1 BIT MASK FOR SIGN BIT.
       MASK3 = IBITS(-1,0,52)              !52 BIT MASK FOR IEEE MANTISSA.
       DO 100 I=1,NF
-        IF (BF(I) .NE. IZERO) THEN
+        IF (BF(I) .NE. IZERO(1)) THEN
             J = IAND(ISHFT(BF(I),-52),MASK4)
             IEEEF(I)  = IOR(IOR(
      1        IAND(BF(I),MASK1),
@@ -174,7 +180,7 @@ C
       MASK1 = IBSET(0,31)                 !1 BIT MASK FOR SIGN BIT.
       MASK3 = IBITS(-1,0,20)              !20 BIT MASK FOR IEEE MANTISSA.
       DO 101 I=1,NF*2,2
-        IF (BF(I) .NE. IZERO) THEN
+        IF (BF(I) .NE. IZERO(1)) THEN
             J = IAND(ISHFT(BF(I),-20),MASK4)
             IEEEF(I)  = IOR(IOR(
      1        IAND(BF(I),MASK1),
@@ -212,16 +218,17 @@ CBUG        IEEEF(I+1) = ISHFT(BF(I+1),IMAN(J))
 
       INTEGER      BF(*),IEEEF(*)
       INTEGER      IZERO
-      REAL*8       ZERO
+      REAL*8,      SAVE :: ZERO=0.0
       LOGICAL      ERROR
-      EQUIVALENCE (ZERO,IZERO)
+      POINTER     (PIZ,IZERO(1))
 
 #     include     "machtype.cdk"
 
       LOGICAL          INFO
       COMMON /ZZVERBO/ INFO
-      DATA         ZERO/0.0/
 *--------------------------------------------------------------------
+      PIZ = LOC( ZERO ) !!!   EQUIVALENCE (ZERO,IZERO)
+
       MASK2 = IBITS(-1,0,7)               !7 BIT MASK FOR IBM EXPONENT.
       MASK4 = IBITS(-1,0,4)               !4 BIT MASK FOR FIRST HEX DIGIT.
       MASK5 = IBITS(-1,0,11)              !11 BIT MASK FOR IEEE EXPONENT.
@@ -247,7 +254,7 @@ CBUG        IEEEF(I+1) = ISHFT(BF(I+1),IMAN(J))
      4             ISHFT(IAND(IEEEF(I),MASK3)+IMPLIED,IMOVE-1)
      5                     )
         ELSE
-            BF(I)  = IZERO
+            BF(I)  = IZERO(1)
         END IF
   100 CONTINUE
       END IF
@@ -284,7 +291,7 @@ CBUG 5                 )
      7                 )
           BF(I+1) = IAND(ISHFT(ITEMP,IMOVE-1),ISHFT(-1,IMOVE-1))
         ELSE
-          BF(I)   = IZERO
+          BF(I)   = IZERO(1)
           BF(I+1) = 0
         END IF
   101 CONTINUE
@@ -314,7 +321,7 @@ CBUG 5                 )
           IBMEXP = IBMEXP/4 + 64 + 1
           ENDIF
           IF (IBMEXP .LT. 0) THEN
-            BF(I) = IZERO
+            BF(I) = IZERO(1)
             IF (INTSIZE .EQ. 2) BF(I+1) = 0
           ELSE IF (IBMEXP .GT. MASK2) THEN
             ERROR = .TRUE.
@@ -339,14 +346,14 @@ CBUG 5                 )
       IMPLICIT     INTEGER (A-Z)
 
       INTEGER      BF(*),IEEEF(*)
-      DIMENSION    ZERO(1)
+      REAL(4),     SAVE :: ZERO=0.0
       INTEGER      IZERO
-      EQUIVALENCE (ZERO,IZERO)
+      POINTER     (PIZ,IZERO(1))
       INTEGER      IEXP(15),IMAN(15)           !IEEE NORMALIZATION FACTORS.
-      DATA         ZERO/0.0/
       DATA         IEXP/-4,-3,-3,-2,-2,-2,-2,-1,-1,-1,-1,-1,-1,-1,-1/
       DATA         IMAN/ 0,-1,-1,-2,-2,-2,-2,-3,-3,-3,-3,-3,-3,-3,-3/
 *------------------------------------------------------------------------
+      PIZ = LOC( ZERO ) !!!   EQUIVALENCE (ZERO,IZERO)     
       MASK1        = IBSET(0,31)          !1 BIT MASK FOR SIGN BIT.
       MASK2        = IBITS(-1,0,7)        !7 BIT MASK FOR IBM EXPONENT.
       MASK3        = IBITS(-1,0,20)       !20 BIT MASK FOR IEEE MANTISSA.
@@ -355,7 +362,7 @@ CBUG 5                 )
       MASK6        = IBITS(-1,0,3)        !3 BIT MASK FOR L.S.B. IEEE MANT.
       K            = 1
       DO 100 I=1,2*NF-1,2
-        IF (BF(K) .NE. IZERO) THEN
+        IF (BF(K) .NE. IZERO(1)) THEN
             J = IAND(ISHFT(BF(K),-20),MASK4)
             IEEEF(I)  = IOR(IOR(
      1        IAND(BF(K),MASK1),
@@ -386,14 +393,14 @@ CBUG 5                 )
 #     include     "machtype.cdk"
 
       INTEGER       BF(*),IEEEF(*)
+      REAL(4),      SAVE :: ZERO=0.0
       INTEGER       IZERO
-      DIMENSION     ZERO(1)
-      EQUIVALENCE ( ZERO,IZERO )
+      POINTER      (PIZ,IZERO(1))
       LOGICAL       ERROR
       LOGICAL          INFO
       COMMON /ZZVERBO/ INFO
-      DATA          ZERO / 0.0 /
 *-------------------------------------------------------------------
+      PIZ = LOC( ZERO ) !!!   EQUIVALENCE (ZERO,IZERO)
       IF (INTSIZE .EQ. 1) THEN
           IF (INFO) WRITE(6,6200)
           CALL DABORT
@@ -428,7 +435,7 @@ CBUG        IBMEXP = IBMEXP/4 + 64 + 1
      6        ISHFT(IEEEF(I+1),-32+IMOVE-1)
      7                 )
         ELSE
-            BF(J) = IZERO
+            BF(J) = IZERO(1)
         END IF
         J = J + 1
   100 CONTINUE
@@ -455,7 +462,7 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
             IBMEXP = IBMEXP/4 + 64 + 1
           ENDIF
           IF (IBMEXP .LT. 0) THEN
-            BF(J) = IZERO
+            BF(J) = IZERO(1)
           ELSE IF (IBMEXP .GT. MASK2) THEN
             ERROR = .TRUE.
           END IF
@@ -565,12 +572,13 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
       INTEGER       IEEEF(*),CF(*)
       PARAMETER   ( CEXPBIAS=16384)      ! CRAY EXPONENT BIAS (40000(OCTAL))
       PARAMETER   ( IEXPBIAS=1023)       ! IEEE EXPONENT BIAS
-      DIMENSION     ZERO(1)
+      REAL(8),      SAVE :: ZERO=0.0
       INTEGER       IZERO
-      EQUIVALENCE ( ZERO,IZERO )
-      DATA          ZERO / 0.0 /
+      POINTER      (PIZ,IZERO(1))
 *-----------------------------------------------------------------------------
 #     if defined (CRAY)
+      PIZ = LOC( ZERO ) !!! EQUIVALENCE ( ZERO,IZERO )
+      
       MASK1 = IBSET(0,63)
       MASK2 = IBITS(-1,0,11)
       MASK3 = IBITS(-1,0,52)
@@ -590,7 +598,7 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
      7               IMPLIED),-5) )
      8              )
         ELSE
-          CF(I) = IZERO
+          CF(I) = IZERO(1)
         ENDIF
 10    CONTINUE
 #     endif 
@@ -624,14 +632,14 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
       PARAMETER   ( IAMIEEE=1073127582 )
 
       REAL*8        A,B
-      INTEGER       I,J,K(2)
-      EQUIVALENCE ( A,I ),( B,J ),( A,K )
+      INTEGER       I,J,K
+      POINTER     ( PI,I(1) ),( PJ,J(1) ),( PK,K(2) )
 
       LOGICAL       IBM,CRAY,IEEE,IM64BIT,INTEST2
 
       REAL          DATUM(2)
-      INTEGER      IDATUM(2)
-      EQUIVALENCE ( DATUM,IDATUM )
+      INTEGER      IDATUM
+      POINTER     ( PID,IDATUM(2) )
 
       LOGICAL       INFO
       COMMON       /ZZVERBO/ INFO
@@ -639,6 +647,9 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
 #     include      "machtype.cdk" 
 
 *------------------------------------------------------------------------------
+!!!   EQUIVALENCE ( A,I ),( B,J ),( A,K )
+      PI = LOC( A ) ; PJ = LOC( B ) ; PK = PI
+      PID = LOC( DATUM(1) ) !!! EQUIVALENCE ( DATUM,IDATUM )
 
 ***    INITIALIZATION.
 
@@ -654,21 +665,21 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
       IF (BIGENDI.EQ.1 .OR.
      +   (BIGENDI.EQ.0 .AND. MACHINE*INTSIZE.EQ.1))            THEN
 
-          J    = I
-          IF (A .EQ. B) J = ISHFT(J,-32)
+          J(1)    = I(1)
+          IF (A .EQ. B) J = ISHFT(J(1),-32)
           IF (A .EQ. B) IM64BIT  = .TRUE.
 
       ELSE
 
-          J = K(2)
+          J(1) = K(2)
 
       END IF
 
 ***    TEST FOR IBM, CRAY OR IEEE MACHINE.
 
-      IBM       = J .EQ. IAMIBM
-      CRAY      = J .EQ. IAMCRAY
-      IEEE      = J .EQ. IAMIEEE
+      IBM       = J(1) .EQ. IAMIBM
+      CRAY      = J(1) .EQ. IAMCRAY
+      IEEE      = J(1) .EQ. IAMIEEE
       INTEST2   = INTSIZE .EQ. 2
 
 ***    NOW BRANCH ON TYPE OF MACHINE.
@@ -781,14 +792,14 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
       PARAMETER   ( IAMIEEE=1073127582 )
 
       REAL*8        A,B
-      INTEGER       I,J,K(2)
-      EQUIVALENCE ( A,I ),( B,J ),( A,K )
+      INTEGER       I,J,K
+      POINTER     ( PI,I(1) ),( PJ,J(1) ),( PK,K(2) )
 
       LOGICAL       IBM,CRAY,IEEE,IM64BIT,INTEST2
 
       DIMENSION     DATUM(2)
-      INTEGER      IDATUM(2)
-      EQUIVALENCE ( DATUM,IDATUM )
+      INTEGER      IDATUM
+      POINTER     ( PID,IDATUM(2) )
 
       LOGICAL       INFO
       COMMON       /ZZVERBO/ INFO
@@ -796,6 +807,9 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
 #     include      "machtype.cdk" 
 
 *---------------------------------------------------------------------------
+!!!   EQUIVALENCE ( A,I ),( B,J ),( A,K )
+      PI = LOC( A ) ; PJ = LOC( B ) ; PK = PI
+      PID = LOC( DATUM(1) ) !!! EQUIVALENCE ( DATUM,IDATUM )
 
 ***    INITIALIZATION.
 
@@ -811,21 +825,21 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
       IF (BIGENDI.EQ.1 .OR.
      +   (BIGENDI.EQ.0 .AND. MACHINE*INTSIZE.EQ.1))            THEN
 
-          J    = I
-          IF (A .EQ. B) J = ISHFT(J,-32)
+          J(1)   = I(1)
+          IF (A .EQ. B) J(1) = ISHFT(J(1),-32)
           IF (A .EQ. B) IM64BIT  = .TRUE.
 
       ELSE
 
-          J = K(2)
+          J(1) = K(2)
 
       END IF
 
 ***    TEST FOR IBM, CRAY OR IEEE MACHINE.
 
-      IBM       = J .EQ. IAMIBM
-      CRAY      = J .EQ. IAMCRAY
-      IEEE      = J .EQ. IAMIEEE
+      IBM       = J(1) .EQ. IAMIBM
+      CRAY      = J(1) .EQ. IAMCRAY
+      IEEE      = J(1) .EQ. IAMIEEE
       INTEST2   = INTSIZE .EQ. 2
 
 ***    NOW BRANCH ON TYPE OF MACHINE.
@@ -923,20 +937,21 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
       PARAMETER   ( IAMCRAY=1073853700 )
       PARAMETER   ( IAMIEEE=1073127582 )
       REAL*8        A,B
-      INTEGER       I,J
-      EQUIVALENCE ( A,I ),( B,J )
+      INTEGER       I0,J0
+      POINTER     ( PI,I0(1) ),( PJ,J0(1) )
       LOGICAL       IBM,CRAY,IEEE,IM64BIT,INTEST2
+      REAL,         SAVE :: ZERO=0.0
       INTEGER       IZERO
-      DIMENSION     ZERO(1)
-      EQUIVALENCE ( ZERO,IZERO )
+      POINTER     ( PIZ,IZERO(1))
 
       LOGICAL       INFO
       COMMON       /ZZVERBO/ INFO
 
 #     include      "machtype.cdk" 
-
-      DATA          ZERO / 0.0 /
 *-------------------------------------------------------------------------------
+
+      PI  = LOC( A ) ; PJ = LOC( B ) !!! EQUIVALENCE ( A,I0 ),( B,J0 )
+      PIZ = LOC( ZERO ) !!! EQUIVALENCE ( ZERO,IZERO )
 
 ***    INITIALIZATION.
 
@@ -948,17 +963,17 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
 ***    USE THE STANDARD TRICK TO SEE IF WE'RE A 32 OR 64 BIT MACHINE.
 
       A          = DSQRT(2.0D0)
-      J          = I
+      J0(1)      = I0(1)
       IF (A .EQ. B) THEN
         IM64BIT  = .TRUE.
-        J = ISHFT(J,-32)
+        J0(1)    = ISHFT(J0(1),-32)
       END IF
 
 ***    TEST FOR IBM, CRAY OR IEEE MACHINE.
 
-      IBM       = J .EQ. IAMIBM
-      CRAY      = J .EQ. IAMCRAY
-      IEEE      = J .EQ. IAMIEEE
+      IBM       = J0(1) .EQ. IAMIBM
+      CRAY      = J0(1) .EQ. IAMCRAY
+      IEEE      = J0(1) .EQ. IAMIEEE
       INTEST2   = INTSIZE .EQ. 2
 
 ***    NOW BRANCH ON TYPE OF MACHINE.
@@ -998,7 +1013,7 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
         MASK5 = IBITS(-1,0,11)              !11 BIT MASK FOR IEEE 64' EXPONENT.
         IF (.NOT.INTEST2) THEN !INTEGERS ARE 32', REALS ARE 32'.
           DO 30 I=1,2*NWDS-1,2
-	    IF (LCM(K) .NE. IZERO) THEN
+	    IF (LCM(K) .NE. IZERO(1)) THEN
 	      IEEEF(I) = IOR(IOR(
      1                   IAND(LCM(K),MASK1),
      2        ISHFT(IAND(IBITS(LCM(K),23,8)-127+1023,MASK5),20)
@@ -1050,20 +1065,21 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
       PARAMETER   ( IAMCRAY=1073853700 )
       PARAMETER   ( IAMIEEE=1073127582 )
       REAL*8        A,B
-      INTEGER       I,J
-      EQUIVALENCE ( A,I ),( B,J )
+      INTEGER       I0,J0
+      POINTER     ( PI,I0(1) ),( PJ,J0(1) )
       LOGICAL       IBM,CRAY,IEEE,IM64BIT,INTEST2
-      INTEGER      IZERO
-      DIMENSION     ZERO(1)
-      EQUIVALENCE ( ZERO,IZERO )
+      REAL,         SAVE :: ZERO=0.0
+      INTEGER       IZERO
+      POINTER     ( PIZ,IZERO(1))
 
       LOGICAL       INFO
       COMMON       /ZZVERBO/ INFO
 
 #     include      "machtype.cdk" 
-
-      DATA          ZERO / 0.0 /
 *--------------------------------------------------------------------------
+
+      PI  = LOC( A ) ; PJ = LOC( B ) !!! EQUIVALENCE ( A,I0 ),( B,J0 )
+      PIZ = LOC( ZERO ) !!! EQUIVALENCE ( ZERO,IZERO )
 
 ***    INITIALIZATION.
 
@@ -1075,17 +1091,17 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
 ***    USE THE STANDARD TRICK TO SEE IF WE'RE A 32 OR 64 BIT MACHINE.
 
       A          = DSQRT(2.0D0)
-      J          = I
+      J0(1)      = I0(1)
       IF (A .EQ. B) THEN
         IM64BIT  = .TRUE.
-        J = ISHFT(J,-32)
+        J0(1)    = ISHFT(J0(1),-32)
       END IF
 
 ***    TEST FOR IBM, CRAY OR IEEE MACHINE.
 
-      IBM        = J .EQ. IAMIBM
-      CRAY       = J .EQ. IAMCRAY
-      IEEE       = J .EQ. IAMIEEE
+      IBM        = J0(1) .EQ. IAMIBM
+      CRAY       = J0(1) .EQ. IAMCRAY
+      IEEE       = J0(1) .EQ. IAMIEEE
       INTEST2    = INTSIZE .EQ. 2
 
 ***    NOW BRANCH ON TYPE OF MACHINE.
@@ -1135,7 +1151,7 @@ CBUG      IBMEXP = IBMEXP/4 + 64 + 1
      6        IAND(ISHFT(IEEEF(I+1),-29),MASK4)
      7                    )
             ELSE
-              LCM(K) = IZERO
+              LCM(K) = IZERO(1)
             END IF
             K = K + 1
    30     CONTINUE

@@ -18,7 +18,7 @@
 *
 *
 *     AUTHORS - F.Zwiers, R.Laprise, 1985.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/crvplot.ptn,v 4.20 2014/09/25 20:20:46 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/crvplot.ptn,v 4.21 2014/12/22 19:24:53 dugas Exp $
 *
 *
 *     PURPOSE - READ GROUPS OF MULTI-VALUED FUNCTIONS FROM FILE YAXIS AND
@@ -246,6 +246,9 @@
 *     ---------------------------------------------------------------
 
 *     $Log: crvplot.ptn,v $
+*     Revision 4.21  2014/12/22 19:24:53  dugas
+*     Utiliser la fonction CHAR2INT qui se trouve dans char2int.cdk.
+*
 *     Revision 4.20  2014/09/25 20:20:46  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -534,13 +537,13 @@
       CALL BNDLSET('THIC',  2, 1,MINR)
       CALL BNDLSET( ETIK, VTIK,4,LABL)
 
-      CALL ISPSET(4HLABL, LABL )
-      CALL ISPSET(4HNULB,  1   )
+      CALL ISPSET(CHAR2INT('LABL'), LABL )
+      CALL ISPSET(CHAR2INT('NULB'),  1   )
 
-      CALL ISPSET(4HRNDV, 1.0  )
-      CALL ISPSET(3HNHL,   5   )
-      CALL ISPSET(3HNLB,   5   )
-      CALL ISPSET(3HNPV,   5   )
+      CALL ISPSET(CHAR2INT('RNDV'), 1.0  )
+      CALL ISPSET(CHAR2INT('NHL'),   5   )
+      CALL ISPSET(CHAR2INT('NLB'),   5   )
+      CALL ISPSET(CHAR2INT('NPV'),   5   )
 
 ***    READ CONTROL INFORMATION AND LABELS ON 2,3 OR 4 INPUT CARDS.
  
@@ -549,7 +552,7 @@
       NFOLD = 1
       NSKIP = 0
 
-  110 CALL OPTN( 4HCASE,4 )
+  110 CALL OPTN( CHAR2INT('CASE'),4 )
  
       IF (RPBLOC( ' ',LIGNE ))                                THEN
 
@@ -878,12 +881,12 @@ CCC       CALL                                     XIT(' Crvplot',-1 )
 
 ***      ACCOUNT FOR PUBLICATION QUALITY.
 
-        CALL ISPSET(4HMAJR, MAJR )
-        CALL ISPSET(4HMINR, MINR )
-        CALL ISPSET(3HNHI,   -1  )
-        CALL ISPSET(4HILAB,   0  )
-        CALL ISPSET(4HECOL,   1  )
-        CALL ISPSET(4HOFFM,   1  )
+        CALL ISPSET(CHAR2INT('MAJR'), MAJR )
+        CALL ISPSET(CHAR2INT('MINR'), MINR )
+        CALL ISPSET(CHAR2INT('NHI'),   -1  )
+        CALL ISPSET(CHAR2INT('ILAB'),   0  )
+        CALL ISPSET(CHAR2INT('ECOL'),   1  )
+        CALL ISPSET(CHAR2INT('OFFM'),   1  )
 
       END IF
 
@@ -1578,7 +1581,7 @@ CCC       CALL                                     XIT(' Crvplot',-1 )
 
 ***        PLOT NEXT FRAME.
 
-          CALL OPTN( 4HCASE,4 )
+          CALL OPTN( CHAR2INT('CASE'),4 )
           READ(ANT, 12) NT
           NT  = Y2KDAT8( NT )
           CALL DATE2STAMP( NT,NSTAMP )
@@ -1668,7 +1671,9 @@ CCC       CALL                                     XIT(' Crvplot',-1 )
  6056 FORMAT(10X,'Fxlo,fxhi=',2E12.4)
  6060 FORMAT('Crvplot:  ',I5,' Curve(s) on plot no',I5/)
  
-      END
+#     include "char2int.cdk"
+
+      END 
       SUBROUTINE PLOTLGD(PAT,IPATNE)
 
 ***    MAR 03/88 - F. MAJAESS

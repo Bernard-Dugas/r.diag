@@ -169,13 +169,13 @@
 *-----------------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER,    PARAMETER :: MAXLEV = 999
-      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER     MAXLEV
+      PARAMETER ( MAXLEV = 999 )
 
       LOGICAL     OK
-      CHARACTER   LIGNE*80,PKTYP*2
-      CHARACTER(4) NAME,STATUS,MDATA,CPHIS,CTEMP,CLNSP,TYPE
-      INTEGER     LEVT(MAXLEV),LEVM(MAXLEV+1),KBUF(HEAD),KPAK,
+      CHARACTER   LIGNE*80
+      CHARACTER*4 NAME,STATUS,MDATA,CPHIS,CTEMP,CLNSP,TYPE
+      INTEGER     LEVT(MAXLEV),LEVM(MAXLEV+1),KBUF(taille_entete),KPAK,
      +            NFIL,MAXW,LEN,NSL,NSL1,IER,NPACK,K,LEVTH,UN,
      +            NSETS,NWDS,IO,IBUF,IJ,NII,NJJ,NST,MEM,VKIND
 
@@ -194,20 +194,20 @@
 
       POINTER   ( P1,  ZPT(1) ),( P2,  ZPM(1) ),( P3,DZPM(1) )
       POINTER   ( P4,    T(1) ),( P5, LNPM(1) ),( P6,LNPT(1) )
-      POINTER   ( P7, PDAT(11)),( P8, PHIS(1) ),( P9,LNSP(1) )
+      POINTER   ( P7, PDAT(1) ),( P8, PHIS(1) ),( P9,LNSP(1) )
       POINTER   ( PA,LNPHT(1) ),( PB,DZHTM(1) ),( PC,  H0(1) )
       POINTER   ( PD, IBUF(8) )
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
 
-      LOGICAL,    EXTERNAL :: RPBLOC
-      INTEGER,    EXTERNAL :: GETSIZ2
-      CHARACTER,  EXTERNAL :: GETYP*4
-      EXTERNAL    JCLPNT,DEFCPHY,GETSTAT,GETFLD2,
-     +            CMPLBL,CALZ,DZHTMOM,GETSET2,XIT,
-     +            CALLNPM,CALLNPT,CALLNPH,PUTSET2,
-     +            GETLIGN,BURNF,LVCODE,CONVPR
+      LOGICAL     RPBLOC
+      INTEGER     GETSIZ2
+      CHARACTER*4 GETYP,PKTYP*2
+      EXTERNAL    JCLPNT,DEFCPHY,GETSTAT,GETFLD2,RPBLOC,
+     +            CMPLBL,CALZ,DZHTMOM,GETSET2,XIT,HPALLOC,
+     +            CALLNPM,CALLNPT,CALLNPH,PUTSET2,GETYP,
+     +            GETLIGN,BURNF,GETSIZ2,LVCODE,CONVPR
 
       DATA        OK / .FALSE. /
 *===================================================================

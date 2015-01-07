@@ -20,17 +20,17 @@
 
       INTEGER   K
       LOGICAL   LOPASS
-      REAL      L0,W(*),SUMW
+      REAL      L0,W(-K:K),SUMW
 
 !     * JUILLET 18/85 - F. ZWIERS, N.E. SARGENT, B.DUGAS. 
   
 !     * COMPUTE WEIGHTS FOR:  
   
-!     * 1) (IF K.GT.0) ====================================== 
+!     * 1) FWGHTS ====================================== 
 !     * IDEAL LOW PASS FILTER WITH CUTOFF FREQUENCY L0
 !     * USING HANNING TAPER WITH K WEIGHTS, 
   
-!     * 2) (IF K.LT.0) ====================================== 
+!     * 2) FWGHTSS ====================================== 
 !     * PRODUCT OF TWO SEQUENTIALLY APPLIED SYMMETRIC AVERAGE 
 !     * FILTERS WITH BASE CUTOFF FREQUENCY L0.
 
@@ -44,62 +44,55 @@
       PI  = 4.0*ATAN(1.D0)
       PII = 1./PI
 
-      IF (K >= 0)                                              THEN 
+!     * IDEAL FILTER. 
   
-!         * IDEAL FILTER. 
+      FK      = K
+      W8(K+1) = L0/PI
+      SUMW8   = W8(K+1) 
+      DO  I=1,K
+          FI        = I
+          AK        = SIN(FI*L0)*PII/FI
+          HK        = 0.5*(1.0+COS(PI*FI/FK))
+          BK        = HK*AK
+          W8(K+1+I) = BK 
+          W8(K+1-I) = BK 
+          SUMW8     = SUMW8+BK+BK 
+      END DO
   
-          FK      = K
-          W8(K+1) = L0/PI
-          SUMW8   = W8(K+1) 
-          DO  I=1,K
-              FI        = I
-              AK        = SIN(FI*L0)*PII/FI
-              HK        = 0.5*(1.0+COS(PI*FI/FK))
-              BK        = HK*AK
-              W8(K+1+I) = BK 
-              W8(K+1-I) = BK 
-              SUMW8     = SUMW8+BK+BK 
-          END DO
-  
-          IF (.NOT.LOPASS) SUMW8 = -SUMW8
+      IF (.NOT.LOPASS) SUMW8 = -SUMW8
 
-          SUMW = SUMW8
+      SUMW = SUMW8
 
-          DO  I=1,2*K+1
-              W(I) = W8(I)/SUMW8
-          END DO
+      DO  I=-K,K
+          W(I) = W8(K+1+I)/SUMW8
+      END DO
 
-          IF (.NOT.LOPASS) W(K+1) = W(K+1)+1
-  
-      ELSE
-  
-!         * SEQUENTIAL MOVING AVERAGE FILTER. 
-  
-          F   = L0/(2.0*PI) 
-          JR  = INT(1.0/(2.0*F))
-          JRP = 2*JR/3
-          K   = JR+JRP
+      IF (.NOT.LOPASS) W(0) = W(0)+1
 
-          DO  I=1,2*K+1
-              W(I) = 0.0
-          END DO
-  
-          DO  I=-JR,JR 
-              DO  J=-JRP,JRP 
-                  W(I+J+K+1) = W(I+J+K+1) &
-                             + 1.0/FLOAT((2*JR+1)*(2*JRP+1))
-              END DO
-          END DO
-  
-          IF (.NOT.LOPASS)                                     THEN 
-  
-              DO  I=1,2*K+1
-                  W(I) = -W(I)
-              END DO
+      RETURN
 
-              W(K+1) = W(K+1)+1 
+      ENTRY FWGHTSS(L0,K,W,LOPASS,SUMW) 
   
-          ENDIF 
+!     * SEQUENTIAL MOVING AVERAGE FILTER. 
+  
+      PI  = 4.0*ATAN(1.D0)
+
+      F   = L0/(2.0*PI) 
+      JR  = INT(1.0/(2.0*F))
+      JRP = 2*JR/3
+      K   = JR+JRP
+
+      W = 0.0
+  
+      DO  I=-JR,JR 
+         DO  J=-JRP,JRP 
+            W(I+J) = W(I+J) + 1.0/FLOAT((2*JR+1)*(2*JRP+1))
+         END DO
+      END DO
+  
+      IF (.NOT.LOPASS)                                     THEN 
+
+         W = -W ; W(0) = W(0)+1 
   
       ENDIF 
   
@@ -223,7 +216,7 @@
       REAL     L0,PI,K0,SUMW
       INTEGER  I,J,K,MAXSIZ,NL
       REAL,    DIMENSION (:), ALLOCATABLE :: HOLDX,HOLDY
-      REAL,    DIMENSION(:,:),POINTER,SAVE :: W
+      REAL,    DIMENSION(:,:),ALLOCATABLE,SAVE :: W
 
       INTEGER  OLD_LISSE
       SAVE     OLD_LISSE

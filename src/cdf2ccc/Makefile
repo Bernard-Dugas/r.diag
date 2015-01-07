@@ -1,6 +1,8 @@
 .SUFFIXES :
 .SUFFIXES : .txt .ftn .f .h .o .a
 
+# CDF2CCC Makefile
+
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
 endif
@@ -42,9 +44,9 @@ FTNC     = $(COMPILE) -includes "$(MODDIR)" -defines "=$(DEFINES)" -P -src
 FTNT     = $(CPPT) $(TXT)
 
 CODEBETA =
-#FIXES   = $(LIBDIR)/msg.o
-#FIXES   = $(LIBDIR)/stubs.o
-OBJ      = lire_arg.o $(FIXES)
+#OBJ     = $(LIBDIR)/msg.o
+#OBJ     = $(LIBDIR)/stubs.o
+OBJ      =
 
 MALIB    = cdf2ccc
 LIBP     = $(LIBDIR)/lib$(MALIB).a
@@ -145,8 +147,15 @@ OBJECTS= \
 	 wrlalo.o
 
 HDECKS= \
-	 cdf2ccc.h	dimmem.h		format.h		ibufmem.h \
-	 infomem.h	specmem.h	varmem.h		workmem.h	ztypmem.h
+	$(INCLUDES)/cdf2ccc.h \
+	$(INCLUDES)/dimmem.h \
+	$(INCLUDES)/format.h \
+	$(INCLUDES)/ibufmem.h \
+	$(INCLUDES)/infomem.h \
+	$(INCLUDES)/specmem.h \
+	$(INCLUDES)/varmem.h \
+	$(INCLUDES)/workmem.h \
+	$(INCLUDES)/ztypmem.h
 
 TXTDECKS =	cdf2ccc.txt
 
@@ -158,56 +167,56 @@ FICHIERS = $(FTNDECKS) $(FDECKS) $(HDECKS)
 
 cdf2ccc.txt:		cdf2ccc.ftn
 
-$(LIBP)(affecte_attr.o):	affecte_attr.f cdf2ccc.h	workmem.h 
-$(LIBP)(affecte_coord.o):	affecte_coord.f	cdf2ccc.h	infomem.h 
-$(LIBP)(affecte_dim.o):		affecte_dim.f	cdf2ccc.h	dimmem.h 
-$(LIBP)(affecte_var.o): 	affecte_var.f	cdf2ccc.h	infomem.h 
-$(LIBP)(attr_value.o): 		attr_value.f	cdf2ccc.h
-$(LIBP)(attribut_coord.o):	attribut_coord.f	cdf2ccc.h	dimmem.h	format.h	infomem.h	varmem.h	workmem.h 
-$(LIBP)(attribut_var.o): 	attribut_var.f	cdf2ccc.h	dimmem.h	infomem.h 	varmem.h 
-$(LIBP)(auxiliary_coordinate.o): 	auxiliary_coordinate.f	cdf2ccc.h	infomem.h	varmem.h	ztypmem.h
-$(LIBP)(cal_date.o):			cal_date.f	cdf2ccc.h 
-$(LIBP)(cdf2ccc.o):			cdf2ccc.ftn	cdf2ccc.h
-$(LIBP)(combline.o): 		combline.f	cdf2ccc.h 
-$(LIBP)(conv_unit.o): 		conv_unit.f	cdf2ccc.h 	infomem.h 
-$(LIBP)(decodate.o):			decodate.ftn	cdf2ccc.h 	infomem.h  
-$(LIBP)(def_attr_projection.o): def_attr_projection.f cdf2ccc.h ztypmem.h
-$(LIBP)(def_cccma.o):		def_cccma.f	cdf2ccc.h 
-$(LIBP)(def_dim_coord.o):	def_dim_coord.f	cdf2ccc.h	dimmem.h	infomem.h	varmem.h		workmem.h 
-$(LIBP)(def_level.o):		def_level.f	cdf2ccc.h 	dimmem.h 	infomem.h 	varmem.h		workmem.h 
-$(LIBP)(def_spectral_truncation.o):	def_spectral_truncation.f	cdf2ccc.h 	infomem.h 
-$(LIBP)(define_list.o):		define_list.f	cdf2ccc.h 	infomem.h 
-$(LIBP)(define_netcdf.o):	define_netcdf.f	cdf2ccc.h	dimmem.h	infomem.h 
-$(LIBP)(define_var.o):		define_var.f	cdf2ccc.h	dimmem.h	infomem.h 
-$(LIBP)(encodate.o):			encodate.ftn	cdf2ccc.h 
-$(LIBP)(enleve_bissextile2.o):	enleve_bissextile2.ftn	cdf2ccc.h 	format.h 
-$(LIBP)(eval_lonlat.o):		eval_lonlat.f	cdf2ccc.h	dimmem.h	infomem.h	varmem.h	ztypmem.h
-$(LIBP)(eval_xcyc.o):		eval_xcyc.f	cdf2ccc.h 	infomem.h 	varmem.h 
-$(LIBP)(get_attr.o):			get_attr.f		cdf2ccc.h 	workmem.h 
-$(LIBP)(get_attribut.o):	get_attribut.f		cdf2ccc.h 	workmem.h 
-$(LIBP)(get_coord2.o):		get_coord2.f	cdf2ccc.h	dimmem.h	infomem.h	varmem.h 
-$(LIBP)(get_coordonne.o):	get_coordonne.f	cdf2ccc.h	dimmem.h	infomem.h	varmem.h 
-$(LIBP)(get_dim.o):			get_dim.f	cdf2ccc.h	dimmem.h 
-$(LIBP)(get_topo.o):			get_topo.f	cdf2ccc.h	dimmem.h	varmem.h	workmem.h 
-$(LIBP)(get_var.o):			get_var.f	cdf2ccc.h	workmem.h 
-$(LIBP)(hybrid_vertical_coordinate.o):		hybrid_vertical_coordinate.f	cdf2ccc.h	dimmem.h	infomem.h	varmem.h 
-$(LIBP)(init_dim.o):			init_dim.f	cdf2ccc.h	dimmem.h	infomem.h 
-$(LIBP)(initialise.o):		initialise.f	cdf2ccc.h 	infomem.h
-$(LIBP)(inq_file.o):			inq_file.f	cdf2ccc.h 	ztypmem.h
-$(LIBP)(lire_arg.o):			lire_arg.f	cdf2ccc.h	ztypmem.h
-$(LIBP)(lire_cccvar.o):		lire_cccvar.f	cdf2ccc.h	dimmem.h	infomem.h	varmem.h	workmem.h 
-$(LIBP)(possibilite.o):		possibilite.f	cdf2ccc.h 
-$(LIBP)(put_attribut.o):	put_attribut.f	cdf2ccc.h	workmem.h 
-$(LIBP)(put_var.o):			put_var.f	cdf2ccc.h	workmem.h 
-$(LIBP)(rdlatlon2.o):		rdlatlon2.f	cdf2ccc.h	dimmem.h	ibufmem.h	infomem.h	varmem.h	workmem.h	ztypmem.h 
-$(LIBP)(rdspec2.o):			rdspec2.f	cdf2ccc.h	dimmem.h ibufmem.h	infomem.h 	infomem.h	specmem.h	varmem.h	workmem.h 
-$(LIBP)(scanfile.o):			scanfile.f	cdf2ccc.h	format.h	varmem.h	workmem.h 
-$(LIBP)(trier.o):				trier.f		cdf2ccc.h	dimmem.h	infomem.h	specmem.h 	ztypmem.h
-$(LIBP)(valide_range.o):	valide_range.f	cdf2ccc.h	infomem.h 
-$(LIBP)(vers_cccma.o):		vers_cccma.f	cdf2ccc.h 	dimmem.h	ibufmem.h	infomem.h	specmem.h	varmem.h	ztypmem.h
-$(LIBP)(vers_netcdf.o):		vers_netcdf.f	cdf2ccc.h 	dimmem.h	ibufmem.h 	infomem.h	specmem.h	varmem.h	ztypmem.h
-$(LIBP)(wrfile.o):			wrfile.f	cdf2ccc.h	dimmem.h	ibufmem.h	infomem.h	varmem.h	workmem.h 
-$(LIBP)(wrlalo.o):			wrlalo.f		cdf2ccc.h	dimmem.h	ibufmem.h	infomem.h	varmem.h	workmem.h 
+$(LIBP)(affecte_attr.o):	affecte_attr.f $(INCLUDES)/cdf2ccc.h	$(INCLUDES)/workmem.h 
+$(LIBP)(affecte_coord.o):	affecte_coord.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/infomem.h 
+$(LIBP)(affecte_dim.o):		affecte_dim.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h 
+$(LIBP)(affecte_var.o): 	affecte_var.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/infomem.h 
+$(LIBP)(attr_value.o): 		attr_value.f	$(INCLUDES)/cdf2ccc.h
+$(LIBP)(attribut_coord.o):	attribut_coord.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/format.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/workmem.h 
+$(LIBP)(attribut_var.o): 	attribut_var.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h 	$(INCLUDES)/varmem.h 
+$(LIBP)(auxiliary_coordinate.o): 	auxiliary_coordinate.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/ztypmem.h
+$(LIBP)(cal_date.o):			cal_date.f	$(INCLUDES)/cdf2ccc.h 
+$(LIBP)(cdf2ccc.o):			cdf2ccc.ftn	$(INCLUDES)/cdf2ccc.h
+$(LIBP)(combline.o): 		combline.f	$(INCLUDES)/cdf2ccc.h 
+$(LIBP)(conv_unit.o): 		conv_unit.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h 
+$(LIBP)(decodate.o):			decodate.ftn	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h  
+$(LIBP)(def_attr_projection.o): def_attr_projection.f $(INCLUDES)/cdf2ccc.h $(INCLUDES)/ztypmem.h
+$(LIBP)(def_cccma.o):		def_cccma.f	$(INCLUDES)/cdf2ccc.h 
+$(LIBP)(def_dim_coord.o):	def_dim_coord.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h		$(INCLUDES)/workmem.h 
+$(LIBP)(def_level.o):		def_level.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/dimmem.h 	$(INCLUDES)/infomem.h 	$(INCLUDES)/varmem.h		$(INCLUDES)/workmem.h 
+$(LIBP)(def_spectral_truncation.o):	def_spectral_truncation.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h 
+$(LIBP)(define_list.o):		define_list.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h 
+$(LIBP)(define_netcdf.o):	define_netcdf.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h 
+$(LIBP)(define_var.o):		define_var.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h 
+$(LIBP)(encodate.o):			encodate.ftn	$(INCLUDES)/cdf2ccc.h 
+$(LIBP)(enleve_bissextile2.o):	enleve_bissextile2.ftn	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/format.h 
+$(LIBP)(eval_lonlat.o):		eval_lonlat.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/ztypmem.h
+$(LIBP)(eval_xcyc.o):		eval_xcyc.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h 	$(INCLUDES)/varmem.h 
+$(LIBP)(get_attr.o):			get_attr.f		$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/workmem.h 
+$(LIBP)(get_attribut.o):	get_attribut.f		$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/workmem.h 
+$(LIBP)(get_coord2.o):		get_coord2.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h 
+$(LIBP)(get_coordonne.o):	get_coordonne.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h 
+$(LIBP)(get_dim.o):			get_dim.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h 
+$(LIBP)(get_topo.o):			get_topo.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/workmem.h 
+$(LIBP)(get_var.o):			get_var.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/workmem.h 
+$(LIBP)(hybrid_vertical_coordinate.o):		hybrid_vertical_coordinate.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h 
+$(LIBP)(init_dim.o):			init_dim.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h 
+$(LIBP)(initialise.o):		initialise.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h
+$(LIBP)(inq_file.o):			inq_file.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/ztypmem.h
+$(LIBP)(lire_arg.o):			lire_arg.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/ztypmem.h
+$(LIBP)(lire_cccvar.o):		lire_cccvar.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/workmem.h 
+$(LIBP)(possibilite.o):		possibilite.f	$(INCLUDES)/cdf2ccc.h 
+$(LIBP)(put_attribut.o):	put_attribut.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/workmem.h 
+$(LIBP)(put_var.o):			put_var.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/workmem.h 
+$(LIBP)(rdlatlon2.o):		rdlatlon2.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/ibufmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/workmem.h	$(INCLUDES)/ztypmem.h 
+$(LIBP)(rdspec2.o):			rdspec2.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h $(INCLUDES)/ibufmem.h	$(INCLUDES)/infomem.h $(INCLUDES)/infomem.h	$(INCLUDES)/specmem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/workmem.h 
+$(LIBP)(scanfile.o):			scanfile.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/format.h	$(INCLUDES)/varmem.h	$(INCLUDES)/workmem.h 
+$(LIBP)(trier.o):				trier.f		$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/specmem.h $(INCLUDES)/ztypmem.h
+$(LIBP)(valide_range.o):	valide_range.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/infomem.h 
+$(LIBP)(vers_cccma.o):		vers_cccma.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/dimmem.h	$(INCLUDES)/ibufmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/specmem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/ztypmem.h
+$(LIBP)(vers_netcdf.o):		vers_netcdf.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/dimmem.h	$(INCLUDES)/ibufmem.h $(INCLUDES)/infomem.h	$(INCLUDES)/specmem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/ztypmem.h
+$(LIBP)(wrfile.o):			wrfile.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/ibufmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/workmem.h 
+$(LIBP)(wrlalo.o):			wrlalo.f		$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/ibufmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/workmem.h 
 
 
 #LISTE DES CIBLES DU FICHIER recettes
@@ -307,7 +316,7 @@ cdf2ccc: initial cdf2ccc.ftn
 	$(AR) xv $(LIBP) lire_arg.o
 	$(FC) $@.ftn -o $@ -libpath "$(LIBPATH)" \
 	-libappl "$(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB)" \
-	-librmn $(RMNLIB) -obj "$(OBJ)" $(CODEBETA) -libsys $(DDFUN90)
+	-librmn $(RMNLIB) -obj "lire_arg.o $(OBJ)" $(CODEBETA) -libsys $(DDFUN90)
 	/bin/rm lire_arg.o cdf2ccc.o ; /bin/mv $@ $(BINDIR)/cdf2ccc_$(CONV_VERSION) ;\
 	cd $(BINDIR)  ; /bin/ln -f cdf2ccc_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
 
@@ -318,7 +327,7 @@ AIX: initial cdf2ccc.ftn
 	$(AR) xv $(LIBP) lire_arg.o
 	$(FC) cdf2ccc.ftn -o $@ -libpath "$(LIBPATH)" \
 	-libappl "$(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB)" \
-	-librmn $(RMNLIB) -obj "$(OBJ)" $(CODEBETA)
+	-librmn $(RMNLIB) -obj "lire_arg.o $(OBJ)" $(CODEBETA)
 	/bin/rm lire_arg.o cdf2ccc.o ; /bin/mv $@ $(BINDIR)/cdf2ccc_$(CONV_VERSION) ;\
 	cd $(BINDIR)  ; /bin/ln -f cdf2ccc_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
 

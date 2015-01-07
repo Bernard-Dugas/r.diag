@@ -6,7 +6,9 @@ print_usage() {
         ${0##*/} command [file1 [file2 ... ]] -other_arguments
        "
 }
-Location=${DIAGNOSTIQUE}
+Location=$(true_path $0)
+Location=${Location%/bin/*}
+Location=${DIAGNOSTIQUE:-${Location}}
 case ${1:---help} in
 --help | -h )
   print_usage
@@ -32,8 +34,8 @@ case ${1:---help} in
   exit 0
   ;;
 * )
-  RDIAG=${RDIAG:-${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.r.diag}
-  if [ `echo ${RDIAG} | cut -c1` != "/" ]; then RDIAG=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/$RDIAG ; fi
+  RDIAG=${RDIAG:-${Location}/bin/${BASE_ARCH}/stable.r.diag}
+  if [ `echo ${RDIAG} | cut -c1` != "/" ]; then RDIAG=${Location}/bin/${BASE_ARCH}/$RDIAG ; fi
   if [[ -x ${RDIAG} ]] ; then
     if [ ! "${launched_by_r_diag_script}" ]; then
       export launched_by_r_diag_script=YES
@@ -47,7 +49,7 @@ case ${1:---help} in
       exit 99
     fi
   else
-    ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.r.diag "$@"
+    ${Location}/bin/${BASE_ARCH}/stable.r.diag "$@"
     exit $?
   fi
   ;;

@@ -8,7 +8,7 @@
 *
 *
 *     AUTHOR - B.Dugas, juin 29/88.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fullcor.ptn,v 4.8 2014/09/25 20:20:48 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/fullcor.ptn,v 4.9 2014/12/04 00:26:27 dugas Exp $
 *
 *
 *     DESCRIPTION...
@@ -68,6 +68,9 @@
 *    2                 TAPE1=IN, TAPE2=MAT, TAPE5=INPUT,TAPE6=OUTPUT) 
  
 *     $Log: fullcor.ptn,v $
+*     Revision 4.9  2014/12/04 00:26:27  dugas
+*     Corrections pour GFORTRAN 4.9.
+*
 *     Revision 4.8  2014/09/25 20:20:48  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -259,7 +262,7 @@
           VAR = VAR/NWDS
           RMS = SQRT(VAR) 
  
-          If (RMS > 1e-300)                                    THEN
+          If (RMS > 1d-300)                                    THEN
               DO  J=1,NWDS 
                   DAT(WHERE1+J) = DAT(WHERE1+J)/RMS 
               END DO

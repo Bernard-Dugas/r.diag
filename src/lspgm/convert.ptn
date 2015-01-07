@@ -18,7 +18,7 @@
 *
 *
 * Auteur: B.Dugas, RPN - septembre 1990.
-* Derniere revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/convert.ptn,v 4.85 2014/10/16 02:24:34 dugas Exp $
+* Derniere revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/convert.ptn,v 4.86 2014/12/04 00:23:37 dugas Exp $
 *
 * 
 * Objet:
@@ -304,6 +304,9 @@
 ***        CCRN a RPN.
 ***   
 *     $Log: convert.ptn,v $
+*     Revision 4.86  2014/12/04 00:23:37  dugas
+*     Corrections pour GFORTRAN 4.9.
+*
 *     Revision 4.85  2014/10/16 02:24:34  dugas
 *      - Modifications commandees par la compilation avec GFORTRAN et IFORT.
 *      - Implementer le support des valeurs manquantes (via "-mvalue").
@@ -913,14 +916,14 @@
       real(8)   :: MisFlag, Epsilon = 0.01
       logical   :: MValue=.false.,MValue_READ=.false.,MValue_IS_OFF=.false.
 
-      real,           save :: misf=9.96921e+36  ! a very large float
-      integer,        save :: misi=Z'80000000'  ! largest negative 32 bit integer
-      integer,        save :: misui=Z'FFFFFFFF' ! largest 32 bit unsigned integer
-      real    *8,     save :: misd=9.96921e+36  ! very large double
-      integer *2,     save :: misa=Z'8000'      ! largest negative 16 bit integer
-      integer *2,     save :: misus=Z'FFFF'     ! largest 16 bit unsigned integer
-      integer *1,     save :: misb=Z'80'        ! largest negative 8 bit integer
-      integer *1,     save :: misub=Z'FF'       ! largest  8 bit unsigned integer
+      real,           save :: misf=9.96921e+36                ! a very large float
+      real    *8,     save :: misd=9.96921e+36                ! very large double
+      integer,        save :: misi =transfer(Z'80000000',1_4) ! largest negative 32 bit integer
+      integer,        save :: misui=transfer(Z'FFFFFFFF',1_4) ! largest 32 bit unsigned integer
+      integer *2,     save :: misa =transfer(Z'8000'    ,1_2) ! largest negative 16 bit integer
+      integer *2,     save :: misus=transfer(Z'FFFF'    ,1_2) ! largest 16 bit unsigned integer
+      integer *1,     save :: misb =transfer(Z'80'      ,1_1) ! largest negative 8 bit integer
+      integer *1,     save :: misub=transfer(Z'FF'      ,1_1) ! largest  8 bit unsigned integer
 
       integer, external :: GET_MISSING_VALUE_FLAGS,MISSING_VALUE_USED
 

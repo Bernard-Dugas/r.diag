@@ -17,64 +17,69 @@
         PROGRAM fptest
 
 *     $Log: fptest.ptn,v $
-*     Revision 4.1  2014/09/25 20:20:47  dugas
-*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*     Revision 4.2  2014/12/04 00:25:39  dugas
+*     Enlever l'enonce EQUIVALENCE.
 *
-*     Revision 4.0  1994/11/17 14:20:04  armnrbd
-*     Messages informatifs quand au passage de la version 3.x a 4.0...
-*     1) Les espaces en debut des noms de variables de sont plus pertinents.
-*     2) Les grilles complexes de type CMPL sont maintenant supportees.
-*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
-*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
-*
-*     Revision 3.0  93/10/13  13:55:59  armnrbd
-*     Premiere version compatible HP-UX.
-*     
-*     Revision 1.0  92/02/24  14:41:42  armnrbd
-*     Initial revision
-*     
+!     Revision 4.1  2014/09/25 20:20:47  dugas
+!     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+!
+!     Revision 4.0  1994/11/17 14:20:04  armnrbd
+!     Messages informatifs quand au passage de la version 3.x a 4.0...
+!     1) Les espaces en debut des noms de variables de sont plus pertinents.
+!     2) Les grilles complexes de type CMPL sont maintenant supportees.
+!     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+!     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+!
+!     Revision 3.0  93/10/13  13:55:59  armnrbd
+!     P emiere version compatible HP-UX.
+!     
+!     Revision 1.0  92/02/24  14:41:42  armnrbd
+!     Initial revision
+!             
 
-	integer y(2),w
-	real x,z
-        equivalence (w,x)
+        integer y(2),w(1)
+        real x,z
+        pointer (ix,x(1))
+!!!     equivalence (w,x)
+        ix = loc(w(1))
 
-	x=1.e5
-	call encodr(x,y)
-        write(*,1001) x,y(1),y(2)
-	call decodr(z,y)
-	write(*,1002) x,z,x-z,w
+        x=1.e5
+        call encodr(x,y)
+        write(*,1001) x(1),y(1),y(2)
+        call decodr(z,y)
+        write(*,1002) x(1),z,x(1)-z,w(1)
 
-	x=-1.e-5
-	call encodr(x,y)
-	write(*,1001) x,y(1),y(2)
-	call decodr(z,y)
-	write(*,1002) x,z,x-z,w
+        x=-1.e-5
+        call encodr(x,y)
+        write(*,1001) x(1),y(1),y(2)
+        call decodr(z,y)
+        write(*,1002) x(1),z,x(1)-z,w(1)
 
-	x=1.9375e5
-	call encodr(x,y)
- 	write(*,1001) x,y(1),y(2)
-	call decodr(z,y)
-	write(*,1002) x,z,x-z,w
+        x=1.9375e5
+        call encodr(x,y)
+        write(*,1001) x(1),y(1),y(2)
+        call decodr(z,y)
+        write(*,1002) x(1),z,x(1)-z,w(1)
 
-	x=-1.9375e-5
-	call encodr(x,y)
-	write(*,1001) x,y(2),y(1)
-	call decodr(z,y)
-	write(*,1002) x,z,x-z,w
+        x=-1.9375e-5
+        call encodr(x,y)
+        write(*,1001) x(1),y(2),y(1)
+        call decodr(z,y)
+        write(*,1002) x(1),z,x(1)-z,w(1)
 
-  100	write(*,1003)
-  200	read(*,2000,end=200) x
-            call encodr(x,y)
-	    write(*,1001) x,y(1),y(2)
-	    call decodr(z,y)
-	    write(*,1002) x,z,x-z,w
-            if (x.eq.0.d0) stop ' '
-	goto 100
+ 100    write(*,1003)
+ 200    read(*,2000,end=200) x(1)
+           call encodr(x,y)
+           write(*,1001) x(1),y(1),y(2)
+           call decodr(z,y)
+           write(*,1002) x(1),z,x(1)-z,w(1)
+           if (x(1) == 0.0) stop ' '
+        goto 100
 
- 1001	format(/1x,e20.12,'=',z8.8,1x,z8.8,' (apres ENCODR)')
- 1002	format( 1x,3e20.12,' (apres DECODR)'/
-     +          ' w =',z8.8)
- 1003	format(/' Selectionnez une valeur reelle ... ',$)
- 2000	format(bz,e10.0)
+ 1001   format(/1x,e20.12,'=',z8.8,1x,z8.8,' (apres ENCODR)')
+ 1002   format( 1x,3e20.12,' (apres DECODR)'/' w =',z8.8)
+ 1003   format(/' Selectionnez une valeur reelle ... ',$)
+ 2000   format(bz,e20.0)
 
-	end
+        stop
+        end

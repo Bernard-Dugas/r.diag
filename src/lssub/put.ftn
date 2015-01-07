@@ -22,6 +22,9 @@
 #     endif
 C
 C     $Log: put.ftn,v $
+C     Revision 3.50  2014/12/03 23:24:37  dugas
+C     Enlever les enonces EQUIVALENCE.
+C
 C     Revision 3.49  2014/10/16 12:14:19  dugas
 C     Modifications commandees par la compilation avec GFORTRAN et IFORT.
 C
@@ -281,9 +284,10 @@ C
 !     used for date calculation (newdate)
       integer(8),   save :: bit33=X'100000000' ! = 1 0000 0000
       integer(8) :: DATE_CONVERSION_FACTOR
-      integer    :: DATE32(2),YYYYMMDD, HHMMSSHH, NPAS
-      integer(8) :: DATE64,   YYYYMMDD8,HHMMSSHH8,DCF
-      equivalence ( DATE64, DATE32(1) )
+      integer    :: DATE32,YYYYMMDD, HHMMSSHH, NPAS
+      integer(8) :: DATE64,YYYYMMDD8,HHMMSSHH8,DCF
+
+      pointer     ( IDT32,DATE32(2) )
 
       INTEGER(8) :: MinDat8=  30 01 01 00,
      +              MaxDat8= 100 00 00 00
@@ -295,6 +299,8 @@ C
       INTEGER(8) :: BASDAT8=1900 00 00 00, UNMILLION=1 00 00 00
 
 *---------------------------------------------------------------------
+      IDT32 = LOC( DATE64 ) !!! equivalence ( DATE64, DATE32(1) )
+
       OK = .TRUE.
       NF = ABS( NFL )
 

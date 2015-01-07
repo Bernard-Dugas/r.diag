@@ -1,6 +1,8 @@
 .SUFFIXES :
 .SUFFIXES : .cdk90 .ftn .ftn90 .txt .c .F90 .f .f90 .mod .o .a
 
+# LSSUB Makefile
+
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
 endif
@@ -26,7 +28,7 @@ DIAGS   = $(DIAGNOSTIQUE)
 INCLUDE = $(DIAGS)/include
 LIBDIR  = $(DIAGS)/lib/$(EC_ARCH)
 MANDIR  = $(DIAGS)/man/pdoc
-MODDIR  = $(DIAGS)/lib/mods/$(EC_ARCH)
+MODDIR  = $(INCLUDE)/$(EC_ARCH)
 SOURCES = $(DIAGS)/src/lssub/sources$(STD)/$(EC_ARCH)
 
 DIAGLIB = diag_sq$(STD)
@@ -34,7 +36,7 @@ LIBS    = $(LIBDIR)/lib$(DIAGLIB).a
 VGDLIB  = descrip
 
 TXT     = -DNO_SOURCE -DAUTO_DOC
-DEFINE  = -Dtaille_entete=$(ENTETE) -D$(EC_ARCH) -Dnombre_de_taches=$(NP)
+DEFINE  = -Dtaille_entete=$(ENTETE) -Dnombre_de_taches=$(NP)
 
 COMPILE = s.compile
 FCOMP   = $(COMPILE) -includes "$(INCLUDE) $(MODDIR)" -defines "=$(DEFINE)" -O $(OPTIL) -optf "$(FFLAGS)" -src
@@ -234,7 +236,7 @@ convsub.o  : convsub.ftn diag_toc.mod \
 	$(INCLUDE)/machtype.cdk	$(INCLUDE)/zlabel.cdk
 coord.o : coord.ftn	diag_convert_ip123.mod
 diag_convert_ip123.o : diag_convert_ip123.cdk90
-diag_toc.o : diag_toc.cdk90
+diag_toc.o : diag_toc.cdk90	vgrid_descriptors.mod
 get.o      : get.ftn diag_toc.mod \
 	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 util.o     : util.ftn  diag_toc.mod \
@@ -247,7 +249,7 @@ initial:
 # Setup des repertoires et liens dependants de $(EC_ARCH)
 	/bin/mkdir -p $(SOURCES) $(LIBDIR) $(MANDIR) $(MODDIR)
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
-	if [[ ! -L $(SOURCES)/Makefile ]]; then \
+	if [[ `/bin/ls -L $(SOURCES)/Makefile ; echo $?` != 0 ]]; then \
 	/bin/ln -sf $(DIAGS)/src/lssub/Makefile_sources$(STD) $(SOURCES)/Makefile ; fi
 
 document: lssub.ftn

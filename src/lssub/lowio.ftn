@@ -14,93 +14,96 @@
 ! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
-C     $Log: lowio.ftn,v $
-C     Revision 3.7  2014/09/25 18:42:03  dugas
-C     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
-C
-C     Revision 3.6  2008/04/25 20:50:45  dugas
-C     Remplacer 'defined f77' par defined (F77)' dans ENCODR/DECODR.
-C
-C     Revision 3.5  2000/04/04 16:48:57  armnrbd
-C     Tenir compte de la definition de constantes hexadecimales
-C     avec F90 dans les routines ENCODR et DECODR.
-C
-C     Revision 3.4  1999/06/23 20:53:02  armnrbd
-C     Verifier pour la presence de NaN dans DECODR.
-C
-C     Revision 3.3  1999/04/08 19:53:31  armnrbd
-C     Utiliser le comdeck MACHTYPE.CDK.
-C     Tenir compte de BIGENDI dans ENCODR et DECODR.
-C     Elaborer differamment les boucles principales des
-C     routines GBYTES1, GBYTES2, GBYTES3 et GBYTES4.
-C
-C     Revision 3.2  1997/11/21 20:58:14  armnrbd
-C     Assurer l'alignement de Z dans (DE/EN)CODR.
-C
-C     Revision 3.1  1994/11/17  14:13:40  armnrbd
-C     Messages informatifs quand au passage de la version 2.x a 3.1...
-C     1) Les espaces en debut des noms de variables de sont plus pertinents.
-C     2) Les grilles complexes de type CMPL sont maintenant supportees.
-C     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
-C     4) Plusieurs nouvelles cles sont disponibles au demarrage.
-C
-C     Revision 3.0  94/11/17  13:55:46  13:55:46  armnrbd (Bernard Dugas)
-C     *** empty log message ***
-C     
-C     Revision 2.0  93/10/13  13:31:54  armnrbd
-C     Premiere version compatible HP-UX.
-C     
-C     Revision 1.0  92/02/21  11:33:40  11:33:40  armnrbd (Bernard Dugas)
-C     Initial revision
-C     
+!     $Log: lowio.ftn,v $
+!     Revision 3.8  2014/12/03 23:26:35  dugas
+!     Enlever les enonces EQUIVALENCE.
+!
+!     Revision 3.7  2014/09/25 18:42:03  dugas
+!     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
+!
+!     Revision 3.6  2008/04/25 20:50:45  dugas
+!     Remplacer 'defined f77' par defined (F77)' dans ENCODR/DECODR.
+!
+!     Revision 3.5  2000/04/04 16:48:57  armnrbd
+!     Tenir compte de la definition de constantes hexadecimales
+!     avec F90 dans les routines ENCODR et DECODR.
+!
+!     Revision 3.4  1999/06/23 20:53:02  armnrbd
+!     Verifier pour la presence de NaN dans DECODR.
+!
+!     Revision 3.3  1999/04/08 19:53:31  armnrbd
+!     Utiliser le comdeck MACHTYPE.CDK.
+!     Tenir compte de BIGENDI dans ENCODR et DECODR.
+!     Elaborer differamment les boucles principales des
+!     routines GBYTES1, GBYTES2, GBYTES3 et GBYTES4.
+!
+!     Revision 3.2  1997/11/21 20:58:14  armnrbd
+!     Assurer l'alignement de Z dans (DE/EN)CODR.
+!
+!     Revision 3.1  1994/11/17  14:13:40  armnrbd
+!     Messages informatifs quand au passage de la version 2.x a 3.1...
+!     1) Les espaces en debut des noms de variables de sont plus pertinents.
+!     2) Les grilles complexes de type CMPL sont maintenant supportees.
+!     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+!     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+!
+!     Revision 3.0  94/11/17  13:55:46  13:55:46  armnrbd (Bernard Dugas)
+!     *** empty log message ***
+!     
+!     Revision 2.0  93/10/13  13:31:54  armnrbd
+!     Premiere version compatible HP-UX.
+!     
+!     Revision 1.0  92/02/21  11:33:40  11:33:40  armnrbd (Bernard Dugas)
+!     Initial revision
+!     
 
       SUBROUTINE encodr (X,Y)
 
-C     * APRIL 01/90 - B.DUGAS. CREATES AN IEEE-754 VERSION OF THE
-C     *                        AES/CCRN PACKER.
-C     * NOV 06/90   - B.DUGAS. CONVERT THE INPUT FROM REAL*4 FORMAT.
+      IMPLICIT INTEGER(4) (A-Z)
 
-C     * THIS ROUTINE TAKES  A VALID IEEE-754 FP NUMBER AND
-C     * NORMALIZES IT IN SUCH A WAY THAT IT CAN BE THEN BE
-C     * SENT FROM ONE COMPUTER TO ANOTHER. THE OUTPUT CLO-
-C     * SELY RESEMBLES A CRAY SINGLE PRECISION FP NUMBER.
+      DIMENSION Y(2)
 
-C     * THE IEEE-754 64-BIT INPUT WORD LOOKS LIKE: 
+!     * APRIL 01/90 - B.DUGAS. CREATES AN IEEE-754 VERSION OF THE
+!     *                        AES/CCRN PACKER.
+!     * NOV 06/90   - B.DUGAS. CONVERT THE INPUT FROM REAL*4 FORMAT.
 
-C     *           +-----------------------------------------------+
-C     *           ! SIGN !  BIASED EXPONENT  !     MANTISSA       !
-C     *           +-----------------------------------------------+
+!     * THIS ROUTINE TAKES  A VALID IEEE-754 FP NUMBER (X) AND
+!     * NORMALIZES IT IN SUCH A WAY THAT IT CAN BE THEN BE SENT
+!     * FROM ONE COMPUTER TO ANOTHER. THE OUTPUT (Y) CLOSELY
+!     * RESEMBLES A CRAY SINGLE PRECISION FP NUMBER.
 
-C     * WHERE ...
+!     * THE IEEE-754 64-BIT INPUT WORD LOOKS LIKE: 
 
-C     *       SIGN     = 1 BIT,
-C     *       EXPONENT = 11 BITS (BIASED BY 2**10-1) AND 
-C     *       MANTISSA = 52 BITS (WITH AN IMPLICIT LEADING 1).
+!     *           +-----------------------------------------------+
+!     *           ! SIGN !  BIASED EXPONENT  !     MANTISSA       !
+!     *           +-----------------------------------------------+
 
-C     * THE NORMALISED 64-BIT OUTPUT NUMBER LOOKS LIKE: 
+!     * WHERE ...
 
-C     *           +-----------------------------------------------+
-C     *           !   BIASED EXPONENT   !    BIASED MANTISSA      !
-C     *           +-----------------------------------------------+
+!     *       SIGN     = 1 BIT,
+!     *       EXPONENT = 11 BITS (BIASED BY 2**10-1) AND 
+!     *       MANTISSA = 52 BITS (WITH AN IMPLICIT LEADING 1).
 
-C     * WHERE ...
+!     * THE NORMALISED 64-BIT OUTPUT NUMBER LOOKS LIKE: 
 
-C     *       EXPONENT = 15 BITS (2**14 BIASED EXPONENT) AND
-C     *       MANTISSA = 49 BITS (BIASED BY 2**48-1 WHICH IS THE
-C     *                           LARGEST POSSIBLE MANTISSA ON A
-C     *                           CRAY COMPUTER).
+!     *           +-----------------------------------------------+
+!     *           !   BIASED EXPONENT   !    BIASED MANTISSA      !
+!     *           +-----------------------------------------------+
 
-C-------------------------------------------------------------------
-      IMPLICIT INTEGER (A-Z)
+!     * WHERE ...
 
-      DIMENSION Z(2), Y(2)
-      REAL*8    Z8
+!     *       EXPONENT = 15 BITS (2**14 BIASED EXPONENT) AND
+!     *       MANTISSA = 49 BITS (BIASED BY 2**48-1 WHICH IS THE
+!     *                           LARGEST POSSIBLE MANTISSA ON A
+!     *                           CRAY COMPUTER).
 
-      EQUIVALENCE ( Z8,Z(1) )
+!-------------------------------------------------------------------
+      DIMENSION Z(2)
+      REAL(8)   Z8
+      POINTER (IZ8,Z8(*))
 
 #     include    "machtype.cdk"
 
-      DATA ZERO, UN, TROIS, CINQ, LAST / 0, 1, 3, 5, 31 /
 #     if defined (F77)
       DATA INME    / X'7FF00000' /,
      +     INBE    / X'78040000' /,
@@ -111,25 +114,30 @@ C-------------------------------------------------------------------
      +     ZEROMAN / X'FFFFFFFF' /,
      +     ZEROEXP / X'8000FFFF' /
 #     else
-      DATA INME    / Z'7FF00000' /,
-     +     INBE    / Z'78040000' /,
-     +     INMM    / Z'FFFFF'    /,
-     +     OUB1    / Z'7FFFFFF'  /,
-     +     OUB2    / Z'1FFFFF'   /,
-     +     OUMM    / Z'1F'       /,
-     +     ZEROMAN / Z'FFFFFFFF' /,
-     +     ZEROEXP / Z'8000FFFF' /
+      REAL(8), SAVE :: ZERO8 = Z'8000FFFFFFFFFFFF'
+      INTEGER, SAVE :: INME  = TRANSFER( Z'7FF00000',1 )
+      INTEGER, SAVE :: INBE  = TRANSFER( Z'78040000',1 )
+      INTEGER, SAVE :: INMM  = TRANSFER( Z'FFFFF'   ,1 ) 
+      INTEGER, SAVE :: OUB1  = TRANSFER( Z'7FFFFFF' ,1 )
+      INTEGER, SAVE :: OUB2  = TRANSFER( Z'1FFFFF'  ,1 )
+      INTEGER, SAVE :: OUMM  = TRANSFER( Z'1F'      ,1 )
 #     endif
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+      INTEGER, SAVE :: ZERO=0, UN=1, TROIS=3, CINQ=5, LAST=31
+
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
       OR ( NUM1, NUM2) = IOR    ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT ( NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT ( NUM,  BITS)
       ISHC( NUM,  BITS) = ISHFTC( NUM,  BITS, 32)
 
-C ------------------------------------------------------------------- 
-      IF (BIGENDI.EQ.1)                                        THEN
+      EXTERNAL GO4A8
+
+! ------------------------------------------------------------------- 
+      IZ8 = LOC( Y(1) )
+
+      IF (BIGENDI == 1)                                        THEN
           HIW = 1
           LOW = 2
       ELSE
@@ -137,46 +145,50 @@ C -------------------------------------------------------------------
           LOW = 1
       END IF
 
-C     * CONVERT TO REAL*8 FORMAT BEFORE CODING.
+!     * CONVERT TO REAL*8 FORMAT BEFORE CODING.
 
       CALL GO4A8 (X,Z)
 
-C     * TAKE CARE OF ZERO VALUES.
+!     * TAKE CARE OF ZERO VALUES.
 
-      IF (       Z(HIW)     .EQ.ZERO .AND. 
-     +    ISHFT( Z(LOW),UN ).EQ.ZERO      )                    THEN
+      IF (       Z(HIW)      == ZERO .AND. 
+     +    ISHFT( Z(LOW),UN ) == ZERO      )                    THEN
+#         if defined (F77)
           Y(2) = ZEROMAN
           Y(1) = ZEROEXP
+#         else
+          Z8(1) = ZERO8
+#         endif
           RETURN
       END IF
 
-C     * ISOLATE EXPONENT E IN RESULT WORD. ACCOUNT FOR IEEE BIAS.
-C     * NOTE THAT INBE = 2*(2**14-(2**10-1)+1)).
+!     * ISOLATE EXPONENT E IN RESULT WORD. ACCOUNT FOR IEEE BIAS.
+!     * NOTE THAT INBE = 2*(2**14-(2**10-1)+1)).
 
       E = ISHFT( AND( INME, Z(HIW)) , -TROIS) + INBE
 
-C     * ISOLATE MANTISSA. ISOLATE THE HIGH 27 BITS FROM Z(HIW) AND 
-C     * THE  LOW 20 BITS FROM Z(LOW). THEN, ACCOUNTING FOR THE IM-
-C     * PLICIT 2**51 BIT GIVES US A 48-BIT MANTISSA.
+!     * ISOLATE MANTISSA. ISOLATE THE HIGH 27 BITS FROM Z(HIW) AND 
+!     * THE  LOW 20 BITS FROM Z(LOW). THEN, ACCOUNTING FOR THE IM-
+!     * PLICIT 2**51 BIT GIVES US A 48-BIT MANTISSA.
 
       M1 = ISHFT( Z(LOW),-CINQ )
       M2 = AND(   Z(HIW), INMM ) + (INMM+UN)
 
-C     * CHECK IF SIGN BIT IS ON. 
+!     * CHECK IF SIGN BIT IS ON. 
 
       IF (BTEST( Z(HIW),LAST ))                                THEN
 
-C         * NEGATIVE NUMBER CASE. SUBSTRACT THE MANTISSA FROM THE BIAS.
+!         * NEGATIVE NUMBER CASE. SUBSTRACT THE MANTISSA FROM THE BIAS.
 
           M1 = OUB1-M1
           M2 = OUB2-M2
 
       ELSE
 
-C         * POSITIVE NUMBER CASE. ADD THE BIAS TO THE MANTISSA,
-C         * TAKING CARE OF A POSSIBLE CARRY BIT FROM M1 TO M2.
+!         * POSITIVE NUMBER CASE. ADD THE BIAS TO THE MANTISSA,
+!         * TAKING CARE OF A POSSIBLE CARRY BIT FROM M1 TO M2.
 
-          IF (M1.NE.ZERO)                                      THEN
+          IF (M1 /= ZERO)                                      THEN
               M1 = M1-UN
               M2 = M2+UN+OUB2
           ELSE
@@ -186,70 +198,68 @@ C         * TAKING CARE OF A POSSIBLE CARRY BIT FROM M1 TO M2.
           
       END IF
 
-C     * JOIN THE NORMALIZED EXPONENT AND MANTISSA.
+!     * JOIN THE NORMALIZED EXPONENT AND MANTISSA.
 
       Y(2) = OR( ISHC( AND( OUMM,M2 ),-CINQ ),M1 )
       Y(1) = OR( ISHFT( M2,-CINQ ),E )
 
       RETURN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END
 
       SUBROUTINE decodr (X,Y)
 
-C     * APRIL 01/90 - B.DUGAS. CREATES AN IEEE-754 VERSION OF THE
-C     *                        AES/CCRN PACKER.
-C     * NOV 06/90   - B.DUGAS. CONVERT THE OUTPUT TO REAL*4 FORMAT.
+      IMPLICIT INTEGER(4) (A-Z)
 
-C     * THIS SUBPROGRAM DOES THE OPPOSITE WORK OF ENCODR. IT
-C     * TAKES A NORMALIZED FP  NUMBER AND RETURNS A IEEE-754 
-C     * VALID FORM.  NOTE THAT THE INPUT CLOSELY RESEMBLES A
-C     * CRAY SINGLE PRECISION FP NUMBER.
+      DIMENSION Y(2)
 
-C     * THE NORMALIZED 64-BIT INPUT NUMBER LOOKS LIKE: 
+!     * APRIL 01/90 - B.DUGAS. CREATES AN IEEE-754 VERSION OF THE
+!     *                        AES/CCRN PACKER.
+!     * NOV 06/90   - B.DUGAS. CONVERT THE OUTPUT TO REAL*4 FORMAT.
 
-C     *           +-----------------------------------------------+
-C     *           !   BIASED EXPONENT   !    BIASED MANTISSA      !
-C     *           +-----------------------------------------------+
+!     * THIS SUBPROGRAM DOES THE OPPOSITE WORK OF ENCODR. IT
+!     * TAKES A NORMALIZED FP NUMBER (Y) AND RETURNS A IEEE-754 
+!     * VALID FORM (X).  NOTE THAT THE INPUT CLOSELY RESEMBLES A
+!     * CRAY SINGLE PRECISION FP NUMBER.
 
-C     * WHERE ...
+!     * THE NORMALIZED 64-BIT INPUT NUMBER LOOKS LIKE: 
 
-C     *       EXPONENT = 15 BITS (2**14 BIASED EXPONENT) AND
-C     *       MANTISSA = 49 BITS (MANTISSA BIASED BY 2**48-1,
-C     *                           WHICH IS THE LARGEST MANTISSA
-C     *                           ON A CRAY COMPUTER).
+!     *           +-----------------------------------------------+
+!     *           !   BIASED EXPONENT   !    BIASED MANTISSA      !
+!     *           +-----------------------------------------------+
 
-C     * THE 64-BIT OUTPUT F.P. NUMBER WILL LOOK LIKE: 
+!     * WHERE ...
 
-C     *           +-----------------------------------------------+
-C     *           ! SIGN !  BIASED EXPONENT  !     MANTISSA       !
-C     *           +-----------------------------------------------+
+!     *       EXPONENT = 15 BITS (2**14 BIASED EXPONENT) AND
+!     *       MANTISSA = 49 BITS (MANTISSA BIASED BY 2**48-1,
+!     *                           WHICH IS THE LARGEST MANTISSA
+!     *                           ON A CRAY COMPUTER).
 
-C     * WHERE ...
+!     * THE 64-BIT OUTPUT F.P. NUMBER WILL LOOK LIKE: 
 
-C     *       SIGN     = 1 BIT,
-C     *       EXPONENT = 11 BITS (BIASED BY 2**10-1) AND
-C     *       MANTISSA = 52 BITS (WITH AN IMPLICIT LEADING 1),
+!     *           +-----------------------------------------------+
+!     *           ! SIGN !  BIASED EXPONENT  !     MANTISSA       !
+!     *           +-----------------------------------------------+
 
-C     * I.E. A STANDARD IEEE-754 DOUBLE PRECISION F.P. NUMBER.
+!     * WHERE ...
 
-C-------------------------------------------------------------------
-      IMPLICIT INTEGER (A-Z)
+!     *       SIGN     = 1 BIT,
+!     *       EXPONENT = 11 BITS (BIASED BY 2**10-1) AND
+!     *       MANTISSA = 52 BITS (WITH AN IMPLICIT LEADING 1),
 
-      DIMENSION  Y(2), Z(2)
-      REAL*8           Z8
+!     * I.E. A STANDARD IEEE-754 DOUBLE PRECISION F.P. NUMBER.
 
-      EQUIVALENCE ( Z8,Z(1) )
+!-------------------------------------------------------------------
+      DIMENSION Z(2)
+      REAL(8)   Z8
+      POINTER  (IZ8,Z8(*))
 
       LOGICAL              INFO
       COMMON     /ZZVERBO/ INFO
 
-      EXTERNAL    GO8A4,XIT
-
 #     include    "machtype.cdk"
 
-      DATA ZERO, UN, TROIS, QUATRE, C28, LAST  / 0, 1, 3, 4, -28, 31 /
 #     if defined (F77)
       DATA INME    / X'FFFE0000' /,
      +     INBE    / X'78020000' /,
@@ -261,41 +271,50 @@ C-------------------------------------------------------------------
      +     ZEROMAN / X'FFFFFFFF' /,
      +     ZEROEXP / X'8000FFFF' /
 #     else
-      DATA INME    / Z'FFFE0000' /,
-     +     INBE    / Z'78020000' /,
-     +     INM1    / Z'1FFFF'    /,
-     +     INM2    / Z'F0000000' /,
-     +     OUB1    / Z'FFFFFFF'  /,
-     +     OUB2    / Z'FFFFF'    /,
-     +     EINC    / Z'100000'   /,
-     +     ZEROMAN / Z'FFFFFFFF' /,
-     +     ZEROEXP / Z'8000FFFF' /
+      REAL(8), SAVE :: ZERO8 = Z'8000FFFFFFFFFFFF'
+      INTEGER, SAVE :: INME  = TRANSFER( Z'FFFE0000',1 )
+      INTEGER, SAVE :: INBE  = TRANSFER( Z'78020000',1 )
+      INTEGER, SAVE :: INM1  = TRANSFER( Z'1FFFF'   ,1 ) 
+      INTEGER, SAVE :: INM2  = TRANSFER( Z'F0000000',1 )
+      INTEGER, SAVE :: OUB1  = TRANSFER( Z'FFFFFFF' ,1 )
+      INTEGER, SAVE :: OUB2  = TRANSFER( Z'FFFFF'   ,1 )
+      INTEGER, SAVE :: EINC  = TRANSFER( Z'100000'  ,1 )
 #     endif
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+      INTEGER, SAVE :: ZERO=0, UN=1, TROIS=3, QUATRE=4, C28=-28, LAST=31
+
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
       OR ( NUM1, NUM2) = IOR    ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ------------------------------------------------------------------- 
-C     * TAKE CARE OF ZERO VALUES.
+      EXTERNAL    GO8A4,XIT
 
-      IF (Y(2).EQ.ZEROMAN .AND. Y(1).EQ.ZEROEXP)               THEN
+! ------------------------------------------------------------------- 
+      IZ8 = LOC( Y(1) )
+
+!     * TAKE CARE OF ZERO VALUES.
+
+#     if defined (F77)
+      IF (Y(2) == ZEROMAN .AND. Y(1) == ZEROEXP)               THEN
+#     else
+      IF (Z8(1) == ZERO8)                                      THEN
+#     endif
           X = ZERO
           RETURN
       END IF
 
-C     * ISOLATE EXPONENT E IN RESULT WORD. CORRECT TO IEEE BIAS.
-C     * NOTE THAT INBE = 2*(2**14-(2**10-1)).
+!     * ISOLATE EXPONENT E IN RESULT WORD. CORRECT TO IEEE BIAS.
+!     * NOTE THAT INBE = 2*(2**14-(2**10-1)).
 
       E = ISHFT( AND( INME,Y(1) ) - INBE,TROIS )
 
-C     * ISOLATE MANTISSA. ISOLATE THE 32 BITS FROM Y(2) AND THE
-C     * LOW 17 BITS FROM Y(1).  THIS GIVES US A 49-BIT MANTISSA.
-C     * SEPARATE IN HIGH 21- AND LOW 28-BIT WORDS AND SUBSTRACT 
-C     * THE BIAS. IF THE MANTISSA IS SMALLER THAN THE BIAS, THE
-C     * SIGN BIT IS TURNED ON.
+!     * ISOLATE MANTISSA. ISOLATE THE 32 BITS FROM Y(2) AND THE
+!     * LOW 17 BITS FROM Y(1).  THIS GIVES US A 49-BIT MANTISSA.
+!     * SEPARATE IN HIGH 21- AND LOW 28-BIT WORDS AND SUBSTRACT 
+!     * THE BIAS. IF THE MANTISSA IS SMALLER THAN THE BIAS, THE
+!     * SIGN BIT IS TURNED ON.
 
       M1 = AND( OUB1,Y(2) )
 
@@ -307,9 +326,9 @@ C     * SIGN BIT IS TURNED ON.
 
       M2 = OR( M3,M4 )
 
-      IF (M2.LT.OUB2 .OR. (M2.EQ.OUB2 .AND. M1.LT.OUB1))       THEN
+      IF (M2.LT.OUB2 .OR. (M2 == OUB2 .AND. M1.LT.OUB1))       THEN
 
-C         * NEGATIVE NUMBER CASE. SUBSTRACT THE MANTISSA FROM THE BIAS.
+!         * NEGATIVE NUMBER CASE. SUBSTRACT THE MANTISSA FROM THE BIAS.
 
           S  = IBSET( ZERO,LAST )
           M1 = OUB1-M1
@@ -317,8 +336,8 @@ C         * NEGATIVE NUMBER CASE. SUBSTRACT THE MANTISSA FROM THE BIAS.
 
       ELSE
 
-C         * POSITIVE NUMBER CASE.  SUBSTRACT THE BIAS FROM THE MAN-
-C         * TISSA, TAKING CARE OF A POSSIBLE CARRY BIT FROM M1 TO M2.
+!         * POSITIVE NUMBER CASE.  SUBSTRACT THE BIAS FROM THE MAN-
+!         * TISSA, TAKING CARE OF A POSSIBLE CARRY BIT FROM M1 TO M2.
 
           S = ZERO
 
@@ -332,8 +351,8 @@ C         * TISSA, TAKING CARE OF A POSSIBLE CARRY BIT FROM M1 TO M2.
 
       END IF
 
-C     * JOIN THE SIGN, EXPONENT AND MANTISSA. CHECK THAT BIT 21
-C     * OF M2 IS SET. IF IT IS NOT, SHIFT LEFT UNTIL IT IS.
+!     * JOIN THE SIGN, EXPONENT AND MANTISSA. CHECK THAT BIT 21
+!     * OF M2 IS SET. IF IT IS NOT, SHIFT LEFT UNTIL IT IS.
 
   100 IF (M2.LE.OUB2)                                          THEN
           E  = E-EINC
@@ -346,7 +365,7 @@ C     * OF M2 IS SET. IF IT IS NOT, SHIFT LEFT UNTIL IT IS.
           GOTO 100
       END IF
 
-      IF (BIGENDI.EQ.1)                                        THEN
+      IF (BIGENDI == 1)                                        THEN
           Z(2) = ISHFT( M1,QUATRE )
           Z(1) = OR( AND( M2,OUB2 ),OR( S,E ) )
       ELSE
@@ -354,13 +373,13 @@ C     * OF M2 IS SET. IF IT IS NOT, SHIFT LEFT UNTIL IT IS.
           Z(2) = OR( AND( M2,OUB2 ),OR( S,E ) )
       END IF
 
-C     * CHECK FOR IEEE-754 64-BITS INFINITE OR NAN VALUES.
+!     * CHECK FOR IEEE-754 64-BITS INFINITE OR NAN VALUES.
 
       NaN = ISHFT( 1+(AND( 2047,ISHFT( Z(BIGENDI),-20 ) )),-11 )
 
-      IF (NaN.EQ.0)                                            THEN
+      IF (NaN == 0)                                            THEN
 
-C         * GO TO SINGLE PRECISION IEEE-754.
+!         * GO TO SINGLE PRECISION IEEE-754.
 
           CALL GO8A4 (Z,X)
 
@@ -373,200 +392,200 @@ C         * GO TO SINGLE PRECISION IEEE-754.
 
       RETURN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
  6000 FORMAT(//'0 *** Error *** DECODR: IEEE overflow.'//)
 
       END 
 
       SUBROUTINE gbytesb (JPAK,J,BITS,DIM)
 
-C     * APRIL 04/1990 - B.DUGAS (UQAM)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN IDENTICAL WITH THE CRAY VERSION. AS SUCH,  PACKING
-C     * DENSITIES OF 2,4,8 AND 16 ARE SUPPORTED. 32 BIT REAL WORD 
-C     * ARE NO LONGER CONSIDERED (THEY SHOULD NOT BE PACKED). NON
-C     * 32 BIT-FILLING PACKING DENSITIES WORK FINE, THANK YOU.
-
-C     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
-C     * WITH SBYTESB. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
-C     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS J AND WILL 
-C     * BE DIMENSIONNED TO "DIM".
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION J(DIM), JPAK(*)
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * APRIL 04/1990 - B.DUGAS (UQAM)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN IDENTICAL WITH THE CRAY VERSION. AS SUCH,  PACKING
+!     * DENSITIES OF 2,4,8 AND 16 ARE SUPPORTED. 32 BIT REAL WORD 
+!     * ARE NO LONGER CONSIDERED (THEY SHOULD NOT BE PACKED). NON
+!     * 32 BIT-FILLING PACKING DENSITIES WORK FINE, THANK YOU.
+
+!     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
+!     * WITH SBYTESB. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
+!     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS J AND WILL 
+!     * BE DIMENSIONNED TO "DIM".
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW
 
-      DATA ZERO, UN, DEUX / 0, 1, 2 /
+      INTEGER, SAVE :: ZERO=0, UN=1, DEUX=2
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ---------------------------------------------------------------------
-C     * PACKING DENSITY.
+! ---------------------------------------------------------------------
+!     * PACKING DENSITY.
 
       PACK  = BW/BITS
 
-C     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
-C     * PROCESSED IN JPAK.
+!     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
+!     * PROCESSED IN JPAK.
 
       MASQUE = 2**BITS-UN
 
-C     * NUMBER OF BITS TO SHIFT THE POSITIVE INTEGERS INTO THE 
-C     * UNPACKED ARRAY J.
+!     * NUMBER OF BITS TO SHIFT THE POSITIVE INTEGERS INTO THE 
+!     * UNPACKED ARRAY J.
 
       BSKIP  = (PACK-UN)*BITS
       MASQUE = ISHFT( MASQUE, BSKIP)
 
-      DO 300 POINT = UN,(PACK-UN)
+      DO  POINT = UN,(PACK-UN)
 
-C         * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
-C         * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
-C         * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
+!         * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
+!         * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
+!         * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
 
-          DO 250 K = POINT,DIM,PACK
+          DO  K = POINT,DIM,PACK
               JJ   = K/PACK + 1
               J(K) = ISHFT( AND( MASQUE, JPAK(JJ)), -BSKIP) 
-  250     CONTINUE
+          END DO
 
           MASQUE   = ISHFT( MASQUE, -BITS)
           BSKIP    = BSKIP-BITS
 
-  300 CONTINUE
+      END DO
 
 
-C     * DO THE LAST SET SEPARATELY BECAUSE THERE IS NO SHIFTING.
+!     * DO THE LAST SET SEPARATELY BECAUSE THERE IS NO SHIFTING.
 
-      DO 350 K = PACK,DIM,PACK
+      DO  K = PACK,DIM,PACK
           JJ   = K/PACK
           J(K) = AND( MASQUE, JPAK(JJ))
-  350 CONTINUE
+      END DO
 
       RETURN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
  
       SUBROUTINE gbytes1 (JPAK,X,BITS,DIM,XSCALI,XMIN)
 
-C     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 1/1 
-C     * PACKING VERSION.
-
-C     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
-C     * WITH SBYTES1. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
-C     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS X AND WILL 
-C     * BE DIMENSIONNED TO "DIM".
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION JPAK(*)
-      REAL      X(*),XSCALI,XMIN
+      REAL(4)   X(*),XSCALI,XMIN
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 1/1 
+!     * PACKING VERSION.
+
+!     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
+!     * WITH SBYTES1. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
+!     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS X AND WILL 
+!     * BE DIMENSIONNED TO "DIM".
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ---------------------------------------------------------------------
-C     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
-C     * PROCESSED IN JPAK.
+! ---------------------------------------------------------------------
+!     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
+!     * PROCESSED IN JPAK.
 
       MASQUE = 2**BITS-1
 
-C     * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
-C     * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
-C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
+!     * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
+!     * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
+!     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
 
-      DO 250 K = 1,DIM
+      DO  K = 1,DIM
 
           IX   = AND( MASQUE,JPAK(K) )
           X(K) = IX * XSCALI + XMIN
 
-  250 CONTINUE
+      END DO
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
  
       SUBROUTINE gbytes2 (JPAK,X,BITS,DIM,XSCALI,XMIN)
 
-C     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 2/1 
-C     * PACKING VERSION.
-
-C     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
-C     * WITH SBYTES2. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
-C     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS X AND WILL 
-C     * BE DIMENSIONNED TO "DIM".
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION JPAK(*)
-      REAL      X(2,*),XSCALI,XMIN
+      REAL(4)   X(2,*),XSCALI,XMIN
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 2/1 
+!     * PACKING VERSION.
+
+!     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
+!     * WITH SBYTES2. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
+!     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS X AND WILL 
+!     * BE DIMENSIONNED TO "DIM".
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ---------------------------------------------------------------------
-C     * PACKING DENSITY.
+! ---------------------------------------------------------------------
+!     * PACKING DENSITY.
 
       PACK = 2
       DIM2 = DIM/PACK
 
-C     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
-C     * PROCESSED IN JPAK.
+!     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
+!     * PROCESSED IN JPAK.
 
       MASQUE2 = 2**BITS-1
       MASQUE1 = ISHFT( MASQUE2, BITS )
 
       BSKIP1  = -BITS
 
-C     * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
-C     * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
-C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
+!     * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
+!     * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
+!     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
 
-      DO 250 K = 1,DIM2
+      DO  K = 1,DIM2
 
           IX2    =        AND( MASQUE2,JPAK(K) )
           IX1    = ISHFT( AND( MASQUE1,JPAK(K) ), BSKIP1 )
@@ -574,60 +593,60 @@ C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
           X(2,K) = IX2 * XSCALI + XMIN
           X(1,K) = IX1 * XSCALI + XMIN
 
-  250 CONTINUE
+      END DO
 
-      IF (MOD(DIM,2).NE.0)
+      IF (MOD(DIM,2) /= 0)
      +    X(1,K) = ISHFT(
      +                    AND( MASQUE1,JPAK(K) ), 
      +                    BSKIP1
      +                  )
      +           * XSCALI + XMIN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
  
       SUBROUTINE gbytes3 (JPAK,X,BITS,DIM,XSCALI,XMIN)
 
-C     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 3/1 
-C     * PACKING VERSION.
-
-C     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
-C     * WITH SBYTES3. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
-C     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS X AND WILL 
-C     * BE DIMENSIONNED TO "DIM".
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION JPAK(*)
-      REAL      X(3,*),XSCALI,XMIN
+      REAL(4)   X(3,*),XSCALI,XMIN
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 3/1 
+!     * PACKING VERSION.
+
+!     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
+!     * WITH SBYTES3. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
+!     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS X AND WILL 
+!     * BE DIMENSIONNED TO "DIM".
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ---------------------------------------------------------------------
-C     * PACKING DENSITY.
+! ---------------------------------------------------------------------
+!     * PACKING DENSITY.
 
       PACK = 3
       DIM3 = DIM/PACK
 
-C     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
-C     * PROCESSED IN JPAK.
+!     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
+!     * PROCESSED IN JPAK.
 
       MASQUE3 = 2**BITS-1
       MASQUE2 = ISHFT( MASQUE3, BITS )
@@ -636,11 +655,11 @@ C     * PROCESSED IN JPAK.
       BSKIP2 = -BITS*1
       BSKIP1 = -BITS*2
 
-C     * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
-C     * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
-C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
+!     * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
+!     * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
+!     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
 
-      DO 250 K = 1,DIM3
+      DO  K = 1,DIM3
 
           IX3    =        AND( MASQUE3,JPAK(K) )
           IX2    = ISHFT( AND( MASQUE2,JPAK(K) ), BSKIP2 )
@@ -650,9 +669,9 @@ C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
           X(2,K) = IX2 * XSCALI + XMIN
           X(1,K) = IX1 * XSCALI + XMIN
 
-  250 CONTINUE
+      END DO
 
-      IF (MOD(DIM,3).NE.0)                                     THEN
+      IF (MOD(DIM,3) /= 0)                                     THEN
 
           IX1    = ISHFT( AND( MASQUE1,JPAK(K) ), BSKIP1 )
           X(1,K) = IX1 * XSCALI + XMIN
@@ -664,51 +683,51 @@ C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
 
       END IF
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
  
       SUBROUTINE gbytes4 (JPAK,X,BITS,DIM,XSCALI,XMIN)
 
-C     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 4/1 
-C     * PACKING VERSION.
-
-C     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
-C     * WITH SBYTES4. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
-C     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS X AND WILL 
-C     * BE DIMENSIONNED TO "DIM".
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION JPAK(*)
-      REAL      X(4,*),XSCALI,XMIN
+      REAL(4)   X(4,*),XSCALI,XMIN
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 4/1 
+!     * PACKING VERSION.
+
+!     * THIS SUBROUTINE UNPACKS THE MEMORY WORDS ALREADY PACKED 
+!     * WITH SBYTES4. THE  PACKED NUMBERS ARE POSITIVE INTEGERS   
+!     * CODED ON "BITS" BITS.  THE UNPACKED ARRAY IS X AND WILL 
+!     * BE DIMENSIONNED TO "DIM".
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ---------------------------------------------------------------------
-C     * PACKING DENSITY.
+! ---------------------------------------------------------------------
+!     * PACKING DENSITY.
 
       PACK = 4
       DIM4 = DIM/PACK
 
-C     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
-C     * PROCESSED IN JPAK.
+!     * MASK USED TO SELECT WHICH COLUMN OF "BITS" BITS WILL BE
+!     * PROCESSED IN JPAK.
 
       MASQUE4 = 2**BITS-1
       MASQUE3 = ISHFT( MASQUE4, BITS )
@@ -719,11 +738,11 @@ C     * PROCESSED IN JPAK.
       BSKIP2 = -BITS*2
       BSKIP1 = -BITS*3
 
-C     * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
-C     * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
-C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
+!     * FILL J WITH  ONE COLUMN OF "BITS" BITS OF JPAK BY 
+!     * INCREMENT OF "PACK",  AFTER  SHIFTING THE  "BITS"
+!     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
 
-      DO 250 K = 1,DIM4
+      DO  K = 1,DIM4
 
           IX4    =        AND( MASQUE4,JPAK(K) )
           IX3    = ISHFT( AND( MASQUE3,JPAK(K) ), BSKIP3 )
@@ -735,9 +754,9 @@ C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
           X(2,K) = IX2 * XSCALI + XMIN
           X(1,K) = IX1 * XSCALI + XMIN
 
-  250 CONTINUE
+      END DO
 
-      IF (MOD(DIM,4).NE.0)                                     THEN
+      IF (MOD(DIM,4) /= 0)                                     THEN
 
           IX1    = ISHFT( AND( MASQUE1,JPAK(K) ), BSKIP1 )
           X(1,K) = IX1 * XSCALI + XMIN
@@ -756,197 +775,190 @@ C     * COLUMNS TRANSFERED BY BSKIP COLUMNS TO THE RIGHT.
 
       END IF
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
  
       SUBROUTINE sbytesb (JPAK,J,BITS,DIM)
 
-C     * APRIL 04/1990 - B.DUGAS (UQAM)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN IDENTICAL WITH THE CRAY VERSION. AS SUCH,  PACKING
-C     * DENSITIES OF 2,4,8 AND 16 ARE SUPPORTED. 32 BIT REAL WORD 
-C     * ARE NO LONGER CONSIDERED (THEY SHOULD NOT BE PACKED). NON
-C     * 32 BIT-FILLING PACKING DENSITIES WORK FINE, THANK YOU.
-
-C     * THIS SUBROUTINE PACKS AN ARRAY J OF  DIMENSION IDIM, CONTAINING
-C     * POSITIVE INTEGERS CODED ON NBITS BITS, INTO AN ARRAY JPAK WHICH 
-C     * DIMENSION IS <= DIM.
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION J(DIM),JPAK(*)
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * APRIL 04/1990 - B.DUGAS (UQAM)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN IDENTICAL WITH THE CRAY VERSION. AS SUCH,  PACKING
+!     * DENSITIES OF 2,4,8 AND 16 ARE SUPPORTED. 32 BIT REAL WORD 
+!     * ARE NO LONGER CONSIDERED (THEY SHOULD NOT BE PACKED). NON
+!     * 32 BIT-FILLING PACKING DENSITIES WORK FINE, THANK YOU.
+
+!     * THIS SUBROUTINE PACKS AN ARRAY J OF  DIMENSION IDIM, CONTAINING
+!     * POSITIVE INTEGERS CODED ON NBITS BITS, INTO AN ARRAY JPAK WHICH 
+!     * DIMENSION IS <= DIM.
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW
 
-      DATA  ZERO, UN, DEUX / 0, 1, 2 /
+      INTEGER, SAVE :: ZERO=0, UN=1, DEUX=2
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       OR ( NUM1, NUM2) = IOR    ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ------------------------------------------------------------------- 
-C     * PACKING DENSITY.
+! ------------------------------------------------------------------- 
+!     * PACKING DENSITY.
 
       PACK = BW/BITS
 
-C     * REMAINDER OF ELEMENTS WHICH REQUIRE BUT MAY NOT FILL A JPACK
-C     * ELEMENT SPACE.
+!     * REMAINDER OF ELEMENTS WHICH REQUIRE BUT MAY NOT FILL A JPACK
+!     * ELEMENT SPACE.
 
       RMNDR = MOD( DIM, PACK)
 
-C     * DIMENSION OF PACKED ARRAY JPAK. 
+!     * DIMENSION OF PACKED ARRAY JPAK. 
 
-      IF (RMNDR.EQ.0)                                          THEN
+      IF (RMNDR == 0)                                          THEN
           PDIM = DIM/PACK
       ELSE
           PDIM = (DIM/PACK)+UN
       END IF
 
-C     * INITIALIZE PACKED ARRAY TO AVOID SURPRISES.
+!     * INITIALIZE PACKED ARRAY TO AVOID SURPRISES.
 
-      DO 100 K = 1,PDIM
-          JPAK(K)   = ZERO
-  100 CONTINUE
+      JPAK(1:PDIM) = ZERO
 
-C     * THIS SEQUENCE IS DONE TO FILL JPAK THE FIRST TIME AND
-C     * AVOID SHIFTING BY NOTHING.
+!     * THIS SEQUENCE IS DONE TO FILL JPAK THE FIRST TIME AND
+!     * AVOID SHIFTING BY NOTHING.
 
-      DO 150 K = UN,DIM,PACK
+      DO  K = UN,DIM,PACK
           JJ       = (K-1)/PACK + 1
           JPAK(JJ) = J(K)
-  150 CONTINUE
+      END DO
 
-C     * AND THEN, WE CONTINUE THE PROCESSING UP TO (UNPACK-1) TIMES
-C     * BY SHIFTING JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
-C     * A TIME FROM J BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
+!     * AND THEN, WE CONTINUE THE PROCESSING UP TO (UNPACK-1) TIMES
+!     * BY SHIFTING JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
+!     * A TIME FROM J BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
 
-      DO 250 POINT = DEUX,PACK-1
-
-          DO 200 K = POINT,DIM,PACK
+      DO  POINT = DEUX,PACK-1
+          DO  K = POINT,DIM,PACK
               JJ       = K/PACK + 1
               JPAK(JJ) = OR( ISHFT( JPAK(JJ), BITS), J(K))
-  200     CONTINUE
-  250 CONTINUE
+          END DO
+      END DO
 
-      IF (PACK.NE.1)                                           THEN
-          DO 300 K = PACK,DIM,PACK
+      IF (PACK /= 1)                                           THEN
+          DO  K = PACK,DIM,PACK
               JJ       = K/PACK
               JPAK(JJ) = OR( ISHFT( JPAK(JJ), BITS), J(K))
-  300     CONTINUE
+          END DO
       END IF
 
-C     * ZEROS FILL UP THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST
-C     * ELEMENT BY SHIFTING (PACK-RMNDR)*BITS COLUMNS TO THE LEFT.
-C     * (I.E. LEFT JUSTIFY THE DATA BITS IN THE LAST ELEMENT OF JPAK)
+!     * ZEROS FILL UP THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST
+!     * ELEMENT BY SHIFTING (PACK-RMNDR)*BITS COLUMNS TO THE LEFT.
+!     * (I.E. LEFT JUSTIFY THE DATA BITS IN THE LAST ELEMENT OF JPAK)
 
-      IF (RMNDR.NE.0) 
+      IF (RMNDR /= 0) 
      +    JPAK(PDIM) = ISHFT( JPAK(PDIM), (PACK-RMNDR)*BITS)
 
       RETURN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
 
       SUBROUTINE sbytes1 (JPAK,X,BITS,DIM,XSCAL,XMIN)
 
-C     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 1/1
-C     * PACKING DENSITY VERSION.
-
-C     * THIS SUBROUTINE PACKS AN ARRAY X OF  DIMENSION IDIM, CONTAINING
-C     * REALS INTO AN ARRAY JPAK WHICH  DIMENSION IS <= DIM.
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION JPAK(*)
-      REAL      X(*),XSCAL,XMIN
+      REAL(4)   X(*),XSCAL,XMIN
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 1/1
+!     * PACKING DENSITY VERSION.
+
+!     * THIS SUBROUTINE PACKS AN ARRAY X OF  DIMENSION IDIM, CONTAINING
+!     * REALS INTO AN ARRAY JPAK WHICH  DIMENSION IS <= DIM.
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW 
 
-C ------------------------------------------------------------------- 
-C     * SHIFT JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
-C     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
+! ------------------------------------------------------------------- 
+!     * SHIFT JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
+!     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
 
-      DO 200 K = 1,DIM
-
-          JPAK(K) =     NINT( XSCAL * (X(K) - XMIN) )
-
-  200 CONTINUE
+      JPAK(1:DIM) =     NINT( XSCAL * (X(1:DIM) - XMIN) )
 
       RETURN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
 
       SUBROUTINE sbytes2 (JPAK,X,BITS,DIM,XSCAL,XMIN)
 
-C     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 2/1
-C     * PACKING DENSITY VERSION.
-
-C     * THIS SUBROUTINE PACKS AN ARRAY X OF  DIMENSION IDIM, CONTAINING
-C     * REALS INTO AN ARRAY JPAK WHICH  DIMENSION IS <= DIM.
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION JPAK(*)
-      REAL      X(2,*),XSCAL,XMIN
+      REAL(4)   X(2,*),XSCAL,XMIN
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 2/1
+!     * PACKING DENSITY VERSION.
+
+!     * THIS SUBROUTINE PACKS AN ARRAY X OF  DIMENSION IDIM, CONTAINING
+!     * REALS INTO AN ARRAY JPAK WHICH  DIMENSION IS <= DIM.
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW 
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
       OR ( NUM1, NUM2) = IOR    ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ------------------------------------------------------------------- 
-C     * PACKING DENSITY.
+! ------------------------------------------------------------------- 
+!     * PACKING DENSITY.
 
       PACK = 2
       DIM2 = DIM/PACK
 
-C     * REMAINDER OF ELEMENTS WHICH REQUIRE BUT MAY NOT FILL A JPACK
-C     * ELEMENT SPACE.
+!     * REMAINDER OF ELEMENTS WHICH REQUIRE BUT MAY NOT FILL A JPACK
+!     * ELEMENT SPACE.
 
       RMNDR = MOD( DIM, PACK )
 
-C     * SHIFT JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
-C     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
+!     * SHIFT JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
+!     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
 
-      DO 200 K = 1,DIM2
+      DO  K = 1,DIM2
 
           JPAK(K) =     NINT( XSCAL * (X(1,K) - XMIN) )
 
@@ -955,13 +967,13 @@ C     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
      +                  NINT( XSCAL * (X(2,K) - XMIN) ) 
      +                )
 
-  200 CONTINUE
+      END DO
 
-C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
+!     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
 
       MASQUE1 = ISHFT( 2**BITS-1,1*BITS ) 
 
-      IF (RMNDR.EQ.1)
+      IF (RMNDR == 1)
      +    JPAK(K) = AND( 
      +                   ISHFT( 
      +                          NINT( XSCAL * (X(1,K) - XMIN) ),
@@ -972,57 +984,57 @@ C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
 
       RETURN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
 
       SUBROUTINE sbytes3 (JPAK,X,BITS,DIM,XSCAL,XMIN)
 
-C     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 3/1
-C     * PACKING DENSITY VERSION.
-
-C     * THIS SUBROUTINE PACKS AN ARRAY X OF  DIMENSION IDIM, CONTAINING
-C     * REALS INTO AN ARRAY JPAK WHICH  DIMENSION IS <= DIM.
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION JPAK(*)
-      REAL      X(3,*),XSCAL,XMIN
+      REAL(4)   X(3,*),XSCAL,XMIN
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 3/1
+!     * PACKING DENSITY VERSION.
+
+!     * THIS SUBROUTINE PACKS AN ARRAY X OF  DIMENSION IDIM, CONTAINING
+!     * REALS INTO AN ARRAY JPAK WHICH  DIMENSION IS <= DIM.
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW 
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
       OR ( NUM1, NUM2) = IOR    ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ------------------------------------------------------------------- 
-C     * PACKING DENSITY.
+! ------------------------------------------------------------------- 
+!     * PACKING DENSITY.
 
       PACK = 3
       DIM3 = DIM/PACK
 
-C     * REMAINDER OF ELEMENTS WHICH REQUIRE BUT MAY NOT FILL A JPACK
-C     * ELEMENT SPACE.
+!     * REMAINDER OF ELEMENTS WHICH REQUIRE BUT MAY NOT FILL A JPACK
+!     * ELEMENT SPACE.
 
       RMNDR = MOD( DIM, PACK )
 
-C     * SHIFT JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
-C     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
+!     * SHIFT JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
+!     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
 
-      DO 200 K = 1,DIM3
+      DO  K = 1,DIM3
 
           JPAK(K) =     NINT( XSCAL * (X(1,K) - XMIN) )
 
@@ -1036,14 +1048,14 @@ C     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
      +                  NINT( XSCAL * (X(3,K) - XMIN) ) 
      +                )
 
-  200 CONTINUE
+      END DO
 
-C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
+!     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
 
       MASQUE1 = ISHFT( 2**(1*BITS)-1,2*BITS )
       MASQUE2 = ISHFT( 2**(2*BITS)-1,1*BITS )
 
-      IF (RMNDR.EQ.1)
+      IF (RMNDR == 1)
      +    JPAK(K) = AND( 
      +                   ISHFT( 
      +                          NINT( XSCAL * (X(1,K) - XMIN) ),
@@ -1053,7 +1065,7 @@ C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
      +                 )
 
 
-      IF (RMNDR.EQ.2) 
+      IF (RMNDR == 2) 
      +    JPAK(K) = AND( 
      +                   OR( 
      +                       ISHFT(
@@ -1070,57 +1082,57 @@ C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
 
       RETURN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
 
       SUBROUTINE sbytes4 (JPAK,X,BITS,DIM,XSCAL,XMIN)
 
-C     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
-
-C     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
-C     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
-C     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
-C     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 4/1
-C     * PACKING DENSITY VERSION.
-
-C     * THIS SUBROUTINE PACKS AN ARRAY X OF  DIMENSION IDIM, CONTAINING
-C     * REALS INTO AN ARRAY JPAK WHICH  DIMENSION IS <= DIM.
-
-C----------------------------------------------------------------------
-      IMPLICIT INTEGER*4 (A-Z)
+      IMPLICIT INTEGER(4) (A-Z)
 
       DIMENSION JPAK(*)
-      REAL      X(4,*),XSCAL,XMIN
+      REAL(4)   X(4,*),XSCAL,XMIN
 
-C     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
-C     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
-C     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
-C     * TER.
+!     * SEPTEMBER 16/1991 - B.DUGAS (RPN)
+
+!     * THIS IS A SUBSET OF THE CRAY  SBYTESB ROUTINE (WRITTEN BY 
+!     * J.F. FORTIN, CCRN - DECEMBER/1983).  IN THIS VERSION, THE 
+!     * OUTPUT HAS TO FILL 32-BIT INTEGERS, IF THE RESULTS ARE TO
+!     * REMAIN  IDENTICAL WITH THE CRAY VERSION.  THIS IS THE 4/1
+!     * PACKING DENSITY VERSION.
+
+!     * THIS SUBROUTINE PACKS AN ARRAY X OF  DIMENSION IDIM, CONTAINING
+!     * REALS INTO AN ARRAY JPAK WHICH  DIMENSION IS <= DIM.
+
+!----------------------------------------------------------------------
+!     * "BW" IS THE NUMBER OF BITS PER INTEGER WORD.  THIS VALUE 
+!     * IS MACHINE  AND IMPLEMENTATION DEPENDENT. FOR EXAMPLE, A
+!     * SINGLE PRECISION NUMBER WARRANTS BW = 64 ON A CRAY COMPU-
+!     * TER.
 
       COMMON /MACHSPEC/ BW 
 
-C     * (TRANSLATING) STATEMENT FUNCTIONS.
+!     * (TRANSLATING) STATEMENT FUNCTIONS.
 #     if defined (HP) || defined (SUN)
       AND( NUM1, NUM2) = IAND   ( NUM1, NUM2)
       OR ( NUM1, NUM2) = IOR    ( NUM1, NUM2)
 #     endif
-C     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
+!     ISHL( NUM,  BITS) = ISHFT (NUM,  BITS)
 
-C ------------------------------------------------------------------- 
-C     * PACKING DENSITY.
+! ------------------------------------------------------------------- 
+!     * PACKING DENSITY.
 
       PACK = 4
       DIM4 = DIM/PACK
 
-C     * REMAINDER OF ELEMENTS WHICH REQUIRE BUT MAY NOT FILL A JPACK
-C     * ELEMENT SPACE.
+!     * REMAINDER OF ELEMENTS WHICH REQUIRE BUT MAY NOT FILL A JPACK
+!     * ELEMENT SPACE.
 
       RMNDR = MOD( DIM, PACK )
 
-C     * SHIFT JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
-C     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
+!     * SHIFT JPAK TO THE LEFT AND TRANSFERING "BITS" BITS AT
+!     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
 
-      DO 200 K = 1,DIM4
+      DO  K = 1,DIM4
 
           JPAK(K) =     NINT( XSCAL * (X(1,K) - XMIN) )
 
@@ -1139,15 +1151,15 @@ C     * A TIME FROM X BY INCREMENT OF "PACK" J-ELEMENT POSITIONS.
      +                  NINT( XSCAL * (X(4,K) - XMIN) ) 
      +                )
 
-  200 CONTINUE
+      END DO
 
-C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
+!     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
 
       MASQUE1 = ISHFT( 2**(1*BITS)-1,3*BITS )
       MASQUE2 = ISHFT( 2**(2*BITS)-1,2*BITS )
       MASQUE3 = ISHFT( 2**(3*BITS)-1,1*BITS )
 
-      IF (RMNDR.EQ.1)
+      IF (RMNDR == 1)
      +    JPAK(K) = AND( 
      +                   ISHFT( 
      +                          NINT( XSCAL * (X(1,K) - XMIN) ),
@@ -1156,7 +1168,7 @@ C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
      +                   MASQUE1
      +                 )
 
-      IF (RMNDR.EQ.2) 
+      IF (RMNDR == 2) 
      +    JPAK(K) = AND( 
      +                   OR( 
      +                       ISHFT(
@@ -1171,7 +1183,7 @@ C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
      +                   MASQUE2
      +                 )
 
-      IF (RMNDR.EQ.3) 
+      IF (RMNDR == 3) 
      +    JPAK(K) = AND( 
      +                   OR(
      +                       OR( 
@@ -1194,6 +1206,6 @@ C     * ZEROS FILL THE UNOCCUPIED LOWER ORDER BITS IN JPAK LAST ELEMENT.
 
       RETURN
 
-C--------------------------------------------------------------------
+!--------------------------------------------------------------------
       END 
 

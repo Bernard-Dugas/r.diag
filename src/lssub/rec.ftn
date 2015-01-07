@@ -18,6 +18,12 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: rec.ftn,v $
+C     Revision 3.47  2014/12/04 21:35:20  dugas
+C     Enlever le DATA ZERO redondant dans RECUP2.
+C
+C     Revision 3.46  2014/12/03 23:23:38  dugas
+C     Enlever les enonces EQUIVALENCE.
+C
 C     Revision 3.45  2014/10/16 12:02:45  dugas
 C     Modifications commandees par la compilation avec GFORTRAN et IFORT.
 C
@@ -512,10 +518,10 @@ C
       INTEGER       LCM(3), IBUF(HEAD+1),LEN,NWDS,PACK,NBW,N,BITS,
      +                                   J,KIND,FWRD, CENDI
 
-      INTEGER       IVAL,IVAL8(2),IER, DATYP
+      INTEGER       IVAL,IVAL8, IER, DATYP
       REAL*8         VAL8
       REAL           VAL, AMIN,AMAX,AMEAN
-      EQUIVALENCE ( IVAL8,VAL8 ),( IVAL,VAL )
+      POINTER     ( IV8, IVAL8(2) ),( IV4, IVAL(1) )
 
       INTEGER,      DIMENSION(:), ALLOCATABLE :: LCMO
 
@@ -538,6 +544,8 @@ C
 
       DATA          IBM,CRAY,IEEE / 3*.FALSE. /
 * ------------------------------------------------------------------
+
+      IV8 = LOC( VAL8 ) ; IV4 = LOC( VAL ) !!! EQUIVALENCE ( IVAL8,VAL8 ),( IVAL,VAL )
 
       IO64B = GETIO64( IO64B )
 
@@ -639,7 +647,7 @@ C
                           ELSE
                               VAL      = 0.0
                           END IF
-                          IBUF(HEAD+N) = IVAL
+                          IBUF(HEAD+N) = IVAL(1)
                       END DO
 
                   ELSE
@@ -718,7 +726,7 @@ C
 ***                        **OR** BIG-ENDIAN MACHINE.
 
                           DO  N=1,NWDS
-                              IVAL             = LCM(N)
+                              IVAL(1)          = LCM(N)
                               VAL8             = VAL
                               IBUF(HEAD+N+N-1) = IVAL8(1)
                               IBUF(HEAD+N+N  ) = IVAL8(2)
@@ -729,7 +737,7 @@ C
 ***                        Case: LITTLE-ENDIAN MACHINE.
 
                           DO  N=1,NWDS
-                              IVAL             = LCM(N)
+                              IVAL(1)          = LCM(N)
                               VAL8             = VAL
                               IBUF(HEAD+N+N-1) = IVAL8(2)
                               IBUF(HEAD+N+N  ) = IVAL8(1)
@@ -754,7 +762,7 @@ C
                   IF (DEBUG) WRITE(6,6300)
 
                   DO  N=1,NWDS
-                      IVAL         = LCM(N)
+                      IVAL(1)      = LCM(N)
                       IBUF(HEAD+N) = VAL
                   END DO
 
@@ -819,8 +827,8 @@ C
 ***                        CASE: BIG-ENDIAN MACHINE.
 
                           DO N=1,NWDS
-                              IVAL = LCM(N)
-                              VAL8 = VAL
+                              IVAL(1) = LCM(N)
+                              VAL8    = VAL
                               IBUF(HEAD+2*N-1) = IVAL8(1)
                               IBUF(HEAD+2*N  ) = IVAL8(2)
                           END DO
@@ -830,8 +838,8 @@ C
 ***                        CASE: LITTLE-ENDIAN 32-BIT MACHINE.
 
                           DO N=1,NWDS
-                              IVAL = LCM(N)
-                              VAL8 = VAL
+                              IVAL(1) = LCM(N)
+                              VAL8    = VAL
                               IBUF(HEAD+2*N-1) = IVAL8(2)
                               IBUF(HEAD+2*N  ) = IVAL8(1)
                           END DO
@@ -865,7 +873,7 @@ C
                       ELSE
                           VAL      = 0.0
                       END IF
-                      IBUF(HEAD+N) = IVAL
+                      IBUF(HEAD+N) = IVAL(1)
                   END DO
               ELSE
                   DO N=1,NWDS
@@ -943,7 +951,7 @@ C
 ***                    CASE: BIG-ENDIAN MACHINE.
 
                       DO  N=1,NWDS
-                          IVAL             = LCM(N)
+                          IVAL(1)          = LCM(N)
                           VAL8             = VAL
                           IBUF(HEAD+N+N-1) = IVAL8(1)
                           IBUF(HEAD+N+N  ) = IVAL8(2)
@@ -954,7 +962,7 @@ C
 ***                    Case: LITTLE-ENDIAN MACHINE.
 
                       DO  N=1,NWDS
-                          IVAL             = LCM(N)
+                          IVAL(1)          = LCM(N)
                           VAL8             = VAL
                           IBUF(HEAD+N+N-1) = IVAL8(2)
                           IBUF(HEAD+N+N  ) = IVAL8(1)
@@ -1000,7 +1008,7 @@ C
                   IVAL8(1) = LCM(N+N-1)
                   IVAL8(2) = LCM(N+N  )
                   VAL      = VAL8
-                  LCMO(N)  = IVAL
+                  LCMO(N)  = IVAL(1)
               END DO
           ELSE
               DO  N=1,NWDS
@@ -1176,14 +1184,14 @@ C
       INTEGER       LCM(3),IBUF(HEAD+1),LEN,NWDS,PACK,NBW,N,BITS,
      +              I,J,L,KIND,FWRD,LSR,LA,LR,LM,LM2,LNT,KTR, CENDI
 
-      INTEGER       IVAL,IVAL8(2)
+      INTEGER       IVAL,IVAL8
       REAL*8         VAL8
       REAL           VAL, AMIN,AMAX,AMEAN
-      EQUIVALENCE ( IVAL8,VAL8 ),( IVAL,VAL )
+      POINTER     ( IV8, IVAL8(2) ),( IV4, IVAL(1) )
 
       INTEGER       IZERO
-      REAL           ZERO
-      EQUIVALENCE ( IZERO,ZERO )
+      REAL,         SAVE :: ZERO = 0.0
+      POINTER     ( IZ, IZERO(1) )
 
       LOGICAL                DEBUG,INFO,IO64B
       COMMON       /ZZDEBUG/ DEBUG
@@ -1207,9 +1215,11 @@ C
      +              PACCRN,PACC92,DIMGT2,FMMM2,GETMACH,
      +              GETIO64,GETHIGH,INFNAN,WRDSWP
 
-      DATA          ZERO / 0.0 /
       DATA          IBM,CRAY,IEEE / 3*.FALSE. /
 * ---------------------------------------------------------------------
+
+      IV8 = LOC( VAL8 ) ; IV4 = LOC( VAL ) !!! EQUIVALENCE ( IVAL8,VAL8 ),( IVAL,VAL )
+      IZ  = LOC( ZERO ) !!! EQUIVALENCE ( IZERO,ZERO )
 
       IO64B = GETIO64( IO64B )
 
@@ -1320,7 +1330,7 @@ C
 ***                    Case: 32-BIT INPUT, 32-BIT DATA WORDS.
 
                       DO  N=1,NWDS
-                          IVAL       = IBUF(HEAD+N)
+                          IVAL(1)    = IBUF(HEAD+N)
                           VAL8       = VAL
                           LCM(N+N-1) = IVAL8(1)
                           LCM(N+N  ) = IVAL8(2)
@@ -1403,7 +1413,7 @@ C
                               VAL    = SIGN( 
      +                                 MAX( 
      +                                 ABS( VAL8 ), 1.19D-38 ), VAL8 )
-                              LCM(N) = IVAL
+                              LCM(N) = IVAL(1)
                           ELSE
                               LCM(N) = 0
                           END IF
@@ -1432,7 +1442,7 @@ C
 
                   DO  N=1,NWDS
                       VAL            = IBUF(HEAD+N)
-                      LCM(N)         = IVAL
+                      LCM(N)         = IVAL(1)
                   END DO
 
               END IF
@@ -1499,7 +1509,7 @@ C
                               VAL    = SIGN( 
      +                                 MAX( 
      +                                 ABS( VAL8 ), 1.19D-38 ), VAL8 )
-                              LCM(N) = IVAL
+                              LCM(N) = IVAL(1)
                           ELSE
                               LCM(N) = 0
                           END IF
@@ -1527,7 +1537,7 @@ C
 
               IF (IO64B)                                       THEN
                   DO  N=1,NWDS
-                      IVAL       = IBUF(HEAD+N)
+                      IVAL(1)    = IBUF(HEAD+N)
                       VAL8       = VAL
                       LCM(N+N-1) = IVAL8(1)
                       LCM(N+N  ) = IVAL8(2)
@@ -1616,7 +1626,7 @@ C
                           VAL    = SIGN( 
      +                             MAX( 
      +                             ABS( VAL8 ), 1.19D-38 ), VAL8 )
-                          LCM(N) = IVAL
+                          LCM(N) = IVAL(1)
                       ELSE
                           LCM(N) = 0
                       END IF
@@ -1683,7 +1693,7 @@ C
 
               CALL DIMGT2( LSR,LA,LR, LM, KTR, IBUF(7), 0,-1 )
               DO 200 N=2,2*LM,2
-                  LCM(N) = IZERO
+                  LCM(N) = IZERO(1)
   200         CONTINUE
 
           ELSE IF(TYPE.EQ.'FOUR')                              THEN
@@ -1691,7 +1701,7 @@ C
               LM2 = 2*IBUF(5) 
               LNT = LM2*IBUF(6)
               DO 250 N=2,LNT,LM2
-                  LCM(N) = IZERO
+                  LCM(N) = IZERO(1)
   250         CONTINUE
 
           END IF
@@ -1703,7 +1713,7 @@ C
 ***        CONVERT SINGLE-PRECISION TO DOUBLE-PRECISION IN PLACE.
 
               DO  N=NWDS,1,-1
-                  IVAL       = LCM(N)
+                  IVAL(1)    = LCM(N)
                   VAL8       = VAL
                   LCM(N+N-1) = IVAL8(1)
                   LCM(N+N  ) = IVAL8(2)

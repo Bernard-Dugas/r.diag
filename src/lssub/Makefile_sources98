@@ -1,6 +1,8 @@
 .SUFFIXES :
 .SUFFIXES : .a .F90 .f .f90 .mod .c .o
 
+# LSSUB Makefile secondaire
+
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
 endif

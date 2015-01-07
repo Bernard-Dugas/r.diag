@@ -1,4 +1,5 @@
 #!/bin/bash
-CDF2CCC=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/latest.cdf2ccc
+Location=$(true_path $0) ; Location=${Location%/bin/*}
+CDF2CCC=${DIAGNOSTIQUE:-${Location}}/bin/${BASE_ARCH}/latest.cdf2ccc
 ${CDF2CCC} "$@"
 exit $?

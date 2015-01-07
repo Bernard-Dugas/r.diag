@@ -133,17 +133,23 @@ C     EXEMPLE DE CARTE D'ENTRE...
 *-----------------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER,    PARAMETER :: MAXW = grille_maximale
-      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER     MAXW
+      PARAMETER ( MAXW = grille_maximale )
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
 
       LOGICAL     OK
-      REAL(8)     PI,RAD
-      CHARACTER(4) LIGNE*80,CORN,PKTYP,STATUS
-      INTEGER     NI,NJ,IER,IO,HEM,NFF,MAXS,LEN,NWDS,IPAK
-      REAL        DX,COR,SCF, RE,RS
+      REAL*8      PI,RAD
+      CHARACTER   LIGNE*80,CORN*4
+      INTEGER     IBUF,NI,NJ,IER,IO,HEM,
+     +            NFF,MAXS,LEN,NWDS,IPAK
+      REAL        SF,F,DATAIN,DX,COR,SCF,
+     +            RE,RS
 
-      integer,    allocatable,dimension(:) :: ibuf
-      real,       allocatable,dimension(:) :: datain,f,sf
+      POINTER   ( PB,IBUF(8) )
+      POINTER   ( PD,DATAIN(1) )
+      POINTER   ( PF,F(1) )
+      POINTER   ( PS,SF(1) )
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -152,12 +158,13 @@ C     EXEMPLE DE CARTE D'ENTRE...
       INTEGER     IG1,IG2,IG3,IG4
       REAL        PII,PJJ,D60,DGRW
 
-      LOGICAL,    EXTERNAL :: RPBLOC
-      INTEGER,    EXTERNAL :: GETHIGH,GETSIZ
-      CHARACTER(4),EXTERNAL ::  GETHIC,GETYP
-      EXTERNAL    JCLPNT,GETLIGN,SCALFAC,
-     +            BURNF,GETFLD2,PUTFLD2,XIT,SETLAB,
-     +            GETSTAT,CIGAXG,CXGAIG,PUTHIC,PUTHIGH
+      LOGICAL     RPBLOC
+      INTEGER     GETHIGH,GETSIZ
+      CHARACTER*4 GETHIC,GETYP,PKTYP,STATUS
+      EXTERNAL    RPBLOC,GETYP,JCLPNT,GETLIGN,SCALFAC,
+     +            BURNF,GETFLD2,HPALLOC,PUTFLD2,XIT,SETLAB,
+     +            GETSTAT,CIGAXG,CXGAIG,GETSIZ,PUTHIC,
+     +            PUTHIGH,GETHIC,GETHIGH
 
 *     PI   = LE NOMBRE PI
 *     PHI0 = LATITUDE DE REFERENCE, C'EST A DIRE 60 DEGRES NORD
@@ -173,7 +180,10 @@ C     EXEMPLE DE CARTE D'ENTRE...
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/calmap.ptn,v $'
 
 *---------------------------------------------------------------------- 
-      ALLOCATE( ibuf(MAXW+HEAD),datain(MAXW),f(MAXW),sf(MAXW) )
+      CALL HPALLOC( PB,MAXW+HEAD,IER,0 )
+      CALL HPALLOC( PD,MAXW,     IER,0 )
+      CALL HPALLOC( PF,MAXW,     IER,0 )
+      CALL HPALLOC( PS,MAXW,     IER,0 )
 
 ***    ACCEDER LES FICHIERS D'E/S.
 

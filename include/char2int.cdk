@@ -1,0 +1,15 @@
+!-----------------------------------------------------------------------
+      CONTAINS
+ 
+      function CHAR2INT( STR ) result( INT32 )
+
+      integer                       :: INT32
+      character (len=*), intent(IN) :: STR
+      character (len=4)             :: str_in
+
+      str_in = STR ; INT32 = transfer( str_in, 1 )
+
+      return
+
+      end function CHAR2INT
+!-----------------------------------------------------------------------

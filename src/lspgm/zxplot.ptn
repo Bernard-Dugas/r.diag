@@ -22,7 +22,7 @@
 *
 *
 *     AUTHOR  - J.D.Henderson, MAR 31/81.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxplot.ptn,v 4.29 2014/09/25 20:20:57 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zxplot.ptn,v 4.30 2014/12/22 19:24:53 dugas Exp $
 *
 *
 *     PURPOSE - PLOTS CROSS-SECTIONS FROM FILE ZXIN, AND POSSIBLY ZXIN2,
@@ -412,6 +412,9 @@
 *     ------------------------------------------------------------------
 
 *     $Log: zxplot.ptn,v $
+*     Revision 4.30  2014/12/22 19:24:53  dugas
+*     Utiliser la fonction CHAR2INT qui se trouve dans char2int.cdk.
+*
 *     Revision 4.29  2014/09/25 20:20:57  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -573,7 +576,7 @@
       IMPLICIT     REAL (A-H,O-Z), INTEGER (I-N)
 
       INTEGER, PARAMETER :: MAXJ = latitude_maximale , MAXLEV = 999
-      INTEGER, PARAMETER :: MAXLX = 999, NPAT = 21
+      INTEGER, PARAMETER :: MAXLX = 999, NPAT = 21, HEAD = taille_entete
 
       REAL         PTMIN
       PARAMETER  ( PTMIN = pression_au_toit )
@@ -584,7 +587,7 @@
       CHARACTER    IPNT*7,NAME1*4,NAME2*4,NAME*4,NOM*4
       REAL         ZLEV(NPAT),ZLEV1(NPAT),ZLEV2(NPAT)
       INTEGER      IPAT(NPAT),IPAT1(NPAT),IPAT2(NPAT)
-      INTEGER      LEV(MAXLEV),DEN(4,MAXLEV-3),HEAD
+      INTEGER      LEV(MAXLEV),DEN(4,MAXLEV-3)
       INTEGER      NPAT0,NPAT1,NPAT2,TOP,BOT
       INTEGER      IOS1,IOS2,IOV1,IOV2
 
@@ -620,9 +623,9 @@
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
 
-      INTEGER      STAR,PLUS,CCAR
-      DATA         STAR,PLUS,CCAR
-     +           / 1H* ,1H+,4HCCAR /
+      INTEGER  ::  STAR=TRANSFER('*   ',1 ),
+     +             PLUS=TRANSFER('+   ',1 ),
+     +             CCAR=TRANSFER('CCAR',1 )
 
       DATA NLAT  / 0    /
       DATA IPAT  / 104,101, 89, 81, 21, 85, 91,101,104, 12*0 /
@@ -650,8 +653,6 @@
 
 *---------------------------------------------------------------------
       MAXW = MAXJ*MAXLEV
-
-      CALL MACSPE( HEAD,ZERO )
 
       ALLOCATE( IBUF(MAXW+HEAD),
      +          JBUF(MAXW+HEAD) )
@@ -708,12 +709,12 @@
       CALL BNDLSET('THIC',  2, 1,MINR)
       CALL BNDLSET( ETIK, VTIK,4,LABL)
 
-      CALL ISPSET(4HLABL, LABL )
-      CALL ISPSET(4HNULB,  1   )
-      CALL ISPSET(4HRNDV, 1.0  )
-      CALL ISPSET(3HNHL,   5   )
-      CALL ISPSET(3HNLB,   5   )
-      CALL ISPSET(3HNPV,   5   )
+      CALL ISPSET(CHAR2INT('LABL'), LABL )
+      CALL ISPSET(CHAR2INT('NULB'),  1   )
+      CALL ISPSET(CHAR2INT('RNDV'), 1.0  )
+      CALL ISPSET(CHAR2INT('NHL'),   5   )
+      CALL ISPSET(CHAR2INT('NLB'),   5   )
+      CALL ISPSET(CHAR2INT('NPV'),   5   )
 
       PRBLOC = .FALSE.
       NFRAME =  0
@@ -868,22 +869,23 @@
 
         pb  =.TRUE.
         ms1 = Abs(ms1+1)
-        Call ispset(4HMAJR, majr )
-        Call ispset(4HMINR, minr )
-        Call ispset(3HNHI,   -1  )
-        Call ispset(4HILAB,   0  )
-        Call ispset(4HECOL,   1  )
-        Call ispset(4HOFFM,   1  )
+
+        CALL ISPSET(CHAR2INT('MAJR'), majr )
+        CALL ISPSET(CHAR2INT('MINR'), minr )
+        CALL ISPSET(CHAR2INT('NHI'),  -1   )
+        CALL ISPSET(CHAR2INT('ILAB'),  0   )
+        CALL ISPSET(CHAR2INT('ECOL'),  1   )
+        CALL ISPSET(CHAR2INT('OFFM'),  1   )
 
       Else
 
         pb=.FALSE.
-        Call ispset(4HMAJR, norm )
-        Call ispset(4HMINR, -1   )
-        Call ispset(3HNHI,   1   )
-        Call ispset(4HILAB,  1   )
-        Call ispset(4HECOL,  0   )
-        Call ispset(4HOFFM,  0   )
+        CALL ISPSET(CHAR2INT('MAJR'), norm )
+        CALL ISPSET(CHAR2INT('MINR'), -1   )
+        CALL ISPSET(CHAR2INT('NHI'),   1   )
+        CALL ISPSET(CHAR2INT('ILAB'),  1   )
+        CALL ISPSET(CHAR2INT('ECOL'),  0   )
+        CALL ISPSET(CHAR2INT('OFFM'),  0   )
 
       End If
 
@@ -1229,7 +1231,7 @@
 ***    Check that nulb is not zero.
 
       If (nulb.EQ.0) nulb = 1 
-      Call ispset(4HNULB, nulb )
+      Call ispset(CHAR2INT('NULB'), nulb )
 
 ***    Read-in scalar field to be contoured.
  
@@ -1664,9 +1666,9 @@
         End If
 
         If (Abs(pbot-fbot).LT..0001)                           Then
-*         Call ispset('OFFM', 0 )
+*         Call ispset(CHAR2INT('OFFM'), 0 )
         Else
-*         Call ispset('OFFM', 1 )
+*         Call ispset(CHAR2INT('OFFM'), 1 )
         End If
 
 ***      Compute the equally spaced pressure levels and latitudes for
@@ -1756,27 +1758,27 @@
           finc1=  2.*finc
 
           If (.NOT.pb)                                         Then
-            Call ispset(4HNULB,   0  )
-            Call ispget(4HILAB,   k  )
-            Call ispset(4HILAB,   1  )
-            Call ispset(4HOFFM,   1  )
+            Call ispset(CHAR2INT('NULB'),   0  )
+            Call ispget(CHAR2INT('ILAB'),   k  )
+            Call ispset(CHAR2INT('ILAB'),   1  )
+            Call ispset(CHAR2INT('OFFM'),   1  )
           END IF
 
           CALL CONISP( F, NLATP,NLATP,LXP,FLO1,HI,FINC1,1,NHI,NDOT )
 
           IF (.NOT.PB)                                         THEN
-            CALL ISPSET(4HILAB,   0  )
-            CALL ISPSET(4HECOL,   1  )
+            CALL ISPSET(CHAR2INT('ILAB'),   0  )
+            CALL ISPSET(CHAR2INT('ECOL'),   1  )
           END IF
 
           CALL CONISP( F, NLATP,NLATP,LXP,FLO,HI2,FINC1,1,-1, NDOT )
           CALL CONISP( F, NLATP,NLATP,LXP,FLO3,HI,FINC1,1,-1, NDOT )
 
           IF (.NOT.PB)                                         THEN
-            CALL ISPSET(4HNULB, NULB )
-            CALL ISPSET(4HILAB,   K  )
-            CALL ISPSET(4HOFFM,   0  )
-            CALL ISPSET(4HECOL,   0  )
+            CALL ISPSET(CHAR2INT('NULB'), NULB )
+            CALL ISPSET(CHAR2INT('ILAB'),   K  )
+            CALL ISPSET(CHAR2INT('OFFM'),   0  )
+            CALL ISPSET(CHAR2INT('ECOL'),   0  )
           END IF
 
         ELSE
@@ -2380,9 +2382,9 @@
         END IF
 
         IF (ABS(PBOT-FBOT).LT..0001)                           THEN
-*         CALL ISPSET('OFFM', 0 )
+*         CALL ISPSET(CHAR2INT('OFFM'), 0 )
         ELSE
-*         CALL ISPSET('OFFM', 1 )
+*         CALL ISPSET(CHAR2INT('OFFM'), 1 )
         END IF
 
 ***      COMPUTE THE EQUALLY SPACED PRESSURE LEVELS AND LATITUDES FOR
@@ -2506,9 +2508,9 @@
       PHGT  = PHGT -DTOP
 
       CALL SET( PLEFT,PLEFT+PWDTH,PBOT,PBOT+PHGT,1.,XPOS,1.,YPOS,1 )
-      IF (PB) CALL OPTN('TH', 3 )
+      IF (PB) CALL OPTN(CHAR2INT('TH'), 3 )
       CALL VELVCT( ZXV,LYR,ZXW,LYR,LYR,LXR,VLO,VI,-1,0,SPV )
-      IF (PB) CALL OPTN('TH', 1 )
+      IF (PB) CALL OPTN(CHAR2INT('TH'), 1 )
 
 ***    WRITE LABEL FOR VECTOR PLOT. FORCE UPPER-CASE.
 
@@ -2836,6 +2838,8 @@
  6031 FORMAT(22X,'zlev='/(22X,5E12.5))
  6040 FORMAT('0 Cross-section   ',A80)
  6050 FORMAT('  Vector plot     ',A80)
+
+#     include "char2int.cdk"
 
       END
 #     endif

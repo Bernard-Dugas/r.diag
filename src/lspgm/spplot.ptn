@@ -11,7 +11,7 @@
 *
 *
 *     AUTHOR  - N.E.Sargent, NOV 29/83.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spplot.ptn,v 4.9 2014/09/25 20:20:53 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/spplot.ptn,v 4.10 2014/12/22 19:24:53 dugas Exp $
 *
 *
 *     PURPOSE - CONTOUR THE REAL PART OF A TRIANGULARLY TRUNCATED SPECTRAL
@@ -94,6 +94,9 @@
 *     ------------------------------------------------
 
 *     $Log: spplot.ptn,v $
+*     Revision 4.10  2014/12/22 19:24:53  dugas
+*     Utiliser la fonction CHAR2INT qui se trouve dans char2int.cdk.
+*
 *     Revision 4.9  2014/09/25 20:20:53  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -263,15 +266,15 @@
       CALL BNDLSET('THIC',  2, 1,MINR )
       CALL BNDLSET( ETIK, VTIK,4,LABL )
 
-      CALL ISPSET(4HLABL, LABL )
-      CALL ISPSET(4HRNDV, 1.0  )
-      CALL ISPSET(3HNHL,   5   )
-      CALL ISPSET(3HNLB,   5   )
-      CALL ISPSET(3HNPV,   5   )
+      CALL ISPSET(CHAR2INT('LABL'), LABL )
+      CALL ISPSET(CHAR2INT('RNDV'), 1.0  )
+      CALL ISPSET(CHAR2INT('NHL'),   5   )
+      CALL ISPSET(CHAR2INT('NLB'),   5   )
+      CALL ISPSET(CHAR2INT('NPV'),   5   )
 
       SPVAL = 10.E37
-      CALL ISPSET(4HSPVA, SPVAL )
-      CALL ISPGET(4HSPVA, SPVAL )
+      CALL ISPSET(CHAR2INT('SPVA'), SPVAL )
+      CALL ISPGET(CHAR2INT('SPVA'), SPVAL )
 
       ALL   =.FALSE.
       NPLOT = 0
@@ -396,9 +399,9 @@
 
       END IF
 
-      CALL ISPSET(4HMAJR, NORM )
-      CALL ISPSET(4HMINR, -1   )
-      CALL ISPSET(4HVALU, LABL )
+      CALL ISPSET(CHAR2INT('MAJR'), NORM )
+      CALL ISPSET(CHAR2INT('MINR'), -1   )
+      CALL ISPSET(CHAR2INT('VALU'), LABL )
 
       CALL LOW2UP( NAME,NAME )
       IF (NAME.NE.'    ')  CALL LEADBLK( NAME )
@@ -426,13 +429,13 @@
       IF (MS.LT.0)                                             THEN
           PB =.TRUE.
           MS = IABS(MS+1)
-          CALL ISPSET(4HMAJR, MAJR )
-          CALL ISPSET(4HMINR, MINR )
-          CALL ISPSET(3HNHI,   -1  )
-          CALL ISPSET(4HECOL,   1  )
-          CALL ISPSET(4HOFFM,   1  )
-          CALL ISPSET(4HOFFM,   0  )
-          CALL ISPSET(4HILAB,   1  )
+          CALL ISPSET(CHAR2INT('MAJR'), MAJR )
+          CALL ISPSET(CHAR2INT('MINR'), MINR )
+          CALL ISPSET(CHAR2INT('NHI'),   -1  )
+          CALL ISPSET(CHAR2INT('ECOL'),   1  )
+          CALL ISPSET(CHAR2INT('OFFM'),   1  )
+          CALL ISPSET(CHAR2INT('OFFM'),   0  )
+          CALL ISPSET(CHAR2INT('ILAB'),   1  )
       ELSE
           PB=.FALSE.
       END IF
@@ -773,9 +776,9 @@
 
 ***    INVOKE SPECIAL VALUE OPTION.
 
-      CALL ISPSET(4HOFFP,   1  )
-      CALL ISPSET(4HSPVA, -1.0 )
-      CALL ISPSET(4HNULB,   1  )
+      CALL ISPSET(CHAR2INT('OFFP'),   1  )
+      CALL ISPSET(CHAR2INT('SPVA'), -1.0 )
+      CALL ISPSET(CHAR2INT('NULB'),   1  )
 
 ***    PLOT.
 
@@ -841,6 +844,8 @@
      1                                      ', SCAL= ',G12.4)
  6030 FORMAT(' Considering hemispheric data.')
  6040 FORMAT(' SPplot reports I/O error number ',I4,' on unit 5.')
+
+#     include "char2int.cdk"
 
       END
 #     endif

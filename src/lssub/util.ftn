@@ -18,6 +18,15 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.120  2014/12/09 20:10:22  dugas
+C     Arret (-98) pour cause config compilation non supportee.
+C
+C     Revision 3.119  2014/12/08 22:03:38  dugas
+C     Deplacer CHKENDI, ME32O64 et INTEFLT vres util2.F90.
+C
+C     Revision 3.118  2014/12/04 03:02:40  dugas
+C     Correction a ME32O64.
+C
 C     Revision 3.116  2014/09/25 18:42:04  dugas
 C     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 C
@@ -859,28 +868,30 @@ C
       INTEGER,        PARAMETER :: NBRGEN = 16 , NBRUNT = 80
       INTEGER,        PARAMETER :: MAXUNIT = unite_io_maximale
 
-      CHARACTER*4     STATF(NBRUNT)
-      CHARACTER*32    COMMAND,FTYPC*2
-      CHARACTER*4     PKTYP(0:MAXUNIT),
-     +                PKTP0,PKTP1,DEF_PKTYP
-      CHARACTER*20    INPUT,OUTPUT,VRBOSE,XITVAL,
-     +                DEBUGM,TMPDIR,BIGTMP,UZBIGT,
-     +                PKVAL,ECHOJCL,OLDIP1V,LEAPYR,
-     +                MISVAL,KDATEV,DATFMT
-      CHARACTER*6     POSITF(NBRUNT),POSITION,OUVTYP
-      CHARACTER*16    CLES(NBRGEN),INFMOD,INFMODX
-      CHARACTER*(*)   NAMEQ,STATQ,NAMEV,TMPVAL,POSITQ
-      CHARACTER*512   NAME,EVALUE,DEF(NBRGEN),NAM(NBRGEN),
-     +                TMPDIRN,UNIT5,DIAGEXT,PROGRAM_NAME,
-     +                IONAM(NBRUNT+1),DEFNAM(NBRUNT)
-      SAVE            PROGRAM_NAME,TMPDIRN,DEFNAM
+      INTEGER         LISTE(NBRUNT)
+      INTEGER,        SAVE :: U(NBRUNT)
+      CHARACTER(4),   SAVE :: STATF(NBRUNT)
+      CHARACTER(6),   SAVE :: POSITF(NBRUNT)
+      CHARACTER(512), SAVE :: DEFNAM(NBRUNT)
+      CHARACTER(512)  IONAM(NBRUNT+1)
 
-      REAL            FVORT,PI
-      LOGICAL         FORTB(MAXUNIT)
-      INTEGER         I,J, LENNAM,LENTMP, NF,NFOUT,
-     +                IO,NUM,STIMEI,U(NBRUNT),IDEB,IFIN,
-     +                IPOS,II,INFMODI,IONUM,IU,IUQ,FTYP,
-     +                MAXSWRD,MAXWRD, IOVAL,IER
+      CHARACTER(16),  SAVE :: cles(NBRGEN)
+      CHARACTER(512), SAVE :: nam(NBRGEN),def(NBRGEN)
+
+      CHARACTER(4)    PKTP0,PKTP1
+      CHARACTER(6)    POSITION,OUVTYP
+      CHARACTER(16)   INFMOD,INFMODX
+      CHARACTER(32)   COMMAND,FTYPC*2
+      CHARACTER(512)  NAME,EVALUE
+      CHARACTER(512), SAVE :: PROGRAM_NAME,TMPDIRN
+
+      CHARACTER*(*)   NAMEQ,NAMEV,POSITQ,STATQ,TMPVAL ! Entry arguments
+      REAL            FVORT,PI ! SPWCON7 arguments
+
+      INTEGER,        SAVE :: IPOS=1,INFMODI=-1
+      INTEGER         I,J, LENNAM,LENTMP, NF,NFOUT, IOVAL,
+     +                IO,NUM,IDEB,IFIN,IER,
+     +                II,IONUM,IU,IUQ,FTYP
 
       INTEGER
      +                IU01,IU02,IU03,IU04,IU05,IU06,IU07,IU08,IU09,IU10,
@@ -892,31 +903,22 @@ C
      +                IU61,IU62,IU63,IU64,IU65,IU66,IU67,IU68,IU69,IU70,
      +                IU71,IU72,IU73,IU74,IU75,IU76,IU77,IU78,IU79,IU80
 
-      INTEGER         LISTE(NBRUNT)
-
-      LOGICAL         EX,OP, INFO, DATE, DEXIT, DEBUG, SINGLZ, SEQ,
-     +                LOPEN(MAXUNIT), SAUVD(MAXUNIT), SAUVE(MAXUNIT),
-     +                SAUVY(MAXUNIT), SAUVZ(MAXUNIT), SAUVU(MAXUNIT),
-     +                OLDIP1, NOABORT, E64OUT, KEEPIP2, SET_DEXIT, Done
-
-      LOGICAL,SAVE :: Vrai = .true. , Faux = .false. , MSGLVL = .false.
-
-      INTEGER         DATVAL
-      LOGICAL         SETYP,LVALUE
-      SAVE            SETYP
+      LOGICAL         HELP, Done, EX, OP, LVALUE
+      LOGICAL,        SAVE :: Vrai = .true. , Faux = .false.
+      LOGICAL,        SAVE :: MSGLVL = .false., SETYP
 
       REAL(8)         RVALUE,REPSIL, init8
       LOGICAL,SAVE :: MValue=.false.,MValue_READ=.false.,MValue_IS_OFF=.false.
       REAL(8),SAVE :: MisFlag,Epsilon=1D-3
 
-      real,           save :: misf=9.969209968386890e+36 ! a very large float
-      integer,        save :: misi=Z'80000000'  ! largest negative 32 bit integer
-      integer,        save :: misui=Z'FFFFFFFF' ! largest 32 bit unsigned integer
-      real    *8,     save :: misd=9.969209968386890e+36 ! very large double
-      integer *2,     save :: misa=Z'8000'      ! largest negative 16 bit integer
-      integer *2,     save :: misus=Z'FFFF'     ! largest 16 bit unsigned integer
-      integer *1,     save :: misb=Z'80'        ! largest negative 8 bit integer
-      integer *1,     save :: misub=Z'FF'       ! largest  8 bit unsigned integer
+      real,           save :: misf=9.96921e+36                ! a very large float
+      real    *8,     save :: misd=9.96921e+36                ! very large double
+      integer,        save :: misi =transfer(Z'80000000',1_4) ! largest negative 32 bit integer
+      integer,        save :: misui=transfer(Z'FFFFFFFF',1_4) ! largest 32 bit unsigned integer
+      integer *2,     save :: misa =transfer(Z'8000'    ,1_2) ! largest negative 16 bit integer
+      integer *2,     save :: misus=transfer(Z'FFFF'    ,1_2) ! largest 16 bit unsigned integer
+      integer *1,     save :: misb =transfer(Z'80'      ,1_1) ! largest negative 8 bit integer
+      integer *1,     save :: misub=transfer(Z'FF'      ,1_1) ! largest  8 bit unsigned integer
 
       INTEGER, EXTERNAL :: GET_MISSING_VALUE_FLAGS,MISSING_VALUE_USED
 
@@ -924,82 +926,71 @@ C
 
 #     include        "zlabel.cdk"
 
-      COMMON         /TIMER/   STIMEI
-      COMMON         /IODIRE/  UNIT5
-      COMMON         /ZZZOPEN/ LOPEN
-      COMMON         /DEXIT/   DEXIT,SET_DEXIT,DIAGEXT
-      COMMON         /MAXWRD/  MAXWRD
-      COMMON         /MAXSWRD/ MAXSWRD
-      COMMON         /ZZFORTB/ FORTB
-      COMMON         /ZZPKTYP/ PKTYP
-      COMMON         /ZZDEFPK/ DEF_PKTYP
-      COMMON         /ZZVERBO/ INFO
-      COMMON         /ZZDEBUG/ DEBUG
-      COMMON         /ZZ98IP1/ OLDIP1
-      COMMON         /ZZZDATE/ DATE,KEEPIP2,DATVAL
-      COMMON         /ZZZSNGL/ SINGLZ
-      COMMON         /ZZZSEQF/ SEQ   
-      COMMON         /ZZABORT/ NOABORT
-      COMMON         /ZZZE64O/ E64OUT
-      COMMON         /OUICEST/ SAUVD,SAUVE,SAUVY,SAUVZ,SAUVU
+      CHARACTER   DIAGEXT*512
+      LOGICAL     DEXIT,SET_DEXIT  ; COMMON /DEXIT/   DEXIT,SET_DEXIT,DIAGEXT
+      INTEGER     KEY(0:MAXUNIT)   ; COMMON /DIAGKEY/ KEY
+      CHARACTER   UNIT5*512        ; COMMON /IODIRE/  UNIT5
+      INTEGER     INFMOT(0:MAXUNIT); COMMON /LIRZXL/  INFMOT
+      INTEGER     MAXWRD           ; COMMON /MAXWRD/  MAXWRD
+      INTEGER     MAXSWRD          ; COMMON /MAXSWRD/ MAXSWRD
+      LOGICAL     SAUVD(MAXUNIT), SAUVE(MAXUNIT),
+     +            SAUVU(MAXUNIT), SAUVY(MAXUNIT), SAUVZ(MAXUNIT)
+      COMMON     /OUICEST/ SAUVD, SAUVE, SAUVY, SAUVZ, SAUVU
+      INTEGER     STIMEI           ; COMMON /TIMER/   STIMEI
+
+      LOGICAL     OLDIP1           ; COMMON /ZZ98IP1/ OLDIP1
+      LOGICAL     NOABORT          ; COMMON /ZZABORT/ NOABORT
+      LOGICAL     DEBUG            ; COMMON /ZZDEBUG/ DEBUG
+      CHARACTER   DEF_PKTYP*4      ; COMMON /ZZDEFPK/ DEF_PKTYP
+      LOGICAL     FORTB(MAXUNIT)   ; COMMON /ZZFORTB/ FORTB
+      CHARACTER*4 PKTYP(0:MAXUNIT) ; COMMON /ZZPKTYP/ PKTYP
+      LOGICAL     INFO             ; COMMON /ZZVERBO/ INFO
+      INTEGER     DATVAL
+      LOGICAL     DATE,KEEPIP2     ; COMMON /ZZZDATE/ DATE,KEEPIP2,DATVAL
+      LOGICAL     E64OUT           ; COMMON /ZZZE64O/ E64OUT
+      LOGICAL     LOPEN(MAXUNIT)   ; COMMON /ZZZOPEN/ LOPEN
+      LOGICAL     SEQ              ; COMMON /ZZZSEQF/ SEQ   
+      LOGICAL     SINGLZ           ; COMMON /ZZZSNGL/ SINGLZ
 
       INTEGER(8),     SAVE :: DATE_CONVERSION_FACTOR
-      INTEGER         YYYYMMDD, HHMMSShh, DATE_TIME_STAMP, DTM
+      INTEGER         YYYYMMDD, HHMMSShh, DATE_TIME_STAMP, DTM,DUMMY,ERR
       INTEGER(8)      YYYYMMDD8,HHMMSShh8,DATE8,IOVAL8
       INTEGER(8),     SAVE ::   D8=1 00 00 00 00 _8,     UN8=1,
      +                          DA=1 00 00 00 00 00 _8,
      +                          DC=1 00 00 00 00 00 00 _8
 
-      INTEGER         NEWDATE,ME32O64,INTEFLT,CHKENDI,DUMMY
-      EXTERNAL        NEWDATE,ME32O64,INTEFLT,CHKENDI
-
 #     include        "machtype.cdk"
 
-      LOGICAL         HELP
+      LOGICAL,EXTERNAL :: IS_ON,IS_OFF,SETIO64
+      INTEGER,EXTERNAL :: NEWDATE,ME32O64,INTEFLT,CHKENDI
+      INTEGER,EXTERNAL :: FCLOS,FNOM,FSTNBR,FSTOPC,FSTFRM,XDFOPT
+      INTEGER,EXTERNAL :: WKOFFIT,LONGUEUR
+      EXTERNAL            XIT,GETENVC,CCARD,PROGRAM_VERSION,
+     +                    LOW2UP,UP2LOW,QQQDOC,MESSYS,INICLE,
+     +                    PUTPARC,PUTPARI,OUVSTD
 
-      LOGICAL         IS_ON,IS_OFF,SETIO64
-      EXTERNAL        IS_ON,XIT,GETENVC,CCARD,SETIO64,
-     +                LOW2UP,UP2LOW,QQQDOC,MESSYS,INICLE,
-     +                PROGRAM_VERSION,IS_OFF
+      CHARACTER(20),SAVE :: ZZZJCL='JCLPNT PAS EXECUTE'
 
-      INTEGER                  KEY(0:MAXUNIT)
-      COMMON         /DIAGKEY/ KEY
-      INTEGER                  INFMOT(0:MAXUNIT)
-      COMMON         /LIRZXL/  INFMOT
+      CHARACTER(20)   BIGTMP,DATFMT,DEBUGM,ECHOJCL,INPUT,
+     +                KDATEV,LEAPYR,MISVAL,OLDIP1V,OUTPUT,
+     +                PKVAL,TMPDIR,UZBIGT,VRBOSE,XITVAL
 
-      INTEGER         ERR,              XDFOPT
-      INTEGER         FCLOS,FNOM,FSTNBR,FSTOPC,FSTFRM
-      EXTERNAL        FCLOS,FNOM,FSTNBR,FSTOPC,FSTFRM,
-     +                PUTPARC,PUTPARI,OUVSTD,XDFOPT
-
-      INTEGER         WKOFFIT,LONGUEUR
-      EXTERNAL        WKOFFIT,LONGUEUR
-
-      CHARACTER*20    ZZZJCL
-      SAVE            ZZZJCL
-
-      SAVE            IPOS,NAM,DEF,U,STATF,POSITF
-
-      DATA            IPOS   /            1           /,
-     +                INFMODI/           -1           /
-
-      DATA            ZZZJCL /  'JCLPNT PAS EXECUTE'  /
-
-      DATA            ECHOJCL/   'ECHO_COMMAND_LINE'  /,
+      DATA            BIGTMP /       'BIG_TMPDIR'     /,
+     +                DATFMT /      'DATE_FORMAT'     /,
+     +                DEBUGM /       'DEBUG_MODE'     /,
+     +                ECHOJCL/   'ECHO_COMMAND_LINE'  /,
      +                INPUT  /        'INPUT '        /,
+     +                KDATEV /     'PRESERVE_DATEV'   /,
+     +                LEAPYR /   'LEAP_YEAR_CONTROL'  /,
+     +                MISVAL /     'MISSING_VALUE'    /,
+     +                OLDIP1V/   'USE_OLD_STYLE_IP1'  /,
      +                OUTPUT /        'OUTPUT'        /,
      +                PKVAL  / 'DEFAULT_PACKING_TYPE' /,
-     +                XITVAL /        'XITVAL'        /,
-     +                VRBOSE /        'INFORM'        /,
-     +                DEBUGM /       'DEBUG_MODE'     /,
-     +                UZBIGT /     'USE_BIG_TMPDIR'   /,
      +                TMPDIR /        'TMPDIR'        /,
-     +                BIGTMP /       'BIG_TMPDIR'     /,
-     +                OLDIP1V/   'USE_OLD_STYLE_IP1'  /,
-     +                MISVAL /     'MISSING_VALUE'    /,
-     +                KDATEV /     'PRESERVE_DATEV'   /,
-     +                DATFMT /      'DATE_FORMAT'     /,
-     +                LEAPYR /   'LEAP_YEAR_CONTROL'  /
+     +                UZBIGT /     'USE_BIG_TMPDIR'   /,
+     +                VRBOSE /        'INFORM'        /,
+     +                XITVAL /        'XITVAL'        /
+
 
       DATA cles(1) / 'HELP'   /,nam(1) / 'NON'  /,def(1) / 'OUI'  /,
      +     cles(2) / 'INFO'   /,nam(2) / 'NON'  /,def(2) / 'OUI'  /,
@@ -1069,9 +1060,18 @@ C
 
 ***    DETERMINE MACHINE TYPE.
 
-      MACHINE = ME32O64( DUMMY )
-      INTSIZE = INTEFLT( DUMMY )
       BIGENDI = CHKENDI( DUMMY )
+      INTSIZE = INTEFLT( DUMMY )
+      MACHINE = ME32O64( DUMMY )
+
+      IF (INTSIZE /= 1 .or. MACHINE /= 2)                      THEN
+          print *,' Aborting ...'
+          IF (INTSIZE /= 1)
+     +    print *,' Default integer and real sizes are different' 
+          IF (MACHINE /= 2)
+     +    PRINT *,' Default integers 64-bit rather than 32-bit.'
+          CALL                                     XIT(' Jclpnt ',-98)
+      END IF
 
       IF (MACHINE.EQ.1) EX = SETIO64( Vrai )
       IF (MACHINE.EQ.2) EX = SETIO64( Faux )
@@ -1201,6 +1201,12 @@ C
       IF (INFMODI.EQ. 5)            INFMODX = 'TRIVIAL '
 
       IF (INFO .OR. IS_ON( NAM(10) )) CALL program_version('OUI')
+
+      IF (INFO)                                                THEN
+          IF (BIGENDI == 0) EVALUE = ' Little Endian machine'
+          IF (BIGENDI == 1) EVALUE = ' Big Endian machine'
+          WRITE(6,'(/A/)') TRIM( EVALUE )
+      END IF
 
 ***    Setup NOMVAR equivalence table.
 
@@ -3073,7 +3079,7 @@ C
 
       use DIAG_TOC, only: EcrTOC
 
-      IMPLICIT      NONE
+      IMPLICIT      none
 
       character*(*) name
       integer       n
@@ -3091,7 +3097,7 @@ C
 
 CCC   external      etime
       real          totalt,usert,systt,ra(2)
-      equivalence  (ra(1),usert),(ra(2),systt)
+!!!   equivalence  (ra(1),usert),(ra(2),systt)
       
       COMMON       /TIMER/   STIMEI
       COMMON       /IODIRE/  UNIT5
@@ -3243,7 +3249,7 @@ CCC   external      etime
       CALL SETRTEOPTS('cpu_time_type=total_usertime')
       CALL CPU_TIME( usert )
 #     else
-      call etime( ra,totalt )
+      call etime( ra,totalt ) ; usert = ra(1) ; systt = ra(2)
 #     endif
       CALL SYSTEM_CLOCK( STIMEF,IRATE )
       totalt = (STIMEF-STIMEI)/float( IRATE )
@@ -3900,103 +3906,14 @@ CCC           ERROR = .FALSE.
 
       end
 
-      INTEGER FUNCTION INTEFLT(IDUMMY)
+!      INTEGER FUNCTION INTEFLT(IDUMMY)     
+!      Moved to util2.F90 on Nov 5, 2014
 
-***    A.J. STACEY - AUG  6 1992 - USE DIMENSION STATEMENT TO DECLARE ANUM 
-***                                AND BNUM.  THIS TRACKS THE SIZE OF A FLOATING
-***                                POINT VARIABLE BETTER THAN A REAL DECLARATION,
-***                                ESPECIALLY WHEN "-R8" OPTION IS SPECTIFIED.
-***    A.J. STACEY - MAR 31 1992 - THIS ROUTINE CHECKS IF INTEGER WORD SIZE
-***                                IS THE SAME AS THE REAL WORD SIZE.  THIS
-***                                IS SUBTLY DIFFERENT FROM THE OUTPUT OF
-***                                "ME32O64".
+!      INTEGER FUNCTION ME32O64(IDUMMY)
+!      Moved to util2.F90 on Nov 5, 2014
 
-      IMPLICIT     REAL (A-H,O-Z), INTEGER (I-N)
-
-      DIMENSION    ANUM(1),BNUM(1)
-      INTEGER      INUM,JNUM
-      EQUIVALENCE (ANUM,INUM),(BNUM,JNUM)
-*-------------------------------------------------------------------------------
-      ANUM(1) = DSQRT(2.0D0)
-      JNUM    = INUM
-
-                                INTEFLT = 1
-      IF (ANUM(1) .NE. BNUM(1)) INTEFLT = 2
-
-      RETURN
-      END
-
-      INTEGER FUNCTION ME32O64(IDUMMY)
-
-***    A.J. STACEY    -MARCH 23,1992-  ROUTINE CREATED TO TELL CALLING
-***                                    PROGRAM WHETHER CURRENT MACHINE
-***                                    IS A 32-BIT MACHINE (2) OR A 
-***                                    64-BIT MACHINE (1).
-
-***    ALGORITHM:
-
-***    THIS SUBPROGRAM SHOULD BE CALLED AS FOLLOWS:
-
-***           :
-***          MACHINE = ME32O64(DUMMY)
-***          IF      (MACHINE .EQ. 1) THEN
-***            PRINT *,' I AM A 64-BIT MACHINE. '
-***          ELSE IF (MACHINE .EQ. 2) THEN
-***            PRINT *,' I AM A 32-BIT MACHINE. '
-***          ELSE
-***            PRINT *,' ERROR (NOT A VALID MACHINE VALUE.)'
-***          END IF
-***           :
-
-***    THIS ROUTINE USES A TRICK THAT INTEGERS DO NOT HAVE A 64-BIT 
-***    REPRESENTATION ON MACHINES THAT ARE OPERATING IN TRUE 32-BIT MODE.
-***    BY REFERENCING A 64-BIT CONSTANT AS AN INTEGER AND ASSIGNING IT
-***    TO ANOTHER INTEGER, 32-BIT MACHINES WILL TRANSFER ONLY HALF OF THE
-***    REAL*8 TEST VALUE, WHICH CAN BE DETECTED AND TESTED.
-
-***    NOTE: IT IS IMPORTANT THAT THE CONSTANT CHOSE FOR "ANUM" HAVE NON-ZERO
-***    BITS IN THE THE LEAST SIGNIFICANT 32-BIT HALF OF A 64-BIT WORD.
-***    CHOOSING "DSQRT(2)" SOLVES THIS PROBLEM.
-
-      IMPLICIT     REAL (A-H,O-Z), INTEGER (I-N)
-
-      REAL*8       ANUM,BNUM
-      INTEGER      INUM,JNUM
-      EQUIVALENCE (ANUM,INUM),(BNUM,JNUM)
-*-------------------------------------------------------------------------------
-
-      ANUM     = DSQRT(2.0D0)
-      JNUM     = INUM
-
-                          ME32O64 = 1
-      IF (ANUM .NE. BNUM) ME32O64 = 2
-
-      RETURN
-
-*-------------------------------------------------------------------------------
-      END
-
-      INTEGER FUNCTION CHKENDI( DUMMY )
-
-      INTEGER       DUMMY
-
-***    Determines the endian-ess of a computer (after M. Valin)
-***    March 24, 1999 - B. Dugas, RPN
-
-      INTEGER       W32
-      INTEGER*2     W16(2)
-      EQUIVALENCE ( W16(1) , W32 )
-
-      DATA          W32 / 1 /
-*-------------------------------------------------------------------------------
-
-      IF (W16(1).EQ.1) CHKENDI = 0 ! Little endian machine
-      IF (W16(1).EQ.0) CHKENDI = 1 ! Big endian machine
-
-      RETURN
-
-*-------------------------------------------------------------------------------
-      END
+!      INTEGER FUNCTION CHKENDI( DUMMY )
+!      Moved to util2.F90 on Nov 5, 2014
 
       SUBROUTINE SWAPA4( A4 )
 
@@ -4823,12 +4740,16 @@ CCC           ERROR = .FALSE.
 *        N     NOMBRE DE MOTS A COPIER DE A A B
 **
 
-      INTEGER  LITEND, I
-      DATA     LITEND /1/
-      INTEGER *2   LITTLE(2)
-      EQUIVALENCE (LITTLE(1),LITEND)
-      
-      IF (LITTLE(1) .EQ. 1)                                    THEN
+      INTEGER  I
+!!!   INTEGER  LITEND
+!!!   DATA     LITEND /1/
+!!!   INTEGER *2   LITTLE(2)
+!!!   EQUIVALENCE (LITTLE(1),LITEND)
+
+#     include        "machtype.cdk"
+
+!!!   IF (LITTLE(1) == 1)                                      THEN
+      IF (BIGENDI == 0)                                        THEN
 
 *         PRINT *,'DEBUG THIS COMPUTER IS LITTLE ENDIAN'
 

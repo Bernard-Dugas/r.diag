@@ -1,3 +1,1 @@
-subroutine no_such_routine_exist_here
-return
-end subroutine no_such_routine_exist_here
+stubs.f90.rmn_015

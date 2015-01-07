@@ -10,7 +10,7 @@
 *
 *
 *     AUTHOR   - R.Laprise, DEC 19/84.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/txtplot.ptn,v 4.4 2014/09/25 20:20:55 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/txtplot.ptn,v 4.5 2014/12/22 19:24:53 dugas Exp $
 *
 *
 *     INPUT PARAMETERS...
@@ -71,6 +71,9 @@
 *     -------------------------------------
  
 *     $Log: txtplot.ptn,v $
+*     Revision 4.5  2014/12/22 19:24:53  dugas
+*     Utiliser la fonction CHAR2INT qui se trouve dans char2int.cdk.
+*
 *     Revision 4.4  2014/09/25 20:20:55  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -145,7 +148,7 @@
       CALL JCLPNT( NFF, 5,6 )
 
       CALL SYSDAT
-      CALL OPTN( 4HCASE,4 )
+      CALL OPTN( CHAR2INT('CASE'),4 )
       CALL SET( 0.01,0.99,0.01,0.99, 0.,1.,0.,1., 1 )
 
       I = 0
@@ -201,10 +204,10 @@
   201     WRITE(6,6010) I,LINE
 
           IF (Y.LE.YMIN)                                       THEN
-              CALL PWRIT( .97,.97,1HX,4,ISIZ,IOR,0 )
+              CALL PWRIT( .97,.97,'X',4,ISIZ,IOR,0 )
               CALL FRAME
               Y = YSTART
-              CALL OPTN( 4HCASE,4 )
+              CALL OPTN( CHAR2INT('CASE'),4 )
           END IF
 
           CALL PWRIT( XSTART,Y,LINE,LENLIN,ISIZ,IOR,0 )
@@ -214,7 +217,7 @@
 
 ***    INPUT SECTION IS FINISHED.
 
-  700 CALL PWRIT(.97,.97,1HX,4,ISIZ,IOR,0)
+  700 CALL PWRIT(.97,.97,'X',4,ISIZ,IOR,0)
       CALL FRAME
       CALL                                         XIT(' Txtplot', 0 )
 
@@ -225,6 +228,8 @@
 *-----------------------------------------------------------------------
  5000 FORMAT(10X,I5)
  6010 FORMAT(1X,I5,5X,A)
+
+#     include "char2int.cdk"
 
       END
 #endif
