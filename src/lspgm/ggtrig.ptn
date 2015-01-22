@@ -9,19 +9,19 @@
 *
 *
 *     AUTHOR  - J.D.Henderson, MAY 25/81.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggtrig.ptn,v 4.14 2014/09/25 20:20:49 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggtrig.ptn,v 4.15 2015/01/22 21:44:36 dugas Exp $
 *
 *
-*     PURPOSE - MULTIPLIES ANY 'A','B','G' 'L' OR 'Z' GRID FILE BY
-*               CONST*TRIG(LAT)**N OR CONST*TRIG(N*LON), WHERE
-*               TRIG CAN BE EITHER OF THE FOLLOWING:
+*     PURPOSE - MULTIPLIES ANY 'A','B','G' 'L','N','S' OR 'Z' GRID
+*               FILE BY CONST*TRIG(LAT)**N OR CONST*TRIG(N*LON),
+*               WHERE TRIG CAN BE EITHER OF THE FOLLOWING:
 *               1) ANY OF THE USUAL SINUS, COSINUS
 *                  OR TANGENT FUNCTIONS.
 *               2) THE IDENTITY FUNCTION.
 *
 *
 *     INPUT FILE...
-*      GGIN  = 'A','B','G','L' OR 'Z' GRIDS
+*      GGIN  = 'A','B','G','L','N','S' OR 'Z' GRIDS
 *
 *     OUTPUT FILE...
 *      GGOUT = GGIN MULTIPLIED AS REQUESTED.
@@ -99,6 +99,9 @@
 *     -------------------------------------------------------------
 
 *     $Log: ggtrig.ptn,v $
+*     Revision 4.15  2015/01/22 21:44:36  dugas
+*     Ajouter le support des grilles de type N et S.
+*
 *     Revision 4.14  2014/09/25 20:20:49  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -183,20 +186,23 @@
 *-----------------------------------------------------------------------
       IMPLICIT    none
 
-      CHARACTER*5 AN,ALON
-      CHARACTER*3 KTR,CGEO
-      LOGICAL     OK,NEW,RPBLOC,LGEO
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+
+      CHARACTER(5) AN,ALON
+      CHARACTER(3) KTR,CGEO
+      LOGICAL     OK,NEW,LGEO
       CHARACTER   PKTYP*4,GRTYP,ZTYP
       REAL        ZIG1,ZIG2,ZIG3,ZIG4,DLON1,
-     +            DLAT1,DLON2,DLAT2,XLON0,XLAT0
+     +            DLAT1,DLON2,DLAT2,XLON0,XLAT0,
+     +            XIP,XJP,D60,DGRW,X,Y
       CHARACTER   LIGNE*80,CONST8*20,CONST4*10
-      REAL*8      PIS2,DYLA,DEUXPI,RLON,H,CO,CONST
-      INTEGER     IER,NR,NLAT,NLAT0,ILATH,IO,N,NLON,NLON0,
-     +            NFF,I,J,JR,K,IN,NHEM,NHEM0,LON,LONM1,NWDS,
-     +            KBUF(taille_entete),MAXW,LEN,KPAK,IG1,IG2,
+      REAL(8)     PIS2,DYLA,DEUXPI,RLON,H,CO,CONST
+      INTEGER     IER,NR,NLAT,ILATH,IO,N,NLON,
+     +            NFF,I,J,JR,K,IN,NHEM,LON,LONM1,NWDS,
+     +            KBUF(HEAD),MAXW,LEN,KPAK,IG1,IG2,
      +            IG3,IG4,DIMX,DIMY,IJ
 
-      REAL*8,     DIMENSION(:), ALLOCATABLE :: F,TRIGLON,TRIGLAT,
+      REAL(8),    DIMENSION(:), ALLOCATABLE :: F,TRIGLON,TRIGLAT,
      +                                         RAD,SL,CL,WL,WOSSL
       REAL,       DIMENSION(:), ALLOCATABLE :: LONR,LATR, VALX,VALY
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
@@ -204,15 +210,15 @@
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
 
-      LOGICAL     SETIO64
-      CHARACTER*4 GETHIC,GETYP
-      INTEGER     GETHIGH,GETSIZ
-      EXTERNAL    GETSIZ,JCLPNT,RPBLOC,GETLIGN,BURNF,
-     +            XIT,GETFLD2,GAUSSG,TRIGL2,PUTFLD2,LOW2UP,
-     +            SETIO64,GETHIC,GETYP,GETHIGH,GETZREF,
-     +            GETZDES,CIGAXG,D_ROTA
+      LOGICAL,      EXTERNAL :: SETIO64,RPBLOC
+      CHARACTER(4), EXTERNAL :: GETHIC,GETYP
+      INTEGER,      EXTERNAL :: GETHIGH,GETSIZ
 
-      DATA        NLON0,NLAT0,NHEM0 / 3*-1 /
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,
+     +            XIT,GETFLD2,GAUSSG,TRIGL2,PUTFLD2,LOW2UP,
+     +            GETZREF,GETZDES,CIGAXG,D_ROTA
+
+      INTEGER,    SAVE :: NLON0 = -1, NLAT0 = -1, NHEM0 = -1
 *===================================================================
 
       NOMPRG =
@@ -361,10 +367,15 @@
 
           END IF
 
-          IF     (GRTYP.EQ.'Z')                                THEN
+***        Check wether we need to perform a new setup ?
 
-              IF (NEW           .OR.
-     +            NLAT.NE.NLAT0 .OR. NLON.NE.NLON0)            THEN
+          IF (GRTYP == 'Z' .OR.
+     +        GRTYP == 'N' .OR.
+     +        GRTYP == 'S')                                    THEN
+
+              IF (GRTYP == 'Z' .AND.
+     +           (NEW           .OR.
+     +            NLAT /= NLAT0 .OR. NLON /= NLON0))           THEN
 
                   IF (LON.EQ.0 .AND. N.NE.IN) CALL XIT(' Ggtrig ',-5 )
 
@@ -413,54 +424,107 @@
                       END DO
                   ENDIF
 
-                  IF (LON.EQ.0)                                THEN
+              ELSE IF ((GRTYP == 'N'  .OR. GRTYP == 'S')
+     +       .AND.     (NEW           .OR. NHEM /= NHEM0
+     +       .OR.       NLAT /= NLAT0 .OR. NLON /= NLON0))     THEN
+              
+                  IF (.NOT.NEW) DEALLOCATE( LONR,LATR )
+                  ALLOCATE( LONR(NLON*NLAT),LATR(NLON*NLAT) )
 
-***                    RESET LATR TO THE REQUESTED
-***                    LATITUDE TRIG FUNCTION.
+                  NEW   = .FALSE.
 
-                      IF (KTR.EQ.'SIN')                        THEN
-                          DO  J=1,NLON*NLAT
-                              LATR(J) = SIN( CO*LATR(J) )**N
-                          END DO
-                      ELSE IF (KTR.EQ.'COS')                   THEN
-                          DO  J=1,NLON*NLAT
-                              LATR(J) = COS( CO*LATR(J) )**N
-                          END DO
-                      ELSE IF (KTR.EQ.'TAN')                   THEN
-                          DO  J=1,NLON*NLAT
-                              LATR(J) = TAN( CO*LATR(J) )**N
-                          END DO
-                      ELSE IF (KTR.EQ.'IDF')                   THEN
-                          DO  J=1,NLON*NLAT
-                              LATR(J) =      CO*LATR(J)  **N
-                          END DO
-                      END IF
+                  NLON0 =  NLON
+                  NLAT0 =  NLAT
+                  NHEM0 =  NHEM
 
+                  CALL CIGAXG( GRTYP, XIP,XJP,D60,DGRW,
+     +                                IG1,IG2,IG3,IG4 )
+
+                  DO  J=1,NLAT
+                      Y  = J-XJP
+                      JR = (J-1)*NLON
+                      DO  I=1,NLON
+                          X = I-XIP 
+                          K = JR+I
+                          CALL LLFXY( LATR(K),LONR(K),
+     +                                X,Y,D60,DGRW,NHEM ) 
+                      END DO
+                  END DO
+ 
+              ELSE
+
+                  ! No setup needed for N-, S- and Z-type grids.
+
+                  GOTO 200
+
+              END IF
+
+              IF (LON.EQ.0)                                    THEN
+                     
+***                RESET LATR TO THE REQUESTED LATITUDE TRIG
+***                FUNCTION . N COULD ALSO BE NEGATIVE.
+
+                  IF (N == IN)                                 THEN
+                     IF (KTR.EQ.'SIN')                         THEN
+                        DO  J=1,NLON*NLAT
+                           LATR(J) = SIN( CO*LATR(J) )**N
+                        END DO
+                     ELSE IF (KTR.EQ.'COS')                    THEN
+                        DO  J=1,NLON*NLAT
+                           LATR(J) = COS( CO*LATR(J) )**N
+                        END DO
+                     ELSE IF (KTR.EQ.'TAN')                    THEN
+                        DO  J=1,NLON*NLAT
+                           LATR(J) = TAN( CO*LATR(J) )**N
+                        END DO
+                     ELSE IF (KTR.EQ.'IDF')                    THEN
+                        DO  J=1,NLON*NLAT
+                           LATR(J) =      CO*LATR(J)  **N
+                        END DO
+                     END IF
                   ELSE
-
-***                    RESET LONR TO THE REQUESTED
-***                    LONGITUDE TRIG FUNCTION.
-
-                      IF (KTR.EQ.'SIN')                        THEN
-                          DO  I=1,NLON*NLAT
-                              LONR(I) = CONST*SIN( N*CO*LONR(I) )
-                          END DO
-                      ELSE IF (KTR.EQ.'COS')                   THEN
-                          DO  I=1,NLON*NLAT
-                              LONR(I) = CONST*COS( N*CO*LONR(I) )
-                          END DO
-                      ELSE IF (KTR.EQ.'TAN')                   THEN
-                          DO  I=1,NLON*NLAT
-                              LONR(I) = CONST*TAN( N*CO*LONR(I) )
-                          END DO
-                      ELSE IF (KTR.EQ.'IDF')                   THEN
-                          DO  I=1,NLON*NLAT
-                              LONR(I) = CONST*     N*CO*LONR(I)
-                          END DO
-                      END IF
-             
+                     IF (KTR == 'SIN')                         THEN
+                        DO  J=1,NLON*NLAT
+                           LATR(J) = 1./(SIN( CO*LATR(J) )**IN)
+                        END DO
+                     ELSE IF (KTR == 'COS')                    THEN
+                        DO  J=1,NLON*NLAT
+                           LATR(J) = 1./(COS( CO*LATR(J) )**IN)
+                        END DO
+                     ELSE IF (KTR == 'TAN')                    THEN
+                        DO  J=1,NLON*NLAT
+                           LATR(J) = 1./(TAN( CO*LATR(J) )**IN)
+                        END DO
+                     ELSE IF (KTR == 'IDF')                    THEN
+                        DO  J=1,NLON*NLAT
+                           LATR(J) = 1./(     CO*LATR(J)  **IN)
+                        END DO
+                     END IF
                   END IF
 
+              ELSE
+
+***                RESET LONR TO THE REQUESTED
+***                LONGITUDE TRIG FUNCTION.
+
+                  IF (KTR.EQ.'SIN')                            THEN
+                     DO  I=1,NLON*NLAT
+                        LONR(I) = CONST*SIN( N*CO*LONR(I) )
+                     END DO
+                  ELSE IF (KTR.EQ.'COS')                       THEN
+                     DO  I=1,NLON*NLAT
+                        LONR(I) = CONST*COS( N*CO*LONR(I) )
+                     END DO
+                  ELSE IF (KTR.EQ.'TAN')                       THEN
+                     DO  I=1,NLON*NLAT
+                        LONR(I) = CONST*TAN( N*CO*LONR(I) )
+                     END DO
+                  ELSE IF (KTR.EQ.'IDF')                       THEN
+                     DO  I=1,NLON*NLAT
+                        LONR(I) = CONST*     N*CO*LONR(I)
+                     END DO
+                  END IF
+                  
               END IF
 
           ELSE IF (LON.EQ.0      .AND.
@@ -697,9 +761,11 @@
           END IF
 * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - --
 
-          IF (GRTYP.EQ.'Z')                                    THEN
+  200      IF (GRTYP == 'Z' .OR.
+     +         GRTYP == 'N' .OR.
+     +         GRTYP == 'S')                                   THEN
 
-              IF (LON.EQ.0)                                        THEN
+              IF (LON.EQ.0)                                    THEN
 
 ***                MULTIPLY THE GRID BY CONST*TRIG(LAT)**N
 
@@ -719,7 +785,7 @@
 
           ELSE
 
-              IF (LON.EQ.0)                                        THEN
+              IF (LON.EQ.0)                                    THEN
 
 ***                MULTIPLY THE GRID BY CONST*TRIG(LAT)**N
 
