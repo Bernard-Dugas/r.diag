@@ -1,5 +1,6 @@
 #!/bin/bash
 Location=$(true_path $0) ; Location=${Location%/bin/*}
-CDF2RPN=${DIAGNOSTIQUE:-${Location}}/bin/${BASE_ARCH}/latest.cdf2rpn
+export DIAGNOSTIQUE=${DIAGNOSTIQUE:-${Location}}
+CDF2RPN=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/latest.cdf2rpn
 ${CDF2RPN} "$@"
 exit $?

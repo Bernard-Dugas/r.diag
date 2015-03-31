@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: fftcray.ftn,v $
+*     Revision 3.8  2015/03/30 22:13:41  dugas
+*     Verifier que N > 0 dans FTSETUP.
+*
 *     Revision 3.7  2014/09/25 18:42:02  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 *
@@ -87,6 +90,7 @@ C       AS REQUIRED BY FFT_RD.
       integer, dimension(maxfac) :: ifac
       common /QQQRD_FFFT8_DRQQQ/ trigs,ifac,npts
 
+      IF (N <= 0) CALL                             XIT(' Ftsetup',-1 )
       CALL SETFFT_RD( N,IER )
       IF (IER /= 0) CALL                           XIT(' Ftsetup',-1 )
 

@@ -18,6 +18,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.121  2015/02/13 20:21:04  dugas
+C     Mise-a-jour syntaxique F90 de QQQDOC.
+C
 C     Revision 3.120  2014/12/09 20:10:22  dugas
 C     Arret (-98) pour cause config compilation non supportee.
 C
@@ -3758,7 +3761,7 @@ CCC           ERROR = .FALSE.
 
 *     LOGICAL       op
       LOGICAL       checked_ARMNLIB
-      INTEGER       i,j,k,err
+      INTEGER       i,j,err
 *     INTEGER       IO,l,iun
       CHARACTER*512 path,docs,pager
 *     CHARACTER*80  strings
@@ -3807,33 +3810,21 @@ CCC           ERROR = .FALSE.
   200 checked_ARMNLIB = .false.
       call getenvc( 'DIAGNOSTIQUE',path )
 
-  250 if (path .eq. ' ')                                       then
+  250 if (path == ' ')                                         then
           call getenv( 'ARMNLIB',path )
           checked_ARMNLIB = .true.
-          if (path == ' ')                                     then
-              path = '.'
-              k    =  1
-          else
-              do k=512,2,-1
-                 if (path(k:k) .ne. ' ') goto 300
-              end do
-          end if
-      else
-          do k=512,2,-1
-             if (path(k:k) .ne. ' ') goto 300
-          end do
       end if
 
-  300 if (k.eq.1)                                              then
+      if (path == ' ')                                         then
           docs = './' // nom(i:j) // '.txt'
       else
-          err = clib_isdir( path(1:k) // '/man/pdoc/' )
+          err = clib_isdir( trim( path ) // '/man/pdoc/' )
           if (err == CLIB_OK ) then
-              docs = path(1:k) // '/man/pdoc/' // nom(i:j) // '.txt'
+              docs = trim( path ) // '/man/pdoc/' // nom(i:j) // '.txt'
           else
-              err = clib_isdir( path(1:k) // '/pdoc/' )
+              err = clib_isdir( trim( path ) // '/pdoc/' )
               if (err == CLIB_OK ) then
-                  docs = path(1:k) // '/pdoc/' // nom(i:j) // '.txt'
+                  docs = trim( path ) // '/pdoc/' // nom(i:j) // '.txt'
               else if (.not.checked_ARMNLIB)                    then
                   path = ' '
                   goto 250
@@ -3854,15 +3845,11 @@ CCC           ERROR = .FALSE.
 ***    check for PAGER environment variable. defaults to "more".
 
       call getenvc( 'PAGER',pager )
-      if (pager.eq.' ') pager = 'more'
-
-      do k=512,2,-1
-         if (pager(k:k) .ne. ' ') goto 400
-      end do
+      if (pager == ' ') pager = 'more'
 
 ***    do it...
 
-  400 call system( pager(1:k)//' '//docs )
+  400 call system( trim( pager ) // ' ' //d ocs )
 
 ***    open docs and read/write till EOF.
 ***    unit number corresponds to stderr.

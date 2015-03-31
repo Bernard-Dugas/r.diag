@@ -6,7 +6,7 @@
 *
 *
 *     AUTHOR - B.Dugas, Oct 10/91.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zadlev.ptn,v 4.18 2014/09/25 20:20:56 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/zadlev.ptn,v 4.19 2015/03/30 22:24:00 dugas Exp $
 *
 *
 *     DESCRIPTION...
@@ -123,6 +123,9 @@
       PROGRAM zadlev
 
 *     $Log: zadlev.ptn,v $
+*     Revision 4.19  2015/03/30 22:24:00  dugas
+*     Menage du code F77 --> F90.
+*
 *     Revision 4.18  2014/09/25 20:20:56  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -224,21 +227,23 @@
 *     Initial revision
 *     
 *- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      IMPLICIT    none
+      IMPLICIT     none
 
-      INTEGER     MAXLEV,       MAXLIN
-      PARAMETER ( MAXLEV = 999, MAXLIN = 80)
+      INTEGER,     PARAMETER :: MAXLEV=999, MAXLIN=80
 
-      CHARACTER*4  TYPE,LIGNE*80,VERBE*8
+      CHARACTER(10) VALEUR,CKIND,CLEVX(MAXLEV)
+      CHARACTER(4) TYPE,LIGNE*80,VERBE*8,PKTYP*2
       LOGICAL      OK,ADD,LOG,INCREAS,LINEP,BIGF
-      CHARACTER*10 VALEUR,CKIND,VTYPI,CLEVX(MAXLEV)
       REAL         PR(MAXLEV),PRXI(MAXLEV),PRXO(MAXLEV),ZERO,
      +             Y(MAXLEV),YX(MAXLEV),DEN(4,MAXLEV-3),HOLDP,DP,HOLD
-      INTEGER      NWDS,JPAK,ILEV,NLEV,INTERP,VTI0,VTI,VT1,
+      INTEGER      NWDS,JPAK,ILEV,NLEV,INTERP,VTI0,
      +             LEVX(MAXLEV),LEV(MAXLEV),IPRX(MAXLEV),LEN,
      +             MAXW,MEM,HEAD,JBUF(taille_entete), LIM1,LIM2,
      +             KIND,N,NF,NR,I,J,K,L,IK,LXI,LXO,IO,IER,NLAT,LEVO,
      +             PERIOD,VKIND,N0
+
+      CHARACTER(10),SAVE :: VTYPI='PRES'
+      INTEGER,     SAVE :: VTI=-1, VT1=-1
 
       INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
       REAL,        DIMENSION(:), ALLOCATABLE :: ZO,ZI
@@ -246,16 +251,13 @@
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
 
-      LOGICAL      RPBLOC
-      INTEGER      GETSIZ,GETSIZ2,GETKIND
-      CHARACTER*4  PKTYP,GETYP,GETKINDC*16
-      EXTERNAL     GETSIZ2,MACSPE,JCLPNT,RPBLOC,GETLIGN,
-     +             BURNF,XIT,GETSET2,PUTSET2,SETLAB,
-     +             CONVPR,LVCODE,WRITLEV,GETKINDC,
-     +             CMPLBL,GETVERB,GETKIND,GETSIZ
-
-      DATA         VTYPI/ 'PRES' /, VTI,VT1/ -1,-1 /
-
+      LOGICAL,     EXTERNAL :: RPBLOC
+      INTEGER,     EXTERNAL :: GETSIZ,GETSIZ2,GETKIND
+      CHARACTER(4),EXTERNAL :: GETYP
+      CHARACTER(16),EXTERNAL :: GETKINDC
+      EXTERNAL     MACSPE,JCLPNT,GETLIGN,BURNF,XIT,GETSET2,
+     +             PUTSET2,SETLAB,CONVPR,LVCODE,WRITLEV,
+     +             CMPLBL,GETVERB
 *=====================================================================
 
       NOMPRG =
@@ -275,7 +277,6 @@
       CALL GETVERB( VERBE )
 
       PKTYP = GETYP( 1 )
-      PKTYP = PKTYP(1:2)
 
       IF (PKTYP.EQ.'SQ')                                      THEN
           MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
@@ -484,7 +485,7 @@
 
 ***        LEVX PROCESSING AND IDENTIFICATION.
 
-          IF (PKTYP.EQ.'SQ')                                   THEN
+          IF (PKTYP.NE.'SQ')                                   THEN
               VTYPI = 'CCCMA'
           ELSE
               VTYPI = getkindc( VTI )
@@ -504,9 +505,9 @@
               END IF
 
               DO  L=3,N
-                  IF ((     INCREAS .AND. PRXI(L).LE.PRXI(L-1))
+                  IF ((     INCREAS .AND. PRXI(L-1).GE.PRXI(L))
      +           .OR.
-     +                (.NOT.INCREAS .AND. PRXI(L).GE.PRXI(L-1))) THEN
+     +                (.NOT.INCREAS .AND. PRXI(L-1).LE.PRXI(L))) THEN
                       WRITE(6,6008)
                       CALL                         XIT( VERBE,-8 )
                   END IF

@@ -33,6 +33,9 @@
 *
 * REVISIONS
 *
+*     Bernard Dugas, mars 2015 :
+*     - Verifier que le nombre de valeurs des attributs
+*       entiers ou reels est <= max_len.
 *     Bernard Dugas, fevrier 2009 :
 *     - Ajouter le support des donnees de type nf_byte
 *     Bernard Dugas fevrier 2008 :
@@ -70,6 +73,13 @@
 
          status = nf_inq_att(ncid,varid,name,type,nlen)
          call handle_err2(status,'get_attribut')
+
+         if (nlen > max_len .and. type /= NF_CHAR) then
+            write(6,*) 'GET_ATTRIBUT : Nombre de valeurs ',
+     .           nlen,' pour attribut ',trim(varname),':',trim(name),
+     .         ' plus grand que max_len =',max_len
+            call                                  xit('get_attribut',-1)
+         endif
 
          if (type.eq.nf_char) then
 

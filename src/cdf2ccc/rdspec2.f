@@ -36,6 +36,8 @@
 *
 *REVISIONS
 *
+*  Bernard Dugas mars 2015 :
+*  - Faire appel a COMBLINE6 (ajouter DSIZE a la liste des arguments)
 *  Bernard Dugas octobre 2014 :
 *  - Declarations/initialisations locales des variables ktr et lmt
 *  Bernard Dugas fevrier 2014 :
@@ -67,19 +69,19 @@
 ******CCCma :
 
       character cccname*4
-      integer   i,n,nn,k,kk,first,indice,itime
+      integer   i,n,nn,k,kk,first,indice,itime,dsize
       integer   ccctime,la,lm,lr,lrlmt, ktr,lmt
 
       real    bad
 
       integer ilevel(maxlev)
 
-      integer  clrlmt
-      external clrlmt
+      integer, external :: clrlmt
 
 ******
       data miss_cdf,fill_cdf /0.0,0.0/
-      logical var_ok
+      data dsize /-32/
+
 *-----------------------------------------------------------------------
       if (invj) then
          write(6,5999)
@@ -156,12 +158,12 @@
                   indice=0
                   first=dim(level2did)%len*(itime-1)+2*kk-1
 
-                  call combline5( variable(1,nn),dval,indice,kk,
+                  call combline6( variable(1,nn),dval,indice,kk,
      .                                 dim(numdid)%len,1,dim(zdid)%len,
      .                                   scale_fact(kk),add_offset(kk),
      .                                var(nn)%mult,var(nn)%add,.false.,
-     .                             fill_cdf,.false.,0,fill_all,.false. )
-     .                                               
+     .                                     fill_cdf,.false.,0,fill_all,
+     .                                                   .false.,dsize )
 
                   dval(1)=mean(first)
                   dval(2)=mean(first+1)

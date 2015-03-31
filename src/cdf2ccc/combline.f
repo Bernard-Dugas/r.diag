@@ -14,15 +14,15 @@
 ! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 !---------------------------------- LICENCE END ---------------------------------
 !
-      subroutine combline5( VALUE,gg,INDICE,K,NI,NJ,NK,SCALE,OFFSET,
+      subroutine combline6( VALUE,gg,INDICE,K,NI,NJ,NK,SCALE,OFFSET,
      .                      MULT,ADD,FILL_OK,FILL_CDF,INVJJ,LASLON,
-     .                      FILL_ALL,FILL_CDF_NAN )
+     .                      FILL_ALL,FILL_CDF_NAN, DSIZE )
 
       implicit none
       
       include 'cdf2ccc.h'
       
-      integer indice,k,ni,nj,nk,laslon
+      integer indice,k,ni,nj,nk,laslon,dsize
 
       logical fill_ok,invjj,fill_all,fill_cdf_nan
       real*8  scale,offset,mult,add,fill_cdf
@@ -50,6 +50,10 @@
 *
 * REVISIONS
 *
+* B.Dugas mars '15 :
+* - Ajouter l'argument DSIZE qui sera utilise dans le calcul de fill_cdf_toler.
+*   Ce dernier depends maintenant de la valeurs de fill_cdf et de taille native
+*   des donnees NEtCDF
 * B.Dugas fev '14 :
 * - Tenir compte du cas ou FILL_CDF est un NaN
 * B.Dugas juin '13 :
@@ -87,8 +91,20 @@
 *-----------------------------------------------------------------------
 
       fill_count=0 ; fill_all=.false.
-      if (fill_ok .and. .not.fill_cdf_nan)
-     .    fill_cdf_toler=abs( fill_cdf ) * 0.001
+
+      if (fill_ok .and. .not.fill_cdf_nan) then
+         fill_hold=fill_cdf
+         if (fill_cdf == 0.0_8) fill_hold=1.0
+         if      (dsize == -8)  then
+            fill_cdf_toler=abs( fill_hold ) / 256._8      ! /2**8
+         else if (dsize == -16) then
+            fill_cdf_toler=abs( fill_hold ) / 65536._8    ! /2**16
+         else if (dsize == -32 .or. dsize == -64) then
+            fill_cdf_toler=abs( fill_hold ) / 8388608._8  ! /2**23
+         else
+            fill_cdf_toler=abs( fill_hold ) * 0.00001
+         endif
+      endif
 
       if (invjj) then
          jmin=nj

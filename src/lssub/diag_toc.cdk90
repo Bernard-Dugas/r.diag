@@ -25,9 +25,12 @@
 !    Ron Mctaggart-Cowan's Vgrid_Descriptors
 
 !    Author: Bernard Dugas, automne 2009/hiver 2010
-!    Last revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lssub/diag_toc.cdk90,v 3.5 2014/09/25 18:31:50 dugas Exp $
+!    Last revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lssub/diag_toc.cdk90,v 3.6 2015/03/30 22:18:18 dugas Exp $
 
 !    $Log: diag_toc.cdk90,v $
+!    Revision 3.6  2015/03/30 22:18:18  dugas
+!    Remplacer les 'self=TOC_GD' par des 'TOC_GD' dans les appels du type vgd_*.
+!
 !    Revision 3.5  2014/09/25 18:31:50  dugas
 !    Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 !
@@ -159,7 +162,7 @@
 
       IF (TOC_NBR(NF)+1 > max_nbr) RETURN
 
-      status = vgd_new( self=TOC_GD(TOC_NBR(NF)+1,NF),         &
+      status = vgd_new( TOC_GD(TOC_NBR(NF)+1,NF),              &
                         kind=Kind,version=F_version,hyb=F_hyb, &
                         rcoef1=F_rcoef(1),rcoef2=F_rcoef(2),   &
                         ptop_8=F_ptop_8, pref_8=F_pref_8,      &
@@ -172,8 +175,8 @@
           ! Rang du nouvel enregistrement TocToc
           TOC_NBR(NF) = TOC_NBR(NF)+1 ; NBR = TOC_NBR(NF)
 
-          status = vgd_get( self=TOC_GD(NBR,NF),value=TOC_NK(1,NBR,NF), key='NL_M' )
-          status = vgd_get( self=TOC_GD(NBR,NF),value=TOC_NK(2,NBR,NF), key='NL_T' )
+          status = vgd_get( TOC_GD(NBR,NF), key='NL_M', value=TOC_NK(1,NBR,NF) )
+          status = vgd_get( TOC_GD(NBR,NF), key='NL_T', value=TOC_NK(2,NBR,NF) )
 
           TOC_VER(   NBR,NF) = Kind*1000+F_version ! Un-safe !
           TOC_TOP(   NBR,NF) = F_ptop_8
@@ -240,8 +243,6 @@
                   SWA,LNG,DLTF,UBC,EXTRA1,EXTRA2,EXTRA3
       INTEGER     NI0,NJ0,NK0
 
-!     INTEGER,    DIMENSION(:), POINTER :: LOCAL_IP1
-
       NF = ABS( NFIN ) ; IF (NF > unite_io_maximale) RETURN
 
 !    Allocations/Initializations.
@@ -303,7 +304,7 @@
 !            Construct a new set of 3D coordinate descriptors
 !            using the last TocToc record record found.
 
-              status = vgd_new( self=TOC_GD(I,NF),    &
+              status = vgd_new( TOC_GD(I,NF),         &
                                 unit=NF,format='fst', &
                                 ip1=TOC_IP(1,I,NF),   &
                                 ip2=TOC_IP(2,I,NF) )
@@ -323,9 +324,9 @@
 
 !                Start by determining the number of levels.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=IVALUE,      &
-                                    key='NL_M' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='NL_M',   &
+                                    value=IVALUE )
 
                   if (status /= VGD_OK)                        THEN
                       if (DEBUG) write(STDERR,6200) 'NL_M'
@@ -338,9 +339,9 @@
 
 !                Save PTOP the pressure the model top level.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue,      &
-                                    key='PTOP' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='PTOP',   &
+                                    value=rvalue )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'PTOP'
@@ -352,9 +353,9 @@
 
 !                Save PREF the model reference pressure.
 
-                  status = vgd_get( self=TOC_GD(I,NF), & 
-                                    value=rvalue,      &
-                                    key='PREF' )
+                  status = vgd_get( TOC_GD(I,NF), & 
+                                    key='PREF',   &
+                                    value=rvalue )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'PREF'
@@ -366,9 +367,9 @@
 
 !                Save RCOEF.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue,      &
-                                    key='RC_1' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='RC_1',   &
+                                    value=rvalue )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'RC_1'
@@ -383,9 +384,9 @@
 
 !                Start by determining the number of dynamic levels.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=IVALUE,      &
-                                    key='NL_M' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='NL_M',   &
+                                    value=IVALUE )
 
                   if (status /= VGD_OK)                        THEN
                       if (DEBUG) write(STDERR,6200) 'NL_M'
@@ -397,9 +398,9 @@
 
 !                Determine the number of thermodynamic levels.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=IVALUE,      &
-                                    key='NL_T' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='NL_T',   &
+                                    value=IVALUE )
 
                   if (status /= VGD_OK)                        THEN
                       if (DEBUG) write(STDERR,6200) 'NL_T'
@@ -411,9 +412,9 @@
 
 !                Save PTOP the pressure the model top level.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue,      &
-                                    key='PTOP' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='PTOP',   &
+                                    value=rvalue )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'PTOP'
@@ -425,9 +426,9 @@
 
 !                Save PREF the model reference pressure.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue,      &
-                                    key='PREF' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='PREF',   &
+                                    value=rvalue )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'PREF'
@@ -439,9 +440,9 @@
 
 !                Save the first RCOEF.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue,      &
-                                    key='RC_1' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='RC_1',   &
+                                    value=rvalue )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'RC_1'
@@ -453,9 +454,9 @@
 
 !                Save the second RCOEF.
 
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue,      &
-                                    key='RC_2' )
+                  status = vgd_get( TOC_GD(I,NF), &
+                                    key='RC_2',   &
+                                    value=rvalue )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'RC_2'
@@ -542,8 +543,8 @@
 
           do  i=1,TOC_NBR(NF)
 
-              status = vgd_write( self=TOC_GD(i,NF), &
-                                  format='fst',      &
+              status = vgd_write( TOC_GD(i,NF), &
+                                  format='fst', &
                                   unit=NF )
 
               if (status /= VGD_OK)                            THEN
@@ -765,16 +766,16 @@
 
               case ('VIPM')
 !                Get the (coded IP1) hybrid levels.
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=ivalue1d,    &
-                                    key='VIPM' )
+                  status = vgd_get( TOC_GD(I,NF),  &
+                                    key='VIPM',    &
+                                    value=ivalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'VIPM'
               case ('VIPT')
 !                Get the (coded IP1) thermodynamic hybrid levels.
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=ivalue1d,    &
-                                    key='VIPT' )
+                  status = vgd_get( TOC_GD(I,NF),  &
+                                    key='VIPT',    &
+                                    value=ivalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'VIPT'
               end select
@@ -845,48 +846,48 @@
 
               case ('COFA')
 !                Get A, the first pressure reconstruction vector.
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue1d,    &
-                                    key='COFA' )
+                  status = vgd_get( TOC_GD(I,NF),  &
+                                    key='COFA',    &
+                                    value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'COFA'
               case ('COFB')
 !                Get B, the second pressure reconstruction vector.
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue1d,    &
-                                    key='COFB' )
+                  status = vgd_get( TOC_GD(I,NF),  &
+                                    key='COFB',    &
+                                    value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'COFB'
               case ('CA_M')
 !                Get AM, the first momemtum pressure
 !                        reconstruction vector.
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue1d,    &
-                                    key='CA_M' )
+                  status = vgd_get( TOC_GD(I,NF),  &
+                                    key='CA_M',    &
+                                    value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CA_M'
               case ('CB_M')
 !                Get BM, the second momemtum pressure
 !                        reconstruction vector.
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue1d,    &
-                                    key='CB_M' )
+                  status = vgd_get( TOC_GD(I,NF),  &
+                                    key='CB_M',    &
+                                    value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CB_M'
               case ('CA_T')
 !                Get AT, the first momemtum pressure
 !                        reconstruction vector.
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue1d,    &
-                                    key='CA_T' )
+                  status = vgd_get( TOC_GD(I,NF),  &
+                                    key='CA_T',    &
+                                    value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CA_T'
               case ('CB_T')
 !                Get BT, the second momemtum pressure
 !                        reconstruction vector.
-                  status = vgd_get( self=TOC_GD(I,NF), &
-                                    value=rvalue1d,    &
-                                    key='CB_T' )
+                  status = vgd_get( TOC_GD(I,NF),  &
+                                    key='CB_T',    &
+                                    value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CB_T'
               end select
@@ -977,7 +978,8 @@
 
       RETURN
 
- 6500 FORMAT(' SavTOC:   !! with IP1/2 =',2I7,' is now scheduled to be saved to I/O unit ',I2/)
+ 6500 FORMAT(' SavTOC:   !! with IP1/2 =',2I7, &
+             ' is now scheduled to be saved to I/O unit ',I2/)
 
       End SUBROUTINE SavTOC
 !-------------------------------------------------------------------
@@ -1048,7 +1050,7 @@
 
       ni = size(P0,dim=1); nj = size(P0,dim=2) ; nk = size( IP1V,dim=1 )
 
-      status = vgd_levels( self=TOC_GD(I,J),     &
+      status = vgd_levels( TOC_GD(I,J),          &
                            ip1_list=IP1V,        &
                            levels=LocalPressure, &
                            sfc_field=P0,         &

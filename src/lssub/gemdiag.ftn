@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: gemdiag.ftn,v $
+*     Revision 3.30  2015/03/30 22:15:33  dugas
+*     Initialiser les pointeurs qui seront passes a VGRIDDESCRIPTORS.
+*
 *     Revision 3.29  2014/10/16 12:16:55  dugas
 *     Modifications commandees par la compilation avec GFORTRAN et IFORT.
 *
@@ -235,6 +238,8 @@
       EXTERNAL MONVERT,XIT,CONVPR
 
 *---------------------------------------------------------------------
+      nullify( log_pressure,pslog )
+
 ***    CHECK THAT PR IS MONOTONIC.
 
       CALL MONVERT( PR,NPL, TOPP,BOTP,INCP, MONOTON )
@@ -423,6 +428,8 @@
 CCC   PARAMETER ( P0=101320., KAPPA=.285714 )
 
 *---------------------------------------------------------------------------------
+      nullify( fs_pr,temp_pr )
+
 ***    CALCULATE LOCAL PRESSURES.
 
       IF (NSL /= NSLT)
@@ -611,6 +618,8 @@ CCC   PARAMETER ( P0=101320., KAPPA=.285714 )
       EXTERNAL MONVERT,XIT,CONVPR
 
 *---------------------------------------------------------------------
+      nullify( log_pressure,pslog )
+
 ***    CHECK THAT PR IS MONOTONIC.
 
       CALL MONVERT( PR,NPL, TOPP,BOTP,INCP, MONOTON )

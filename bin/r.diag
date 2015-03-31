@@ -8,36 +8,36 @@ print_usage() {
 }
 Location=$(true_path $0)
 Location=${Location%/bin/*}
-Location=${DIAGNOSTIQUE:-${Location}}
+export DIAGNOSTIQUE=${DIAGNOSTIQUE:-${Location}}
 case ${1:---help} in
 --help | -h )
   print_usage
   exit 0
   ;;
 --man )
-  cd ${Location}/man/pdoc
+  cd ${DIAGNOSTIQUE}/man/pdoc
   [[ "$2" == topics ]] && ls *.txt | sed 's/[.]txt//' | xargs -l8 printf "%10s %10s %10s %10s %10s %10s %10s %10s\n"  && exit 0
   [[ -f ${2}.txt ]] && ${PAGER:-less} ${2}.txt
   exit $?
   ;;
 --doc )
-  echo ${Location}/man/pdoc
+  echo ${DIAGNOSTIQUE}/man/pdoc
   exit 0
   ;;
 --versions )
-  cd ${Location}/bin/${BASE_ARCH}/
+  cd ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/
   ls ${0##*/}_*.*.*
   exit 0
   ;;
 --src )
-  echo ${Location}/src
+  echo ${DIAGNOSTIQUE}/src
   exit 0
   ;;
 * )
-  RDIAG=${RDIAG:-${Location}/bin/${BASE_ARCH}/stable.r.diag}
-  if [ `echo ${RDIAG} | cut -c1` != "/" ]; then RDIAG=${Location}/bin/${BASE_ARCH}/$RDIAG ; fi
+  RDIAG=${RDIAG:-${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.r.diag}
+  if [[ `echo ${RDIAG} | cut -c1` != "/" ]]; then RDIAG=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/$RDIAG ; fi
   if [[ -x ${RDIAG} ]] ; then
-    if [ ! "${launched_by_r_diag_script}" ]; then
+    if [[ -z "${launched_by_r_diag_script}" ]]; then
       export launched_by_r_diag_script=YES
       ${RDIAG} "$@"
       exit $?
@@ -49,7 +49,7 @@ case ${1:---help} in
       exit 99
     fi
   else
-    ${Location}/bin/${BASE_ARCH}/stable.r.diag "$@"
+    ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.r.diag "$@"
     exit $?
   fi
   ;;

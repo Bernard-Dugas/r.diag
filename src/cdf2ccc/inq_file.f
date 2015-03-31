@@ -39,6 +39,8 @@
 *         
 *REVISIONS
 *
+*  B. Dugas mars 2015 :
+*  - Correctif lie ax appels GET_TOC/VGRID.
 *  B. Dugas juillet 2013 :
 *  - Verifier la presence de valeurs manquantes dans
 *    les fichiers CMC/RPN via un appel a MISPAR
@@ -128,6 +130,8 @@
       integer(8),       external :: grosse_date
 
 *-----------------------------------------------------------------------
+      nullify( ca_m,cb_m,ca_t,cb_t,vipm,vipt )
+
       allocate( label(max_levs,max_vars),cstep(0:max_steps,max_vars) )
       if (ccc_pktyp(1:2) == 'SQ')
      .  allocate( ip3(max_levs,max_vars),dateo(max_steps,max_vars) )

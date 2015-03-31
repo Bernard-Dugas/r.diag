@@ -9,7 +9,7 @@
 *
 *
 *     AUTHORS -  - R.Laprise ET J.D.Henderson, MAY 14 1983.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/dxdp.ptn,v 4.23 2014/09/25 20:20:47 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/dxdp.ptn,v 4.24 2015/03/30 22:22:32 dugas Exp $
 *
 *
 *     PURPOSE - COMPUTES VERTICAL DERIVATIVE FOR ALL SETS IN A FILE
@@ -116,6 +116,9 @@
 *    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
  
 *     $Log: dxdp.ptn,v $
+*     Revision 4.24  2015/03/30 22:22:32  dugas
+*     Initialiser les pointeurs qui seront passes a VGRIDDESCRIPTORS.
+*
 *     Revision 4.23  2014/09/25 20:20:47  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -260,7 +263,8 @@
       INTEGER,    DIMENSION(:),  ALLOCATABLE :: IBUF
       REAL,       DIMENSION(:),  ALLOCATABLE :: GG
 
-      real,       dimension(:,:,:), pointer  :: local_pressure
+      ! nullify local_pressure which is used in LoPTOC and has to be initialized
+      real,       dimension(:,:,:), save, pointer  :: local_pressure=>null()
       real,       dimension(:,:),ALLOCATABLE :: LP
 
       LOGICAL,    EXTERNAL :: RPBLOC

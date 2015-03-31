@@ -37,6 +37,8 @@
 *
 *REVISIONS 
 *
+*      Bernard Dugas mars 2015 :
+*     - Faire appel a COMBLINE6 (ajouter DSIZE a la liste des arguments)
 *     Bernard Dugas fevrier 2014 :
 *     - Faire appel a COMBLINE5 (ajouter FILL_CDF_NAN=.false.)
 *     Bernard Dugas juin 2013 :
@@ -70,12 +72,12 @@
       integer ccctime
       character*4 cccname
       integer i,j,ij,indice,ilevel,nblen
-      integer nlon, nlat, nhem, opack
+      integer nlon, nlat, nhem, opack, dsize
 
       real*8  scale,offset,bad,miss_cdf,fill_cdf
 
       data scale,offset,miss_cdf,fill_cdf /1.0,0.0,0.0,0.0/
-      data ilevel,ccctime /1,0/
+      data ilevel,ccctime ,dsize/1,0,-32/
       data lonid,latid /0,0/
 ******
       real(8), dimension (:), allocatable :: dlon,dlat
@@ -130,9 +132,9 @@
      .                                     coord(latid)%add,cccname,bad)   
 
       indice=0
-      call combline5( dlat,dval,indice,1,nlon,nlat,1,scale,
+      call combline6( dlat,dval,indice,1,nlon,nlat,1,scale,
      .            offset,coord(latid)%mult,coord(latid)%add,
-     .            .false.,fill_cdf,invj,0, fill_all,.false. )
+     .       .false.,fill_cdf,invj,0, fill_all,.false.,dsize )
 
       call setlab(ibuf,'GRID',ccctime,cccname,ilevel,nlon,nlat,
      .                                                       nhem,opack)
@@ -146,9 +148,9 @@
      .                                     coord(lonid)%add,cccname,bad)   
 
       indice=0
-      call combline5( dlon,dval,indice,1,nlon,nlat,1,scale,
+      call combline6( dlon,dval,indice,1,nlon,nlat,1,scale,
      .            offset,coord(lonid)%mult,coord(lonid)%add,
-     .            .false.,fill_cdf,invj,0, fill_all,.false. )
+     .       .false.,fill_cdf,invj,0, fill_all,.false.,dsize )
 
       call setlab(ibuf,'GRID',ccctime,cccname,ilevel,nlon,nlat,
      .                                                       nhem,opack)

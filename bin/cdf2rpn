@@ -8,35 +8,35 @@ print_usage() {
 }
 Location=$(true_path $0)
 Location=${Location%/bin/*}
-Location=${DIAGNOSTIQUE:-${Location}}
+export DIAGNOSTIQUE=${DIAGNOSTIQUE:-${Location}}
 case ${1:-*} in
 --help | -h )
   print_usage
   exit 0
   ;;
 --man )
-  cd ${Location}/man/pdoc
+  cd ${DIAGNOSTIQUE}/man/pdoc
   [[ -f cdf2ccc.txt ]] && ${PAGER:-less} cdf2ccc.txt
   exit $?
   ;;
 --doc )
-  echo ${Location}/man/pdoc
+  echo ${DIAGNOSTIQUE}/man/pdoc
   exit 0
   ;;
 --versions )
-  cd ${Location}/bin/${BASE_ARCH}/
+  cd ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/
   ls ${0##*/}_*.*.*
   exit 0
   ;;
 --src )
-  echo ${Location}/src
+  echo ${DIAGNOSTIQUE}/src
   exit 0
   ;;
 * )
-  CDF2RPN=${CDF2RPN:-${Location}/bin/${BASE_ARCH}/stable.cdf2rpn}
-  if [ `echo ${CDF2RPN} | cut -c1` != "/" ]; then CDF2RPN=${Location}/bin/${BASE_ARCH}/${CDF2RPN} ; fi
+  CDF2RPN=${CDF2RPN:-${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.cdf2rpn}
+  if [[ `echo ${CDF2RPN} | cut -c1` != "/" ]]; then CDF2RPN=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/${CDF2RPN} ; fi
   if [[ -x ${CDF2RPN} ]] ; then
-    if [ ! "${launched_by_cdf2rpn_script}" ]; then
+    if [[ -z "${launched_by_cdf2rpn_script}" ]]; then
       export launched_by_cdf2rpn_script=YES
       ${CDF2RPN} "$@"
       exit $?
@@ -48,7 +48,7 @@ case ${1:-*} in
       exit 99
     fi
   else
-    ${Location}/bin/${BASE_ARCH}/stable.cdf2rpn "$@"
+    ${DIAGNOSTIQUE}/bin/${BASE_ARCH}/stable.cdf2rpn "$@"
     exit $?
   fi
   ;;

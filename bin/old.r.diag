@@ -1,4 +1,6 @@
 #!/bin/bash
+Location=$(true_path $0) ; Location=${Location%/bin/*}
+export DIAGNOSTIQUE=${DIAGNOSTIQUE:-${Location}}
 RDIAG=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/old.r.diag
 ${RDIAG} "$@"
 exit $?

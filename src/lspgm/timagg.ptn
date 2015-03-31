@@ -15,7 +15,7 @@
 *
 *
 *     AUTHOR  - B.Dugas, JAN/87.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/timagg.ptn,v 4.19 2015/01/07 19:34:38 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/timagg.ptn,v 4.20 2015/02/13 18:53:43 dugas Exp $
 *
 *
 *     PURPOSE - TRANSPOSE A  FILE OF TIME SERIES (OR TIME SPECTRAL COEF-
@@ -119,6 +119,9 @@
 *    2         TAPE1=INFIL, TAPE2=OUTFIL, TAPE6=OUTPUT)
  
 *     $Log: timagg.ptn,v $
+*     Revision 4.20  2015/02/13 18:53:43  dugas
+*     Commenter une fermeture trop hative du fichier scratch 11.
+*
 *     Revision 4.19  2015/01/07 19:34:38  dugas
 *     Enlever les dernieres races de PERROR.
 *
@@ -546,8 +549,7 @@
 
                   IF (WHERE+NS.NE.0)                           THEN
                       NIO(NLEVAR) = NUOUT
-                      IF (.NOT.ALT)
-     +                CLOSE(NUIN)
+                      ! IF (.NOT.ALT) CLOSE(NUIN)
                   END IF
 
               ELSE IF (NOM.NE.IBUF(3) .OR.

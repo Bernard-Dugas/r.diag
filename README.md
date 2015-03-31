@@ -6,10 +6,14 @@
  and 3D meteorological data, as produced either by the Environment
  Canada (EC) GEM forecast model or the EC CCCma General Circulation
  Model (GCM). The CMC/RPN GEM file formats and two flavors of the
- GCM's binary sequential format are supported.
+ GCM's binary sequential format are supported. This toolkit was
+ originally derived from an early 1990's unix port of the then
+ CRAY version of the CCCma diagnostic toolkit. Additional code
+ produced at UQAM for diagnostics of regional climate data in
+ the late 1990's is also included in the toolbox.
 
- The toolkit is built in the R.DIAG executable binary. The toolkit
- commands can be grouped under several themes or section.
+ The GEM toolkit is built in the R.DIAG executable binary. The
+ toolkit commands can be grouped under several themes or section.
 
  The available sections are :
 
@@ -26,8 +30,10 @@
  convention. The converter will otherwise (at best) choke on them.
  Depending on this executable's name, which should be either cdf2ccc
  or cdf2rpn, the default EC file format read/written by the executable
- will be either the CCCma of CMC/RPN formats. These two executable
- are in general automatically generated as hard-links.
+ will be either the CCCma or CMC/RPN formats. These two executable
+ are in general automatically generated as hard-links. The first
+ version of the converter was created by the Ouranos Consortium
+ from 2003 to 2006.
 
  To generate the toolkit executable, the RPN/CMC development environment
  has to be installed and active (see mfvalin/rmnlib on github.com). As
@@ -47,5 +53,5 @@
  Software Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : January 2015
+ Last revision : April 2015
 

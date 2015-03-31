@@ -22,7 +22,7 @@ DIAGNOSTIQUE  = $(CURDIR)/../..
 IGNORE_ERRORS = set -e
 MAKE     = $(IGNORE_ERRORS) ; make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
-EXTRAS   = $(DIAGNOSTIQUE)/extras/NetcdfUdunits/$(EC_ARCH)
+EXTRAS   = $(DIAGNOSTIQUE)/../extras/NetcdfUdunits/$(EC_ARCH)
 
 DIAGS    = $(DIAGNOSTIQUE)
 BINDIR   = $(DIAGS)/bin/$(BASE_ARCH)
@@ -308,8 +308,9 @@ $(LIBP):	initial	$(FDECKS)	$(HDECKS)	\
 	 $(LIBP)(wrfile.o)			\
 	 $(LIBP)(wrlalo.o)
 
-document: cdf2ccc.ftn $(TXTDECKS)
+document: cdf2ccc.ftn attribut_netcdf.dat	$(TXTDECKS)
 # Creation de la documentation pour cdf2ccc
+	rsync -av attribut_netcdf.dat $(MANDIR)
 
 cdf2ccc: initial cdf2ccc.ftn
 # Creation de l'executable cdf2ccc ailleurs que ailleurs que sous AIX

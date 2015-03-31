@@ -35,6 +35,8 @@
 *
 * REVISIONS
 *
+*  B.Dugas mars '15 :
+*  - Introduire la variante 'ht' de la coordonnee de hauteur en km.
 *  B.Dugas aout '13 :
 *  - Corriger le traitement des variables xcoord, ycoord et zcoord
 *  - Corriger le traitement des "long_name" qui pourront etre associees
@@ -131,6 +133,7 @@
      .       cfield          == 'lev'       .or. 
      .       cfield          == 'plev'      .or. 
      .       cfield          == 'level'     .or.
+     .       cfield          == 'ht'        .or. 
      .       cfield          == 'height'    .or. 
      .       cfield          == 'sigma'     .or. 
      .       cfield          == 'hybrid'    .or. 
@@ -296,7 +299,8 @@
                elseif (cfield == 'hybrid height coordinate') then
                   level_desc = 'Hybrid Height'
 
-               elseif (cfield == 'height'        ) then
+               elseif (cfield == 'height'           .or.
+     .               cfield == 'ht_mean_of_range') then
                   level_desc = 'Height'
 
                elseif (cfield == 'gal-chen'      ) then
@@ -379,11 +383,13 @@
      .                level_desc = 'Pressure Levels'
                   coord(zid)%mult=0.01
 
-               else if (cfield.eq."m") then
+               else if (cfield ==  "m"   .or.
+     .                  cfield == "km" ) then
                   if (level_desc == ' ' .or. .not.ReConnu)
      .                level_desc = 'Height'
                   coord(zid)%mult=1.0
-                  if (Is_CCC .and. level_desc == 'Gal-Chen Levels')
+                  if (cfield == "km" .or. 
+     .               (Is_CCC .and. level_desc == 'Gal-Chen Levels'))
      .               coord(zid)%mult=1000.
 
                else if (cfield == "level"      .or.

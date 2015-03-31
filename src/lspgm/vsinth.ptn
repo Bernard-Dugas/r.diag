@@ -15,7 +15,7 @@
 *
 *
 *     AUTHOR  - R. LAPRISE, FEB 16/88.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/vsinth.ptn,v 4.28 2014/09/25 20:20:55 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/vsinth.ptn,v 4.29 2015/03/30 22:22:32 dugas Exp $
 *
 *
 *     PURPOSE - COMPUTES THE VERTICAL SIGMA INTEGRAL FOR DATA ON ETA
@@ -148,6 +148,9 @@
 *     ------------------------------------------------------------------
 *
 *     $Log: vsinth.ptn,v $
+*     Revision 4.29  2015/03/30 22:22:32  dugas
+*     Initialiser les pointeurs qui seront passes a VGRIDDESCRIPTORS.
+*
 *     Revision 4.28  2014/09/25 20:20:55  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -293,8 +296,10 @@
       REAL        A(MAXLEV+1), B(MAXLEV+1)
       NAMELIST   /AABB_NML/ A,B
 
+      ! nullify pressure which is used in LoPTOC and has to be initialized
+      real,       dimension(:,:,:), save, pointer :: pressure=>null()
       real,       dimension(:,:),   pointer :: ps
-      real,       dimension(:,:,:), pointer :: pressure
+
 
       INTEGER,    DIMENSION(:), ALLOCATABLE        :: IBUF,JBUF
       REAL,       DIMENSION(:), ALLOCATABLE        :: ACC,GG,TOPP,SIGB
@@ -607,7 +612,6 @@
      +          PS(NI,NJ),TOPP(NWDS),SIGB(NWDS*2),
      +          IBUF(LEN),JBUF(LEN), STAT=IER )
       
-
       PSMBLN => PRESS ! MEMORY SHARING
 
       IF (AABB)                                                THEN

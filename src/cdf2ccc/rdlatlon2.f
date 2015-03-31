@@ -37,6 +37,8 @@
 *
 *REVISIONS
 *
+* B.Dugas mars '15 :
+* - Faire appel a COMBLINE6 (ajouter opack3 a la liste des arguments)
 * B.Dugas fevrier '14 :
 * - Utiliser la fonction IDNAN pour savoir si les attributs
 *   _FillValue ou missing_value ont pour valeur NaN
@@ -109,7 +111,7 @@
 * - Ajouter le support de donnees non-geographiques et/ou intemporelles
 * B.Dugas oct '07 a avr '08 :
 * - Ne plus utiliser HPALLOC/HPDEALLC
-* - Si npack = 999, utiliser var(nn)%type pour definir opack*
+* - Si npack = 999, utiliser var(nn)%type pour definir opack2
 * - Tenir compte des IP1 dans IBUF(4) pour les fichiers CMC/RPN
 * - Examiner les latitudes et longitudes pour tenter d'identifier
 *   le type de grilles en presence, quitte a corriger project%name
@@ -205,7 +207,7 @@
 
       logical ::   fill_all
       integer ::   fill_count=0
-      integer ::   xglb,yglb,xyxy, iig2, opack1,opack2
+      integer ::   xglb,yglb,xyxy, iig2, opack1,opack2,opack3
       logical ::   ok,xbgrd,ybgrd,dxcons,dycons,ygauss,lxyxy
       logical ::   xincr,yincr,miss_val_cdf,fill_val_cdf
       character(1) cloche
@@ -884,11 +886,13 @@
                call                                xit('rdlatlon2', -2 )
             endif
 
+            if (var(nn)%type == nf_byte)   opack3 = -8
+            if (var(nn)%type == nf_short)  opack3 = -16
+            if (var(nn)%type == nf_float)  opack3 = -32
+            if (var(nn)%type == nf_double) opack3 = -64
+
             if (npack == 999 .or. ntime == 1) then
-               if (var(nn)%type == nf_byte)   opack1 = -8
-               if (var(nn)%type == nf_short)  opack1 = -16
-               if (var(nn)%type == nf_float)  opack1 = -32
-               if (var(nn)%type == nf_double) opack1 = -64
+               opack1 = opack3
             else
                opack1 = npack
             endif
@@ -967,11 +971,11 @@
 
                   fill_ccc_oui=.false.
 
-                  call combline5( variable(1,nn),dval,indice,
+                  call combline6( variable(1,nn),dval,indice,
      .                      kk, dim1,dim2,nlev, scale,offset,
      .                      var(nn)%mult,var(nn)%add,
      .                      fill_ccc_def,fill_cdf, invj,iii,
-     .                      fill_all,fill_cdf_nan )
+     .                      fill_all,fill_cdf_nan, opack3 )
 
                   if (fill_all) then
                      if (rpn_info) then
