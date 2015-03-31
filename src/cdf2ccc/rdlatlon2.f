@@ -39,6 +39,7 @@
 *
 * B.Dugas mars '15 :
 * - Faire appel a COMBLINE6 (ajouter opack3 a la liste des arguments)
+* - Verifier l'ordre des dimensions em X, Y et Z.
 * B.Dugas fevrier '14 :
 * - Utiliser la fonction IDNAN pour savoir si les attributs
 *   _FillValue ou missing_value ont pour valeur NaN
@@ -205,8 +206,8 @@
 
 ******
 
-      logical ::   fill_all
-      integer ::   fill_count=0
+      logical ::   fill_all, transpose_xy
+      integer ::   fill_count=0, indice1,indice2
       integer ::   xglb,yglb,xyxy, iig2, opack1,opack2,opack3
       logical ::   ok,xbgrd,ybgrd,dxcons,dycons,ygauss,lxyxy
       logical ::   xincr,yincr,miss_val_cdf,fill_val_cdf
@@ -708,6 +709,7 @@
             fill_val_cdf=.false.
             fill_cdf_nan=.false.
             do_time_bnds=.false.
+            transpose_xy=.false.
 
             do i=1,var(nn)%nattr
 
@@ -811,6 +813,17 @@
                iii=ii
                dim1=dim(xdid)%len
                dim2=dim(ydid)%len
+
+               if (dimZid > 0 .and.
+     .            (dimZid < dimYid .or. dimZid < dimXid)) then                
+                  write(6,6004) dimXid,dimYid,dimZid
+                  call                             xit('rdlatlon2', -4 )
+               else if (dimXid == dimYid+1) then
+                  transpose_xy=.true.
+               else if (dimXid+1 /= dimYid) then
+                  write(6,6004) dimXid,dimYid,dimZid
+                  call                             xit('rdlatlon2', -4 )
+               endif
 
             elseif (dimXid < 0 .and. dimYid < 0) then
 
@@ -971,12 +984,26 @@
 
                   fill_ccc_oui=.false.
 
+                  if (transpose_xy) then
+                     indice1 = dim1*dim2*(kk-1)
+                     do i=1,dim1
+                        do j=1,dim2
+                           indice1 = indice1+1
+                           indice2 = (j-1)*dim1+i
+                           dval(indice2) = variable(indice1,nn)
+                        end do
+                     end do
+                     indice1 = dim1*dim2*(kk-1)
+                     variable(indice1+1:indice1+indice2,nn) =
+     .               dval(1:indice2)
+                  endif
+
                   call combline6( variable(1,nn),dval,indice,
      .                      kk, dim1,dim2,nlev, scale,offset,
      .                      var(nn)%mult,var(nn)%add,
      .                      fill_ccc_def,fill_cdf, invj,iii,
      .                      fill_all,fill_cdf_nan, opack3 )
-
+                           
                   if (fill_all) then
                      if (rpn_info) then
                         call fill_high( ibuf,
@@ -1035,7 +1062,7 @@ C    .                write(6,'(3A4,A)') dtyp,type,ibuf(1),GRTYP
      .                  cdf2_mode.eq.'cdf2ccc')                
      .           .and. itime.eq.dim(timedid)%len)
      .                                      call prtlab( ibuf )
-               enddo                                    !level
+               end do                                    !level
             end do                                      !time
          end if
       end do TRAITER_VARIABLES
@@ -1062,6 +1089,8 @@ C    .                write(6,'(3A4,A)') dtyp,type,ibuf(1),GRTYP
  6002 format(/' Inconsistance des dimensions'/
      .        ' ntime est ',I8,' et Dim#1*Dim#2*Dim#3 est ',I8,
      .        ' mais la taille totale est ',I8)
+ 6004 format(/' Ordre des dimensions non supporte'/
+     .        ' DimXid, DimYid, DimZid = ',3I2,' plutot que 1 2 3'/)
  6012 format( ' dim#',A,' = ',I8/)
  6022 format( ' dim#',A,' est indefinie'/)
  6003 format( ' dim ',A,' introuvable'/)
