@@ -111,6 +111,16 @@ cdf2conv:
 	EXTRAS=$(EXTRAS)/NetcdfUdunits/$(EC_ARCH) DDFUN90=$(DDFUN90) \
 	lNetCDF="$(lNetCDF)" UDUNITS=$(UDUNITS)
 
+# Only generate the LSSUB, LSPM and CDF2CCC libraries
+
+libs:
+	echo "*** Making libdiag_sq98.a and libdiag_sq98_g.a ***" ;\
+	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB)
+	echo "Making libprog_sq98.a" ;\
+	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) ;\
+	echo "*** Making libcdf2ccc.a ***" ;\
+	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE)
+
 # Online documentation (which was originaly found in $ARMNLIB/man/pdoc) recipe
 
 document:

@@ -10,7 +10,7 @@
 *
 *
 *     AUTHORS - J.D.Henderson, L.Lefaivre AND R.Laprise.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggplot.ptn,v 4.34 2015/01/07 19:34:38 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggplot.ptn,v 4.35 2015/04/02 21:58:28 dugas Exp $
 *
 *
 *     PURPOSE - PLOT MAPS OF Z, Z AND X, VECTOR FIELD OF (U,V), Z AND (U,V),
@@ -335,6 +335,9 @@
 *     ------------------------------------------------------------
 
 *     $Log: ggplot.ptn,v $
+*     Revision 4.35  2015/04/02 21:58:28  dugas
+*     Correction de la procedure d'allocation de memoire.
+*
 *     Revision 4.34  2015/01/07 19:34:38  dugas
 *     Enlever les dernieres races de PERROR.
 *
@@ -1175,13 +1178,20 @@
         MAXW = GETSIZ( IOS1, KBUF,LENI,NWDS,KPAK )
       END IF
 
-      IF (NPLOT /= 0) DEALLOCATE( IBUF,JBUF,GG2,U,V,TP, STAT=IER )
+      IER = 0
 
-      IF (IER == 0) ALLOCATE( IBUF(MAXW+HEAD),JBUF(MAXW+HEAD),
-     +          GG2(MAXW),U(MAXW),V(MAXW),TP(MAXW), STAT=IER )
+      IF (ALLOCATED( IBUF )) DEALLOCATE( IBUF,JBUF,GG2,U,V,TP, STAT=IER)
 
       IF (IER /= 0)                                            THEN
-          WRITE(6,6017) 2*HEAD+6*MAXW
+          WRITE(6,'(/A,I4/)') 'Unable to de-allocate, IER = ',IER
+          CALL                                     XIT(' Ggplot ',-17 )
+      ELSE
+          ALLOCATE( IBUF(MAXW+HEAD),JBUF(MAXW+HEAD),
+     +              GG2(MAXW),U(MAXW),V(MAXW),TP(MAXW), STAT=IER )
+      END IF
+
+      IF (IER /= 0)                                            THEN
+          WRITE(6,6017) 2*HEAD+6*MAXW,IER
           CALL                                     XIT(' Ggplot ',-17 )
       END IF
 
@@ -2153,7 +2163,7 @@
      1      /,'           mod,icosh1 choices. Continuing with jps = 8')
  6010 FORMAT('     Begin plot number',I5)
  6015 FORMAT('0..EOF looking for ',A,2X,A4,1X,A)
- 6017 FORMAT(' Unable to allocate ',I9,' words.')
+ 6017 FORMAT(' Unable to allocate ',I9,' words. IER = ',I5)
  6020 FORMAT('0 FLO= ',G12.4,', HI= ',G12.4,', FINC= ',G12.4,
      1                                      ', SCAL= ',G12.4)
  6030 FORMAT('0',10X,'    STEP NAME  LEVEL     LX',
