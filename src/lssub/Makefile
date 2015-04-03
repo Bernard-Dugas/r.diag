@@ -172,10 +172,10 @@ FDECKS= \
 	vfft.f
 
 F90DECKS= \
-	util2.F90
+	gaussg.F90	util2.F90
 
 f90DECKS= \
-	diag_convert_ip123.f90 	diag_toc.f90	filter.f90	gaussg.f90
+	diag_convert_ip123.f90 	diag_toc.f90	filter.f90
 
 FTNDECKS= \
 	alp.ftn		cofg.ftn		convsub.ftn 	coord.ftn 	ddl.ftn \
@@ -191,7 +191,7 @@ FTNDECKS= \
 	vfft.ftn
 
 FTN90DECKS = \
-	filter.ftn90	gaussg.ftn90
+	filter.ftn90
 
 CDK90DECKS = \
 	diag_convert_ip123.cdk90	diag_toc.cdk90

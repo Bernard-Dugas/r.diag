@@ -48,7 +48,7 @@
 !     
 
       SUBROUTINE gaussg16 (NZERO,F,WT,SIA,RAD,WOCS)
-#     if !defined (AIX) 
+#     if !defined (__HOS_AIX__) && !defined (__INTEL_COMPILER_UPDATE)
       USE ddmodule
 #     endif
       IMPLICIT NONE
@@ -76,7 +76,7 @@
 
       REAL(8)        ERRW8,SUMW8
       INTEGER        IR,IRP,IRM,I
-#     if defined (AIX)
+#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE)
       REAL*16        FI,FI0,FI1,FN, G,GM,GP,GT, FTEMP,GTEMP, &
                      A,B,C,D, DI, DN,DN1, PI,XLIM, DOT, &
                      UN,DEUX,QUATRE,POINT5,SUMW16
@@ -152,16 +152,16 @@
 
       END 
       SUBROUTINE ordleg16 (SX,COA,IR)
-#     if !defined (AIX) 
+#     if !defined (__HOS_AIX__) && !defined (__INTEL_COMPILER_UPDATE)
       USE ddmodule
 #     endif
       IMPLICIT NONE
  
       INTEGER        IR
-#     if !defined (AIX)
-      TYPE (DD_REAL) SX,COA
-#     else
+#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE)
       REAL*16        SX,COA
+#     else
+      TYPE (DD_REAL) SX,COA
 #     endif
 !**    THIS ROUTINE IS A SUBSET OF BELOUSOVS ALGORITHM 
 !**    USED TO CALCULATE ORDINARY LEGENDRE POLYNOMIALS
@@ -171,7 +171,7 @@
 !**    COA = COSINE OF COLATITUDE
 !**     IR = WAVE NUMBER 
 
-#     if defined (AIX)
+#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE)
       REAL*16        ZERO,UN,DEUX,SQR2, PI,THETA,C1, &
                      FN,FN2,FN2SQ, ANG,S1,C4,A,B,FK, &
                      DELTA,SIA, DN
