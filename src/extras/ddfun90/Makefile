@@ -9,6 +9,8 @@ C_SRC = x86.c
 
 C_OBJ = x86.o
 
+RMNLIB = rmn_015
+
 LIB = libddfun90.a
 
 INCDIR = $(DIAGNOSTIQUE)/include/$(EC_ARCH)
@@ -31,7 +33,7 @@ $(LIBDIR)/$(LIB):
 
 test:	$(LIBDIR)/$(LIB)
 	rm -f a.out
-	s.f90 -O tquadtsdd.f90 -I$(INCDIR) -L$(LIBDIR) -lddfun90 -lrmn_013
+	s.f90 -O tquadtsdd.f90 -I$(INCDIR) -L$(LIBDIR) -lddfun90 -l$(RMNLIB)
 	./a.out
 	rm a.out
 

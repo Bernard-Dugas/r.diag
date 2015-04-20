@@ -24,6 +24,14 @@
  e) Manipulations on Fourrier or Spherical harmonics data
  f) Time-series manipulations
 
+ Once installed, documentation .txt files and a few .html files can
+ be found in the /man/pdoc sub-directory. Each R.DIAG commands is thus
+ documented. In particular, the /man/pdoc/index.html file holds a
+ desciption of the packages and a few of the basic arguments and
+ environment variables that it responds to. The .txt files are
+ only available in English while the .html file are in French
+ at this time.
+
  In addition to the toolkit, a conversion tool for either the CCCma
  or CMC/RPN file formats to/from the NetCDF v3 file format is included.
  Input NetCDF files should closely conform to the CF v1.4 Metadata
@@ -40,11 +48,17 @@
  well, the Vgrid Descriptors package used in the GEM v4+ model also has
  to be available. Furthermore, to generate the two cdf2xxx executables,
  the old NetCDF v3.6 and UdUnits v1.2 library packages also have to
- available.
+ available. Most of the code available here is written in FORTRAN.
 
- The Linux version of the toolkit also uses the DDFUN90 package as
+ Some versions of the toolkit may also use the DDFUN90 package as
  produced by  David H. Bailey of the NERSC, Lawrence Berkeley Lab.
- The 2005-03-11 version of this package is included here.
+ The 2005-03-11 version of this package is included here. This is
+ the case for the PGI versions as these compilers (at least as of
+ their version 14xx) do not provide for quad-precision real arithmetic.
+ On the other hand, since the Intel, AIX/xlf and GFORTRAN compilers do
+ support this, version generated with them will not require the
+ DDFUN90 package. The file src/lssub/gaussg.F90 may need to be
+ modified according to your environment's specifications.
  
  R.DIAG is copyrighted (C) 1990-2010 by the "Division de Recherche
  en Prevision Numerique" of Environment Canada. This code is free

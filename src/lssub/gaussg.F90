@@ -14,7 +14,11 @@
 ! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
-!     $Log: gaussg.ftn90,v $
+!     $Log: gaussg.F90,v $
+!     Revision 3.6  2015/04/04 02:12:55  dugas
+!      - Les compilateurs INTEL ne font plus appel au package DDFUN90.
+!      - Renommer a gaussg.F90 pour utiliser les macros d'identification des compilateurs.
+!
 !     Revision 3.5  2014/09/25 18:42:02  dugas
 !     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 !
@@ -48,7 +52,7 @@
 !     
 
       SUBROUTINE gaussg16 (NZERO,F,WT,SIA,RAD,WOCS)
-#     if !defined (__HOS_AIX__) && !defined (__INTEL_COMPILER_UPDATE)
+#     if !defined (__HOS_AIX__) && !defined (__INTEL_COMPILER_UPDATE) && !defined (__GFORTRAN__)
       USE ddmodule
 #     endif
       IMPLICIT NONE
@@ -76,7 +80,7 @@
 
       REAL(8)        ERRW8,SUMW8
       INTEGER        IR,IRP,IRM,I
-#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE)
+#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE) || defined (__GFORTRAN__)
       REAL*16        FI,FI0,FI1,FN, G,GM,GP,GT, FTEMP,GTEMP, &
                      A,B,C,D, DI, DN,DN1, PI,XLIM, DOT, &
                      UN,DEUX,QUATRE,POINT5,SUMW16
@@ -152,13 +156,13 @@
 
       END 
       SUBROUTINE ordleg16 (SX,COA,IR)
-#     if !defined (__HOS_AIX__) && !defined (__INTEL_COMPILER_UPDATE)
+#     if !defined (__HOS_AIX__) && !defined (__INTEL_COMPILER_UPDATE) && !defined (__GFORTRAN__)
       USE ddmodule
 #     endif
       IMPLICIT NONE
  
       INTEGER        IR
-#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE)
+#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE) || defined (__GFORTRAN__)
       REAL*16        SX,COA
 #     else
       TYPE (DD_REAL) SX,COA
@@ -171,7 +175,7 @@
 !**    COA = COSINE OF COLATITUDE
 !**     IR = WAVE NUMBER 
 
-#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE)
+#     if defined (__HOS_AIX__) || defined (__INTEL_COMPILER_UPDATE) || defined (__GFORTRAN__)
       REAL*16        ZERO,UN,DEUX,SQR2, PI,THETA,C1, &
                      FN,FN2,FN2SQ, ANG,S1,C4,A,B,FK, &
                      DELTA,SIA, DN

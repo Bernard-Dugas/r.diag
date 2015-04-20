@@ -31,7 +31,7 @@ LIBDIR   = $(DIAGS)/lib/$(EC_ARCH)
 MANDIR   = $(DIAGS)/man/pdoc
 MODDIR   = $(INCLUDES) $(INCLUDES)/$(EC_ARCH) $(EXTRAS)/include
 
-CONV_VERSION = 2.2.0
+CONV_VERSION = 2.2.1
 
 STD      = 98
 
@@ -318,19 +318,19 @@ cdf2ccc: initial cdf2ccc.ftn
 	$(FC) $@.ftn -o $@ -libpath "$(LIBPATH)" \
 	-libappl "$(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB)" \
 	-librmn $(RMNLIB) -obj "lire_arg.o $(OBJ)" $(CODEBETA) -libsys $(DDFUN90)
-	/bin/rm lire_arg.o cdf2ccc.o ; /bin/mv $@ $(BINDIR)/cdf2ccc_$(CONV_VERSION) ;\
-	cd $(BINDIR)  ; /bin/ln -f cdf2ccc_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
+	/bin/rm -f lire_arg.o $@.o $@.f ; /bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION) ;\
+	cd $(BINDIR)  ; /bin/ln -f $@_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
 
 cdf2rpn: cdf2ccc
 
 AIX: initial cdf2ccc.ftn
 # Creation de l'executable cdf2ccc pour architecture AIX
 	$(AR) xv $(LIBP) lire_arg.o
-	$(FC) cdf2ccc.ftn -o $@ -libpath "$(LIBPATH)" \
+	$(FC) $@.ftn -o $@ -libpath "$(LIBPATH)" \
 	-libappl "$(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB)" \
 	-librmn $(RMNLIB) -obj "lire_arg.o $(OBJ)" $(CODEBETA)
-	/bin/rm lire_arg.o cdf2ccc.o ; /bin/mv $@ $(BINDIR)/cdf2ccc_$(CONV_VERSION) ;\
-	cd $(BINDIR)  ; /bin/ln -f cdf2ccc_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
+	/bin/rm -f lire_arg.o $@.o $@.f ; /bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION) ;\
+	cd $(BINDIR)  ; /bin/ln -f $@_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
 
 clean:
 # Faire un petit menage. On enleve tous les .o et les fichiers .f superflus
