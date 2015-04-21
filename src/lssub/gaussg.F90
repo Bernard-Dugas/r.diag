@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: gaussg.F90,v $
+!     Revision 3.7  2015/04/21 00:35:29  dugas
+!     GFORTRAN n'utilise plus DDFUN90.
+!
 !     Revision 3.6  2015/04/04 02:12:55  dugas
 !      - Les compilateurs INTEL ne font plus appel au package DDFUN90.
 !      - Renommer a gaussg.F90 pour utiliser les macros d'identification des compilateurs.

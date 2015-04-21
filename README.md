@@ -41,8 +41,16 @@
  will be either the CCCma or CMC/RPN formats. These two executable
  are in general automatically generated as hard-links. The first
  version of the converter was created by the Ouranos Consortium
- from 2003 to 2006. Note tha a .txt documentation file for the
+ from 2003 to 2006. Note that a .txt documentation file for the
  converter is also available in the man/pdoc directory.
+
+ The default Makefile target ("allbin") attempts to generate the
+ libraries and executables, after checking that the initial setup
+ has been done. The "all" target includes the "allbin" and "document"
+ targets. The "export" target copies the final products to the parent
+ directory. The working directory that holds the package is assumed
+ to be just that, somewhere users may not be too confortable.
+ The package implicitely assumes that make=gmake.
 
  To generate the toolkit executable, the RPN/CMC development environment
  has to be installed and active (see mfvalin/rmnlib on github.com). As
