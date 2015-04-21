@@ -24,13 +24,13 @@
  e) Manipulations on Fourrier or Spherical harmonics data
  f) Time-series manipulations
 
- Once installed, documentation .txt files and a few .html files can
- be found in the /man/pdoc sub-directory. Each R.DIAG commands is thus
- documented. In particular, the /man/pdoc/index.html file holds a
- desciption of the packages and a few of the basic arguments and
- environment variables that it responds to. The .txt files are
- only available in English while the .html file are in French
- at this time.
+ Once installed, a documentation .txt file for each R.DIAG command and
+ a few .html files can be found in the man/pdoc directory. Each R.DIAG
+ command is thus documented. In particular, the man/pdoc/index.html
+ file holds another description of the package but also of the basic
+ arguments and environment variables that it responds to. The .txt
+ files are only available in English while the .html file are in
+ French at this time.
 
  In addition to the toolkit, a conversion tool for either the CCCma
  or CMC/RPN file formats to/from the NetCDF v3 file format is included.
@@ -41,7 +41,8 @@
  will be either the CCCma or CMC/RPN formats. These two executable
  are in general automatically generated as hard-links. The first
  version of the converter was created by the Ouranos Consortium
- from 2003 to 2006.
+ from 2003 to 2006. Note tha a .txt documentation file for the
+ converter is also available in the man/pdoc directory.
 
  To generate the toolkit executable, the RPN/CMC development environment
  has to be installed and active (see mfvalin/rmnlib on github.com). As
@@ -55,10 +56,11 @@
  The 2005-03-11 version of this package is included here. This is
  the case for the PGI versions as these compilers (at least as of
  their version 14xx) do not provide for quad-precision real arithmetic.
- On the other hand, since the Intel, AIX/xlf and GFORTRAN compilers do
- support this, version generated with them will not require the
- DDFUN90 package. The file src/lssub/gaussg.F90 may need to be
- modified according to your environment's specifications.
+ On the other hand, since the Intel/ifort, AIX/xlf and GFORTRAN
+ compilers do support this, toolkit versions generated with them
+ will not require the DDFUN90 package. To account for this, the
+ src/lssub/gaussg.F90 source file may need to be modified
+ according to your environment's specifications.
  
  R.DIAG is copyrighted (C) 1990-2010 by the "Division de Recherche
  en Prevision Numerique" of Environment Canada. This code is free
