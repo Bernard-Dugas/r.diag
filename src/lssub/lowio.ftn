@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: lowio.ftn,v $
+!     Revision 3.10  2015/04/23 21:15:58  dugas
+!     Autres modifications pour GFORTRAN.
+!
 !     Revision 3.9  2015/04/23 20:41:36  dugas
 !     Modifier les comparaisons avec ZERO et corriger certains enonces TRANSFER pour AIX.
 !
@@ -118,8 +121,8 @@
      +     ZEROEXP / X'8000FFFF' /
 #     else
       REAL(8), SAVE :: ZERO8 = Z'8000FFFFFFFFFFFF'
-      INTEGER, SAVE :: IZ1   = Z'8000FFFF'
-      INTEGER, SAVE :: IZ2   = Z'FFFFFFFF'
+      INTEGER, SAVE :: IZ1   = TRANSFER( Z'8000FFFF',1 )
+      INTEGER, SAVE :: IZ2   = TRANSFER( Z'FFFFFFFF',1 )
       INTEGER, SAVE :: INME  = TRANSFER( Z'7FF00000',1 )
       INTEGER, SAVE :: INBE  = TRANSFER( Z'78040000',1 )
       INTEGER, SAVE :: INMM  = TRANSFER( Z'000FFFFF',1 ) 
@@ -278,8 +281,8 @@
      +     ZEROEXP / X'8000FFFF' /
 #     else
       REAL(8), SAVE :: ZERO8 = Z'8000FFFFFFFFFFFF'
-      INTEGER, SAVE :: IZ1   = Z'8000FFFF'
-      INTEGER, SAVE :: IZ2   = Z'FFFFFFFF'
+      INTEGER, SAVE :: IZ1   = TRANSFER( Z'8000FFFF',1 )
+      INTEGER, SAVE :: IZ2   = TRANSFER( Z'FFFFFFFF',1 )
       INTEGER, SAVE :: INME  = TRANSFER( Z'FFFE0000',1 )
       INTEGER, SAVE :: INBE  = TRANSFER( Z'78020000',1 )
       INTEGER, SAVE :: INM1  = TRANSFER( Z'0001FFFF',1 ) 
