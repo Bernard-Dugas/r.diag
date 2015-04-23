@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: lowio.ftn,v $
+!     Revision 3.9  2015/04/23 20:41:36  dugas
+!     Modifier les comparaisons avec ZERO et corriger certains enonces TRANSFER pour AIX.
+!
 !     Revision 3.8  2014/12/03 23:26:35  dugas
 !     Enlever les enonces EQUIVALENCE.
 !
@@ -115,12 +118,14 @@
      +     ZEROEXP / X'8000FFFF' /
 #     else
       REAL(8), SAVE :: ZERO8 = Z'8000FFFFFFFFFFFF'
+      INTEGER, SAVE :: IZ1   = Z'8000FFFF'
+      INTEGER, SAVE :: IZ2   = Z'FFFFFFFF'
       INTEGER, SAVE :: INME  = TRANSFER( Z'7FF00000',1 )
       INTEGER, SAVE :: INBE  = TRANSFER( Z'78040000',1 )
-      INTEGER, SAVE :: INMM  = TRANSFER( Z'FFFFF'   ,1 ) 
-      INTEGER, SAVE :: OUB1  = TRANSFER( Z'7FFFFFF' ,1 )
-      INTEGER, SAVE :: OUB2  = TRANSFER( Z'1FFFFF'  ,1 )
-      INTEGER, SAVE :: OUMM  = TRANSFER( Z'1F'      ,1 )
+      INTEGER, SAVE :: INMM  = TRANSFER( Z'000FFFFF',1 ) 
+      INTEGER, SAVE :: OUB1  = TRANSFER( Z'07FFFFFF',1 )
+      INTEGER, SAVE :: OUB2  = TRANSFER( Z'001FFFFF',1 )
+      INTEGER, SAVE :: OUMM  = TRANSFER( Z'0000001F',1 )
 #     endif
       INTEGER, SAVE :: ZERO=0, UN=1, TROIS=3, CINQ=5, LAST=31
 
@@ -135,7 +140,7 @@
       EXTERNAL GO4A8
 
 ! ------------------------------------------------------------------- 
-      IZ8 = LOC( Y(1) )
+!     IZ8 = LOC( Y(1) )
 
       IF (BIGENDI == 1)                                        THEN
           HIW = 1
@@ -157,7 +162,8 @@
           Y(2) = ZEROMAN
           Y(1) = ZEROEXP
 #         else
-          Z8(1) = ZERO8
+          Y(1) = IZ1 ; Y(2) = IZ2
+!         Z8(1) = ZERO8
 #         endif
           RETURN
       END IF
@@ -272,13 +278,15 @@
      +     ZEROEXP / X'8000FFFF' /
 #     else
       REAL(8), SAVE :: ZERO8 = Z'8000FFFFFFFFFFFF'
+      INTEGER, SAVE :: IZ1   = Z'8000FFFF'
+      INTEGER, SAVE :: IZ2   = Z'FFFFFFFF'
       INTEGER, SAVE :: INME  = TRANSFER( Z'FFFE0000',1 )
       INTEGER, SAVE :: INBE  = TRANSFER( Z'78020000',1 )
-      INTEGER, SAVE :: INM1  = TRANSFER( Z'1FFFF'   ,1 ) 
+      INTEGER, SAVE :: INM1  = TRANSFER( Z'0001FFFF',1 ) 
       INTEGER, SAVE :: INM2  = TRANSFER( Z'F0000000',1 )
-      INTEGER, SAVE :: OUB1  = TRANSFER( Z'FFFFFFF' ,1 )
-      INTEGER, SAVE :: OUB2  = TRANSFER( Z'FFFFF'   ,1 )
-      INTEGER, SAVE :: EINC  = TRANSFER( Z'100000'  ,1 )
+      INTEGER, SAVE :: OUB1  = TRANSFER( Z'0FFFFFFF',1 )
+      INTEGER, SAVE :: OUB2  = TRANSFER( Z'000FFFFF',1 )
+      INTEGER, SAVE :: EINC  = TRANSFER( Z'00100000',1 )
 #     endif
       INTEGER, SAVE :: ZERO=0, UN=1, TROIS=3, QUATRE=4, C28=-28, LAST=31
 
@@ -292,14 +300,15 @@
       EXTERNAL    GO8A4,XIT
 
 ! ------------------------------------------------------------------- 
-      IZ8 = LOC( Y(1) )
+!     IZ8 = LOC( Y(1) )
 
 !     * TAKE CARE OF ZERO VALUES.
 
 #     if defined (F77)
       IF (Y(2) == ZEROMAN .AND. Y(1) == ZEROEXP)               THEN
 #     else
-      IF (Z8(1) == ZERO8)                                      THEN
+!     IF (Z8(1) == ZERO8)                                      THEN
+      IF (Y(1) == IZ1 .AND. Y(2) == IZ2)                       THEN
 #     endif
           X = ZERO
           RETURN

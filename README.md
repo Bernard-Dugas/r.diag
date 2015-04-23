@@ -30,7 +30,9 @@
  file holds another description of the package but also of the basic
  arguments and environment variables that it responds to. The .txt
  files are only available in English while the .html file are in
- French at this time.
+ French at this time. The list of R.DIAG commands can be retreived
+ via the "r.diag lspgm" command. To figure out what a particular
+ command does, simply execute the "r.diag command_name" command.
 
  In addition to the toolkit, a conversion tool for either the CCCma
  or CMC/RPN file formats to/from the NetCDF v3 file format is included.
