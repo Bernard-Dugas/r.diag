@@ -5,7 +5,7 @@
 *
 *
 *     AUTHOR - B.Dugas, 25 novembre 1992, RPN.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/transpos.ptn,v 4.9 2014/09/25 20:20:55 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/transpos.ptn,v 4.10 2015/04/28 22:01:39 dugas Exp $
 *
 *
 *     DESCRIPTION...
@@ -56,6 +56,9 @@
 *    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
  
 *     $Log: transpos.ptn,v $
+*     Revision 4.10  2015/04/28 22:01:39  dugas
+*     Mise a jour pour F90.
+*
 *     Revision 4.9  2014/09/25 20:20:55  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -105,33 +108,31 @@
 ***    NOVEMBRE 25/92 - B.DUGAS, RPN.
 
 *---------------------------------------------------------------------
-      IMPLICIT    none
+      IMPLICIT     none
 
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
+      INTEGER,     PARAMETER :: MAXLEV = 999
+      INTEGER,     PARAMETER :: HEAD = taille_entete
 
-      LOGICAL     OK 
-      REAL        C,D,G,H,ZERO
-      CHARACTER*9 TYPE*4,OPTION,VALEUR,BASEV
-      INTEGER     IBUF,HEAD,JBUF(taille_entete),LON,LAT,LEV,LEVEL(MAXLEV),
-     +            I,J,NR,NF,LEN,NWDS,JPAK,MAXW,NLEV,CMPL,IER,LENO
+      LOGICAL      OK 
+      REAL         C,D
+      CHARACTER    TYPE*4
+      CHARACTER(9) OPTION,VALEUR,BASEV
+      INTEGER      LON,LAT,LEV,LEVEL(MAXLEV),I,J,JBUF(HEAD),
+     +             NR,NF,LEN,NWDS,JPAK,MAXW,NLEV,CMPL,IER,LENO
 
-      POINTER   ( PI,IBUF(8) )
-      POINTER   ( PG,G(1) )
-      POINTER   ( PH,H(1) )
-      POINTER   ( PG,C(2,1) )
-      POINTER   ( PH,D(2,1) )
+      INTEGER,     ALLOCATABLE,DIMENSION(:) :: IBUF
+      REAL,        ALLOCATABLE,DIMENSION(:) :: G,H
 
-      LOGICAL     RPBLOC
-      EXTERNAL    MACSPE,JCLPNT,PUTSET2,PUTFLD2,CMPLBL,
-     +            HPALLOC,HPDEALLC,GETSET2,GETFLD2,XIT,
-     +            RPBLOC,LOW2UP
+      POINTER    ( PG,C(2,1) )
+      POINTER    ( PH,D(2,1) )
 
-      INTEGER     GETSIZ2
-      EXTERNAL    GETSIZ2
+      INTEGER,     EXTERNAL :: GETSIZ2
+      LOGICAL,     EXTERNAL :: RPBLOC
+      EXTERNAL     JCLPNT,PUTSET2,PUTFLD2,CMPLBL,
+     +             GETSET2,GETFLD2,XIT,LOW2UP
 
-      CHARACTER            NOMPRG*256
-      COMMON     /PROGNAM/ NOMPRG
+      CHARACTER             NOMPRG*256
+      COMMON      /PROGNAM/ NOMPRG
 *===================================================================
 
       NOMPRG =
@@ -140,7 +141,6 @@
 *---------------------------------------------------------------------
 ***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
 
-      CALL MACSPE( HEAD,ZERO )
       CALL SETRABT( '&NON' )
 
 ***    ACCEDER LES FICHIERS D'E/S.
@@ -215,9 +215,9 @@
      +    LAT .NE. 1   )) NLEV = 1
                           LEV  = NLEV
 
-      CALL HPALLOC( PI,LEN           ,IER,1 )
-      CALL HPALLOC( PG,CMPL*NWDS*NLEV,IER,1 )
-      CALL HPALLOC( PH,CMPL*NWDS*NLEV,IER,1 )
+      allocate( IBUF(LEN),G(CMPL*NWDS*NLEV),H(CMPL*NWDS*NLEV))
+      PG = LOC( G(1) ) ; PH = LOC( H(1) )
+
 
   100 IF (TYPE.EQ.'ZONL' .OR.
      +   (TYPE.EQ.'CMPL' .AND. JBUF(6).EQ.1))                  THEN
@@ -229,9 +229,7 @@
           IF (.NOT.OK)                                         THEN
 
               IF (MAXW.EQ.0)                                   THEN
-                  CALL                             HPDEALLC(PI,IER,1 )
-                  CALL                             HPDEALLC(PG,IER,1 )
-                  CALL                             HPDEALLC(PH,IER,1 )
+                  deallocate( IBUF, G,H )
                   GOTO 050
               END IF
 
@@ -315,9 +313,7 @@
           IF (.NOT.OK)                                         THEN
 
               IF (MAXW.EQ.0)                                   THEN
-                  CALL                             HPDEALLC(PI,IER,1 )
-                  CALL                             HPDEALLC(PG,IER,1 )
-                  CALL                             HPDEALLC(PH,IER,1 )
+                  deallocate( IBUF, G,H )
                   GOTO 050
               END IF
 

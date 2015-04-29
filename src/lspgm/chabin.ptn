@@ -1,5 +1,5 @@
 #     if !defined (grille_maximale)
-#         define   grille_maximale 400000
+#         define   grille_maximale 10000000
 #     endif
 #     if !defined (ligne_maximale)
 #         define   ligne_maximale 512
@@ -11,7 +11,7 @@
 *
 *
 *     AUTHORS - R.Laprise, S.J.Lambert, B.Dugas, JUN 23/83.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/chabin.ptn,v 4.14 2014/09/25 20:20:46 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/chabin.ptn,v 4.15 2015/04/28 22:00:13 dugas Exp $
 *      
 *
 *     PURPOSE...
@@ -54,6 +54,7 @@
 *       2 FILE CHAR SEEMS EMPTY (ERROR WHILE READING FIRST LINE)
 *       3 ERROR WHILE READING NUMERICAL DATA
 *       4 ERROR WHILE READING LABEL DATA
+*       5 MEMORY ALLOCATION PROBLEM
 #     endif
 #     if defined (RDIAG_LICENCE)
 !---------------------------------- LICENCE BEGIN -------------------------------
@@ -77,6 +78,12 @@
 *    +               TAPE1=CHAR, TAPE2=BIN, TAPE6=OUTPUT) 
 
 *     $Log: chabin.ptn,v $
+*     Revision 4.15  2015/04/28 22:00:13  dugas
+*      - Augmenter la valeur du macro grille_maximale a 10,000,000
+*      - Mise a jour du traitement des dates (DATE TIME STAMP)
+*      - Allocation dynamique de la memoire revue
+*      - Meilleur support des fichier CMC/RPN
+*
 *     Revision 4.14  2014/09/25 20:20:46  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -163,53 +170,41 @@
 *-----------------------------------------------------------------------
       IMPLICIT     none
 
-      INTEGER      MAXW
-      PARAMETER  ( MAXW = grille_maximale )
-      INTEGER      MAXC
-      INTEGER      MAXLIGNE
-      PARAMETER  ( MAXLIGNE = ligne_maximale )
+      INTEGER,     PARAMETER :: HEAD = taille_entete
+      INTEGER,     PARAMETER :: MAXLIGNE = ligne_maximale
 
-      REAL         ZERO
       LOGICAL      OK,SPEC,DEF
-      CHARACTER    TYPE*4,SUPC*ligne_maximale
-      INTEGER      SUP(ligne_maximale)
-      CHARACTER*30 FORM1,VALEUR,FORM2*6,FORMC*7
-      REAL*8       XINTE,RANGE,XMIN
+      CHARACTER(4) TYPE,PKTYP,SUPC*ligne_maximale
+      CHARACTER(30) FORM1,VALEUR,FORM2*6,FORMC*7
+      REAL(8)      XINTE,RANGE,XMIN
+      INTEGER(8)   IBUF(HEAD),DATA_CONVERSION_FACTOR
       INTEGER      APACK,PACK,PMAX, NWDS,NBW,BLANK,
-     +             I,L,IO,NB,NC,NW,NRECS,HEAD,NFF,
-     +             LEN1,LEN2,LAC
+     +             I,L,IO,NB,NC,NW,NRECS,NFF,LEN1,LEN2,
+     +             LAC,MAXW,IER,SUP(MAXLIGNE),MAXC,
+     +             DATE_TIME_STAMP,DATYP
 
       EQUIVALENCE ( SUP(1),SUPC )
 
       INTEGER,     DIMENSION(:), ALLOCATABLE :: BUF,NF
-      REAL*8,      DIMENSION(:), ALLOCATABLE :: F
+      REAL(8),     DIMENSION(:), ALLOCATABLE :: F
 
 #     include     "machtype.cdk"
 
-      CHARACTER*4  GETYP,PKTYP
-      EXTERNAL     GETYP
-
-      LOGICAL      RPBLOC,SETIO64
-      EXTERNAL     RPBLOC,SETIO64
-
-      EXTERNAL     MACSPE,JCLPNT,XIT,PUTFLD2,HPALLOC,PUTPARC
+      CHARACTER(4),EXTERNAL :: GETYP
+      LOGICAL,     EXTERNAL :: RPBLOC,SETIO64
+      EXTERNAL     JCLPNT,PUTFLD2,PUTPARC,XIT
 
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
 
       DATA         BLANK / Z'20202020' /
+      DATA         MAXW  / -1 /
 *=======================================================================
  
       NOMPRG =
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/chabin.ptn,v $'
 
 *-----------------------------------------------------------------------
-***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
-
-      CALL MACSPE( HEAD,ZERO )
-
-      ALLOCATE( BUF(2*(HEAD+MAXW)),F(MAXW),NF(MAXW) )
-
 ***    ACCEDER LES FICHIERS D'E/S.
 
       NFF = 3
@@ -223,6 +218,17 @@
      +        PKTYP(1:2).EQ.'SQ'  ) NBW = 32
       ELSE IF (MACHINE.EQ.1)                                   THEN
           NBW = 64
+      END IF
+
+      IF (PKTYP(1:2) /= 'SQ')                                  THEN
+          CALL GET_DCF( DATA_CONVERSION_FACTOR )
+          IF (DATA_CONVERSION_FACTOR <= 1_8)                   THEN
+              ! Assume a YYYYMMDDHH date format. This value can be
+              ! overidden via the DATE_FORMAT environment variable
+              WRITE(6,'(/A/)') 'DATE_FORMAT set to "YYYYMMDDHH"'
+              DATA_CONVERSION_FACTOR = 1000000
+              CALL SET_DCF( DATA_CONVERSION_FACTOR )
+          END IF
       END IF
 
       DEF   = .FALSE.
@@ -249,27 +255,50 @@
   
       NRECS = 0 
 
-  100 READ(1,1000,ERR=901,END=902,IOSTAT=IO) BUF(1:8)
+  100 READ(1,1000,ERR=901,END=902,IOSTAT=IO) IBUF(1:8)
 
-          IF (BUF(5).LT.1) BUF(5) = 1
-          IF (BUF(6).LT.1) BUF(6) = 1
+          IF (IBUF(5).LT.1) IBUF(5) = 1
+          IF (IBUF(6).LT.1) IBUF(6) = 1
 
-          WRITE(TYPE,4) BUF(1)
-          NWDS = BUF(5)*BUF(6)
-          PACK = BUF(8)
+          WRITE(TYPE,4) IBUF(1)
+          NWDS = IBUF(5)*IBUF(6)
+          PACK = IBUF(8)
+
+          DATYP = 1
 
           IF (TYPE.EQ.'SPEC' .OR.
-     +        TYPE.EQ.'FOUR')              THEN
+     +        TYPE.EQ.'FOUR')                                  THEN
               SPEC = .TRUE.
               NWDS = NWDS*2
+              DATYP = 8
           ELSE
-              IF (TYPE.EQ.'CMPL' )
-     +        NWDS = NWDS*2
+              IF (TYPE.EQ.'CMPL' )                             THEN
+                  NWDS = NWDS*2
+                  DATYP = 8
+              END IF
               SPEC = .FALSE.
           END IF
- 
-          IF (NWDS.GT.MAXW) CALL                   XIT(' CHABIN ',-1 )
- 
+
+          IF (NWDS > grille_maximale ) CALL        XIT(' CHABIN ',-1 )
+
+          CALL DATE2STAMP ( IBUF(2),DATE_TIME_STAMP )
+
+***        MEMORY ALLOCATION.
+
+          IF (NWDS > MAXW)                                     THEN
+              IER = 0
+              IF (MAXW > 0) DEALLOCATE( BUF,F,NF, STAT=IER )
+              MAXW = NWDS
+              IF (IER == 0)
+     +        ALLOCATE( BUF(2*(HEAD+MAXW)),F(NWDS),NF(NWDS), STAT=IER  )
+              IF (IER /= 0) CALL                   XIT(' CHABIN ',-5 )
+          END IF
+
+          BUF(1:8) = IBUF(1:8)
+          BUF(2) = DATE_TIME_STAMP
+
+          CALL PUTHIGH( DATYP,'DATYP',BUF )
+
           IF (TYPE.NE.'LABL' .AND. TYPE.NE.'CHAR')             THEN
   
 ***            CASE WHERE FIELD CONTAINS DATA.

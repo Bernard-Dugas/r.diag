@@ -1,5 +1,5 @@
 #     if !defined (grille_maximale)
-#         define   grille_maximale 400000
+#         define   grille_maximale 10000000
 #     endif
 #     if !defined (ligne_maximale)
 #         define   ligne_maximale 512
@@ -11,7 +11,7 @@
 *
 *
 *     AUTHORS - R.Laprise, S.J.Lambert, B.Dugas, DEC 6/83.
-*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/binach.ptn,v 4.17 2014/09/25 20:20:45 dugas Exp $
+*     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/binach.ptn,v 4.18 2015/04/28 22:00:13 dugas Exp $
 *      
 *
 *     PURPOSE...
@@ -51,6 +51,9 @@
 *     EXIT CONDITIONS...
 *       0 NO PROBLEMS
 *       1 FILE BIN SEEMS EMPTY
+*       2 PROBLEM READING INPUT FILE
+*       3 RECORD SIZE TOO LARGE
+*       4 MEMORY ALLOCATION PROBLEM
 #     endif
 #     if defined (RDIAG_LICENCE)
 !---------------------------------- LICENCE BEGIN -------------------------------
@@ -72,6 +75,12 @@
       PROGRAM binach
  
 *     $Log: binach.ptn,v $
+*     Revision 4.18  2015/04/28 22:00:13  dugas
+*      - Augmenter la valeur du macro grille_maximale a 10,000,000
+*      - Mise a jour du traitement des dates (DATE TIME STAMP)
+*      - Allocation dynamique de la memoire revue
+*      - Meilleur support des fichier CMC/RPN
+*
 *     Revision 4.17  2014/09/25 20:20:45  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -175,49 +184,39 @@
 *-----------------------------------------------------------------------
       IMPLICIT      none
 
-      INTEGER       MAXW
-      PARAMETER   ( MAXW = grille_maximale )
-      INTEGER       MAXLIGNE
-      PARAMETER   ( MAXLIGNE = ligne_maximale )
+      INTEGER,     PARAMETER :: HEAD = taille_entete
+      INTEGER,     PARAMETER :: MAXLIGNE = ligne_maximale
 
-      REAL          ZERO
-      LOGICAL       OK,SPEC,DEF
-      CHARACTER*7   FORM2,FORMC
-      CHARACTER*30  TYPE*4,FORM1,VALEUR,LABL*4
-      CHARACTER     LABELI*ligne_maximale , LABEL*ligne_maximale 
-      REAL*8        XMIN,XMAX, RANGE,XINTE, VALUE
-      INTEGER       APACK,PACK,PMAX, HEAD, NFL,NBW, I,L,
-     +              NRECS,NWDS,NC,NW,NB,DISMIN,DISMAX,
-     +              LEN,LENW,LAC,LEN1,LEN2
+      LOGICAL      OK,SPEC,DEF
+      CHARACTER(7) FORM2,FORMC,SDATE*12
+      CHARACTER(4) TYPE,LABL,PKTYP,FORM1*30,VALEUR*30
+      CHARACTER    LABELI*ligne_maximale , LABEL*ligne_maximale 
+      REAL(8)      XMIN,XMAX, RANGE,XINTE, VALUE
+      INTEGER      APACK,PACK,PMAX, MAXW, NFL,NBW, I,L,NPAS,
+     +             NRECS,NWDS,NC,NW,NB,DISMIN,DISMAX,LEN,
+     +             LENW,LAC,LEN1,LEN2,IBUF(HEAD),IPAK,IER 
  
-      INTEGER,      DIMENSION(:), ALLOCATABLE :: BUF,NF
-      REAL*8,       DIMENSION(:), ALLOCATABLE :: F
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: BUF,NF
+      REAL(8),     DIMENSION(:), ALLOCATABLE :: F
  
-      CHARACTER     NOMPRG*512
-      COMMON       /PROGNAM/ NOMPRG
+      CHARACTER    NOMPRG*512
+      COMMON      /PROGNAM/ NOMPRG
 
-#     include      "machtype.cdk"
+#     include     "machtype.cdk"
 
-      LOGICAL       RPBLOC
-      EXTERNAL      RPBLOC
+      INTEGER,     EXTERNAL :: GETSIZ,GETHIGH
+      LOGICAL,     EXTERNAL :: RPBLOC,SETIO64
+      CHARACTER(4),EXTERNAL :: GETYP,GETPARC*128
+      EXTERNAL     SETRABT,JCLPNT,RECGET,RECUP2,DISMIN,DISMAX,XIT
 
-      LOGICAL       SETIO64
-      CHARACTER*4   GETYP,GETPARC*128,PKTYP
-      EXTERNAL      GETYP,GETPARC,DISMIN,DISMAX,XIT
-      EXTERNAL      MACSPE,JCLPNT,RECGET,RECUP2,SETIO64
-
-      DATA          LABL / 'LABL' /
+      DATA         LABL / 'LABL' /
 *=======================================================================
  
       NOMPRG =
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/binach.ptn,v $'
 
 *-----------------------------------------------------------------------
-***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
-
-      CALL MACSPE( HEAD,ZERO )
-
-      ALLOCATE( BUF(2*(HEAD+MAXW)),F(MAXW),NF(MAXW) )
+      CALL SETRABT( '&NON' )
 
 ***    ACCEDER LES FICHIERS D'E/S.
 
@@ -226,11 +225,11 @@
  
       PKTYP = GETYP( 1 )
 
-      IF (MACHINE.EQ.2)                                         THEN
+      IF (MACHINE.EQ.2)                                        THEN
           IF (PKTYP     .EQ.'    ') NBW = 64
           IF (PKTYP     .EQ.'PK84' .OR.
      +        PKTYP(1:2).EQ.'SQ'  ) NBW = 32
-      ELSE IF (MACHINE.EQ.1)                                    THEN
+      ELSE IF (MACHINE.EQ.1)                                   THEN
           NBW = 64
       END IF
 
@@ -257,16 +256,34 @@
       NRECS  =  0
       LABELI = ' '
  
+***    MEMORY ALLOCATION.
+
+  050 MAXW = GETSIZ( 1, IBUF,LEN,NWDS,IPAK ) 
+      IF (MAXW == 0) CALL                          XIT(' Binach ',-2 )
+      IF (MAXW > grille_maximale ) CALL            XIT(' Binach ',-3 )
+
+      ALLOCATE( BUF(2*(HEAD+MAXW)),F(NWDS),NF(NWDS), STAT=IER )
+      IF (IER /= 0) CALL                           XIT(' Binach ',-4 )
+
 ***    READ IN BINARY RECORD.
  
   100 CALL RECGET( 1 , ' ',-1,' ',-1, BUF,MAXW,OK )
 
           IF (.NOT.OK)                                         THEN
+              IF (MAXW == 0)                                   THEN
+                  DEALLOCATE( BUF,F,NF, STAT=IER )
+                  IF (IER == 0) GOTO 050
+                  CALL                             XIT(' Binach ',-4 )
+              END IF
               WRITE (6,6000) NRECS
-              IF (NRECS.EQ.0) CALL XIT ('BINACH', -1 )
-              CALL                 XIT ('BINACH',  0 )
+              IF (NRECS == 0) CALL                 XIT ('Binach', -1 )
+              CALL                                 XIT ('Binach',  0 )
           END IF
  
+          npas = GETHIGH('NPAS',BUF )
+          CALL PDATE2( SDATE,BUF(2),npas )
+          CALL leadblk( SDATE )
+
           WRITE (TYPE,4) BUF(1)
           NWDS = BUF(5)*BUF(6)
  
@@ -333,7 +350,7 @@
                       GOTO 200
                   END IF
 
-                  WRITE(2,6030) BUF(1:8)
+                  WRITE(2,6030) BUF(1),SDATE,BUF(3:8)
  
                   NC   = MAX( 1, (APACK-1)/4+1 )
 
@@ -428,7 +445,7 @@
                            BUF(8) = 1
                   IF (DEF) BUF(8) = PACK
 
-                  WRITE (2,6010)  BUF(1:8)
+                  WRITE (2,6010)  BUF(1),SDATE,BUF(3:8)
                   WRITE (2,FORM1) (F(I),I=1,NWDS)
  
               END IF
@@ -438,9 +455,9 @@
 ***            TRANSFER THE LABEL.
  
               IF (MACHINE.EQ.1)                                THEN
-                  WRITE (2,6021) BUF(1:8),(BUF(I+HEAD),I=1,NWDS)
+                  WRITE (2,6021) BUF(1),SDATE,BUF(3:8),(BUF(I+HEAD),I=1,NWDS)
               ELSE IF (MACHINE.EQ.2)                           THEN
-                  WRITE (2,6022) BUF(1:8),(BUF(I+HEAD),I=1,NWDS*2)
+                  WRITE (2,6022) BUF(1),SDATE,BUF(3:8),(BUF(I+HEAD),I=1,NWDS*2)
               END IF
  
           ELSE IF (TYPE.EQ.'CHAR')                             THEN
@@ -466,7 +483,7 @@
                   WRITE(FORMC,"('(',I3,'A4)')") BUF(5)
               END IF
 
-              WRITE(2,6010) BUF(1:8)
+              WRITE(2,6010) BUF(1),SDATE,BUF(3:8)
 
               DO I=1,LAC,LEN2
                   WRITE(LABEL,FORMC)
@@ -490,11 +507,11 @@
  2040 FORMAT(' RANGE=',1PE20.12,' MIN=',1PE20.12,8X)
  2050 FORMAT(' MEAN=',1PE20.12,' RANGE=',1PE20.12,' MIN=',1PE20.12,2X)
  6000 FORMAT('0Binach converted ',I5,' records.')
- 6010 FORMAT(1X,A4,I10,1X,A4,5I10)
- 6021 FORMAT(1X,A4,I10,1X,A4,5I10,10X/050A8)
- 6022 FORMAT(1X,A4,I10,1X,A4,5I10,10X/100A4)
- 6023 FORMAT(1X,A4,I10,1X,A4,5I10,10X/A)
- 6030 FORMAT(1X,A4,I10,1X,A4,5I10,10X)
+ 6010 FORMAT(1X,A4,A10,1X,A4,5I10)
+ 6021 FORMAT(1X,A4,A10,1X,A4,5I10,10X/050A8)
+ 6022 FORMAT(1X,A4,A10,1X,A4,5I10,10X/100A4)
+ 6023 FORMAT(1X,A4,A10,1X,A4,5I10,10X/A)
+ 6030 FORMAT(1X,A4,A10,1X,A4,5I10,10X)
  6100 FORMAT ('0Binach is running in compatibility mode')
 
       END
