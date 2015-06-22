@@ -324,22 +324,22 @@
 ***        PREPARE THE MASK ACCORDING TO KIND AND VALUE.
  
           IF (LOP.EQ.'LT')                                     THEN
-              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0_8, 0.0_8,
      +          GG(1:NWDS*NLEV) < VALUE )
           ELSE IF(LOP.EQ.'GT')                                 THEN
-              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0_8, 0.0_8,
      +          GG(1:NWDS*NLEV) > VALUE )
           ELSE IF(LOP.EQ.'GE')                                 THEN
-              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0_8, 0.0_8,
      +          GG(1:NWDS*NLEV) >= VALUE )
           ELSE IF(LOP.EQ.'LE')                                 THEN
-              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0_8, 0.0_8,
      +          GG(1:NWDS*NLEV) <= VALUE )
           ELSE IF(LOP.EQ.'EQ')                                 THEN
-              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0_8, 0.0_8,
      +          GG(1:NWDS*NLEV) == VALUE )
           ELSE IF(LOP.EQ.'NE')                                 THEN
-              GMSK(1:NWDS*NLEV) = MERGE( 1.0, 0.0,
+              GMSK(1:NWDS*NLEV) = MERGE( 1.0_8, 0.0_8,
      +          GG(1:NWDS*NLEV) /= VALUE )
           ELSE
               CALL                                 XIT('  Fmask ',-3 )
