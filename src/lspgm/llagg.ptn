@@ -71,7 +71,10 @@
 *               number to be used as a missing value flag with the "-mvalue"
 *               global command-line argument. Data that is "close" to this
 *               value will be disregarded by the program.
-*               
+*            7) Digital filtering (see note 4) and missing values (see note 6)
+*               treatments are not applied to U-grid input fields (i.e. to
+*               input Ying-Yang GEM4 global grids). Accordingly, it is
+*               suggested to take care when handling these.
 *
 *
 *     OUTPUT FILES...
@@ -180,6 +183,13 @@
 *    1         TAPE1=LL,TAPE2=GG, TAPE5=INPUT, TAPE6=OUTPUT)
 *     ------------------------------------------------------
 *     $Log: llagg.ptn,v $
+*     Revision 4.49  2016/10/28 17:34  dugas
+*     - Correction au calcul de la resolution
+*       en Y (utilise lors d'un possible lissage)
+*       pour les grilles hemispheriques.
+*     - Corrections a la documentation du support
+*       des grilles U (Ying-Yang)
+*
 *     Revision 4.48  2014/09/25 20:20:50  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -1732,12 +1742,16 @@ CCC   END IF
                           NLG = NLG1-MOD( NLG1,2 )
                           XRESI = 360./NLG
                           YRESI = 180./NLAT
-                          IF (IG2R.EQ.1) YRESI = 90./NLAT
+                          IF (IG1R == 1 .OR.
+     +                        IG1R == 2)
+     +                        YRESI = 90./NLAT
                       ELSE
      +                IF (GRTYP.EQ.'B')                        THEN
                           XRESI = 360./(NLG1-1)
                           YRESI = 180./(NLAT-1)
-                          IF (IG2R.EQ.1) YRESI = 90./(NLAT-1)
+                          IF (IG1R == 1 .OR.
+     +                        IG1R == 2)
+     +                        YRESI = 90./(NLAT-1)
                       ELSE
      +                IF (GRTYP.EQ.'L')                        THEN
                           CALL CIGAXG( GRTYP, XG1, XG2, DLAT,DLON,

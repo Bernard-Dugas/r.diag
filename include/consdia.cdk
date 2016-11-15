@@ -4,6 +4,9 @@
 !          contains all the constants read in from file of constants
 !          for diagnostics code in routine INCTDIA.
  
+! Revision 3.3 2016/10/29 21:10  dugas
+! Ajouter les parametres ttns1,ttns3w,ttns3i,ttns4w et ttns4i
+
 !          base sur une version de consphy.cdk de la physique
  
 ! INIT     logical variable to indicate if the file "CONSTANTES" were
@@ -60,4 +63,10 @@
       COMMON/CTESDIA/ GRAV, RAYT, STEFAN, PI, OMEGA
       COMMON/CTESDIA/ KNAMS, STLO, KARMAN, RIC, CHLC, CHLF
       COMMON/CTESDIA/ T1S, T2S, AW, BW, AI, BI, SLP
+
+      Real*8, Parameter :: ttns1  = 610.78D0
+      Real*8, Parameter :: ttns3w = 17.269D0
+      Real*8, Parameter :: ttns3i = 21.875D0
+      Real*8, Parameter :: ttns4w = 35.86D0
+      Real*8, Parameter :: ttns4i =  7.66D0
 #     endif

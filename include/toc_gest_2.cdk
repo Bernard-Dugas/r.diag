@@ -1,0 +1,48 @@
+# if defined (CDK_DOC)
+!
+! TOC_GEST_2.CDK
+! Code partage de connaissance du type de
+! la coordonnee verticale, partie 2
+!
+! Revision 1.0  2016/10/29 21:43  dugas
+! Version initiale
+!
+# endif
+#         if defined(SET_L_EQUAL_1)
+          IF (L      ==  1     .AND.
+     +        PKTYP  == 'SQ'   .AND.
+#         else
+          IF (PKTYP  == 'SQ'   .AND.
+#         endif
+     +        TOC_NBR >  0     .AND.
+     +       (GRTYP  == 'Z'    .OR.
+     +        GRTYP  == 'U'    )  )                            THEN
+
+              IG1   = GETHIGH('IG1' ,IBUF )
+              IG2   = GETHIGH('IG2' ,IBUF )
+
+              CALL GETTOC( IN1, 'VER',VKIND, IG1,IG2 )
+
+              IF (VKIND == 5001  .OR.
+     +            VKIND == 5002  .OR.
+     +            VKIND == 5003  .OR.
+     +            VKIND == 5004)                               THEN
+                  CALL GETTOC( IN1, 'PTOP' ,PTOIT8, IG1,IG2 )
+                  CALL GETTOC( IN1, 'PREF' ,PREF8 , IG1,IG2 )
+                  CALL GETTOC( IN1, 'RC_1' ,R8    , IG1,IG2 )
+                  PTOIT0 = PTOIT8 ; PREF0 = PREF8 ; R0 = R8
+                  IF (VKIND /= 5001)                           THEN
+                      CALL GETTOC( IN1,'RC_2',R28 , IG1,IG2 )
+                      R20 = R28
+                  END IF
+                  IF (PTOIT0 /= PTOIT .or.
+     +                PREF0  /= PREF  .or.
+     +                R20    /= R2    .or.
+     +                R0     /= R     )                        THEN
+                      WRITE(6,6021)
+                      CALL                         XIT( VERBEX ,-21) 
+                  END IF
+              END IF
+
+          END IF
+

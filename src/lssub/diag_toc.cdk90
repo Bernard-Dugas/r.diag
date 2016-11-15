@@ -28,6 +28,10 @@
 !    Last revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lssub/diag_toc.cdk90,v 3.6 2015/03/30 22:18:18 dugas Exp $
 
 !    $Log: diag_toc.cdk90,v $
+!    Revision 3.7  2016/10/26 16:13  dugas
+!    - Ajouter la routine publique NOSTOC (pour ne pas sauver de TocToc)
+!    - Correction de commentaires dans GetTOC_rv
+!
 !    Revision 3.6  2015/03/30 22:18:18  dugas
 !    Remplacer les 'self=TOC_GD' par des 'TOC_GD' dans les appels du type vgd_*.
 !
@@ -75,6 +79,7 @@
       public :: gettoc ! Retreives specific parametres from !! records
       public :: savtoc ! Determines if a !! record needs to be saved 
       public :: loptoc ! Calculates 3d local pressure field
+      public :: nostoc ! DO NOT save a !! record on certain I/O unit
 
       interface gettoc
          module procedure gettoc_i
@@ -875,7 +880,7 @@
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CB_M'
               case ('CA_T')
-!                Get AT, the first momemtum pressure
+!                Get AT, the first thermodynamic pressure
 !                        reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),  &
                                     key='CA_T',    &
@@ -883,7 +888,7 @@
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CA_T'
               case ('CB_T')
-!                Get BT, the second momemtum pressure
+!                Get BT, the secondthermodynamic pressure
 !                        reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),  &
                                     key='CB_T',    &
@@ -1070,6 +1075,33 @@
 
       End SUBROUTINE LoPTOC
 
+!-------------------------------------------------------------------
+      SUBROUTINE NosTOC (NFOUT)
+
+!    NFOUT    = output unit number we do NOT want to write a !! record to
+
+      integer, intent(IN)  :: NFOUT
+
+!    External declarations
+
+      LOGICAL              info
+      COMMON     /ZZVERBO/ info
+
+!    Local variables
+
+      INTEGER NF
+
+      NF = ABS( NFOUT )
+
+      IF (INFO .and. TOC_SAVE(NF)) WRITE(STDOUT,6700) NF
+
+      TOC_SAVE(NF) = .FALSE.
+
+      RETURN
+
+ 6700 FORMAT(' NosTOC:   !! will not be written to I/O unit ',I2/)
+
+      End SUBROUTINE NosTOC
 !-------------------------------------------------------------------
 
       End module Diag_TOC

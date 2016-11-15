@@ -22,6 +22,17 @@
 #     endif
 C
 C     $Log: put.ftn,v $
+C     Revision 3.51  2016/10/25 14:44  dugas
+C     - La variable HEAD passe de 28 a 32
+C     - Modifications syntaxiques de type F77 --> F90
+C     - Ajouter les arguments RKIND,HIVAL et LOVAL a PUTMSET3 qui utilise
+C       maintenant PUTSAMPLZ pour sauver la taille des echantillons
+C     - Ajouter RKIND aux variables traitees par PUTHIGH
+C     - Ajouter la routine PUTHIR pour sauver des variables reelles
+C       dans la section haute de IBUF (HIVAL et LOVAL en ce moment)
+C     - Ajouter la routine PUTSAMPLZ qui sauve la taille des echantillons
+C       de moyennes temporelles selon les differents formats supportes
+C
 C     Revision 3.50  2014/12/03 23:24:37  dugas
 C     Enlever les enonces EQUIVALENCE.
 C
@@ -624,8 +635,7 @@ C
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
       REAL        G(*),GR8
       INTEGER     NF,NLEV,NVAR,MAXPK
@@ -634,14 +644,15 @@ C
 
 ***    Variables locales.
 
+      LOGICAL     IO64B
       CHARACTER*4 KIND
       INTEGER     POSIT,I,NWDS
 
       REAL*8         G8
       POINTER   ( PG,G8(1) ),( PGR8,GR8(*) )
 
-      LOGICAL     GETIO64,IO64B
-      EXTERNAL    GETIO64,PUTSET2
+      LOGICAL,    EXTERNAL :: GETIO64
+      EXTERNAL    PUTSET2
 
 *-------------------------------------------------------------------
       WRITE(KIND,0004) IBUF(1)
@@ -691,8 +702,7 @@ C
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
       REAL        G(*),GR8
       INTEGER     NF,NSET,MAXV,MAXPK
@@ -701,14 +711,15 @@ C
 
 ***    Variables locales.
 
+      LOGICAL     IO64B
       INTEGER     POSIT,I,NWDS,NLEV,DEBSET
       CHARACTER*4 KIND, HOLDN*20
 
       REAL*8          G8
       POINTER   ( PG8,G8(1) ),( PGR8,GR8(*) )
 
-      LOGICAL     GETIO64,IO64B
-      EXTERNAL    GETIO64,PUTSET2,PUTHIGH,PUTHIC
+      LOGICAL,    EXTERNAL :: GETIO64
+      EXTERNAL    PUTSET2,PUTHIGH,PUTHIC
 
 *-------------------------------------------------------------------
       WRITE(KIND,0004) IBUF(1)
@@ -763,9 +774,8 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
  0004 FORMAT(A4)
 
       END
-      SUBROUTINE putmset3 (NF, G, SET,NIP3,NSET,
-     +                            LEV,VARIAB,MAXV,
-     +                            IBUF,MAXPK)
+      SUBROUTINE putmset3 (NF, G, SET,NIP3,RKIND,HIVAL,LOVAL,NSET,
+     +                            LEV,VARIAB,MAXV, IBUF,MAXPK)
 
 ***    Juin 2001 - B.Dugas, RPN.
 
@@ -777,24 +787,28 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
-      REAL        G(*),GR8
-      INTEGER     NF,NSET,MAXV,MAXPK
+***    Arguments.
+
       CHARACTER * ( * ) VARIAB(MAXV)
-      INTEGER     SET(0:NSET),NIP3(NSET),LEV(MAXV,2),IBUF(*)
+      INTEGER     NF,NSET,MAXV,MAXPK
+      REAL        G(*),HIVAL(*),LOVAL(*)
+      INTEGER     SET(0:NSET),NIP3(NSET),RKIND(*),LEV(MAXV,2),IBUF(*)
 
 ***    Variables locales.
 
+      REAL        GR8
+      LOGICAL     IO64B
       INTEGER     POSIT,I,NWDS,NLEV,DEBSET
       CHARACTER*4 KIND, HOLDN*20
+      REAL        HIVALI,LOVALI
 
       REAL*8          G8
       POINTER   ( PG8,G8(1) ),( PGR8,GR8(*) )
 
-      LOGICAL     GETIO64,IO64B
-      EXTERNAL    GETIO64,PUTSET2,PUTHIGH,PUTHIC
+      LOGICAL,    EXTERNAL :: GETIO64
+      EXTERNAL    PUTSET2,PUTHIGH,PUTHIC,PUTHIR, PUTSAMPLZ
 
 *-------------------------------------------------------------------
       WRITE(KIND,0004) IBUF(1)
@@ -822,8 +836,13 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
 CCC       IF (LEV(DEBSET,2).NE.-1)
 CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
+!!!       CALL PUTHIGH( NIP3(I),'IP3'  ,IBUF )
 
-          CALL PUTHIGH( NIP3(I),'IP3'  ,IBUF )
+          CALL PUTHIR ( HIVAL(I),'HIVAL',IBUF )
+          CALL PUTHIR ( LOVAL(I),'LOVAL',IBUF )
+          CALL PUTHIGH( RKIND(I),'RKIND',IBUF )
+
+          CALL PUTSAMPLZ( NIP3(I),IBUF )
 
           HOLDN = VARIAB(DEBSET)
           IF (HOLDN(17:20).NE.' ')
@@ -869,8 +888,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
       REAL        G(*)
       INTEGER     NF,NLEV,LEV(0:NLEV-1),IBUF(*),MAXPK
@@ -879,25 +897,24 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
 ***    Variables locales.
 
-      REAL*8          G8
-      POINTER   ( PG8,G8(1) )
+      REAL*8           G8
+      POINTER    ( PG8,G8(1) )
 
-      INTEGER     PACK, I,L,N, DATYP
-      CHARACTER*4 TYPE,PKTYP,GETYP,SAVEP
-      INTEGER     KIND0,NI0,NJ0,PACK0, LEN,NWDS
-      SAVE        KIND0,NI0,NJ0,PACK0, LEN,NWDS
+      LOGICAL      IO64B
+      INTEGER      PACK, I,L,N, DATYP
+      CHARACTER(4) TYPE,PKTYP,GETYP,SAVEP
+      INTEGER      KIND0,NI0,NJ0,PACK0, LEN,NWDS
+      SAVE         KIND0,NI0,NJ0,PACK0, LEN,NWDS
 
-      INTEGER,    DIMENSION(:), ALLOCATABLE :: JBUF
-      SAVE                                     JBUF
+      INTEGER,     DIMENSION(:), ALLOCATABLE :: JBUF
+      SAVE                                      JBUF
 
-      CHARACTER*4 GETHIC
-      INTEGER     GETHIGH
-      LOGICAL     GETIO64,IO64B
-      EXTERNAL    GETYP,LBLCHK,GETHIGH,GETHIC,
-     +            GETIO64,RECPK2,RECPUT,PUTZX2,
-     +            PUTPARI
+      CHARACTER(4),EXTERNAL :: GETHIC
+      INTEGER,     EXTERNAL :: GETHIGH
+      LOGICAL,     EXTERNAL :: GETIO64
+      EXTERNAL     LBLCHK,RECPK2,RECPUT,PUTZX2,PUTPARI
 
-      DATA        KIND0,NI0,NJ0,PACK0 / 4*-1 /
+      DATA         KIND0,NI0,NJ0,PACK0 / 4*-1 /
 
 *-------------------------------------------------------------------- 
 ***    ENSURE OUTPUT DATYP CONSISTENCY.
@@ -1043,8 +1060,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
       REAL        ZX(*),ZXR
       INTEGER     NF, LEV(*), MAXPK, IBUF(*)
@@ -1056,21 +1072,22 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
 ***    Variables locales.
 
+      LOGICAL     IO64B,CALLEV
       INTEGER     I,L,LR, DEBUT,FIN, DATYP,VKIND, NLEV
+      CHARACTER(4) PKTYP,NEWL,HNEWL
       REAL        ZXTEMP, PR1
       REAL*8      ZXTEMP8
 
       REAL*8          ZX8
       POINTER   ( PZ8,ZX8(1) ),(PZXR,ZXR(1) )
 
-      INTEGER     GETHIGH
-      LOGICAL     GETIO64,IO64B,CALLEV
-      CHARACTER*4 GETYP,GETHIC,PKTYP,NEWL,HNEWL
-      EXTERNAL    PUTFLD2,SETLAB,LVDCODE,PUTLEV,
-     +            PUTPARI,GETHIGH,GETYP,GETIO64,
-     +            PUTHIC,GETHIC
+      INTEGER,     EXTERNAL :: GETHIGH
+      LOGICAL,     EXTERNAL :: GETIO64
+      CHARACTER(4),EXTERNAL :: GETYP,GETHIC
+      EXTERNAL     PUTFLD2,SETLAB,LVDCODE,PUTLEV,
+     +             PUTPARI,PUTHIC
 
-      DATA        NEWL / 'NEWL' /
+      DATA         NEWL / 'NEWL' /
 
 *----------------------------------------------------------------------
       NLEV = IBUF(6)
@@ -1206,8 +1223,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD =  taille_entete )
+      INTEGER,    PARAMETER :: HEAD =  taille_entete
 
       INTEGER     NF,NLEV,LEV(NLEV),IBUF(*),MAXPK
 
@@ -1216,21 +1232,21 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
 ***    Variables locales.
 
-      REAL        PR (NLEV)
-      REAL*8      PR8(NLEV),PRHOLD
-      INTEGER     J,L,IP1,  JBUF(HEAD), DATYP,VKIND
+      CHARACTER(4) PKTYP
+      LOGICAL      IO64B,OK
+      REAL         PR (NLEV)
+      REAL*8       PR8(NLEV),PRHOLD
+      INTEGER      J,L,IP1,  JBUF(HEAD), DATYP,VKIND
 
-      REAL         PRR
-      POINTER   ( PPRR,PRR(1) )
+      REAL          PRR
+      POINTER    ( PPRR,PRR(1) )
 
-      CHARACTER*4 GETYP,PKTYP
-      INTEGER     GETPHIGH,GETKIND
-      LOGICAL     GETIO64,SETIO64,IO64B,OK
-      EXTERNAL    SETLAB,LVDCODE,PUTFLD2,GETIO64,
-     +            SETIO64,CONVPR,GETYP,PUTHIGH,
-     +            GETHIGH,PUTHIC,GETKIND
+      CHARACTER(4),EXTERNAL :: GETYP
+      INTEGER,     EXTERNAL :: GETHIGH,GETKIND
+      LOGICAL,     EXTERNAL :: GETIO64,SETIO64
+      EXTERNAL     SETLAB,LVDCODE,PUTFLD2,CONVPR,PUTHIGH,PUTHIC
 
-      DATA        DATYP / 1 /
+      DATA         DATYP / 1 /
 *----------------------------------------------------------------------
 
       VKIND = 0
@@ -1321,7 +1337,9 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 ***    Cette routine ecrit des mots (en format
 ***    entier)  dans la section haute de IBUF.
 
-      INTEGER           VALUE,IBUF(taille_entete)
+      INTEGER,          PARAMETER :: HEAD = taille_entete
+
+      INTEGER           VALUE,IBUF(HEAD)
       CHARACTER * ( * ) NAME
 
 #     include          "highbuf.cdk"
@@ -1342,10 +1360,10 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
       OR ( NUM1, NUM2) = IOR ( NUM1, NUM2)
 #     endif
 *------------------------------------------------------------------------------
-***    Verifier la valeur de taille_entete.
+***    Verifier la valeur de HEAD.
 
-      if ( taille_entete .ne. 28)                              THEN
-          IF (INFO) WRITE(6,6001) taille_entete
+      if ( HEAD /= 32)                                 THEN
+          IF (INFO) WRITE(6,6001) 32,taille_entete
           CALL                                     XIT(' Puthigh',-1 )
       END IF
 
@@ -1356,75 +1374,82 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
 ***    On connait ce nom ?
 
-      IF (NOM.EQ.'LEN')                                        THEN
-          IBUF(11) = VALUE
-      ELSE IF (NOM.EQ.'DEET')                                  THEN
-          IBUF(12) = VALUE
-          highdel  = .TRUE.
-      ELSE IF (NOM.EQ.'NPAS')                                  THEN
-          IBUF(13) = VALUE
-          highpas  = .TRUE.
-      ELSE IF (NOM.EQ.'DATEO')                                 THEN
-          IBUF(14) = VALUE
-          highdat  = .TRUE.
-      ELSE IF (NOM.EQ.'IG1')                                   THEN
-          IBUF(15) = VALUE
-          highigi  = .TRUE.
-      ELSE IF (NOM.EQ.'IG2')                                   THEN
-          IBUF(16) = VALUE
-          highigi  = .TRUE.
-      ELSE IF (NOM.EQ.'IG3')                                   THEN
-          IBUF(17) = VALUE
-          highigi  = .TRUE.
-      ELSE IF (NOM.EQ.'IG4')                                   THEN
-          IBUF(18) = VALUE
-          highigi  = .TRUE.
-      ELSE IF (NOM.EQ.'DATYP')                                 THEN
+      SELECT CASE ( NOM )
+
+         CASE('LEN')
+            IBUF(11) = VALUE
+         CASE( 'DEET')
+            IBUF(12) = VALUE
+            highdel  = .TRUE.
+         CASE('NPAS')
+            IBUF(13) = VALUE
+            highpas  = .TRUE.
+         CASE('DATEO')
+            IBUF(14) = VALUE
+            highdat  = .TRUE.
+         CASE('IG1')
+            IBUF(15) = VALUE
+            highigi  = .TRUE.
+         CASE('IG2')
+            IBUF(16) = VALUE
+            highigi  = .TRUE.
+         CASE('IG3')
+            IBUF(17) = VALUE
+            highigi  = .TRUE.
+         CASE('IG4')
+            IBUF(18) = VALUE
+            highigi  = .TRUE.
+         CASE('DATYP')
 
 ***        Bits 0 a 8 pour DATYP.
           
-          BITVAL   = IBITS( -1,0,23 )
-          IBUF(19) = AND( IBUF(19), ISHFT( BITVAL,9 ) )
-          BITVAL   = AND( VALUE,    IBITS( -1,0, 9 ) )
-          IBUF(19) = OR(  IBUF(19), BITVAL )
+            BITVAL   = IBITS( -1,0,23 )
+            IBUF(19) = AND( IBUF(19), ISHFT( BITVAL,9 ) )
+            BITVAL   = AND( VALUE,    IBITS( -1,0, 9 ) )
+            IBUF(19) = OR(  IBUF(19), BITVAL )
 
-          highdtp  = .TRUE.
+            highdtp  = .TRUE.
 
-      ELSE IF (NOM.EQ.'DIMSUP1')                               THEN
+         CASE('DIMSUP1')
 
 ***        Bits 9 a 21 pour DIMSUP1 (dimension supplementaire #1)
 
-          BITVAL   = IBITS( -1,0,10 )
-          BITVAL   = OR( ISHFT( BITVAL,22 ), IBITS( -1,0,9 ) )
-          IBUF(19) = AND( IBUF(19),BITVAL )
-          BITVAL   = AND( VALUE-1, IBITS( -1,0,13 ) )
-          IBUF(19) = OR(  IBUF(19), ISHFT( BITVAL,9 ) )
+            BITVAL   = IBITS( -1,0,10 )
+            BITVAL   = OR( ISHFT( BITVAL,22 ), IBITS( -1,0,9 ) )
+            IBUF(19) = AND( IBUF(19),BITVAL )
+            BITVAL   = AND( VALUE-1, IBITS( -1,0,13 ) )
+            IBUF(19) = OR(  IBUF(19), ISHFT( BITVAL,9 ) )
 
-      ELSE IF (NOM.EQ.'DIMSUP2')                               THEN
+         CASE('DIMSUP2')
 
 ***        Bits 22 a 31 pour DIMSUP2 (dimension supplementaire #2)
 
-          IBUF(19) = AND( IBUF(19), IBITS( -1,0,22 ) )
-          IBUF(19) = OR(  IBUF(19), ISHFT( VALUE-1,22 ) )
+            IBUF(19) = AND( IBUF(19), IBITS( -1,0,22 ) )
+            IBUF(19) = OR(  IBUF(19), ISHFT( VALUE-1,22 ) )
 
-      ELSE IF (NOM.EQ.'IP1')                                   THEN
-          IBUF(20) = VALUE
-          highip1  = .TRUE.
-      ELSE IF (NOM.EQ.'IP2')                                   THEN
-          IBUF(21) = VALUE
-          highip2  = .TRUE.
-      ELSE IF (NOM.EQ.'IP3')                                   THEN
-          IBUF(22) = VALUE
-          highip3  = .TRUE.
-      ELSE
-          IF (INFO) WRITE(6,6002) NOM
-          CALL                                     XIT(' Puthigh',-2 )
-      END IF
+         CASE('IP1')
+            IBUF(20) = VALUE
+            highip1  = .TRUE.
+         CASE('IP2')
+            IBUF(21) = VALUE
+            highip2  = .TRUE.
+         CASE('IP3')
+            IBUF(22) = VALUE
+            highip3  = .TRUE.
+         CASE('RKIND')
+            IBUF(29) = VALUE
+            highkin  = .TRUE.
+
+         CASE DEFAULT
+            IF (INFO) WRITE(6,6002) NOM
+            CALL                                   XIT(' Puthigh',-2 )
+
+      END SELECT
 
       RETURN
 *------------------------------------------------------------------------------
 
- 6001 FORMAT(' Puthigh: size discrepancy in high area',I4)
+ 6001 FORMAT(' Puthigh: size discrepancy in high area',2I4)
  6002 FORMAT(' Puthigh: unknown integer parameter name ',A)
 
       END
@@ -1435,14 +1460,17 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 ***    Cette routine ecrit des mots (en format
 ***    caractere) dans la section haute de IBUF.
 
-      INTEGER           IBUF(taille_entete)
+      INTEGER,          PARAMETER :: HEAD = taille_entete
+
+      INTEGER           IBUF(HEAD)
       CHARACTER * ( * ) NAME,VALUE
 
 #     include          "highbuf.cdk"
 
 ***    Variables locales.
 
-      CHARACTER*4       NOM*8,VALEUR,VTEMP
+      CHARACTER(8)      NOM
+      CHARACTER(4)      VALEUR,VTEMP
 
       LOGICAL                    info
       COMMON           /ZZVERBO/ info
@@ -1450,10 +1478,10 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
       EXTERNAL          LOW2UP,XIT
 
 *------------------------------------------------------------------------------
-***    Verifier la valeur de taille_entete.
+***    Verifier la valeur de HEAD.
 
-      if ( taille_entete .ne. 28)                              THEN
-          IF (INFO) WRITE(6,6001) taille_entete
+      if ( HEAD /= 32)                                THEN
+          IF (INFO) WRITE(6,6001) 32,taille_entete
           CALL                                     XIT(' Puthic ',-1 )
       END IF
 
@@ -1467,45 +1495,114 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
 ***    On connait ce nom ?
 
-      IF (NOM.EQ.'GRTYP'  .OR.
-     +    NOM.EQ.'TYPVAR' )                                    THEN
-          WRITE(vtemp,0004) IBUF(9)
-          IF (NOM.EQ.'TYPVAR') vtemp(1:2) = valeur
-          IF (NOM.EQ.'GRTYP' ) vtemp(3:3) = valeur
-                               vtemp(4:4) = ' '
-          READ(vtemp, 0004) IBUF(9)
-          IF (NOM.EQ.'TYPVAR') highvar = .TRUE. 
-          IF (NOM.EQ.'GRTYP' ) hightyp = .TRUE. 
-      ELSE IF (NOM.EQ.'PKTYP')                                 THEN
-          READ(valeur,0004) IBUF(10)
-      ELSE IF (NOM.EQ.'NEWL')                                  THEN
-          READ(valeur,0004) IBUF(23)
-      ELSE IF (NOM.EQ.'NAME')                                  THEN
-          READ(valeur,0004) IBUF(24)
-          highnam = .TRUE.
-      ELSE IF (NOM.EQ.'ETIK1')                                 THEN
-          READ(valeur,0004) IBUF(25)
-          higheti = .TRUE.
-      ELSE IF (NOM.EQ.'ETIK2')                                 THEN
-          READ(valeur,0004) IBUF(26)
-          higheti = .TRUE.
-      ELSE IF (NOM.EQ.'ETIK3')                                 THEN
-          READ(valeur,0004) IBUF(27)
-          higheti = .TRUE.
-      ELSE IF (NOM.EQ.'ETIK4')                                 THEN
-          READ(valeur,0004) IBUF(28)
-          higheti = .TRUE.
-      ELSE
-          IF (INFO) WRITE(6,6002) NOM
-          CALL                                     XIT(' Puthic ',-2 )
-      END IF
+      SELECT CASE ( NOM )
+
+         CASE('GRTYP')
+            WRITE(vtemp,0004) IBUF(9)
+            vtemp(3:3) = valeur
+            vtemp(4:4) = ' '
+            READ(vtemp, 0004) IBUF(9)
+            hightyp = .TRUE. 
+         CASE('TYPVAR' )
+            WRITE(vtemp,0004) IBUF(9)
+            vtemp(1:2) = valeur
+            vtemp(4:4) = ' '
+            READ(vtemp, 0004) IBUF(9)
+            highvar = .TRUE. 
+         CASE( 'PKTYP')
+            READ(valeur,0004) IBUF(10)
+         CASE( 'NEWL')
+            READ(valeur,0004) IBUF(23)
+         CASE( 'NAME')
+            READ(valeur,0004) IBUF(24)
+            highnam = .TRUE.
+         CASE( 'ETIK1')
+            READ(valeur,0004) IBUF(25)
+            higheti = .TRUE.
+         CASE( 'ETIK2')
+            READ(valeur,0004) IBUF(26)
+            higheti = .TRUE.
+         CASE( 'ETIK3')
+            READ(valeur,0004) IBUF(27)
+            higheti = .TRUE.
+         CASE( 'ETIK4')
+            READ(valeur,0004) IBUF(28)
+            higheti = .TRUE.
+
+         CASE DEFAULT
+            IF (INFO) WRITE(6,6002) NOM
+            CALL                                   XIT(' Puthic ',-2 )
+
+      END SELECT
 
       RETURN
 *------------------------------------------------------------------------------
 
  0004 FORMAT(A4)
- 6001 FORMAT(' Puthic: size discrepancy in high area',I4)
+ 6001 FORMAT(' Puthic: size discrepancy in high area',2I4)
  6002 FORMAT(' Puthic: unknown character parametre name ',A)
+
+      END
+      SUBROUTINE puthir (VALUE,NAME,IBUF)
+
+      IMPLICIT          none
+
+***    Cette routine ecrit des mots (en format
+***    REAL) dans la section haute de IBUF.
+
+      INTEGER,          PARAMETER :: HEAD = taille_entete
+
+      INTEGER           IBUF(HEAD)
+      CHARACTER * ( * ) NAME
+      REAL              VALUE
+
+#     include          "highbuf.cdk"
+
+***    Variables locales.
+
+      CHARACTER(8)      NOM
+
+      LOGICAL                    info
+      COMMON           /ZZVERBO/ info
+
+      EXTERNAL          LOW2UP,XIT
+
+*------------------------------------------------------------------------------
+***    Verifier la valeur de taille_entete.
+
+      if (HEAD /= 32)                                          THEN
+          IF (INFO) WRITE(6,6001) 32,taille_entete
+          CALL                                     XIT(' Puthir ',-1 )
+      END IF
+
+***    Convertir name en majuscules.
+
+      nom = NAME
+      call LOW2UP( nom,nom )
+
+***    On connait ce nom ?
+
+      SELECT CASE ( NOM )
+
+         CASE( 'HIVAL')
+            IBUF(30) = TRANSFER( VALUE, 1 )
+            highhiv = .TRUE.
+         CASE( 'LOVAL')
+            IBUF(31) = TRANSFER( VALUE, 1 )
+            highlov = .TRUE.
+
+         CASE DEFAULT
+            IF (INFO) WRITE(6,6002) NOM
+            CALL                                   XIT(' Puthir ',-2 )
+
+      END SELECT
+
+      RETURN
+*------------------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+ 6001 FORMAT(' Puthir: size discrepancy in high area',2I4)
+ 6002 FORMAT(' Puthir: unknown character parametre name ',A)
 
       END
       SUBROUTINE putfld2 (NF,G,IBUF,MAXPK)
@@ -1523,8 +1620,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
       REAL        G(1)
       INTEGER     NF,IBUF(0:HEAD),MAXPK
@@ -1533,19 +1629,16 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
 ***    Variables locales.
 
-      INTEGER     I,PACK,NWDS
-      CHARACTER*4 PKTYP,SAVEP
-      INTEGER     KIND0,NI0,NJ0,PACK0, LEN
-      SAVE        KIND0,NI0,NJ0,PACK0, LEN
+      INTEGER      I,PACK,NWDS
+      CHARACTER(4) PKTYP,SAVEP
+      INTEGER,     SAVE :: KIND0,NI0,NJ0,PACK0, LEN
 
-      INTEGER,    DIMENSION(:), ALLOCATABLE :: JBUF
-      SAVE                                     JBUF
+      INTEGER,     SAVE, DIMENSION(:), ALLOCATABLE :: JBUF
 
-      CHARACTER*4 GETHIC,GETYP
-      EXTERNAL    GETYP,LBLCHK,RECPK2,
-     +            RECPUT,PUTHIC,GETHIC
+      CHARACTER(4),EXTERNAL :: GETHIC,GETYP
+      EXTERNAL     LBLCHK,RECPK2,RECPUT,PUTHIC
 
-      DATA        KIND0,NI0,NJ0,PACK0 / 4*-1 /
+      DATA         KIND0,NI0,NJ0,PACK0 / 4*-1 /
 
 *-------------------------------------------------------------------- 
       IF (MACHINE.EQ.2)                                        THEN
@@ -1609,3 +1702,115 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 *-------------------------------------------------------------------
 
       END 
+      SUBROUTINE PUTSAMPLZ( NSAMPZ,IBUF )
+
+      ! Objet:
+      ! Ecrire le nombre d'echantillons dans IP2 et/ou IP3,
+      !  selon l'usage qui est fait des IP1/IP2/IP3, i.e. avec
+      !  ou sans interval verticaux ou de temps, et en
+      !  utilisant un codage NEW-STYLE de preference.
+
+      ! Notez que les limites des codages utilises ici
+      ! sont les suivantes:
+      !  254903968   <=  IPi <= 267486880 pour KIND_SAMPLES
+      ! 0.100000E+07 >= VIPi >=    0.0
+      !  171017888   <=  IPi <= 183500800 pour KIND_HOURS
+
+      ! Les valeurs codees < 171017888 ne representent
+      ! donc ni des heures ni des nombres d'echantillons.
+      
+      ! Auteur: B. Dugas (UQAM/RPN)
+
+      ! Revision: version original, septembre 2016. 
+
+      use          diag_convert_ip123
+
+      IMPLICIT     none
+
+      INTEGER      IBUF(*),NSAMPZ
+
+      CHARACTER(4) NULS
+      LOGICAL      COMPLET
+      REAL(8)      HEURES
+      REAL         HIVAL,LOVAL
+      type(FLOAT_IP) :: RP1,RP2,RP3
+      REAL         VIP1,VIP2,VIP3,HOLD
+      INTEGER      IP1,IP2,IP3, KIND,RANGE_KIND,NPAS,DEET,STAT
+
+      LOGICAL                INFO
+      COMMON       /ZZVERBO/ INFO
+
+      REAL,        EXTERNAL :: GETHIR
+      INTEGER,     EXTERNAL :: GETHIGH
+      EXTERNAL     PUTHIGH, PUTHIR, Diag_CONVIP_plus
+
+!------------------------------------------------------------------------------
+      IF (NSAMPZ <= 1) RETURN ! Not a time-mean average. Do nothing !
+
+      IP1    = ibuf(4) ! au lieu de GETHIGH(  'IP1',IBUF )
+      IP2    = GETHIGH(  'IP2',IBUF )
+      IP3    = GETHIGH(  'IP3',IBUF )
+
+      NPAS   = GETHIGH( 'NPAS',IBUF )
+      DEET   = GETHIGH( 'DEET',IBUF )
+      
+      HIVAL  = GETHIR ('HIVAL',IBUF ) 
+      LOVAL  = GETHIR ('LOVAL',IBUF ) 
+
+      RANGE_KIND = GETHIGH( 'RKIND',IBUF )
+
+      COMPLET = ( ((NPAS)*dble( deet )/3600.) == dble( HIVAL-LOVAL ) )
+
+      IF (COMPLET .and. HIVAL > LOVAL .and.
+     +   (RANGE_KIND == -1 .or. RANGE_KIND == KIND_HOURS))                         THEN
+          ! Coder (ou re-coder) (HIVAL,LOVAL) dans (IP2,IP3)
+          CALL Diag_CONVIP_plus( IP1,vip1,kind ,-2,NULS,.FALSE. )
+          RP1%hi = vip1  ; RP1%lo = vip1  ; RP1%kind = kind
+          RP2%hi = HIVAL ; RP2%lo = LOVAL ; RP2%kind = KIND_HOURS
+          stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 ) 
+          IF (stat == CONVERT_ERROR)                                               THEN
+              IF (INFO) \
+                  WRITE(6,6001) stat,RP1%hi,RP1%lo,RP1%kind,
+     +                               RP2%hi,RP2%lo,RP2%kind
+              CALL                                 XIT('PutSamplZ',-1 )
+          END IF
+          CALL PUTHIGH( IP2       ,'IP2'  ,IBUF )
+          CALL PUTHIGH( IP3       ,'IP3'  ,IBUF )
+          CALL PUTHIGH( KIND_HOURS,'RKIND',IBUF )
+      ELSE
+     +IF (RANGE_KIND >= 0 .AND. RANGE_KIND /= KIND_HOURS)                          THEN
+          ! Interval de coordonee verticale dans IP1 et IP3.
+          ! On a mets le nombre d'echantillon dans IP2.
+          CALL Diag_CONVIP_plus( IP2,FLOAT( NSAMPZ ),
+     +                           kIND_SAMPLES,+2,NULS,.FALSE. )
+          CALL PUTHIGH( IP2,'IP2',IBUF )
+      ELSE
+     +IF (NSAMPZ < 10 000 000)                                                     THEN 
+          ! HIVAL = LOVAL et IP2 et IP3 sont "libres". On place
+          !  le nombre d'echantillons code en mode KIND_SAMPLES
+          !  dans IP3 et IP2=NSAMPZ*DEET ou on suppose que DEET
+          !  contient l'interval entre les echantillons
+          deet = GETHIGH('DEET',IBUF ) ; HOLD = NSAMPZ*DBLE( DEET )/3600.
+          CALL Diag_CONVIP_plus( IP2,HOLD,kIND_HOURS,+2,NULS,.FALSE. )
+          CALL Diag_CONVIP_plus( IP3,FLOAT( NSAMPZ ),
+     +                           kIND_SAMPLES,+2,NULS,.FALSE. )
+          CALL PUTHIGH( IP2,'IP2',IBUF )
+          CALL PUTHIGH( IP3,'IP3',IBUF )
+      ELSE
+     +IF (10 000 000 <= NSAMPZ .AND. NSAMPZ < 254903968)                           THEN
+          ! Ecrire NSAMPZ en format non-code dans IP3. IP2 = 0
+          IP3 = NSAMPZ ; IP2 = 0
+          CALL PUTHIGH( IP2,'IP2',IBUF )
+          CALL PUTHIGH( IP3,'IP3',IBUF )
+      ELSE ! Trop d'echantillons. Erreur !
+          IF (INFO) WRITE(6,6002) NSAMPZ
+          CALL                                     XIT('PutSamplZ',-2 )
+      END IF
+
+      RETURN
+!------------------------------------------------------------------------------
+ 6001 format(/'   Erreur=',I3,' dans ENCODE_ip, RP1=',2p4e14.6,I3/
+     +                                      31x,'RP2=',2p4e14.6,I3/)
+ 6002 format(/'   Too many samples, NSAMPZ = ',I11/)
+
+      END SUBROUTINE PUTSAMPLZ

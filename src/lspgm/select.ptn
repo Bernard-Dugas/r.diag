@@ -22,8 +22,7 @@
 *               AND BETWEEN TWO SPECIFIED LEVELS FROM FILE IN. 
 *               IF ALL VARIABLES ARE SELECTED THEY ARE PUT ON FILE S1. 
 *               OTHERWISE 1 TO 10 VARIABLES ARE PUT ON FILES S1 TO S10.
-*     NOTE    - STEP NUMBERS IN FILE IN ARE ASSUMED TO BE INCREASING. 
-* 
+*
 *
 *     INPUT FILE... 
 *      IN = FILE CONTAINING GRID OR SPECTRAL FIELDS TO BE SELECTED. 
@@ -97,6 +96,8 @@
 *                  'HYBRIDE'   , hybrid GEM coordinate
 *                  'THETA'     , potential temperature coordinate
 *                  'GALCHEN'   , GalChen generalized coordinate
+*                  'MOMENTUM'  , GEM4 momentum levels
+*                  'THERMODYN' , GEM4 thermodynamic levels
 *
 *      KIND(2)   = OUTPUT FILE MODE. KNOWN VALUES ARE "APPEND", "OVER".
 *                  THE DEFAULT IS TO OVERWRITE ALL OUTPUT FILES.
@@ -134,6 +135,22 @@
 *        1         2         3         4         5         6         7
 *
 *
+*     NOTES: 1) Step numbers in file IN are assumed to be increasing. 
+*            2) If the -t1 and -t2 argument values are actually calendar dates,
+*               for example in a yyyymmddhh format, which is the usual case for
+*               CMC/RPN files, the -t3 argument value may give surprising
+*               results if different from 1. Consider a value of 3 hours,
+*               starting at 2010010100. SELECT will then only consider the
+*               following sequence of dates:
+*
+*               2010010100, 2010010103, ... , 2010010199, 2010010202, ...
+*
+*               i.e. simply adding 3 units to the number given for argument
+*               -t1. Calendar date 2010010200 will not be considered valid.
+*               In the previous case, using  module SELECT2 with argument
+*               -kind=1 would be a valid alternative.
+* 
+*
 *     EXIT CONDITIONS...
 *       0 NO PROBLEMS
 *       1 INCONSISTENT VALUES IN INPUT PARAMETERS
@@ -143,6 +160,7 @@
 *       6 MISMATCH BETWEEN NUMBER OF VARIABLES AND FILE NAMES
 *       7 FILE IN IS EMPTY (NEW)
 *       8 VARIABLE NAME REQUESTED MORE THAN ONCE
+*       9 TocToc RECORD (!!) NOT FOUND ON FILE IN
 #     endif
 #     if defined (RDIAG_LICENCE)
 !---------------------------------- LICENCE BEGIN -------------------------------
@@ -170,6 +188,12 @@
 *    +     TAPE20=S10, TAPE5= INPUT, TAPE6=OUTPUT) 
   
 *     $Log: select.ptn,v $
+*     Revision 4.28  2016/10/28 17:23  dugas
+*     - Ajouter le support de recherche de niveaux thermodynamiques
+*       ou bien de niveaux dynamiques pour un champs GEM4.
+*     - Ajouter de la documentation sur le traitement de
+*       la recherche des dates
+*
 *     Revision 4.27  2014/09/25 20:20:52  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -340,6 +364,8 @@
 ***        -  IMPLANTER LA METHODOLOGIE ANT1,ANT2 DE LA VERSION CCC.
 
 *---------------------------------------------------------------------
+      use diag_toc, only: GetTOC, LirTOC
+
       IMPLICIT     none
 
       INTEGER,     PARAMETER :: MAXLEV = 999 , HEAD = taille_entete
@@ -355,19 +381,20 @@
      +             ALEV(MAXLEV)
       CHARACTER    ANT1*5,ANT2*5,
      +             ALV1*15,ALV2*15,NUM(10)
-      LOGICAL      FIRST,ALLEV,ALTIM,RND,OK,
-     +             NEGINT,ZSETN,CHEKZ
+      LOGICAL      FIRST,ALLEV,ALTIM,RND,OK,INDEXL(MAXLEV),
+     +             NEGINT,ZSETN,CHEKZ,GEM4M,GEM4T,TOCLU
       INTEGER*8 :: N,NT1,NT2,INTT,CTIM
       INTEGER*8 :: ZERO=0,MUN=-1
       INTEGER      JBUF(HEAD),NIVEAU,LEV(MAXLEV),
      +             LEV2(MAXLEV),KIND,VKIND,VKIND1,
-     +             IP1,PERIOD,N0,NIO(10),IO,NLEVG,
-     +             NLEV,NBRLVL,I,J,L,IL,LV1,LV2,
-     +             INTP,MAXW,LEN,VK,
+     +             IP1,IP2,PERIOD,N0,NIO(10),IO,
+     +             NLEVG,NLEV,NBRLVL,I,J,L,IL,LV1,
+     +             LV2,INTP,MAXW,LEN,VK,NBRTOC,
      +             JPAK,NWDS,NF,NREC,NRECO(10),
      +             NRECS,CNAME,VKIND2,VKIND0,
-     +             YYYYMMDD,HHMMSShh
+     +             YYYYMMDD,HHMMSShh,NLEVS
 
+      INTEGER,     DIMENSION(:), POINTER     :: LEVS
       INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
       REAL*8,      DIMENSION(:), ALLOCATABLE :: F
 
@@ -399,7 +426,10 @@
      +             ALLEV / .FALSE. /,
      +             ALTIM / .FALSE. /,
      +             CHEKZ / .TRUE.  /,
-     +             FIRST / .TRUE.  /
+     +             FIRST / .TRUE.  /,
+     +             GEM4M / .FALSE. /,
+     +             GEM4T / .FALSE. /,
+     +             TOCLU / .FALSE. /
       DATA         N0,NIO / 1, 11,12,13,14,15,16,17,18,19,20 /
 *===================================================================
 
@@ -433,6 +463,8 @@
       ZNAME  = ' '
       CKIND  = ' '
       VKIND  = VKIND0
+
+      INDEXL(1:MAXLEV) = .TRUE.
 
 ***    IS SOURCE FILE D/A ?
 
@@ -477,9 +509,19 @@
           OK = RPBLOC('KIND',VALEUR)
           IF (OK) CKIND = VALEUR
 
-          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+          IF (PKTYP.EQ.'SQ' .AND.
+     +        .NOT.(CKIND == '****' .OR. CKIND == ' '))        THEN
+              CALL LOW2UP( CKIND,CKIND )
+
+              IF (CKIND(1:3) == 'DYN')  GEM4M = .TRUE.
+              IF (CKIND(1:3) == 'MOM')  GEM4M = .TRUE.
+              IF (CKIND(1:4) == 'THER') GEM4T = .TRUE.
+              IF (GEM4M .OR. GEM4T) CKIND = 'HYBRIDE'
+
               CALL SETKIND( CKIND )
               VKIND = GETKIND( )
+          ELSE IF (CKIND == '****')                            THEN
+              CKIND = ' '
           ENDIF
 
           VKIND1 = VKIND
@@ -799,7 +841,7 @@
               WRITE(6,6100)
           END IF
 
-      ELSE
+      ELSE IF (.NOT.(GEM4M .OR. GEM4T))                        THEN
           WRITE(6,6201)
       END IF
 
@@ -834,6 +876,40 @@
           ELSE
               GOTO 904
           END IF
+      END IF
+
+      IF (.NOT.TOCLU .AND. (GEM4M .OR. GEM4T))                 THEN
+
+          ! Retreive !! GEM4 vertical information record.
+
+          CALL LirToc( N0, NBRtoc )
+
+          IF (NBRtoc > 0)                                      THEN
+
+              call GetTOC( N0, 'IP1',IP1, NBRtoc )
+              call GetTOC( N0, 'IP2',IP2, NBRtoc )
+
+              ! Read relevant set of GEM4 levels.
+
+              IF (GEM4M)                                       THEN
+                 CALL GetTOC( N0,'VIPM',LEVS,IP1,IP2 )
+              ELSE IF (GEM4T)                                  THEN
+                 CALL GetTOC( N0,'VIPT',LEVS,IP1,IP2 )
+              END IF
+
+              NLEVS = size( LEVS )
+
+          ELSE
+              CALL                                 XIT(' Select ',-9 )
+          END IF
+
+          ALLEV = .FALSE.
+
+          IF (GEM4M) WRITE(6,6202) 'momentum'
+          IF (GEM4T) WRITE(6,6202) 'thermodynamic'
+
+          TOCLU = .TRUE. ! Do this only once.
+
       END IF
 
       WRITE(TYPE,4) JBUF(1)
@@ -914,8 +990,20 @@
 
               IF (KIND.NE.VKIND) GOTO 300
 
+              IF (GEM4T .OR. GEM4M)                            THEN
+                  INDEXL(1:NLEVG) = .FALSE.
+                  FIND_LEVELS : DO  L=1,NLEVG
+                      DO  IL=1,NLEVS
+                          IF (LEV(L) == LEVS(IL))              THEN
+                              INDEXL(L) = .TRUE.
+                              CYCLE FIND_LEVELS
+                          END IF
+                      END DO
+                  END DO FIND_LEVELS
+              END IF
+
               DO  L=1,NLEVG
-                  CALL CONVPR( LEV(L), ALEV(L), VK, -1 )
+                  IF (INDEXL(L)) CALL CONVPR( LEV(L), ALEV(L), VK, -1 )
               END DO
 
 ***            SAVE APPROPRIATE LEVELS.
@@ -924,8 +1012,14 @@
               DO  L=1,NLEVG
                   RSMALL = RSMALL0
                   IF (ABS( ALEV(L) ) > 0.0) RSMALL = RSMALL*ABS( ALEV(L) )
-                  RS1 = ALEV(L)-DBLE( RLV1 ) ; RS2 = ALEV(L)-DBLE( RLV2 )
-                  IF (RS1 >= -RSMALL .AND. RS2 <= RSMALL)   THEN
+                  IF (LV1 /= -1)                               THEN
+                      RS1 = ALEV(L)-DBLE( RLV1 )
+                      RS2 = ALEV(L)-DBLE( RLV2 )
+                  ELSE
+                      RS1 = 0.0 ; RS2 = 0.0
+                  END IF
+                  IF (INDEXL(L) .AND.
+     +                RS1 >= -RSMALL .AND. RS2 <= RSMALL)      THEN
                       DO  I=1,NWDS
                           F(IL*NWDS+I) = F((L-1)*NWDS+I)
                       END DO
@@ -1045,6 +1139,7 @@
  6151 FORMAT('0Select times  ... ALL TIMES.')
  6200 FORMAT(' Select levels ',A,' to ',A)
  6201 FORMAT(' Select levels ... ALL LEVELS.')
+ 6202 FORMAT(' Select GEM4 ',A,' levels.')
  6250 FORMAT(' Variable names =',10(2X,A)) 
  6300 FORMAT('0Records in =',I6,', records out =',10I6)
  6350 FORMAT(' Negative T3 reset, T1 reset to ',I10) 

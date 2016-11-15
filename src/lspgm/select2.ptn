@@ -20,6 +20,8 @@
 *                *** RECORDS ARE IN THE CORRECT TIME ORDER ***
 *
 *     NOTE     - SELECT2 SUPPORTS SEVERAL TECHNIQUES FOR MEASURING TIME
+*                AND SHOULD BE CONSIDERED WHEN DEALING WITH DATES RATHER
+*                THAN TIMESTEPS.
 * 
 *
 *     INPUT FILE... 
@@ -32,7 +34,7 @@
 *
 *     INPUT PARAMETERS... 
 * 
-*      NT1,NT2   = TIMESTEP RANGE (INCLUSIVE).
+*      NT1,NT2   = TIMESTEP OR DATE RANGE (INCLUSIVE).
 *      (t1,t2)     1) IF (NT1=-1) OR (NT1,NT2 BLANK) ==> SELECT ALL INTERVALS 
 *                     (AND THEN ANT1,NT2 ARE IGNORED). THE TIME INTERVAL IS
 *                     THEN THAT BETWEEN THE FIRST TWO VALID TIMESTEPS. 
@@ -83,6 +85,8 @@
 *                  'HYBRIDE'   , hybrid GEM coordinate
 *                  'THETA'     , potential temperature coordinate
 *                  'GALCHEN'   , GalChen generalized coordinate
+*                  'MOMENTUM'  , GEM4 momentum levels
+*                  'THERMODYN' , GEM4 thermodynamic levels
 *
 *      KIND(3)   = OUTPUT FILE MODE. KNOWN VALUES ARE "APPEND", "OVER".
 *                  THE DEFAULT IS TO OVERWRITE ALL OUTPUT FILES.
@@ -94,7 +98,7 @@
 *                  THEN  ALL VARIABLES ARE SELECTED. 
 *      NAME2     = SECOND VARIABLE TO BE SELECTED FOR FILE S2. 
 *      DTM       = FLAG TO INDICATE METHOD OF TIME MEASUREMENT.
-*     (kind(1))  = 0 ==> IBUF(2),T1,T2 AND T3 IN KOUNT UNITS.
+*     (kind(1))  = 0 ==> IBUF(2),T1,T2 AND T3 IN TIMESTEPS UNITS.
 *                = 1 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHH
 *                        AND T3 IS IN HOURS.
 *                = 2 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYMMDDHHMM
@@ -149,6 +153,7 @@
 *      12 MORE THAN ONE KIND OF INPUT LEVEL REQUESTED
 *      13 MISMATCH BETWEEN NUMBER OF VARIABLES AND FILE NAMES
 *      14 FILE IN IS EMPTY (NEW)
+*      15 TocToc RECORD (!!) NOT FOUND ON FILE IN
 *
 *     NON-FATAL CONDITIONS...
 *     101 FOUND DISCONTINUOUS TIME SEQUENCE
@@ -177,6 +182,10 @@
 *     -----------------------------------------------------------------
 
 *     $Log: select2.ptn,v $
+*     Revision 4.24  2016/10/28 17:28  dugas
+*     Ajouter le support de recherche de niveaux thermodynamiques
+*     ou bien de niveaux dynamiques pour un champs GEM4.
+*
 *     Revision 4.23  2014/09/25 20:20:52  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -316,6 +325,8 @@
 *     JAN 14/85 - F. ZWIERS
 *
 *-----------------------------------------------------------------------
+      use diag_toc, only: GetTOC, LirTOC
+
       IMPLICIT     none
 
       INTEGER,     PARAMETER :: MAXLEV = 999 , HEAD = taille_entete
@@ -328,20 +339,20 @@
       CHARACTER*20 VALEUR,CKIND,CIOM
       CHARACTER    ANT1*5,ANT2*5,
      +             ALV1*15,ALV2*15,NUM(10)
-      LOGICAL      FIRST1,FIRST2,NA,ALLEV,
-     +             OK,RLV,ALTIM,NEGINT,ZSETN
+      LOGICAL      FIRST1,FIRST2,NA,ALLEV,INDEXL(MAXLEV),
+     +             OK,RLV,ALTIM,NEGINT,ZSETN,GEM4M,GEM4T,TOCLU
       INTEGER*8 :: N,NT1,NT2,NT3,IT1,IT2
       INTEGER*8 :: ZERO=0,MUN=-1,INT8,LAST1
       INTEGER*8 :: TIME,TIME1,TIME2,LAST2
       INTEGER*8 :: UN_MILLION=1 00 00 00
       CHARACTER*4  NOM,NIL,ALL,TYPE, NAME1,NAME2
-      INTEGER      WARN2,NIVEAU,JBUF(HEAD),VKIND0,VK,
-     +             LEV(MAXLEV),KIND,VKIND,IP1,PERIOD,
-     +             VKIND1,VKIND2,I,J,L,IL,NRECS,NREC,
-     +             NREC1,NREC2,NLEV,NLEVG,NF,LV1,LV2,
-     +             INTP,DTM,WARN1,INA,IO,LEV2(MAXLEV),
+      INTEGER      WARN2,NIVEAU,JBUF(HEAD),VKIND,VKIND0,VKIND1,VKIND2,
+     +             VK,LEV(MAXLEV),KIND,IP1,IP2,PERIOD,I,J,L,IL,NRECS,
+     +             NREC,NREC1,NREC2,NLEV,NLEVG,NF,LV1,LV2,NLEVS,
+     +             NBRTOC,INTP,DTM,WARN1,INA,IO,LEV2(MAXLEV),
      +             JPAK,NBR,NBRLVL,MAXW,NWDS,LEN
   
+      INTEGER,     DIMENSION(:), POINTER     :: LEVS
       INTEGER,     DIMENSION(:), ALLOCATABLE :: IBUF
       REAL*8,      DIMENSION(:), ALLOCATABLE :: F
 
@@ -375,7 +386,10 @@
      +             ALTIM  / .FALSE. /,
      +             FIRST1 / .TRUE.  /,
      +             FIRST2 / .TRUE.  /,
-     +             NA     / .FALSE. /
+     +             NA     / .FALSE. /,
+     +             GEM4M  / .FALSE. /,
+     +             GEM4T  / .FALSE. /,
+     +             TOCLU  / .FALSE. /
 *===================================================================
 
       NOMPRG =
@@ -406,6 +420,8 @@
       NAME2 = ' '
       CKIND = ' '
       VKIND = VKIND0
+
+      INDEXL(1:MAXLEV) = .TRUE.
 
 ***    SETUP FOR 64-BIT I/O.
 
@@ -444,9 +460,19 @@
           OK = RPBLOC('KIND2',VALEUR)
           IF (OK) CKIND = VALEUR
 
-          IF (PKTYP.EQ.'SQ' .AND. CKIND.NE.' ')                THEN
+          IF (PKTYP == 'SQ' .AND.
+     +        .NOT.(CKIND == '****' .OR. CKIND == ' '))        THEN
+              CALL LOW2UP( CKIND,CKIND )
+
+              IF (CKIND(1:3) == 'DYN')  GEM4M = .TRUE.
+              IF (CKIND(1:3) == 'MOM')  GEM4M = .TRUE.
+              IF (CKIND(1:4) == 'THER') GEM4T = .TRUE.
+              IF (GEM4M .OR. GEM4T) CKIND = 'HYBRIDE'
+
               CALL SETKIND( CKIND )
               VKIND = GETKIND( )
+          ELSE IF (CKIND == '****')                            THEN
+              CKIND = ' '
           ENDIF
 
           VKIND1 = VKIND
@@ -671,7 +697,7 @@
               WRITE(6,6009)
           END IF
 
-      ELSE
+      ELSE IF (.NOT.(GEM4M .OR. GEM4T))                        THEN
           WRITE(6,6201)
       END IF
 
@@ -728,16 +754,6 @@
       LAST1 = 0
       LAST2 = 0
 
-***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
-
-  250 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
-      IF (MAXW.EQ.0) GOTO 904
-
-      WRITE(TYPE,4) JBUF(1)
-      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
-
-      ALLOCATE( IBUF(2*LEN),F(MAX( MAXW,NWDS*NLEV )) )
-
 ***    READ THE NEXT SET OF GRIDS FROM FILE 1. 
 ***    STOP AT EOF OR IF STEP NUMBER EXCEEDS NT2.
 
@@ -746,6 +762,50 @@
       IF (ZNAME.NE.' ')                ZSETN = .TRUE.
 
       
+***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
+
+  250 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
+      IF (MAXW.EQ.0) GOTO 904
+
+      IF (.NOT.TOCLU .AND. (GEM4M .OR. GEM4T))                 THEN
+
+          ! Retreive !! GEM4 vertical information record.
+
+          CALL LirToc( 1, NBRtoc )
+
+          IF (NBRtoc > 0)                                      THEN
+
+              call GetTOC( 1, 'IP1',IP1, NBRtoc )
+              call GetTOC( 1, 'IP2',IP2, NBRtoc )
+
+              ! Read relevant set of GEM4 levels.
+
+              IF (GEM4M)                                       THEN
+                 CALL GetTOC( 1,'VIPM',LEVS,IP1,IP2 )
+              ELSE IF (GEM4T)                                  THEN
+                 CALL GetTOC( 1,'VIPT',LEVS,IP1,IP2 )
+              END IF
+
+              NLEVS = size( LEVS )
+
+          ELSE
+              CALL                                 XIT(' Select2',-15)
+          END IF
+
+          ALLEV = .FALSE.
+
+          IF (GEM4M) WRITE(6,6202) 'momentum'
+          IF (GEM4T) WRITE(6,6202) 'thermodynamic'
+
+          TOCLU = .TRUE. ! Do this only once.
+
+      END IF
+
+      WRITE(TYPE,4) JBUF(1)
+      IF (TYPE.EQ.'ZONL') NWDS = JBUF(5)
+
+      ALLOCATE( IBUF(2*LEN),F(MAX( MAXW,NWDS*NLEV )) )
+
       IF (ALLEV)                                               THEN
           VKIND1 = GETKIND( )
           VKIND2 = VKIND1
@@ -758,9 +818,9 @@
               DEALLOCATE( IBUF,F )
 
               IF (MAXW.EQ.0)                                   THEN
-                  IF (ZSETN)
-     +            ZNAME = ' '
-                  ZSETN = .FALSE.
+!!!               IF (ZSETN)
+!!!  +            ZNAME = ' '
+!!!               ZSETN = .FALSE.
                   GOTO 250
               END IF
 
@@ -814,8 +874,21 @@
 
               IF (KIND.NE.VKIND) GOTO 300
 
+
+              IF (GEM4T .OR. GEM4M)                            THEN
+                  INDEXL(1:NLEVG) = .FALSE.
+                  FIND_LEVELS : DO  L=1,NLEVG
+                      DO  IL=1,NLEVS
+                          IF (LEV(L) == LEVS(IL))              THEN
+                              INDEXL(L) = .TRUE.
+                              CYCLE FIND_LEVELS
+                          END IF
+                      END DO
+                  END DO FIND_LEVELS
+              END IF
+
               DO  L=1,NLEVG
-                  CALL CONVPR( LEV(L), ALEV(L), VK, -1 )
+                   IF (INDEXL(L)) CALL CONVPR( LEV(L), ALEV(L), VK, -1 )
               END DO
 
 ***            SAVE APPROPRIATE LEVELS.
@@ -824,8 +897,14 @@
               DO  L=1,NLEVG
                   RSMALL = RSMALL0
                   IF (ABS( ALEV(L) ) > 0.0) RSMALL = RSMALL*ABS( ALEV(L) )
-                  RS1 = ALEV(L)-DBLE( RLV1 ) ; RS2 = ALEV(L)-DBLE( RLV2 )
-                  IF (RS1 >= -RSMALL .AND. RS2 <= RSMALL)   THEN
+                  IF (LV1 /= -1)                               THEN
+                      RS1 = ALEV(L)-DBLE( RLV1 )
+                      RS2 = ALEV(L)-DBLE( RLV2 )
+                  ELSE
+                      RS1 = 0.0 ; RS2 = 0.0
+                  END IF
+                  IF (INDEXL(L) .AND.
+     +                RS1 >= -RSMALL .AND. RS2 <= RSMALL)      THEN
                       DO  I=1,NWDS
                           F(IL*NWDS+I) = F((L-1)*NWDS+I)
                       END DO
@@ -992,8 +1071,9 @@
  6150 FORMAT('0Select times ',I14,' (T1)  to ',I14,
      +       ' (T2) in steps of',I10,' (T3)') 
  6151 FORMAT('0Select times  ... ALL TIMES.')
- 6200 FORMAT(' Select levels',A,'  to ',A)
+ 6200 FORMAT(' Select levels ',A,' to ',A)
  6201 FORMAT(' Select levels ... ALL LEVELS.')
+ 6202 FORMAT(' Select GEM4 ',A,' levels.')
  6250 FORMAT(' Variable names =',2(2X,A)) 
  6300 FORMAT('0Records in =',I6,', records out =',2I6)
  6350 FORMAT(' Negative T3 reset, T1 reset to ',I14) 

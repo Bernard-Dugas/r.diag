@@ -6,8 +6,8 @@
 *     CALL SEQUENCE...
 *      vsinth  XIN LNSP XOUT [ GTOP ] INPUT OUTPUT \ 
 *            [ -kind VAL1 [ VAL2 ] -scal VAL3 -l VAL4 -a VAL5 \ 
-*                                  -c    VAL6 -d VAL7 -i VAL8 \ 
-*                                  -def [VAL9] ]
+*                                  -c    VAL6 -d VAL7 -i VAL8 [VAL9] \ 
+*                                  -def [AABB] ]
 *
 *
 *     DESCRIPTION...
@@ -62,7 +62,8 @@
 *                        FOR UPWARD COMPATIBILITY.
 *      PTOIT  (c)      = PRESSURE (PA) AT THE MODEL LID.
 *      PREF   (d)      = REF PRESSURE USED WHEN COORD='GEM2' OR 'GEM3' (DEF 80000 PA).
-*      R      (i)      = EXPONENT USED ONLY WHEN COORD='GEM2' OR 'GEM3' (DEF 1.0)
+*      R      (i)      = EXPONENT USED ONLY WHEN COORD='GEMi', i=234 (DEF 1.0)
+*      R2    (i2)      = Second reference exponent if COORD='GEM4' (DEF 1.0)
 *
 *      Notes:   1) When COORD(1:3)='GEM', LEVTYP and SIGTOP are ignored.
 *               2) When COORD='GEM', PTOIT is only used if GTOP is empty
@@ -74,7 +75,7 @@
 *                  original hybrid coordinate as implemented by Edouard &&
 *                  Gravel in GEM/DM v2.2.0. GEM3 is the normalized version
 *                  that was implemented in the v2.3.1 GEM/DM. 'GEM4' is the
-*                  coordinate version of GEM/DM from v4.0.6.
+*                  staggered hybrid coordinate version of GEM/DM from v4.0.6.
 *               6) The default value of COORD is determined by the file type
 *                  and the program will also try to determine it by the
 *                  (internal) coding used for the coordinate itself.
@@ -82,11 +83,22 @@
 *                  a text file called aabb.nml, containing a FORTRAN
 *                  namelist AABB_NML, which in turns will hold two arrays,
 *                  A and B such that the local pressure at level K, PL(K),
-*                  can be calculated as "A(K)+B(K)*PS". This then by-passes
-*                  all of the normal COORD-related calculations for PL(K).
+*                  can be calculated as "A(K)+B(K)*PS" for most coordinates.
+*                  For 'GEM4', the corresponding formula to calculate the
+*                  K-level natural logaritm of the local pressure is rather
+*                  "A(K)+B(K)*LN(PS/PREF)". The A and B terms should be such
+*                  as to produce local pressures in Pa units, even though PS
+*                  is usually read in units of hPa (before being converted
+*                  to Pa units internally). In all cases, this approach then
+*                  by-passes the normal COORD-related calculations for PL(K).
+*                                        *************
+*                  Given the above, correctly using the AABB option with a
+*                  GEM4 file requires specifying the "-kind GEM4" argument.
+*                                        *************
 *
-*      READ( 5,5000) LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT,PREF,R
-*5000  FORMAT(11X,A4,E10.0,I5,1X,A4,E5.0,3E10.0)
+*
+*      READ( 5,5000) LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT,PREF,R,R2
+*5000  FORMAT(11X,A4,E10.0,I5,1X,A4,E5.0,4E10.0)
 *
 *
 *     EXAMPLE OF INPUT CARD...
@@ -114,13 +126,15 @@
 *      13 LNSP AND GTOP NOT THE SAME SIZE
 *      14 MORE THAN ONE SIZE IN GTOP
 *      15 ILLEGAL GEM/LAY VALUE
-*      16 PTOIT GREATER THAN TOP MODEL LEVEL (=ETA(TOP)*PREF)
-*      17 UNSUPPORTED VERTICAL COORDINATE IN XIN
-*      18 COORD PARAMETRE AND XIN DATA MISMATCH
-*      19 MORE THAN ONE VERTICAL COORDINATE IN XIN 
+*      16 UNSUPPORTED VERTICAL COORDINATE IN XIN
+*      17 COORD PARAMETRE AND XIN DATA MISMATCH
+*      18 UNABLE TO FIND A GEM4 '!!' RECORD
+*      19 PTOIT GREATER THAN TOP MODEL LEVEL (=ETA(TOP)*PREF)
 *      20 UNABLE TO READ AABB NAMELIST
-*      21 LNSP DOES NOT CONTAIN LN(SURFACE PRESSURES) FOR EARTH
+*      21 MORE THAN ONE VERTICAL COORDINATE IN XIN 
 *      22 WRONG NUMBER OF AA,BB IN AABB
+*      23 LNSP DOES NOT CONTAIN LN(SURFACE PRESSURES) FOR EARTH
+*      24 UNABLE TO ALLOCATE WORKING MEMORY
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -148,6 +162,13 @@
 *     ------------------------------------------------------------------
 *
 *     $Log: vsinth.ptn,v $
+*     Revision 4.30  2016/10/28 17:53  dugas
+*     - Ameliorer le support des coordonnees verticales de
+*       GEM4, et ce aussi pour le mode de traitement AABB.
+*     - Modifications syntaxiques de type F77 --> F90.
+*     - Usage des nouveaux comdecks toc_gest_1.cdk, toc_gest_2.cdk
+*       et set_a_b_from_AABB.cdk.
+*
 *     Revision 4.29  2015/03/30 22:22:32  dugas
 *     Initialiser les pointeurs qui seront passes a VGRIDDESCRIPTORS.
 *
@@ -268,26 +289,25 @@
 
       IMPLICIT    none
 
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
-      REAL        PTMIN
-      PARAMETER ( PTMIN = pression_au_toit )
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      REAL,       PARAMETER :: PTMIN  = pression_au_toit
  
       CHARACTER   GRTYP
-      LOGICAL     MODETA
-      REAL(8)     PTOIT8,PREF8,R8
+      LOGICAL     MODETA,TOCLU
+      REAL(8)     PTOIT8,PREF8,R8,R28
       LOGICAL     OK,SPEC,FTOPP,MONOTON,DEF,AABB
       REAL        CPRES,NPRES,PREF,SIGTOP, BIGBIN
-      REAL        CONST,PTOIT,ZERO,R,R0,
-     +            PLOCAL,PTOIT0,PREF0,
-     +            AMIN,AMAX,AMEAN
-      CHARACTER*4 LEVTYP,COORD,TYPE,NAME,CLNSP
-      CHARACTER   LIGNE*80,CHECK*2,PKTYP*2
-      INTEGER     NFIL,LAY,KBUF(taille_entete),LBUF(taille_entete),MBUF(taille_entete),MAXW,MAXW2,
+      REAL        CONST,PTOIT,R,R2,R0,R20,LOVAL,
+     +            CORR2,AMIN,AMAX,AMEAN,HIVAL,
+     +            PLOCAL,PTOIT0,PREF0,CORR1
+      CHARACTER*4 LEVTYP,COORD,COORDI,TYPE,NAME,CLNSP
+      CHARACTER   LIGNE*80,CHECK*2,PKTYP*2,VERBEX*8
+      INTEGER     NFIL,LAY,KBUF(HEAD),LBUF(HEAD),MBUF(HEAD),MAXW,MAXW2,
      +            MAXW4,LEN,LEN2,LEN4,NWDS,KPAK,ILEV,ILEVG,I,J,K,L,M,
-     +            TIM,IER,HIGH,LOW,KEEP,IL,HEAD,NSETS,IO,KIND,NOM,
-     +            TOP,BOT,INC,LPAK,MPAK,MEM,VKIND,VK,NC,LEVS,LL,
-     +            TOC_NK,TOC_NBR,IG10,IG20,IG1,IG2,NI,NJ,IUN
+     +            TIM,IER,HIGH,LOW,KEEP,IL,NSETS,IO,KIND,NOM,TOP,IN1,
+     +            BOT,INC,LPAK,MPAK,MEM,VKIND,VKINDI,VK,NC,LEVS,NSL,
+     +            LL,L1,L2,TOC_NK,TOC_NBR,IG10,IG20,IG1,IG2,NI,NJ,IUN
 
       INTEGER     LEV (MAXLEV)
       REAL        ETA (MAXLEV),ETAB (MAXLEV)
@@ -303,6 +323,7 @@
 
       INTEGER,    DIMENSION(:), ALLOCATABLE        :: IBUF,JBUF
       REAL,       DIMENSION(:), ALLOCATABLE        :: ACC,GG,TOPP,SIGB
+      REAL,       DIMENSION(:,:), ALLOCATABLE      :: CPRESL,NPRESL
       REAL,       DIMENSION(:), POINTER            :: PSMBLN
       REAL,       DIMENSION(:), ALLOCATABLE,TARGET :: PRESS
 
@@ -319,6 +340,7 @@
       DATA        CHECK /  ' '    /
       DATA        FTOPP / .FALSE. /
       DATA        MODETA/ .FALSE. /
+      DATA        TOCLU / .FALSE. /
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -328,17 +350,16 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vsinth.ptn,v $'
 
 *---------------------------------------------------------------------
-***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
-
-      CALL MACSPE( HEAD,ZERO )
       CALL SETRABT( '&NON' )
 
 ***    ACCEDER LES FICHIERS D'E/S.
 
-      NFIL = 6
-      CALL JCLPNT( NFIL, 1,2,3,4, 5,6 )
+      NFIL = 6 ; IN1 = 1
+      CALL JCLPNT( NFIL, IN1,2,3,4, 5,6 )
  
-      PKTYP = GETYP( 1 )
+      VERBEX = ' Vsinth '
+
+      PKTYP = GETYP( IN1 )
       NSETS = 0
 
       COORD  = 'DEF'
@@ -347,12 +368,15 @@
       LAY    =   0
       SIGTOP = -1.0
       PTOIT  = PTMIN
+      PREF   = 80000.
+      PREF8  =-1.0
+      R      = 1.0
+      R2     = 1.0
+      R0     =-1.0
+      R20    =-1.0
       AABB   =.FALSE.
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
-
-          PREF   = 80000.
-          R      =  1.0
 
           OK = RPBLOC('KIND',LIGNE)
           IF (OK) COORD = LIGNE
@@ -361,22 +385,27 @@
           IF (OK) LEVTYP = LIGNE
 
           OK = RPBLOC('SCAL',LIGNE)
-          IF (OK) READ(LIGNE,0010,END=900,ERR=900,IOSTAT=IO) CONST
+          IF (OK) READ(LIGNE,0010,END=910,ERR=910,IOSTAT=IO) CONST
 
           OK = RPBLOC('L',LIGNE)
-          IF (OK) READ(LIGNE,0005,END=900,ERR=900,IOSTAT=IO) LAY
+          IF (OK) READ(LIGNE,0005,END=910,ERR=910,IOSTAT=IO) LAY
 
           OK = RPBLOC('A',LIGNE)
-          IF (OK) READ(LIGNE,0010,END=900,ERR=900,IOSTAT=IO) SIGTOP
+          IF (OK) READ(LIGNE,0010,END=910,ERR=910,IOSTAT=IO) SIGTOP
 
           OK = RPBLOC('C',LIGNE)
-          IF (OK) READ(LIGNE,0010,END=900,ERR=900,IOSTAT=IO) PTOIT
+          IF (OK) READ(LIGNE,0010,END=910,ERR=910,IOSTAT=IO) PTOIT
 
           OK = RPBLOC('D',LIGNE)
-          IF (OK) READ(LIGNE,0010,END=900,ERR=900,IOSTAT=IO) PREF
+          IF (OK) READ(LIGNE,0010,END=910,ERR=910,IOSTAT=IO) PREF8
 
           OK = RPBLOC('I',LIGNE)
-          IF (OK) READ(LIGNE,0010,END=900,ERR=900,IOSTAT=IO) R
+          IF (OK) READ(LIGNE,0010,END=910,ERR=910,IOSTAT=IO) R0
+
+          IF (COORD == 'GEM4')                                 THEN
+              OK = RPBLOC('I2',LIGNE)
+              IF (OK) READ(LIGNE,0010, END=910,ERR=910,IOSTAT=IO ) R20
+          END IF
 
           DEF = RPBLOC('DEFAUT',LIGNE)
           IF (DEF .AND. LIGNE == 'AABB') AABB = .TRUE.
@@ -388,24 +417,38 @@
           CALL GETLIGN( 5,LIGNE,80,OK )
 
           IF (.NOT.OK)                                         THEN
-              GOTO 900
+              GOTO 910
           ELSE
-              READ( LIGNE, 5000, ERR=900,END=900,IOSTAT=IO )
-     +                     LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT,PREF,R
+              READ( LIGNE, 5000, ERR=910,END=910,IOSTAT=IO )
+     +                     LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT,PREF8,R0,R20
               CALL BURNF
           END IF
 
       END IF
+
+***    ACCOUNT FOR DEFAULT TREATMENT.
 
       IF (COORD.NE.' ') CALL LEADBLK( COORD )
       IF (COORD.EQ.' ') COORD = 'DEF'
 
       IF (AABB .AND. COORD == 'DEF') COORD = 'GEM'
 
+      IF (R0  > 0.) R  = R0
+      IF (R20 > 0.) R2 = R20
+
+      IF (PREF8 <= 0.0_8)                                      THEN
+          ! Reset PREF8 for GEM4. PREF is already set otherwise.
+          IF (COORD == 'GEM4') PREF8 = 100000.
+      ELSE IF (COORD == 'GEM4')                                THEN
+          PREF8 = 100000. ! This is the only allowed value.
+      ELSE
+          PREF = PREF8
+      END IF
+
       IF (PKTYP.EQ.'SQ')                                       THEN
 
-          IF (COORD.EQ.'DEF'  .OR.
-     +        COORD.EQ.'GEM2' .OR.
+!!!       IF (COORD.EQ.'DEF'  .OR.
+          IF (COORD.EQ.'GEM2' .OR.
      +        COORD.EQ.'GEM3')
      +        CALL SETPT( PTOIT,PREF,R )
 
@@ -423,79 +466,37 @@
 ***     ... TO GET ETA VALUES OF CENTRES
 ***     ... TO DETERMINE THE FIELD SIZE AND ASK FOR THE NECESSARY MEMORY.
 
-  050 MAXW = GETSIZ2( 1, KBUF,LEN,NWDS,KPAK, LEV,ILEV )
+  050 MAXW = GETSIZ2( IN1, KBUF,LEN,NWDS,KPAK, LEV,ILEV )
 
-      IF (MAXW.LE.  0   ) CALL                     XIT(' Vsinth ',-1 )
+      IF (MAXW.LE.  0   ) CALL                     XIT( VERBEX ,-1 )
       IF (ILEV.LT.  2     .OR.
-     +    ILEV.GT.MAXLEV) CALL                     XIT(' Vsinth ',-2 )
+     +    ILEV.GT.MAXLEV) CALL                     XIT( VERBEX ,-2 )
 
-      IF (PKTYP.EQ.'SQ' .AND. .NOT.AABB)                       THEN
+      IF (PKTYP.EQ.'SQ' .AND. .NOT.(TOCLU .OR. AABB))          THEN
 
-***        RETREIVE VKIND FROM GETSIZ2(1).
+***        ATTEMPT TO DEFINE VERTICAL LEVEL INFO FROM HY OR !! RECORDS.
 
-          VKIND = GETKIND()
+#         include "toc_gest_1.cdk"
 
-***        TRY LOOKING FOR A HY RECORD.
-***        TRY LOOKING FOR A HY RECORD.
+***        CHECK IF XIN HOLDS OTHER VALUES OF PTOIT,PREF AND R.
 
-          CALL LIRPT( 1 )
-          CALL GETPT( 1 , PTOIT0,PREF0,R0 )
-
-          IF (PTOIT0 == -1.)                                   THEN
-
-***            LITPT/GETPT did not WORK.
-***            TRY LOOKKING FOR A !! RECORD.
-
-              CALL LirToc( 1, TOC_NBR )
-
-              IF (TOC_NBR > 0)                                 THEN
-
-                  GRTYP = GETHIC('GRTYP',KBUF )
-
-                  IF (GRTYP /= 'Z')                            THEN
-                      IG10 = -1 ; IG20 = -1
-                  ELSE
-                      IG10  = GETHIGH('IG1',KBUF )
-                      IG20  = GETHIGH('IG2',KBUF )
-                  END IF
-
-                  CALL GETTOC( 1, 'VER',VKIND, IG10,IG20 )
-                  CALL GETTOC( 1, 'NK',TOC_NK, IG10,IG20 )
-                 
-              END IF
-
+          IF (PTOIT0.NE.-1.)                                   THEN
+              PTOIT = PTOIT0
+              PREF  = PREF0
+              R     = R0
           END IF
 
-          IF (VKIND /= 1    .AND.
-     +        VKIND /= 5    .AND.
-     +        VKIND /= 5001 .AND.
-     +        VKIND /= 5002 .AND.
-     +        VKIND /= 5003)                                   THEN
-              CALL                                 XIT(' Vsinth ',-17 )
-          ELSE IF (VKIND.EQ.1)                                 THEN
-              IF (COORD.EQ.'DEF')  COORD = 'GEM3'
-              IF (COORD.EQ.'PRES') CALL            XIT(' Vsinth ',-18 )
-          ELSE IF (VKIND.EQ.5.OR.
-     +             VKIND == 5001)                              THEN
-              IF (COORD.EQ.'DEF')  COORD = 'GEM2'
-              IF (COORD.NE.'GEM2') CALL            XIT(' Vsinth ',-18 )
-          ELSE IF (VKIND == 5002 .OR. VKIND == 5003)           THEN
-              IF (COORD.EQ.'DEF')  COORD = 'GEM4'
-              IF (COORD.NE.'GEM4') CALL            XIT(' Vsinth ',-18 )
-          END IF
+          TOCLU = .TRUE.
 
-          IF (VKIND == 5001)                                   THEN
-              CALL GETTOC( 1, 'PTOP' ,PTOIT8, IG10,IG20 )
-              CALL GETTOC( 1, 'PREF' ,PREF8 , IG10,IG20 )
-              CALL GETTOC( 1, 'RC_1' ,R8    , IG10,IG20 )
-              PTOIT0 = PTOIT8 ; PREF0 = PREF8 ; R0 = R8
-          END IF
+      ELSE IF (.NOT.AABB)                                      THEN
 
-      ELSE IF (COORD.EQ.'DEF')                                 THEN
-
-          COORD = 'ET15'
+          IF (COORD == 'DEF') COORD = 'ET15'
+          VKIND = 2
 
       END IF
+
+      CORR1 = LOG( 100. )
+      IF (COORD == 'GEM4') CORR2 = LOG( PREF8 ) ! Used in AABB-mode
 
 ***    IS THERE A TOP PRESSURE FILE AVAILABLE.
 
@@ -516,7 +517,7 @@
 
       IF (COORD(1:3).EQ.'GEM'  .AND.
      +   (LAY       .LT. 0     .OR.
-     +    LAY       .GT. 2 ) ) CALL                XIT(' Vsinth ',-15 )
+     +    LAY       .GT. 2 ) ) CALL                XIT( VERBEX ,-15 )
 
       KIND = KBUF(1)
       NOM  = KBUF(3)
@@ -531,8 +532,9 @@
       DO  L=1,ILEV
           CALL CONVPR( LEV(L), ETA(L), VK, -2 )
           IF (PKTYP.EQ.'SQ')                                   THEN
-              IF (VK      /= VKIND .and.
-     +            TOC_NBR <=   0 ) CALL            XIT(' Vsinth ',-18) 
+              IF (.NOT.AABB        .and.
+     +            VK      /= VKIND .and.
+     +            TOC_NBR <=   0 ) CALL            XIT( VERBEX ,-17) 
           ELSE IF (VK.EQ.2)                                    THEN
               ETA(L) = ETA(L) * 0.001
           END IF
@@ -553,27 +555,32 @@
 ***     CHECK THAT ETA IS MONOTONIC.
 
       CALL MONVERT( ETA,ILEV, TOP,BOT,INC, MONOTON )
+      HIVAL = ETA(TOP) ; LOVAL = ETA(BOT)
 
-      IF (.NOT.MONOTON) CALL                       XIT(' Vsinth ',-11)
+      IF (.NOT.MONOTON) CALL                       XIT( VERBEX ,-11)
+
+!!!   IF (.NOT.AABB .AND. COORD == 'GEM4' .AND. TOP > BOT)     THEN
+!!!       WRITE(6,6025) ; CALL                     XIT( VERBEX ,-25)
+!!!   END IF
 
       SPEC = (TYPE.EQ.'SPEC' .OR.
      +        TYPE.EQ.'FOUR' .OR.
      +        TYPE.EQ.'CMPL')
 
-      IF (SPEC .AND. COORD.NE.'SIG') CALL          XIT(' Vsinth ',-3 )
+      IF (SPEC .AND. COORD.NE.'SIG') CALL          XIT( VERBEX ,-3 )
 
       IF (.NOT.SPEC)                                           THEN
 
 ***        CONSIDER THE LNSP FIELD SIZE.
  
           MAXW2 = GETSIZ(  2, LBUF,LEN2,NWDS,LPAK )
-          IF (MAXW2.LE. 0  ) CALL                  XIT(' Vsinth ',-4 )
+          IF (MAXW2.LE. 0  ) CALL                  XIT( VERBEX ,-4 )
 
           CALL CMPLBL( 0,LBUF, 0,KBUF, OK ) 
 
           IF (.NOT.OK)                                         THEN
               CALL PRTLAB( KBUF ) ; CALL PRTLAB( LBUF )
-              CALL                                 XIT(' Vsinth ',-5 ) 
+              CALL                                 XIT( VERBEX ,-5 ) 
           END IF
 
           LEN  = MAX( LEN, LEN2  )
@@ -586,13 +593,13 @@
 ***            COMPARE FIRST TOPP WITH LNSP.
 
               MAXW4 = GETSIZ(  4, MBUF,LEN4,NWDS,MPAK )
-              IF (MAXW4.EQ. 0) CALL                XIT(' Vsinth ',-12)
+              IF (MAXW4.EQ. 0) CALL                XIT( VERBEX ,-12)
 
               CALL CMPLBL( 0,LBUF, 0,MBUF, OK ) 
 
               IF (.NOT.OK)                                     THEN
                   CALL PRTLAB( LBUF ) ; CALL PRTLAB( MBUF )
-                  CALL                             XIT(' Vsinth ',-13) 
+                  CALL                             XIT( VERBEX ,-13) 
               END IF
 
               LEN  = MAX( LEN, LEN4  )
@@ -609,46 +616,21 @@
       MEM = MAX( MAXW,ILEV*NWDS )+5*NWDS+2*LEN
 
       ALLOCATE( PRESS(NWDS),ACC(NWDS),GG(MAX( MAXW,NWDS*ILEV )), 
-     +          PS(NI,NJ),TOPP(NWDS),SIGB(NWDS*2),
-     +          IBUF(LEN),JBUF(LEN), STAT=IER )
+     +          PS(NI,NJ),TOPP(NWDS),SIGB(NWDS*2),CPRESL(NI,NJ),
+     +          NPRESL(NI,NJ),IBUF(LEN),JBUF(LEN), STAT=IER )
+      IF (IER /= 0) GOTO 924
       
       PSMBLN => PRESS ! MEMORY SHARING
 
       IF (AABB)                                                THEN
 
-***        AA and BB are read form namelist file 'aabb.nml'.
+***        AB and BB are read from namelist file 'aabb.nml'.
 
-          IUN = 0 ; IO = 0
-          IF (FNOM( IUN, 'aabb.nml', 'SQE+OLD', 0 ) == 0)       THEN
+#         define NSL ILEV
+#         include "set_a_b_from_AABB.cdk"
+#         undef  NSL
 
-              BIGBIN = -524288. ! -(2^^9)
-              ! BIGBIN = BIGBIN*BIGBIN*BIGBIN
-              A(:) = BIGBIN ; B(:) = BIGBIN
-
-              READ( IUN, NML=AABB_NML, END=920,ERR=920, IOSTAT=IO )
-              LL = 0 ; DO  L=1,MAXLEV+1
-                  IF (A(L) == BIGBIN .OR. B(L) == BIGBIN) EXIT
-                  LL = LL+1
-              END DO
-
-              ! Check the number of valid (A,B) pairs.
-
-              IF (LL /= ILEV .AND. LL /= ILEV-1)               THEN
-                  WRITE(6,6022) ILEV,LL
-                  CALL                         XIT(' Vsinth ',-22) 
-              ELSE IF (LL == ILEV-1)                           THEN
-                  A(LL+1) = 0. ; B(LL+1) = 1.0 ! Add surface values.
-              END IF
-
-              AB(1:ILEV) = A(1:ILEV) ; BB(1:ILEV) = B(1:ILEV)
-
-              IER = FCLOS( IUN )
-
-              WRITE(6,6110)
-
-          ELSE
-              GOTO 0920
-          END IF
+          AB(1:ILEV) = A(1:ILEV) ; BB(1:ILEV) = B(1:ILEV)
 
       ELSE IF (COORD(1:3).NE.'GEM')                            THEN
 
@@ -661,7 +643,7 @@
               ELSE IF (LEVTYP.EQ.'HALF')                       THEN
                   CALL BASCAL( JBUF, ETAB, ETA,ETA,ILEV,LAY )
               ELSE
-                  CALL                             XIT(' Vsinth ',-6 )
+                  CALL                             XIT( VERBEX ,-6 )
               END IF
 
           END IF
@@ -675,22 +657,6 @@
 
           IF (COORD.EQ.'GEM2' .OR.
      +        COORD.EQ.'GEM3' )                                THEN
-
-              IF (PKTYP.EQ.'SQ')                               THEN
-
-***                CHECK IF XIN HOLDS OTHER
-***                VALUES OF PTOIT,PREF AND R.
-
-                  CALL LIRPT( 1 ) 
-                  CALL GETPT( 1 , PTOIT0,PREF0,R0 )
-
-                  IF (PTOIT0.NE.-1.)                           THEN
-                      PTOIT = PTOIT0
-                      PREF  = PREF0
-                      R     = R0
-                  END IF
-                  
-              END IF
 
               IF (.NOT.MODETA .AND. COORD.EQ.'GEM3')           THEN
 
@@ -708,8 +674,8 @@
               CALL GENAB( AB,BB, ETA, PTOIT,PREF,R, ILEV )
 
               IF ((1.0-ETA(TOP)*PREF/PTOIT) .GT. 1.E-7)        THEN
-                  WRITE(6,6016) (PTOIT/PREF)-ETA(TOP)
-                  CALL                             XIT(' Vsinth ',-16)
+                  WRITE(6,6019) (PTOIT/PREF)-ETA(TOP)
+                  CALL                             XIT( VERBEX ,-19)
               END IF
 
           ELSE IF (COORD.EQ.'GEM')                             THEN
@@ -753,13 +719,14 @@
      +            NSETS.GT.0 .AND. MAXW.GT.0)                  THEN
                   CALL PRTLAB( JBUF )
                   WRITE(6,6250) NSETS
-                  CALL                             XIT(' Vsinth ', 0 )
+                  CALL                             XIT( VERBEX , 0 )
               ELSE IF (MAXW.EQ.0)                              THEN
-                  deallocate( PRESS,ACC,GG,PS,TOPP,SIGB,IBUF,JBUF )
+                  deallocate( PRESS,ACC,GG,PS,TOPP,SIGB,
+     +                        CPRESL,NPRESL,IBUF,JBUF )
                   GOTO 050
               ELSE
                   IF (NC.NE.0) WRITE(6,6007) CLNSP
-                  CALL                             XIT(' Vsinth ',-7 )
+                  CALL                             XIT( VERBEX ,-7 )
               END IF
           END IF
 
@@ -772,17 +739,22 @@
 
           TIM = JBUF(2)
 
-          DO I=1,NWDS
-             PRESS(I) = 100.*EXP( PSMBLN(I) )
-          END DO
+***        Check that LP really contains values that are
+***        representative of earth's LN( surface pressures )
+***        in units of hPa. 
 
-***        Check that PRESS really contains earth surface pressures in mB.
-
-          IF (CHECK.EQ.' ')                                THEN
-              CALL FMMM2( AMIN,AMAX,AMEAN, PRESS,NWDS )
+          IF (CHECK.EQ.' ')                                    THEN
+              CALL FMMM2( AMIN,AMAX,AMEAN,PSMBLN,NWDS )
+              AMIN = EXP( AMIN+CORR1 ) ! Convert to pressure in Pa.
+              AMAX = EXP( AMAX+CORR1 ) 
               IF (AMIN <  33000. .OR.
-     +            AMAX > 121200.) CALL             XIT(' Vsinth ',-21)
+     +            AMAX > 121200.) CALL             XIT( VERBEX ,-23)
               CHECK = 'OK'
+          END IF
+
+          PRESS = PSMBLN+CORR1 ! PRESS = ln( surface pressure in Pa )
+          IF (.NOT.(AABB .AND. COORD == 'GEM4'))               THEN
+              PRESS = EXP( PRESS ) ! PRESS = surface pressure in Pa.
           END IF
 
           IF (COORD.EQ.'GEM' .AND. FTOPP)                      THEN
@@ -794,18 +766,19 @@
               IF (.NOT.OK)                                     THEN
                   IF (MAXW.EQ.0)                               THEN
                       CALL                         PRECEDE( 2,1 )
-                      deallocate( PRESS,ACC,GG,PS,TOPP,SIGB,IBUF,JBUF )
+                      deallocate( PRESS,ACC,GG,PS,TOPP,SIGB,
+     +                            CPRESL,NPRESL,IBUF,JBUF )
                       GOTO 050
                   END IF
                   WRITE(6,6250) NSETS
-                  CALL                             XIT(' Vsinth ',-12)
+                  CALL                             XIT( VERBEX ,-12)
               END IF
 
               CALL CMPLBL( 0,IBUF, 0,MBUF, OK )
 
               IF (.NOT.OK)                                     THEN
                   CALL PRTLAB( IBUF ) ; CALL PRTLAB( MBUF )
-                  CALL                             XIT(' Vsinth ',-14) 
+                  CALL                             XIT( VERBEX ,-14) 
               END IF
 
               DO  I=1,NWDS
@@ -827,9 +800,16 @@
  
       IF (COORD(1:3).EQ.'GEM')                                 THEN
           IF (COORD == 'GEM4')                                 THEN
-              DO  I=1,NWDS
-                  PS(I,1) = PRESS(I)
-              END DO
+              IF (AABB)                                        THEN
+                  DO  I=1,NWDS ! PS contains LN( surface pressure in Pa)
+                      PS(I,1)  = PRESS(I)
+                      PRESS(I) = EXP( PRESS(I) )
+                  END DO
+              ELSE
+                  DO  I=1,NWDS ! PS contains surface pressure in Pa
+                      PS(I,1)  = PRESS(I)
+                  END DO
+              END IF
           ELSE
               DO  I=1,NWDS
                   IF (COORD.EQ.'GEM'  .OR.
@@ -837,65 +817,43 @@
      +                COORD.EQ.'GEM3')                        THEN
                       PLOCAL = AB(TOP) + BB(TOP) *  PRESS(I)
                   END IF
-                  SIGB(I) = PLOCAL / PRESS(I)
+                  SIGB(I+HIGH) = PLOCAL / PRESS(I)
               END DO
           END IF
       ELSE IF (SIGTOP.LT.0.)                                   THEN
           IF (LEVTYP.EQ.'FULL')                                THEN
               DO  I=1,NWDS
-                  SIGB(I) = 0.0
+                  SIGB(I+HIGH) = 0.0
               END DO
           ELSE
               DO  I=1,NWDS
-                  SIGB(I) = ( ETA(TOP) * ETA(TOP) ) / ETAB(TOP)
+                  SIGB(I+HIGH) = ( ETA(TOP) * ETA(TOP) ) / ETAB(TOP)
               END DO
           END IF
       ELSE
           DO  I=1,NWDS
-             SIGB(I) = SIGTOP
+             SIGB(I+HIGH) = SIGTOP
           END DO
       END IF
  
 ***    PROCESS ALL LEVELS AND ACCUMULATE SIGMA VERTICAL INTEGRAL.
  
-  150 CALL GETSET2( 1, GG,LEV,ILEVG, IBUF,MAXW,OK )
+  150 CALL GETSET2( IN1, GG,LEV,ILEVG, IBUF,MAXW,OK )
 
       IF (.NOT.OK)                                             THEN
           IF (NSETS.GT.0 .AND. MAXW.GT.0)                      THEN
               CALL PRTLAB( IBUF )
-              IF (.NOT.SPEC) CALL                  XIT(' Vsinth ',-8 )
-              IF (     SPEC) CALL                  XIT(' Vsinth ', 0 )
+              IF (.NOT.SPEC) CALL                  XIT( VERBEX ,-8 )
+              IF (     SPEC) CALL                  XIT( VERBEX , 0 )
           ELSE IF (MAXW.EQ.0)                                  THEN
-              deallocate( PRESS,ACC,GG,PS,TOPP,SIGB,IBUF,JBUF )
+              deallocate( PRESS,ACC,GG,PS,TOPP,SIGB,
+     +                    CPRESL,NPRESL,IBUF,JBUF )
               IF (.NOT.SPEC) CALL                  PRECEDE( 2,1 )
               IF (.NOT.SPEC .AND. FTOPP) CALL      PRECEDE( 4,1 )
               GOTO 050
           ELSE
-              CALL                                 XIT(' Vsinth ',-9 )
+              CALL                                 XIT( VERBEX ,-9 )
           END IF
-      END IF
-
-      IF (PKTYP == 'SQ' .AND. TOC_NBR > 0)                     THEN
-
-          IG1   = GETHIGH('IG1' ,IBUF )
-          IG2   = GETHIGH('IG2' ,IBUF )
-
-          IF (GRTYP == 'Z')
-     +        CALL GETTOC( 1, 'VER',VKIND, IG1,IG2 )
-
-          IF (VKIND == 5001 .and. GRTYP == 'Z')                THEN
-              CALL GETTOC( 1, 'PTOP' ,PTOIT8, IG1,IG2 )
-              CALL GETTOC( 1, 'PREF' ,PREF8 , IG1,IG2 )
-              CALL GETTOC( 1, 'RC_1' ,R8    , IG1,IG2 )
-              PTOIT0 = PTOIT8 ; PREF0 = PREF8 ; R0 = R8
-              IF (PTOIT0 /= PTOIT .or.
-     +            PREF0  /= PREF  .or.
-     +            R0     /= R     )                            THEN
-                  WRITE(6,6019)
-                  CALL                             XIT(' Vsinth ',-19) 
-              END IF
-          END IF
-
       END IF
 
       IF (IBUF(1).NE.KIND .OR.
@@ -903,13 +861,17 @@
      +    IBUF(3).NE.NOM  .OR.
      +    ILEVG  .NE.ILEV )  GOTO 150
 
+***    CHECK FOR (VERTICAL) REFERENCE RECORD CHANGES.
+
+#     include "toc_gest_2.cdk"
+
       IF (.NOT.SPEC)                                           THEN
 
           CALL CMPLBL( 0,IBUF, 0,JBUF, OK )
 
           IF (.NOT.OK)                                         THEN
               CALL PRTLAB( IBUF ) ; CALL PRTLAB( JBUF )
-              CALL                                 XIT(' Vsinth ',-5 )
+              CALL                                 XIT( VERBEX ,-5 )
           END IF
 
       END IF
@@ -918,19 +880,50 @@
 
 ***        COMPUTE LOCAL PRESSURE ON ALL MODEL LEVELS.
 
-          CALL LoPTOC( pressure, LEV(1:ILEV), PS, IG1,IG2, IN_LNP=.false. )
+          IF (AABB)                                            THEN
+
+              IF (.not.ASSOCIATED( pressure ))   THEN
+                 allocate( pressure( NI,NJ,ILEV ), STAT=IER )
+                 IF (IER /= 0) GOTO 924
+              END IF
+
+              L1 = 0    ; IF (LL == ILEV-1 .AND. INC < 0) L1 = 1
+              L2 = ILEV ; IF (LL == ILEV-1 .AND. INC < 0) L2 = 1
+
+              DO  L=1,LL
+                 ! Calculate A(L)+B(L)*LN(PS/PREF)
+                 pressure(:,:,L+L1) =
+     +                A(L)+B(L)*(PS(:,:)-CORR2)
+              END DO
+
+              ! Do we need to add the surface layer values ?
+
+              IF (LL == ILEV-1)                         THEN
+                 pressure(:,:,L2) =  PS(:,:)
+              END IF
+
+          ELSE
+
+              CALL LoPTOC( pressure, LEV(1:ILEV), PS, IG1,IG2 )
+
+          END IF
+
+          ! Go from LN( P ) to P.
+          pressure = EXP( pressure )
 
           K = 0
           DO  J=1,NJ
               DO  I=1,NI
                   K = K+1
-                  SIGB(K) = pressure(I,J,TOP) / PRESS(K)
+                  SIGB(K+HIGH) = pressure(I,J,TOP) / PRESS(K)
               END DO
           END DO
 
       END IF
 
 ***    INTEGRATE FROM TOP TO BOTTOM.
+
+      IF (COORD == 'GEM4') CPRESL(:,:) = pressure(:,:,TOP)
 
       DO  200 L=TOP,BOT,INC
 
@@ -943,6 +936,8 @@
 ***                OR ARITHMETIC MEANS OF THE ADJACENT MODEL LEVELS.
 ***                NOTE THAT UNDER THE HYDROSTATIC HYPOTHESIS, THE
 ***                FORMER IS EQUIVALENT TO HEIGHT ARITHMETIC MEANS.
+
+                  IF (COORD == 'GEM4') NPRESL(:,:) = pressure(:,:,L+INC)
 
                   I = 0
                   DO  J=1,NJ
@@ -957,8 +952,8 @@
                           NPRES = AB(L+INC) + BB(L+INC) * PRESS(I)
                       ELSE
      +                IF (COORD.EQ.'GEM4')                     THEN
-                          CPRES = pressure(K,J,L)
-                          NPRES = pressure(K,J,L+INC)
+                          CPRES = CPRESL(K,J)
+                          NPRES = NPRESL(K,J)
                       END IF
 
 
@@ -970,6 +965,8 @@
 
                   END DO
                   END DO
+
+                  IF (COORD == 'GEM4') CPRESL = NPRESL
 
               ELSE
 
@@ -985,7 +982,7 @@
                           PLOCAL = AB(L) + BB(L) * PRESS(I)
                       ELSE
      +                IF (COORD.EQ.'GEM4')                     THEN
-                          PLOCAL = pressure(K,J,BOT)
+                          PLOCAL = CPRESL(K,J)
                       END IF
                       SIGB(I+LOW) = PLOCAL / PRESS(I)
                   END DO
@@ -1010,7 +1007,12 @@
  
 ***    PUT THE RESULT ONTO FILE XOUT.
  
-      IBUF(4) = LEVS
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
+      ELSE
+          IBUF(4) = LEVS
+      END IF
+
       CALL PUTFLD2( 3, ACC, IBUF,MAXW )
 
       NSETS = NSETS+1
@@ -1018,25 +1020,31 @@
  
 ***    E.O.F. ON INPUT.
  
- 0900 CALL                                         XIT(' Vsinth ',-10)
+ 0910 IF (IO.NE.0) WRITE(6,6010) IO
+      CALL                                         XIT( VERBEX ,-10)
 
  0920 IF (IO.NE.0) WRITE(6,6020) IO
-      CALL                                         XIT(' Vsinth ',-20 )
+      CALL                                         XIT( VERBEX ,-20)
+ 0924 CALL                                         XIT( VERBEX ,-24)
 *---------------------------------------------------------------------
 
  0004 FORMAT(A4)
  0005 FORMAT(BN,I5)
  0010 FORMAT(BN,E10.0)
 
- 5000 FORMAT(11X,A4,E10.0,I5,1X,A4,E5.0,3E10.0)
+ 5000 FORMAT(11X,A4,E10.0,I5,1X,A4,E5.0,4E10.0)
 
  6007 FORMAT('0 Found ',A,' while expecting LP or LNSP')
- 6016 FORMAT('  (P.lid/P.ref)-eta(top)=',E12.4)
- 6019 FORMAT('  More that one input vertical coordinate.'/) 
+ 6010 FORMAT(' Vsinth reports I/O error number ',I5/)
+ 6016 FORMAT('  Unsupported vertical coordinate in XIN, VKIND =',I9/)
+ 6019 FORMAT('  (P.lid/P.ref)-eta(top)=',E12.4)
  6020 FORMAT('  Unable to read A,B in aabb.nml namelist file,',
      +       '  error no.',I5/)
- 6022 FORMAT(' Wrong number of AA,BB entries in AABB namelist.',
+ 6021 FORMAT('  More that one input vertical coordinate.'/) 
+ 6022 FORMAT(' Wrong number of A,B entries in AABB namelist.',
      +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+!6025 FORMAT(' Vertical levels need to be stored from the TOP to',
+!    +       ' the surface.'/' Please sort XIN with FSTTRI...'/)
 
  6100 FORMAT('  Levtyp = ',A4,', const = ',1P,E12.4,
      +       ', lay = ',0P,I5,', coord=',1X,A4,', sigtop =',F15.10,

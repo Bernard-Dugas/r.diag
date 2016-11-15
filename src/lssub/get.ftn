@@ -24,6 +24,17 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: get.ftn,v $
+C     Revision 3.97  2016/10/26 15:32  dugas
+C     - La variable HEAD passe de 28 a 32
+C     - Modifications syntaxiques de type F77 --> F90
+C     - Ajouter les arguments RKIND,HIVAL et LOVAL a GETMSET3 qui utilise
+C       maintenant GETSAMPLZ pour trouver la taille des echantillons
+C     - Ajouter RKIND aux variables traitees par GETHIGH
+C     - Ajouter la routine GETHIR pour recuperer des variables reelles
+C       dans la section haute de IBUF (HIVAL et LOVAL en ce moment)
+C     - Ajouter la routine GETSAMPLZ qui determine la taille des echantillons
+C       de moyennes temporelles selon les differents formats supportes
+C
 C     Revision 3.96  2014/12/03 23:24:37  dugas
 C     Enlever les enonces EQUIVALENCE.
 C
@@ -2045,8 +2056,8 @@ C     END IF
  6012 FORMAT(' Getmset2: Stripping CHAR and LABL records from input.')
 
       END
-      SUBROUTINE getmset3 (NF, G, SET,NIP3,NSET, LEV,VARIAB,STEP,
-     +                            IBUF,MAXPK,OK )
+      SUBROUTINE getmset3 (NF, G, SET,NIP3,RKIND,HIVAL,LOVAL,NSET,
+     +                            LEV,VARIAB,STEP, IBUF,MAXPK,OK )
 
 ***    Juin 2009 - B.Dugas, RPN.
 
@@ -2062,23 +2073,30 @@ C     END IF
 
       INTEGER,    PARAMETER :: HEAD = taille_entete
 
-      REAL        G(*),GR8
-      LOGICAL     OK,IO64B,MVALUE,LVAL
+***    Arguments.
+
+      LOGICAL     OK
+      CHARACTER * ( * ) VARIAB(*)
+      INTEGER     NF,NSET,MAXPK
+      REAL        G(*),HIVAL(*),LOVAL(*)
+      INTEGER     SET(0:*),NIP3(*),RKIND(*),LEV(*),IBUF(*),STEP(*)
+      
+***    Variables locales.
+
+      REAL        GR8
+      LOGICAL     IO64B,MVALUE,LVAL
       REAL(8)     G8,EPSILON,MISFLAG
-      CHARACTER*4 NOM,KIND,RECABT,HNEWL
-      INTEGER     NF,NSET,MAXPK,JBUF(HEAD),NIP3(*)
-      INTEGER     SET(0:*),LEV(*),IBUF(*),STEP(*)
+      CHARACTER(4) NOM,KIND,RECABT,HNEWL
+      INTEGER     JBUF(HEAD)
       INTEGER     POSIT,I,J,K,NWDS,NR,TIME,NIV,NLEV
       CHARACTER   NIV_S*15,MESSAG*10,ZHOLD*80
 
-      CHARACTER*4,SAVE :: NEWL = 'NEWL'
-      LOGICAL,    SAVE :: NEW_LEV = .FALSE.,PP_LEV=.FALSE.
+      CHARACTER(4),SAVE :: NEWL = 'NEWL'
+      LOGICAL,     SAVE :: NEW_LEV = .FALSE.,PP_LEV=.FALSE.
       INTEGER,    DIMENSION(:), ALLOCATABLE :: INT_LEV
       INTEGER,    DIMENSION(:), ALLOCATABLE, SAVE :: SAV_LEV
 
-      CHARACTER * ( * ) VARIAB(*)
-
-      CHARACTER(LEN=15) :: EXT_SLEV,INT_SLEV
+      CHARACTER(15) :: EXT_SLEV,INT_SLEV
 
       POINTER   ( PG,G8(*) ),( PGR8,GR8(*) )
 
@@ -2092,12 +2110,12 @@ C     END IF
 
 #     include    "zlabel.cdk"
 
-      LOGICAL,    EXTERNAL :: GETIO64
-      INTEGER,    EXTERNAL :: GETHIGH
-      CHARACTER*4,EXTERNAL :: GETHIC
-      EXTERNAL    GETSET2,GETFLD2,
-     +            GETRABT,XIT,CMPLBL,RECGET,
-     +            GET_IP1_STRING
+      CHARACTER(4),EXTERNAL :: GETHIC 
+      LOGICAL,     EXTERNAL :: GETIO64
+      INTEGER,     EXTERNAL :: GETHIGH,GETSAMPLZ
+      EXTERNAL     GETSET2,GETFLD2,
+     +             GETRABT,XIT,CMPLBL,RECGET,
+     +             GET_IP1_STRING
 
       SAVE        MESSAG
       DATA        MESSAG / 'AUCUN' /
@@ -2194,8 +2212,6 @@ C     END IF
               WRITE(KIND,0004) IBUF(1)
               WRITE(NOM ,0004) IBUF(3)
 
-              NIP3(I) = MAX( 1, GETHIGH( 'IP3',IBUF ) )
-
               IF (KIND.EQ.'LABL' .OR. KIND.EQ.'CHAR')          THEN
                   IF (INFO)                                    THEN
                       IF (MESSAG.NE.'deja donne')              THEN
@@ -2208,6 +2224,9 @@ C     END IF
                   END DO
                   GOTO 200
               END IF
+
+              ! Determiner le nombre d'echantillons NIP3
+              NIP3(I) = GETSAMPLZ( RKIND(I),HIVAL(I),LOVAL(I), IBUF )
 
 ***            COMPARER LES NIVEAUX LUS ET SPECIFIE EN ENTREE.
 
@@ -2327,7 +2346,10 @@ C     END IF
      +                KIND,TIME,NOM,NIV, IBUF,MAXPK,OK )
                   END IF
 
-                  NIP3(I) = MAX( 1, GETHIGH( 'IP3',IBUF ) )
+                  ! Determiner le nombre d'echantillons NIP3
+                  IF (J == SET(I-1)+1)
+     +            NIP3(I) = GETSAMPLZ( RKIND(I),HIVAL(I),LOVAL(I),IBUF )
+                      
 
                   ZLABEL = ZHOLD
 
@@ -3134,11 +3156,9 @@ C 100 IER = MEMOIRC( 0 )
       COMMON     /MAXWRD/  MAXWRD0
       COMMON     /MAXSWRD/ MAXSWRD0
 
-      CHARACTER*4 ETIK1,ETIK2,ETIK3,ETIK4
-      INTEGER     GETHIGH
-      CHARACTER*4 GETYP,GETHIC
+      CHARACTER(4) ETIK1,ETIK2,ETIK3,ETIK4
+      CHARACTER(4),EXTERNAL :: GETYP,GETHIC
       EXTERNAL    FILEV2,LBLCHK,CMPLBL,
-     +            GETYP,GETHIGH,GETHIC,
      +            SUIVANT,PRECEDE,XIT
 
       DATA        ETIK1,ETIK2 / ' ',' ' /
@@ -3701,7 +3721,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 ***    Variables locales.
 
       INTEGER           VALUE
-      CHARACTER*8       NOM
+      CHARACTER(8)      NOM
 
       LOGICAL                    info
       COMMON           /ZZVERBO/ info
@@ -3718,38 +3738,44 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
 ***    On connait ce nom ?
 
-      IF (NOM.EQ.'LEN')                                        THEN
-          VALUE = IBUF(11)
-      ELSE IF (NOM.EQ.'DEET')                                  THEN
-          VALUE = IBUF(12)
-      ELSE IF (NOM.EQ.'NPAS')                                  THEN
-          VALUE = IBUF(13)
-      ELSE IF (NOM.EQ.'DATEO')                                 THEN
-          VALUE = IBUF(14)
-      ELSE IF (NOM.EQ.'IG1')                                   THEN
-          VALUE = IBUF(15)
-      ELSE IF (NOM.EQ.'IG2')                                   THEN
-          VALUE = IBUF(16)
-      ELSE IF (NOM.EQ.'IG3')                                   THEN
-          VALUE = IBUF(17)
-      ELSE IF (NOM.EQ.'IG4')                                   THEN
-          VALUE = IBUF(18)
-      ELSE IF (NOM.EQ.'DATYP')                                 THEN
-          VALUE = IBITS( IBUF(19), 0, 9 )
-      ELSE IF (NOM.EQ.'DIMSUP1')                               THEN
-          VALUE = IBITS( IBUF(19), 9,13 ) + 1
-      ELSE IF (NOM.EQ.'DIMSUP2')                               THEN
-          VALUE = IBITS( IBUF(19),22,10 ) + 1
-      ELSE IF (NOM.EQ.'IP1')                                   THEN
-          VALUE = IBUF(20)
-      ELSE IF (NOM.EQ.'IP2')                                   THEN
-          VALUE = IBUF(21)
-      ELSE IF (NOM.EQ.'IP3')                                   THEN
-          VALUE = IBUF(22)
-      ELSE
-          IF (INFO) WRITE(6,6001) NOM
-          CALL                                     XIT(' Gethigh',-1 )
-      END IF
+      SELECT CASE ( NOM )
+
+         CASE('LEN')
+            VALUE = IBUF(11)
+         CASE('DEET')
+            VALUE = IBUF(12)
+         CASE('NPAS')
+            VALUE = IBUF(13)
+         CASE('DATEO')
+            VALUE = IBUF(14)
+         CASE('IG1')
+            VALUE = IBUF(15)
+         CASE('IG2')
+            VALUE = IBUF(16)
+         CASE('IG3')
+            VALUE = IBUF(17)
+         CASE('IG4')
+            VALUE = IBUF(18)
+         CASE('DATYP')
+            VALUE = IBITS( IBUF(19), 0, 9 )
+         CASE('DIMSUP1')
+            VALUE = IBITS( IBUF(19), 9,13 ) + 1
+         CASE('DIMSUP2')
+            VALUE = IBITS( IBUF(19),22,10 ) + 1
+         CASE('IP1')
+            VALUE = IBUF(20)
+         CASE('IP2')
+            VALUE = IBUF(21)
+         CASE('IP3')
+            VALUE = IBUF(22)
+         CASE('RKIND')
+            VALUE = IBUF(29)
+
+         CASE DEFAULT
+            IF (INFO) WRITE(6,6001) NOM
+            CALL                                   XIT(' Gethigh',-1 )
+
+      END SELECT
 
       gethigh = VALUE
 
@@ -3759,7 +3785,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
  6001 FORMAT(' Gethigh: unknown integer parameter name ',A)
 
       END
-      CHARACTER*4 FUNCTION gethic (NAME,IBUF)
+      CHARACTER(4) FUNCTION gethic (NAME,IBUF)
 
       IMPLICIT          none
 
@@ -3772,7 +3798,8 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
 ***    Variables locales.
 
-      CHARACTER*4       NOM*8,VALUE,VTEMP
+      CHARACTER(8)      NOM
+      CHARACTER(4)      VALUE,VTEMP
 
       LOGICAL                    info
       COMMON           /ZZVERBO/ info
@@ -3789,29 +3816,34 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
 ***    On connait ce nom ?
 
-      IF (NOM.EQ.'GRTYP'  .OR.
-     +    NOM.EQ.'TYPVAR'     )                                THEN
-          WRITE(vtemp,0004) IBUF(9)
-          IF (NOM.EQ.'TYPVAR') VALUE = vtemp(1:2)
-          IF (NOM.EQ.'GRTYP' ) VALUE = vtemp(3:3)
-      ELSE IF (NOM.EQ.'PKTYP')                                 THEN
-          WRITE(VALUE,0004) IBUF(10)
-      ELSE IF (NOM.EQ.'NEWL')                                  THEN
-          WRITE(VALUE,0004) IBUF(23)
-      ELSE IF (NOM.EQ.'NAME')                                  THEN
-          WRITE(VALUE,0004) IBUF(24)
-      ELSE IF (NOM.EQ.'ETIK1')                                 THEN
-          WRITE(VALUE,0004) IBUF(25)
-      ELSE IF (NOM.EQ.'ETIK2')                                 THEN
-          WRITE(VALUE,0004) IBUF(26)
-      ELSE IF (NOM.EQ.'ETIK3')                                 THEN
-          WRITE(VALUE,0004) IBUF(27)
-      ELSE IF (NOM.EQ.'ETIK4')                                 THEN
-          WRITE(VALUE,0004) IBUF(28)
-      ELSE
-          IF (INFO) WRITE(6,6001) NOM
-          CALL                                     XIT(' Gethic ',-1 )
-      END IF
+      SELECT CASE ( NOM )
+
+         CASE('GRTYP')
+            WRITE(vtemp,0004) IBUF(9)
+            VALUE = vtemp(3:3)
+         CASE('TYPVAR')
+            WRITE(vtemp,0004) IBUF(9)
+            VALUE = vtemp(1:2)
+         CASE('PKTYP')
+            WRITE(VALUE,0004) IBUF(10)
+         CASE('NEWL')
+            WRITE(VALUE,0004) IBUF(23)
+         CASE('NAME')
+            WRITE(VALUE,0004) IBUF(24)
+         CASE('ETIK1')
+            WRITE(VALUE,0004) IBUF(25)
+         CASE('ETIK2')
+            WRITE(VALUE,0004) IBUF(26)
+         CASE('ETIK3')
+            WRITE(VALUE,0004) IBUF(27)
+         CASE('ETIK4')
+            WRITE(VALUE,0004) IBUF(28)
+
+         CASE DEFAULT
+            IF (INFO) WRITE(6,6001) NOM
+            CALL                                   XIT(' Gethic ',-1 )
+
+      END SELECT
 
       gethic = VALUE
 
@@ -3822,3 +3854,198 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
  6001 FORMAT(' Gethic: unknown character parameter name ',A)
 
       END
+      REAL FUNCTION gethir (NAME,IBUF)
+
+      IMPLICIT          none
+
+***    Cette routine lit les mots qui ont ete
+***    places dans la section haute de IBUF
+***    et les retourne en format REAL.
+
+      INTEGER           IBUF(taille_entete)
+      CHARACTER * ( * ) NAME
+
+***    Variables locales.
+
+      CHARACTER(8)      NOM
+      REAL              VALUE
+
+      LOGICAL                    info
+      COMMON           /ZZVERBO/ info
+
+      EXTERNAL          LOW2UP,XIT
+
+*------------------------------------------------------------------------------
+      VALUE = 0.0
+
+***    Convertir name en majuscules.
+
+      nom = NAME
+      call LOW2UP( nom,nom )
+
+***    On connait ce nom ?
+
+      SELECT CASE ( NOM )
+
+         CASE('HIVAL')
+            VALUE = TRANSFER( IBUF(30), 1. )
+         CASE('LOVAL')
+            VALUE = TRANSFER( IBUF(31), 1. )
+
+         CASE DEFAULT
+            IF (INFO) WRITE(6,6001) NOM
+            CALL                                   XIT(' Gethir ',-1 )
+
+      END SELECT
+
+      gethir = VALUE
+
+      RETURN
+*------------------------------------------------------------------------------
+
+ 6001 FORMAT(' Gethir: unknown character parameter name ',A)
+
+      END
+      INTEGER FUNCTION GETSAMPLZ( RKIND,HIVAL,LOVAL, IBUF )
+
+      ! Objet:
+      ! Cherche a determiner le nombre d'echantillons qui a pu
+      !  etre code dans IP2/IP3, selon l'usage qui est fait des
+      !  IP1/IP2/IP3, i.e. avec ou sans interval verticaux ou
+      !  de temps, en tenant aussi compte de la presence des
+      !  codage OLD-STYLE ou bien NEW-STYLE.
+
+      ! Notez que les limites des codages utilises ici
+      ! sont les suivantes:
+      !  254903968   <=  IP <= 267486880 pour KIND_SAMPLES
+      ! 0.100000E+07 >= VIP >=    0.0
+      !  171017888   <=  IP <= 183500800 pour KIND_HOURS
+
+      ! Les valeurs codees < 171017888 ne representent
+      ! donc ni des heures ni des nombres d'echantillons.
+      
+      ! Auteur: B. Dugas (UQAM/RPN)
+
+      ! Revision: version original, septembre 2016. 
+
+      use          diag_convert_ip123, only : KIND_HOURS, KIND_SAMPLES
+
+      IMPLICIT     none
+
+      ! Arguments
+
+      INTEGER,     INTENT(IN)  :: IBUF(*)
+      INTEGER,     INTENT(OUT) :: RKIND
+      REAL,        INTENT(OUT) :: HIVAL,LOVAL
+
+      ! Variables locales
+
+      REAL         VIP2,VIP3
+      REAL(8)      TIME_RANGE,NPASP1_DEET
+      INTEGER      IP1,IP2,IP3, NPAS,DEET,IKIND, NSAMPZ
+      CHARACTER(4) NULS,PKTYP
+
+      CHARACTER(4),EXTERNAL :: GETHIC
+      INTEGER,     EXTERNAL :: GETHIGH
+      REAL(4),     EXTERNAL :: GETHIR
+
+!------------------------------------------------------------------------------
+      NSAMPZ = 1 ! Initialiser au cas on le decodage ne donne rien
+
+      PKTYP = GETHIC('PKTYP',IBUF ) ; PKTYP(3:4) = '  '
+
+      IF (PKTYP /= 'SQ')                                       THEN
+          ! Comparer IBUF(2) a la plus petite valeur
+          ! associee a un "DATE-TIME STAMP group" valide.
+          IF (IBUF(2) < 01 01 00 01 0) NSAMPZ = IBUF(2)
+          RETURN
+      END IF
+
+      ! Verifier si on a un interval temporel OU VERTICAL encode
+      !  dans ibuf et retoruner les valeurs correspondantes
+      RKIND = GETHIGH('RKIND',IBUF )
+      HIVAL = GETHIR ('HIVAL',IBUF )
+      LOVAL = GETHIR ('LOVAL',IBUF )
+
+      DEET = GETHIGH('DEET',IBUF ) ; NPAS = GETHIGH('NPAS',IBUF )
+
+      NPASP1_DEET =  (NPAS+1)*DBLE( DEET )
+
+      IF (RKIND == KIND_HOURS)                                 THEN
+
+          ! Interval de temps.
+          !  On suppose que c'est le debut d'un interval deja
+          !  moyenne lorsque (HIVAL-LOVAL) corresponds a
+          !  (NPAS+1)*DEET a la seconde pres.
+
+          TIME_RANGE = (HIVAL-DBLE( LOVAL ))*3600.0
+
+          IF (ABS( NPASP1_DEET-TIME_RANGE ) < 1._8) NSAMPZ = NPAS+1
+
+      ELSE IF (RKIND /= -1)                                    THEN
+
+          ! Interval de coordonee verticale.
+          !  Est-ce que IP2 est deja code en heures
+          !  ou bien en un nombre d'echantillons ?
+
+          IP2 = GETHIGH( 'IP2',IBUF )
+
+          IF (IP2 <= 32767 .AND. IP2 == NPAS+1)                THEN
+
+              ! Non. Codage de type OLD-STYLE. On suppose
+              ! qu'on a mis le nombre d'echantillon dans IP2
+              ! lorsque IP2 = NPAS+1
+
+              NSAMPZ = IP2
+
+          ELSE ! Codage NEW-STYLE. Decoder IP2
+
+              CALL Diag_CONVIP_plus( IP2,VIP2,IKIND,-2,NULS,.FALSE. )
+
+              IF (IKIND == KIND_SAMPLES)                       THEN
+
+                  ! IP2 est deja code en nombre d'echantillons
+                  NSAMPZ = NINT( VIP2 )
+
+              ELSE IF (IKIND == KIND_HOURS)                    THEN
+
+                  IF (ABS( NPASP1_DEET-VIP2*3600._8 ) < 1._8)  THEN
+                      ! IP2 est encode en heures et cette derniere
+                      !  valeur est egale a (NPAS+1)*DEET/3600
+                      NSAMPZ = NPAS+1
+                  END IF
+
+              END IF
+
+          END IF
+
+      ELSE ! IP3 est "libre". On suppose qu'il contient alors
+           !  un nombre d'echantillons, possiblement code en
+           !  mode KIND_SAMPLES. Sinon, on ignore tout codage
+
+          IP3 = MAX( 1, GETHIGH( 'IP3',IBUF ) )
+
+          IF (IP3 > 32767)                                     THEN
+
+              CALL Diag_CONVIP_plus( IP3,VIP3,IKIND,-2,NULS,.FALSE. )
+
+              IF (IKIND == KIND_SAMPLES)                       THEN
+                  NSAMPZ = NINT( VIP3 )
+              ELSE
+                  NSAMPZ = IP3 ! Mode compatibilite arriere (partie 1)
+              END IF
+
+          ELSE ! Pas de codage. On prends IP3 tel quel
+
+              NSAMPZ = IP3 ! Mode compatibilite arriere (partie 2)
+
+          END IF
+
+      END IF
+
+      GETSAMPLZ = NSAMPZ
+
+      RETURN
+!------------------------------------------------------------------------------
+
+      END FUNCTION GETSAMPLZ

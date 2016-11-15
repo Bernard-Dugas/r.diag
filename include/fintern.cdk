@@ -1,4 +1,11 @@
+# if defined (CDK_DOC)
 !copyright (C) 2001  MSC-RPN COMM  %%%RPNPHY%%%
+!
+! FINTERN.CDK
+! Revision 3.3 2016/10/29 21:14  dugas
+! - Ajouter les definitions des fonctions
+!   FOEWF,FESIF,FQSMXX,FESMXX,FDLESMXX
+! - Modifier les definitios des fonctions FOEW,FESI
 !
 !   DEFINITION DES FONCTIONS THERMODYNAMIQUES DE BASE
 !   POUR LES CONSTANTES, UTILISER LE COMMON /CTESDYN/
@@ -18,22 +25,24 @@
 !          * REVISION 06 - AVR 2002 - A. PLANTE
 !                          AJOUT DES NOUVELLES FONCTIONS FOTTVH ET FOTVHT
 !
+# endif
 !     FONCTION DE TENSION DE VAPEUR SATURANTE (TETENS) - EW OU EI SELON TT
-      FOEW(TTT) = 610.78D0*DEXP( DMIN1(DSIGN(17.269D0, \
-       DBLE(TTT)-DBLE(TRPL)),DSIGN \
-       (21.875D0,DBLE(TTT)-DBLE(TRPL)))*DABS(DBLE(TTT)-DBLE(TRPL))/ \
-       (DBLE(TTT)-35.86D0+DMAX1(0.D0,DSIGN \
-       (28.2D0,DBLE(TRPL)-DBLE(TTT)))))
+      foewf(ttt) = dmin1(dsign(ttns3w,Dble(ttt)-Dble(trpl)),dsign \
+       (ttns3i,Dble(ttt)-Dble(trpl)))*dabs(Dble(ttt)-Dble(trpl))/ \
+       (Dble(ttt)-ttns4w+dmax1(0.d0,dsign(ttns4w-ttns4i,Dble(trpl)-Dble(ttt))))
+      fomult(ddd)=ttns1*ddd
+      foew(ttt) = fomult(dexp(foewf(ttt)))
 !
 !     FONCTION CALCULANT LA DERIVEE SELON T DE  LN EW (OU LN EI)
-      FODLE(TTT)=(4097.93D0+DMAX1(0.D0,DSIGN(1709.88D0, \
-       DBLE(TRPL)-DBLE(TTT)))) \
-       /((DBLE(TTT)-35.86D0+DMAX1(0.D0,DSIGN(28.2D0, \
-       DBLE(TRPL)-DBLE(TTT))))*(DBLE(TTT)-35.86D0+DMAX1(0.D0 \
-       ,DSIGN(28.2D0,DBLE(TRPL)-DBLE(TTT)))))
+      fodle(ttt)=\
+      (4097.93d0+dmax1(0.d0,dsign(1709.88d0,Dble(trpl)-Dble(ttt))))\
+       /((Dble(ttt)-ttns4w+dmax1(0.d0,dsign(ttns4w-ttns4i,\
+       Dble(trpl)-Dble(ttt))))*(Dble(ttt)-ttns4w+dmax1(0.d0,\
+       dsign(ttns4w-ttns4i,Dble(trpl)-Dble(ttt)))))
 !
 !     FONCTION CALCULANT L'HUMIDITE SPECIFIQUE SATURANTE (QSAT)
       FOQST(TTT,PRS) = DBLE(EPS1)/(DMAX1(1.D0,DBLE(PRS)/FOEW(TTT))-DBLE(EPS2))
+      foqstx(prs,ddd) = Dble(eps1)/(dmax1(1.d0,Dble(prs)/ ddd )-Dble(eps2))
 !
 !     FONCTION CALCULANT LA DERIVEE DE QSAT SELON T
       FODQS(QST,TTT)=DBLE(QST)*(1.D0+DBLE(DELTA)*DBLE(QST))*FODLE(TTT)
@@ -62,6 +71,7 @@
 !     FONCTION CALCULANT HUM REL DE HUM SP (QQQ), TEMP (TTT) ET PRES (PRS)
 !     HR = E/ESAT
       FOHR(QQQ,TTT,PRS) = DMIN1(DBLE(PRS),FOEFQ(QQQ,PRS)) / FOEW(TTT)
+      fohrx(qqq,prs,ddd) = dmin1(Dble(prs),foefq(qqq,prs)) / ddd
 !
 !     FONCTION CALCULANT LA CHALEUR LATENTE DE CONDENSATION
       FOLV(TTT) =DBLE(CHLC) - 2317.D0*(DBLE(TTT)-DBLE(TRPL))
@@ -83,9 +93,10 @@
 !     DE SATURATION.
 
 !     FONCTION DE VAPEUR SATURANTE (TETENS)
-      FOEWA(TTT)=610.78D0*DEXP(17.269D0*(DBLE(TTT)-DBLE(TRPL))/(DBLE(TTT)-35.86D0))
+      foewaf(ttt)=ttns3w*(Dble(ttt)-Dble(trpl))/(Dble(ttt)-ttns4w)
+      foewa(ttt) = fomult(dexp(foewaf(ttt)))
 !     FONCTION CALCULANT LA DERIVEE SELON T DE LN EW
-      FODLA(TTT)=17.269D0*(DBLE(TRPL)-35.86D0)/(DBLE(TTT)-35.86D0)**2
+      fodla(ttt)=ttns3w*(Dble(trpl)-ttns4w)/(Dble(ttt)-ttns4w)**2
 !     FONCTION CALCULANT L'HUMIDITE SPECIFIQUE SATURANTE
       FOQSA(TTT,PRS)=DBLE(EPS1)/(DMAX1(1.D0,DBLE(PRS)/FOEWA(TTT))-DBLE(EPS2))
 !     FONCTION CALCULANT LA DERIVEE DE QSAT SELON T
@@ -103,11 +114,18 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 !
 !     Saturation calculations in presence of liquid phase only
 !     Function for saturation vapor pressure (TETENS)
-      FESI(TTT)=610.78D0*DEXP(21.875D0*(DBLE(TTT)-DBLE(TRPL))/(DBLE(TTT)-7.66D0))
-      FDLESI(TTT)=21.875D0*(DBLE(TRPL)-7.66D0)/(DBLE(TTT)-7.66D0)**2
+      fesif(ttt)=ttns3i*(Dble(ttt)-Dble(trpl))/(Dble(ttt)-ttns4i)
+      fesi(ttt)=fomult(dexp(fesif(ttt)))
+      fdlesi(ttt)=ttns3i*(Dble(trpl)-ttns4i)/(Dble(ttt)-ttns4i)**2
       FESMX(TTT,FFF) = (1.D0-DBLE(FFF))*FOEWA(TTT)+DBLE(FFF)*FESI(TTT)
+      fesmxx(fff,fesi8,foewa8)=(1.d0-Dble(fff))*foewa8+Dble(fff)*fesi8
       FDLESMX(TTT,FFF,DDFF) = ( (1.D0-DBLE(FFF))*FOEWA(TTT)*FODLA(TTT) \
       + DBLE(FFF)*FESI(TTT)*FDLESI(TTT) + DBLE(DDFF)*(FESI(TTT)-FOEWA(TTT)) )/FESMX(TTT,FFF)
+      fdlesmxx(ttt,fff,ddff,foewa8,fesi8,fesmx8) = \
+      ( (1.d0- Dble(fff))*foewa8*fodla(ttt) \
+             + Dble(fff)*fesi8*fdlesi(ttt) \
+             + Dble(ddff)*(fesi8-foewa8) ) / fesmx8
       FQSMX(TTT,PRS,FFF) = DBLE(EPS1)/(DMAX1(1.D0,DBLE(PRS)/FESMX(TTT,FFF) ) - DBLE(EPS2)  )
+      fqsmxx(fesmx8,prs) = Dble(eps1)/(dmax1(1.d0,Dble(prs)/fesmx8 ) - Dble(eps2)  )
       FDQSMX(QSM,DLEMX) = DBLE(QSM ) *(1.D0 + DBLE(DELTA)* DBLE(QSM ) ) * DBLE(DLEMX )
 !

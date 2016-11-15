@@ -39,7 +39,7 @@ GRAFLIB =
 
 # Binaires pre-compiles
 
-FIXES   =
+FIXES   = $(PWD)/lib/$(EC_ARCH)/stubs.o
 
 # (obsolete) WEB Host Server for the documentation
 
@@ -48,7 +48,7 @@ FIXES   =
 
 # RMN and Vgrid_Descriptor library names
 
-RMNLIB  = rmn_015
+RMNLIB  = rmn_015.2
 VGDLIB  = descrip
 
 # DDFUN90, NetCDF3 and UdUnits1 library names
@@ -72,6 +72,7 @@ export:
 	/bin/mkdir -p $(DESTINATION)/lib $(DESTINATION)/bin ;\
 	rsync -av $(DIAGNOSTIQUE)/lib/$(EC_ARCH) $(DESTINATION)/lib/$(BASE_ARCH) ;\
 	rsync -avH $(DIAGNOSTIQUE)/bin/$(BASE_ARCH) $(DESTINATION)/bin ;\
+	rsync -lptgoDv $(DIAGNOSTIQUE)/bin/* $(DESTINATION)/bin ;\
 	rsync -av $(DIAGNOSTIQUE)/man $(DESTINATION)
 
 # Ensure initial setup is done
@@ -94,7 +95,7 @@ rdiag:
 	echo "Making libprog_sq98.a" ;\
 	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE)
 	echo "*** Making executable r.diag ***" ;\
-	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) $(BASE_ARCH) OBJ=$(FIXES) \
+	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) $(BASE_ARCH) OBJ="$(FIXES)" \
 	NOPLOT=$(NOPLOT) GRAFLIB=$(GRAFLIB) DDFUN90=$(DDFUN90) VGDLIB=$(VGDLIB) \
 	DIAG_VERSION=$(DIAG_VERSION) RMNLIB=$(RMNLIB)
 
@@ -107,7 +108,7 @@ cdf2conv:
 	echo "*** Making executable cdf2ccc ***" ;\
 	cd $(DIAGNOSTIQUE)/src/cdf2ccc ;\
 	$(MAKE) cdf2rpn CONV_VERSION=$(CONV_VERSION) \
-	RMNLIB=$(RMNLIB) VGDLIB=$(VGDLIB) OBJ=$(FIXES) \
+	RMNLIB=$(RMNLIB) VGDLIB=$(VGDLIB) OBJ="$(FIXES)" \
 	EXTRAS=$(EXTRAS)/NetcdfUdunits/$(EC_ARCH) DDFUN90=$(DDFUN90) \
 	lNetCDF="$(lNetCDF)" UDUNITS=$(UDUNITS)
 

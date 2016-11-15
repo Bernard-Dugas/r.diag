@@ -1,0 +1,147 @@
+# if defined (CDK_DOC)
+!
+! TOC_GEST_1.CDK
+! Code partage de connaissance du type de
+! la coordonnee verticale, partie 1
+!
+! Revision 1.0  2016/10/29 21:42  dugas
+! Version initiale
+!
+# endif
+          VKIND = GETKIND()
+
+***        TRY LOOKING FOR A HY RECORD.
+
+          CALL LIRPT( IN1 )
+          CALL GETPT( IN1 , PTOIT0,PREF0,R0 )
+
+          IF (PTOIT0 == -1.)                                 THEN
+
+***            LITPT/GETPT did not WORK.
+***            TRY LOOKKING FOR A !! RECORD.
+
+              CALL LirToc( IN1, TOC_NBR )
+
+              IF (TOC_NBR > 0)                               THEN
+
+                  GRTYP = GETHIC('GRTYP',KBUF )
+
+                  IF (.NOT.(GRTYP == 'Z' .OR. GRTYP == 'U')) THEN
+                      IG10 = -1 ; IG20 = -1
+                  ELSE
+                      IG10  = GETHIGH('IG1',KBUF )
+                      IG20  = GETHIGH('IG2',KBUF )
+                  END IF
+
+                  CALL GETTOC( IN1, 'VER' ,VKIND , IG10,IG20 )
+
+              END IF
+
+          END IF
+
+          IF (VKIND /= 1001
+     +  .AND. VKIND /= 1    .AND. VKIND /= 1002
+#         if !defined(NO_TOC_PRESS_IN)
+     +  .AND. VKIND /= 2    .AND. VKIND /= 2001
+#         else
+              ! COORD = Pressure coordinate, i.e !
+              ! VKIND = 2,2001 are not supported !     
+#         endif
+#         if !defined(NO_TOC_GEM4_IN)
+     +  .AND. VKIND /= 5002 .AND. VKIND /= 5003 .AND. VKIND /= 5004
+#         else
+              !      COORD = GEM4 coordinates,  i.e      !
+              ! VKIND = 5002,5003,5004 are not supported !     
+#         endif
+     +  .AND. VKIND /= 5    .AND. VKIND /= 1003 .AND. VKIND /= 5001)
+     +    THEN
+              WRITE(6,6016) VKIND
+              CALL                                 XIT( VERBEX ,-16)
+          ELSE IF (VKIND == 1001)                            THEN
+              IF (COORD == 'DEF') COORD = 'SIG'
+              IF (COORD /= 'SIG') CALL            XIT( VERBEX ,-17)
+#             if defined(SET_VKINDC)
+              VKINDC = 'SIGMA'
+#             endif
+          ELSE IF (VKIND == 1002)                            THEN
+              IF (COORD.EQ.'DEF') COORD = 'GEM'
+              IF (.NOT.
+     +           (COORD  == 'ETA'
+     +       .OR. COORD  == 'GEM')) CALL          XIT( VERBEX ,-17)
+#             if defined(SET_VKINDC)
+              VKINDC = 'ETA'
+#             endif
+          ELSE IF (VKIND == 1    .OR. VKIND == 1003)         THEN
+              IF (COORD.EQ.'DEF') COORD = 'GEM3'
+              IF (.NOT.
+     +           (COORD  == 'ETA'  .OR. COORD == 'ET10'
+     +       .OR. COORD  == 'ET15' .OR. COORD == 'ET16'
+     +       .OR. COORD  == 'SIG'
+     +       .OR. COORD  == 'GEM'
+     +       .OR. COORD  == 'GEM2'
+     +       .OR. COORD  == 'GEM3')) CALL         XIT( VERBEX ,-17)
+#             if defined(SET_VKINDC)
+              VKINDC = 'ETA'
+#             endif
+#         if !defined(NO_TOC_PRESS_IN)
+          ELSE IF (VKIND == 2    .OR. VKIND == 2001)         THEN
+              IF (COORD == 'DEF') COORD = 'PRES'
+              IF (COORD /= 'PRES') CALL           XIT( VERBEX ,-17)
+#             if defined(SET_VKINDC)
+              VKINDC = 'PRESSURE'
+#             endif
+#         endif
+          ELSE IF (VKIND == 5    .OR. VKIND == 5001)         THEN
+              IF (COORD == 'DEF') COORD = 'GEM2'
+              IF (COORD /= 'GEM2') CALL           XIT( VERBEX ,-17)
+#             if defined(SET_VKINDC)
+              VKINDC = 'HYBRIDE'
+#             endif
+#         if !defined(NO_TOC_GEM4_IN)
+          ELSE IF (VKIND == 5002 .OR. VKIND == 5003
+     +        .OR. VKIND == 5004)                            THEN
+              IF (COORD == 'DEF') COORD = 'GEM4'
+              IF (COORD /= 'GEM4') CALL           XIT( VERBEX ,-17)
+#             if defined(SET_VKINDC)
+              VKINDC = 'HYBRIDE'
+#             endif
+#         endif
+          END IF
+
+          IF (
+     +        VKIND == 1002 .OR. VKIND == 1003 .OR. VKIND == 5001
+#         if !defined(NO_TOC_GEM4_IN)
+     +   .OR. VKIND == 5002 .OR. VKIND == 5003 .OR. VKIND == 5004
+#         endif
+     +       ) THEN
+
+
+              !!! This requires a !! records to proceed !!!
+              IF (TOC_NBR <= 0) CALL               XIT( VERBEX ,-18)
+
+              CALL GETTOC( IN1, 'PTOP' ,PTOIT8, IG10,IG20 )
+              PTOIT0 = PTOIT8
+              IF (VKIND /= 1002)                             THEN
+                  CALL GETTOC( IN1, 'PREF' ,PREF8 , IG10,IG20 )
+                  CALL GETTOC( IN1, 'RC_1' ,R8    , IG10,IG20 )
+                  PREF0 = PREF8 ; R0 = R8
+#                 if !defined(NO_TOC_GEM4_IN)
+                  IF (VKIND /= 1003 .AND. VKIND /= 5001)     THEN
+                      CALL GETTOC( IN1,'RC_2',R28,IG10,IG20 )
+                      R20 = R28
+                  END IF
+#                 endif
+              END IF
+
+          END IF
+
+#         if !defined(NO_UPDATING_PARAMS)
+***        DEFINE NEW VALUES OF PTOIT,PREF AND R ?
+
+          IF (PTOIT0 /= -1.)                                   THEN
+              PTOIT = PTOIT0
+              PREF  = PREF0
+              R2    = R20
+              R     = R0
+          END IF
+#         endif

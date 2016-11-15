@@ -145,6 +145,12 @@
 *     ------------------------------------------------
 
 *     $Log: timavg.ptn,v $
+*     Revision 4.40  2016/10/28 17:46  dugas
+*     Tenir compte des nouvelles options de codages des IP1/2/3.
+*     Ceci a de tres grandes incidences sur la facon dont les
+*     nombres d'echantillons peuvent etre lus et/ou sauves
+*     (version Alpha, a reviser).
+*
 *     Revision 4.39  2014/09/25 20:20:54  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -309,30 +315,38 @@
 *     MAY 07/80 - J.D.HENDERSON
 
 *---------------------------------------------------------------------------
+      use         diag_convert_ip123, only : KIND_HOURS, KIND_SAMPLES
+
       IMPLICIT    none
  
       INTEGER     MAXLEV
       PARAMETER ( MAXLEV = 9999 )
 
-      REAL        ZERO
-      CHARACTER*2 TYPVAR,MISTYP
-      CHARACTER   VERBE*8,VALEUR*20
-      CHARACTER*4 TYPE,ACCSTAT,ACCMISS,PREMISS
+      CHARACTER(2) TYPVAR,MISTYP
+      CHARACTER    VERBE*8,VALEUR*20
+      CHARACTER(4) TYPE,ACCSTAT,ACCMISS,PREMISS
       LOGICAL     MODTIM,MVALUE,MISSOUT,SQUARE,
      +            OK,OK2,ACCUM,TIMAX,TIMIN,SAMPLES
-      REAL*8      FNI,HEURE,MISFLAG,EPSILON,EPS
+      REAL(8)     FNI,HEURE,MISFLAG,EPSILON,EPS
+      REAL        ZERO, HIVALi,LOVALi,
+     +            HIVALA(MAXLEV),LOVALA(MAXLEV),
+     +            HIVALB(MAXLEV),LOVALB(MAXLEV),
+     +            HIVAL (MAXLEV),LOVAL (MAXLEV),
+     +            HIM(MAXLEV),LOM(MAXLEV)
+      INTEGER     RKINDA(MAXLEV),RKIND(MAXLEV),
+     +            RKINDB(MAXLEV),RKM(MAXLEV)
       INTEGER     I,K,NF,MEM,NWDS,LEN,IER,MAXW,NLEV,HEAD,
      +            LEV(MAXLEV,2),LEV2(MAXLEV,2),KPAK,KBUF(taille_entete),
      +            DATEI,JOURI,HEURI,DATEO,NPAS,HOLD, MAXW2,LEN2,
      +            DATEAI,JOURAI,HEURAI,LBUF(taille_entete),
      +            LPAK,NWDS2,DATIM(14),DATEF,JOURF,NR,
-     +            NRECS,STEP(MAXLEV),DEET,NSET,NSET2,
-     +            HEURF,ANNEE,JOUR,MOIS,DEETA,IO,
+     +            NRECS,STEP(MAXLEV),DEET,DEETA,DEETB,
+     +            NSET,NSET2,HEURF,ANNEE,JOUR,MOIS,IO,
      +            NPG,SET(0:MAXLEV),SET2(0:MAXLEV),
      +            DATEAF,JOURAF,HEURAF,NLEV2,IER2,
      +            NSETSA(MAXLEV),NSETSB(MAXLEV),
      +            NSAMP(MAXLEV),NSETS,NIP3(MAXLEV),
-     +            MBUF(taille_entete),M0,M1,
+     +            MBUF(taille_entete),M0,M1,KIND,
      +            NMIN,NMAX
 
       CHARACTER*20 VARIAB(MAXLEV),VARIAB2(MAXLEV)
@@ -373,10 +387,14 @@
       NF = 5
       CALL JCLPNT( NF, 11,12,13,14, 6 )
  
+      DEET  = 0
+
       NSETS = 0
       NRECS = 0
       NSAMP = 0
       NSETSA= 0
+      RKINDA=-1
+      HIVALA=-1
 
       PKTYP = GETYP( 11 )
       CALL GETVERB( VERBE ) ; CALL up2low( VERBE,VERBE )
@@ -758,31 +776,31 @@
 
           IF (ACCUM .AND. ACCSTAT.EQ.'OLD')                    THEN
 
+***            READ THE PREVIOUSLY ACCUMULATED VALUES.
+
+              CALL GETMSET3( 12, AVG,
+     +                           SET,NSETSA,RKINDA,HIVALA,LOVALA,NSET,
+     +                           LEV,VARIAB,STEP, IBUF,MAXW,OK )
+
 ***            RETREIVE THE NUMBER OF SETS ACCUMULATED
 ***            (AND POSSIBLY, THE ORIGINAL DATE).
 
               IF (PKTYP.EQ.'SQ')                               THEN
 
                   DATEAI = GETHIGH('DATEO',LBUF )
+                  DEETA  = GETHIGH('DEET' ,LBUF )
                   NPAS   = GETHIGH('NPAS' ,LBUF )
 
-                  IF (DEET.NE.0)                               THEN
-                      DEETA = DEET
-                  ELSE
-                      DEETA = 3600
-                  END IF
+!!!               IF (DEET.NE.0)                               THEN
+!!!                   DEETA = DEET
+!!!               ELSE
+!!!                   DEETA = 3600
+!!!               END IF
 
                   HEURE = (NPAS*(DBLE( DEETA )/60.))/60.
                   CALL INCDATR( DATEAF,DATEAI,HEURE )
-          
 
               END IF
-
-***            READ THE PREVIOUSLY ACCUMULATED VALUES.
-
-              CALL GETMSET3( 12, AVG, SET,NSETSA,NSET,
-     +                                LEV,VARIAB,STEP,
-     +                                IBUF,MAXW,OK )
 
 ***            RE-POSITION AT START OF FILE.
 
@@ -809,9 +827,9 @@
 
 ***                READ THE PREVIOUSLY MISSING DATA INDICATORS.
 
-                  CALL GETMSET3( 13, MA, SET,NIP3,NSET,
-     +                                   LEV,VARIAB,STEP,
-     +                                   IBUF,MAXW,OK2 )
+                  CALL GETMSET3( 13, MA,
+     +                               SET,NIP3,RKM,HIM,LOM,NSET,
+     +                               LEV,VARIAB,STEP, IBUF,MAXW,OK2 )
 
                   IF (.NOT.OK2)                                THEN
 
@@ -863,9 +881,9 @@
 
 ***            READ THE FIRST SET. STOP IF THE FILE IS EMPTY.
 
-              CALL GETMSET3( 11, F, SET,NSAMP,NSET,
-     +                              LEV,VARIAB,STEP,
-     +                              IBUF,MAXW,OK )
+              CALL GETMSET3( 11, F,
+     +                           SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
+     +                           LEV,VARIAB,STEP, IBUF,MAXW,OK )
 
               IF (.NOT.OK) CALL                    XIT( VERBE ,-2 )
 
@@ -887,6 +905,19 @@
                   IF (PKTYP.NE.'SQ') NSAMP(1:NSET)  = IBUF(2)
               ELSE IF (.NOT.(SAMPLES .AND. PKTYP.EQ.'SQ') )    THEN
                   NSAMP(1:NSET) = 1
+              END IF
+
+              IF (PKTYP.EQ.'SQ')                               THEN
+                  DEET  = GETHIGH('DEET' ,IBUF )
+                  IF (DEET /= 0)                               THEN
+                      NPAS  = GETHIGH('NPAS' ,IBUF )
+                      HEURE = (NPAS*(DBLE( DEET )/60.))/60. 
+                      DO  K=1,NSET
+                          IF (RKIND(K) == -1)                  THEN
+                              LOVAL(K) = HEURE ; HIVAL(K) = LOVAL(K)
+                          END IF
+                      END DO
+                  END IF
               END IF
 
 ***            HERE, DATEAI IS DEFINED AS EITHER THE INITIAL DATE "DATEO"
@@ -925,9 +956,9 @@
 
 ***                READ THE MISSING DATA INDICATORS.
 
-                  CALL GETMSET3( 14, MF, SET,NIP3,NSET,
-     +                                   LEV,VARIAB,STEP,
-     +                                   IBUF,MAXW,OK )
+                  CALL GETMSET3( 14, MF,
+     +                               SET,NIP3,RKM,HIM,LOM,NSET,
+     +                               LEV,VARIAB,STEP, IBUF,MAXW,OK )
 
                   IF (.NOT.OK)                                 THEN
 
@@ -992,9 +1023,9 @@
 
 ***    TIMESTEP LOOP. GET THE NEXT SET FROM FILE 11.
   
-  200 CALL GETMSET3( 11, F, SET,NSETSB,NSET,
-     +                      LEV,VARIAB,STEP,
-     +                      IBUF,MAXW,OK )
+  200 CALL GETMSET3( 11, F,
+     +                   SET,NSETSB,RKINDB,HIVALB,LOVALB,NSET,
+     +                   LEV,VARIAB,STEP, IBUF,MAXW,OK )
 
           IF (       .NOT.OK  .AND. MAXW.EQ.0)                 THEN
               DEALLOCATE( IBUF,F )
@@ -1023,6 +1054,19 @@
               NSETSB(1:NSET) = 1
           END IF
 
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              DEETB  = GETHIGH('DEET' ,IBUF )
+              IF (DEETB /= 0)                                  THEN
+                  NPAS  = GETHIGH('NPAS' ,IBUF )
+                  HEURE = (NPAS*(DBLE( DEETB )/60.))/60. 
+                  DO  K=1,NSET
+                      IF (RKINDB(K) == -1)                     THEN
+                          LOVALB(K) = HEURE ; HIVALB(K) = LOVALB(K)
+                      END IF
+                  END DO
+              END IF
+          END IF
+
 ***        DEFINE MF = THE NUMBER OF SAMPLES
 ***        ACCOUNTED FOR BY THE CURRENT F.
 
@@ -1041,9 +1085,9 @@
 
 ***            READ THE MISSING DATA INDICATORS INTO MF.
 
-              CALL GETMSET3( 14, MF, SET,NIP3,NSET,
-     +                               LEV,VARIAB,STEP,
-     +                               IBUF,MAXW,OK )
+              CALL GETMSET3( 14, MF,
+     +                           SET,NIP3,RKM,HIM,LOM,NSET,
+     +                           LEV,VARIAB,STEP, IBUF,MAXW,OK )
 
               IF (.NOT.OK) PREMISS = 'NONE'
 
@@ -1117,6 +1161,13 @@
 
       NSAMP(1:NSET) = NSAMP(1:NSET)+NSETSB(1:NSET)
 
+      DO  K=1,NSET
+          IF (RKINDB(K) == KIND_HOURS .OR. DEETB /= 0)         THEN
+              HIVAL(K) = MAX( HIVAL(K),HIVALB(K) )
+              LOVAL(K) = MIN( LOVAL(K),LOVALB(K) )
+          END IF
+      END DO
+
       NRECS = NRECS+SET(NSET)
       NSETS = NSETS+1
       GOTO 200
@@ -1147,6 +1198,15 @@
  
       NSAMP(1:NSET) = NSAMP(1:NSET)+NSETSA(1:NSET)
       NSETS         = NSAMP(1)
+
+      DO  K=1,NSET
+          IF (RKINDA(K) == KIND_HOURS)                          THEN
+              HIVAL(K) = MAX( HIVAL(K),HIVALA(K) )
+              LOVAL(K) = MIN( LOVAL(K),LOVALA(K) )
+          ELSE IF (RKIND(K) == -1)                              THEN
+              RKIND(K) = KIND_HOURS
+          END IF
+      END DO
 
 ***    CALCULATE THE AVERAGE FOR EACH OF THE SET(NSET) RECORDS.
 
@@ -1309,7 +1369,9 @@
 ***            SAVED ON THE FILE WILL CORRESPOND TO
 ***            THE EARLIEST SAMPLE.
 
-              NPAS = NINT( (HEURE*60.)/(DBLE( DEET )/60.) )
+              NPAS = NSETS-1
+              DEET = NINT( (HEURE*3600._8)/NPAS )
+!!!           NPAS = NINT( (HEURE*60.)/(DBLE( DEET )/60.) )
 
           ELSE
 
@@ -1339,8 +1401,8 @@
 
 ***    SAVE AVERAGES.
 
-      CALL PUTMSET3( 12, AVG, SET,NSAMP,NSET, LEV,VARIAB,MAXLEV,
-     +                        IBUF,MAXW )
+      CALL PUTMSET3( 12, AVG, SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
+     +                        LEV,VARIAB,MAXLEV, IBUF,MAXW )
 
       IF (MISSOUT)                                             THEN
 
@@ -1348,7 +1410,7 @@
 
           IF (PKTYP.EQ.'SQ') CALL PUTHIC( 'MV','TYPVAR',IBUF )
 
-          CALL PUTMSET3( 13, MA,  SET,NSAMP,NSET,
+          CALL PUTMSET3( 13, MA,  SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
      +                            LEV,VARIAB,MAXLEV,
      +                            IBUF,MAXW )
 

@@ -1,7 +1,15 @@
 .SUFFIXES :
 .SUFFIXES : .cdk90 .ftn .ftn90 .txt .c .F90 .f .f90 .mod .o .a
 
-# LSSUB Makefile
+# Description: Makefile principal de LSSUB
+
+# Revision 3.65  2016/10/27 13:24  dugas
+# - Le macro ENTETE passe de 28 a 32
+# - Modifier la recette .cdk.o ("rm" plutot que "mv" le .f90)
+# - Ajouter le traitement de diag_convip_plus.ftn90
+# - Corriger la syntaxe de la liste de dependance de convsub.o et la midifier
+# - Modifier les dependances de coord.o, diag_convert_ip123.o, diag_toc.o, get.o et util.o
+# - Modifier le second make de la cible principale (on definit le macro OPTIM90)
 
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
@@ -19,7 +27,7 @@ MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 CFLAGS  =
 FFLAGS  = 
 
-ENTETE  = 28
+ENTETE  = 32
 NP      = 1
 OPTIL   = 2
 STD     = 98
@@ -85,6 +93,14 @@ default: $(ARCH)
 	$(FCOMP) $<
 	/bin/rm -f $*.f90
 
+.cdk90.o:
+	$(FCOMP) $<
+	/bin/rm -f $*.f90
+
+#.cdk90.o:
+#	$(FCOMP) $<
+#	/bin/mv -f $*.f90 $(SOURCES)
+
 .c.o:
 	$(CC) $<
 
@@ -95,10 +111,6 @@ default: $(ARCH)
 .f90.mod:
 	$(FCOMP) $<
 	rsync -a $@ $(MODDIR)
-
-.cdk90.o:
-	$(FCOMP) $<
-	/bin/mv -f $*.f90 $(SOURCES)
 
 .ftn.f:
 	$(FTNC) $<
@@ -142,7 +154,8 @@ default: $(ARCH)
 
 OBJECTS= \
 	alp.o		cofg.o		convsub.o 	coord.o		ddl.o \
-	dimgt.o	diag_toc.o	 	divers.o 	eapl.o		eof.o		fastaf.o \
+	diag_convert_ip123.o	diag_convip_plus.o	diag_toc.o \
+	dimgt.o	divers.o 	eapl.o		eof.o		fastaf.o \
 	fastaf2.o 	ffgfw2.o 	fftcray.o 	fftini.o		ffwfg2.o \
 	filev.o	 	filter.o 	four2.o		gaussg.o		gcof.o \
 	gemdiag.o 	get.o		ggd.o		gobits.o 	inctdia.o \
@@ -175,7 +188,8 @@ F90DECKS= \
 	gaussg.F90	util2.F90
 
 f90DECKS= \
-	diag_convert_ip123.f90 	diag_toc.f90	filter.f90
+	diag_convert_ip123.f90	diag_convip_plus.f90 	diag_toc.f90 \
+	filter.f90
 
 FTNDECKS= \
 	alp.ftn		cofg.ftn		convsub.ftn 	coord.ftn 	ddl.ftn \
@@ -191,7 +205,7 @@ FTNDECKS= \
 	vfft.ftn
 
 FTN90DECKS = \
-	filter.ftn90
+	filter.ftn90	diag_convip_plus.ftn90
 
 CDK90DECKS = \
 	diag_convert_ip123.cdk90	diag_toc.cdk90
@@ -231,16 +245,11 @@ rec.f     : rec.ftn \
 util.f    : util.ftn \
 	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 
-convsub.o  : convsub.ftn diag_toc.mod \
+$(LIBS)(convsub.o)  : convsub.ftn \
 	$(INCLUDE)/fstparm.cdk	$(INCLUDE)/highbuf.cdk \
 	$(INCLUDE)/machtype.cdk	$(INCLUDE)/zlabel.cdk
-coord.o : coord.ftn	diag_convert_ip123.mod
-diag_convert_ip123.o : diag_convert_ip123.cdk90
-diag_toc.o : diag_toc.cdk90	vgrid_descriptors.mod
-get.o      : get.ftn diag_toc.mod \
-	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
-util.o     : util.ftn  diag_toc.mod \
-	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
+$(LIBS)(get.o)      : $(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
+$(LIBS)(util.o)     : util.ftn \
 	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 
 # Liste des cibles
@@ -269,6 +278,7 @@ $(LIBS):	initial	$(FTNDECKS)	$(FTN90DECKS) \
 	$(LIBS)(coord.o)		\
 	$(LIBS)(ddl.o)		\
 	$(LIBS)(diag_convert_ip123.o)		\
+	$(LIBS)(diag_convip_plus.o)		\
 	$(LIBS)(diag_toc.o)		\
 	$(LIBS)(dimgt.o)		\
 	$(LIBS)(divers.o)		\
@@ -326,5 +336,5 @@ $(ARCH): initial
 # Make en deux etapes: Les deux premiers $(MAKE) mettent a jour les sources
 # dans $(SOURCES) tandis que les deux derniers generent les librairies 
 # (debug et ordinaire, respectivement)
-	$(MAKE) $(LIBS) ;	$(MAKE) clean ; cd $(SOURCES) ; \
-	$(MAKE) ; $(MAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2'
+	$(MAKE) $(LIBS) ;	$(MAKE) clean ; cd $(SOURCES) ; $(MAKE) ; \
+	$(MAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2' OPTIM90='-O 2'

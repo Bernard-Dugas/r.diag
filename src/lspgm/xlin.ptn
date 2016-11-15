@@ -1,8 +1,8 @@
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
-*      xlin  XIN XOUT INPUT OUTPUT [ -a    VAL1 -b   VAL2
-*                                    -name VAL3 -npg VAL4 ]
+*      xlin  XIN XOUT INPUT OUTPUT [ -a  VAL1 -b    VAL2 \ 
+*                        -name VAL3 -npg VAL4 -def [VAL5] ]
 *
 *
 *     AUTHORS - R.Laprise ET J.D.Henderson, MAY 14 1983.
@@ -14,7 +14,8 @@
 *
 *      ... PRODUCES FILE XOUT = A*XIN + B
 *          (WHERE BOTH XIN AND XOUT MAY CONTAIN REAL OR COMPLEX
-*           DATA TYPES, BUT B MUST BE 0.0 FOR COMPLEX FILES)
+*           DATA TYPES, BUT B MUST BE 0.0 FOR COMPLEX FILES.
+*           Please see Note 2) below for mode details)
 *
 *
 *     PARAMETERS...
@@ -25,18 +26,23 @@
 *             DEFAULTS TO THE ORIGINAL NAME
 *      NPG  = (OPTIONAL) OUTPUT PACKING DENSITY
 *
-*      NOTE: IF *BOTH* A AND B ARE LEFT UNSPECIFIED (AND NOT 0), *AND*
-*            IF THE PROGRAM IS INVOKED IN COMMAND-LINE PARAMETER MODE,
-*            THEN A AND B ARE SET TO +1.0 AND 0.0, RESPECTIVELY.
 *
 *      READ( 5,5010 ) A,B,NAME,NPG
 *5010  FORMAT(10X,2E10.0,1X,A4,I5)
 *
 *
-*     NOTE THAT MISSING VALUE TREATMENT IS SUPPORTED VIA EITHER
-*     THE "MISSING_VALUE" ENVIRONMENT VARIABLE OR THE "-mvalue"
-*     COMMAND-LINE ARGUMENT. PLEASE SEE THE R.DIAG WEB
-*     DOCUMENTAION FOR MORE DETAILS.
+*     NOTES: 1) MISSING VALUE TREATMENT IS SUPPORTED VIA EITHER THE
+*               "MISSING_VALUE" ENVIRONMENT VARIABLE OR THE "-mvalue"
+*               COMMAND-LINE ARGUMENT. PLEASE SEE THE R.DIAG WEB
+*               DOCUMENTAION FOR MORE DETAILS.
+*            2) IF "-def SPECTRALB" IS SPECIFIED ON THE COMMAND-LINE,
+*               A NON-ZERO VALUED B CONSTANT IS ALSO APPLIED TO SPECTRAL
+*               FIELDS VIA A MODIFICATION TO THE REAL PART OF THEIR (0,0)
+*               COEFFICIENT SCALED BY SQRT(2.), THE LEGENDRE NORMALISATION
+*               FACTOR USED IN THE CURRENT SPECTRAL TRANSFORMS.
+*            3) IF *BOTH* A AND B ARE LEFT UNSPECIFIED (AND NOT 0), *AND*
+*               IF THE PROGRAM IS INVOKED IN COMMAND-LINE PARAMETER MODE,
+*               THEN A AND B ARE SET TO +1.0 AND 0.0, RESPECTIVELY.
 *
 *
 *     EXAMPLE OF INPUT CARD...
@@ -52,6 +58,8 @@
 *       2 DATA TYPE IS COMPLEX AND B CONSTANT IS NOT ZERO
 *       3 ERROR READING INPUT PARAMETERS
 *       4 PREMATURE EOF ON XIN
+*       5 UNRECOGNIZED -def ARGUMENT VALUE
+*
 #     endif
 #     if defined (RDIAG_LICENCE)
 !---------------------------------- LICENCE BEGIN -------------------------------
@@ -75,6 +83,13 @@
 *    +       TAPE1= XIN, TAPE2= XOUT, TAPE5=INPUT,TAPE6=OUTPUT)
  
 *     $Log: xlin.ptn,v $
+*     Revision 4.18  2016/10/28 17:15  dugas
+*     - Modifications syntaxiques de type F77 --> F90.
+*     - Ajouter le mode SPECTRALB pour lequel les champs spectraux
+*       peuvent etre modifies par une constante B non-nulle. Dans ce
+*       cas, la partie reelle du coefficient (0,0) est modifiee de
+*       facon appropriee.
+*
 *     Revision 4.17  2014/09/25 20:20:56  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -195,9 +210,10 @@
       PARAMETER ( MAXLEV = 999 )
 
       REAL        ZERO
-      REAL*8      A,B,EPSILON,MISFLAG
-      LOGICAL     OK,SPEC,RPBLOC,MVALUE 
+      LOGICAL ::  DEF=.FALSE.,SPECTRALB=.FALSE.
+      LOGICAL     OK,COMPLX,MVALUE,SPECTRAL
       CHARACTER   CA*20,CB*20,VALEUR*20,NOM*4
+      REAL*8      A,B,B2,EPSILON,MISFLAG,SQRT2
       CHARACTER   NEWNAM*4,TYPE*4,LIGNE*256,CNPG*5
       INTEGER     HEAD,JBUF(taille_entete),NLEV,NLEVG,
      +            LEV(MAXLEV),NF,IO,LEN,NWDS,JPAK,MAXW,NR,
@@ -206,11 +222,10 @@
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       REAL*8,     DIMENSION(:), ALLOCATABLE :: G
 
-      LOGICAL,    EXTERNAL :: SETIO64
       INTEGER,    EXTERNAL :: GETSIZ2
+      LOGICAL,    EXTERNAL :: RPBLOC,SETIO64
       EXTERNAL    MACSPE,JCLPNT,GETLIGN,BURNF,FILEV,
-     +            GETSET2,XIT,PUTSET2,MISPAR,
-     +            RPBLOC,GETLAB,PUTLAB
+     +            GETSET2,XIT,PUTSET2,MISPAR,GETLAB,PUTLAB
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -220,6 +235,8 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/xlin.ptn,v $'
 
 *---------------------------------------------------------------------
+      SQRT2 = SQRT( 2.0_8 )
+
 ***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
 
       CALL MACSPE( HEAD,ZERO )
@@ -257,12 +274,31 @@
           OK = RPBLOC('NPG',VALEUR)
           IF (OK) CNPG = VALEUR
 
+          OK = RPBLOC('DEFAUT',VALEUR)
+          IF (OK)                                              THEN
+              IF (VALEUR /= ' ') CALL LEADBLK( VALEUR )
+              IF (VALEUR == '-1')                               THEN
+                  DEF = OK
+              ELSE IF (VALEUR /= ' ')                           THEN
+                  CALL low2up( VALEUR,VALEUR )
+                  IF (index( VALEUR,'SPECTRALB') > 0) SPECTRALB = OK
+                  IF (.NOT.SPECTRALB)                          THEN
+                      WRITE(6,6005) TRIM( VALEUR )
+                      CALL                         XIT('   Xlin  ',-5)
+                  END IF
+              END IF
+          END IF
+          
 ***        CHECK FOR DEFAULT VALUES.
 
           IF (CA.EQ.' ' .AND.
      +        CB.EQ.' '   )                                    THEN
               A = +1.0
               B =  0.0
+          ELSE IF (DEF)                                        THEN
+              A = +1.0 ; B =  0.0
+              IF (CA /= ' ') READ( CA, 20,ERR=900,IOSTAT=IO ) A
+              IF (CB /= ' ') READ( CB, 20,ERR=900,IOSTAT=IO ) B
           ELSE
               READ( CA, 20,ERR=900,IOSTAT=IO ) A
               READ( CB, 20,ERR=900,IOSTAT=IO ) B
@@ -285,7 +321,7 @@
       END IF
 
       WRITE(6,6007) A,B 
- 
+
 ***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
 
   050 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
@@ -330,15 +366,23 @@
 
           IF (TYPE.NE.'LABL')                                  THEN
 
-              SPEC = (TYPE.EQ.'SPEC' .OR.
-     +                TYPE.EQ.'FOUR' .OR.
-     +                TYPE.EQ.'CMPL')
+              IF (SPECTRALB)                                   THEN
+                  SPECTRAL = (TYPE == 'SPEC')
+                  COMPLX   = (TYPE == 'FOUR' .OR. TYPE == 'CMPL')
+              ELSE
+                  SPECTRAL = .False. 
+                  COMPLX   = (TYPE == 'FOUR' .OR.
+     +                        TYPE == 'FOUR' .OR. TYPE == 'CMPL')
+              END IF
+
+              B2 = B*SQRT2
 
 ***            VERIFY SIZES.
 
                                   NWDS2 = IBUF(5)
               IF (TYPE.NE.'ZONL') NWDS2 = IBUF(5)*IBUF(6)
-              IF (SPEC)           NWDS2 = NWDS2*2
+              IF (SPECTRAL .OR.
+     +            COMPLX        ) NWDS2 = NWDS2*2
 
               IF (NWDS*NLEV .LT. NWDS2*NLEVG)                  THEN
                   CALL                             PRECEDE( 1,NLEVG )
@@ -348,9 +392,8 @@
 
 ***            STOP IF FIELD IS COMPLEX AND B IS NOT 0.
 
-              IF (SPEC .AND. B.NE.0.)                          THEN
-                  CALL                             XIT('  Xlin  ',-2 ) 
-              END IF
+              IF (COMPLX .AND. B /= 0.)
+     +            CALL                             XIT('  Xlin  ',-2 ) 
 
               IF (TYPE.NE.'CHAR')                              THEN
 
@@ -363,9 +406,18 @@
                           IF (ABS( G(I)-MISFLAG ).LE.EPSILON) CYCLE
                           G(I) = A*G(I)+B 
                       END DO
-                  ELSE
+                  ELSE IF (.NOT.SPECTRAL)                      THEN
                       DO  I=1,NLEVG*NWDS2
                           G(I) = A*G(I)+B 
+                      END DO
+                  ELSE IF (A /= 1._8)                          THEN
+                      DO  I=1,NLEVG*NWDS2
+                          G(I) = A*G(I)
+                          IF (MOD( I,NWDS2 ) == 1) G(I) = G(I)+B2 ! Add B*SQRT(2.) to global mean
+                      END DO
+                  ELSE
+                      DO  I=1,NLEVG*NWDS2,NWDS2
+                          G(I) = G(I)+B2 ! Add B*SQRT(2.) to global mean
                       END DO
                   END IF
  
@@ -424,6 +476,7 @@
 
  5010 FORMAT(10X,2E10.0,1X,A4,A5)
 
+ 6005 FORMAT(' Unrecognized -def argument value... ',A/)
  6007 FORMAT('0 Xlin A,B =',1P2E20.12)
  6010 FORMAT('0 Xlin read',I6,' records.')
  6100 FORMAT(' Xlin reports I/O error number ',I3,' on unit 5.')

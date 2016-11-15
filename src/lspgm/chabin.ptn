@@ -78,6 +78,9 @@
 *    +               TAPE1=CHAR, TAPE2=BIN, TAPE6=OUTPUT) 
 
 *     $Log: chabin.ptn,v $
+*     Revision 4.20  2016/10/27 16:01  dugas
+*     Correction de la valeur par defaut de la cle -def (-1).
+*
 *     Revision 4.15  2015/04/28 22:00:13  dugas
 *      - Augmenter la valeur du macro grille_maximale a 10,000,000
 *      - Mise a jour du traitement des dates (DATE TIME STAMP)
@@ -246,7 +249,7 @@
 
           IF (DEF)                                             THEN
               WRITE(6,6100)
-              IF (VALEUR.NE.' ') FORM1 = VALEUR
+              IF (VALEUR.NE.'  -1') FORM1 = VALEUR
           END IF
 
       END IF

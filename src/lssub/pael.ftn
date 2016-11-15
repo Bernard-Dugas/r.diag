@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: pael.ftn,v $
+C     Revision 3.9  2016/10/26 15:25  dugas
+C     Argument PSRF --> LNSP dans ELAEL (optimisation)
+C
 C     Revision 3.8  2014/09/25 18:42:03  dugas
 C     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 C
@@ -219,7 +222,7 @@ C
       END 
       SUBROUTINE elael( FP, PR ,NPL, AI,BI, COORDI,PTOITI,
      +                  FS, SIG,NSL, AO,BO, COORDO,PTOITO, 
-     +                  PSRF,PTOP,PTOPI, RLUP,RLDN, LA )
+     +                  LNSP,PTOP,PTOPI, RLUP,RLDN, LA )
     
       IMPLICIT    none
 
@@ -231,7 +234,7 @@ C
 
 ***    FP         = INPUT  GRIDS ON ETA LEVELS.
 ***    FS         = OUTPUT GRIDS ON ETA LEVELS.
-***    PSRF       = INPUT  GRID OF SURFACE PRESSURE IN Pa
+***    LNSP       = INPUT  GRID OF SURFACE LN PRESSURE IN Pa
 ***    PR(NPL)    = VALUES OF INPUT ETA LEVEL
 ***    SIG(NSL)   = VALUES OF ETA LEVELS OF OUTPUT FIELD.
 ***    PTOP       = PRESSURE GRID AT LID IN PA (USED ONLY FOR GEM OUTPUT)
@@ -248,16 +251,19 @@ C
       REAL        PR (NPL),AI(NPL),BI(NPL),PTOITI
       REAL        SIG(NSL),AO(NSL),BO(NSL),PTOITO 
       REAL        FS(LA,NSL),PTOP(LA),PTOPI(LA)
-      REAL        FP(LA,NPL),PSRF(LA)
+      REAL        FP(LA,NPL),LNSP(LA)
       REAL        RLUP,RLDN
   
 ***    Local variables
 
+      REAL(8)     CORR2
       LOGICAL     MONOTON,REVERSE
-      REAL        ZWB,ZWT,DFDLNP(0:NPL+1),FSC(NSL)
-      REAL        FPC(NPL),PI(NPL),PO(NSL),HOLD
+      REAL(8)     ZWB,ZWT,DFDLNP(0:NPL+1),FSC(NSL)
+      REAL(8)     FPC(NPL),PI(NPL),PO(NSL),HOLD
       INTEGER     I,KI,KO,L, TOPP,BOTP,INCP
       INTEGER     INTVL, TOPS,BOTS,INCS
+
+      REAL(8),    DIMENSION(:), POINTER, SAVE :: PSRF
 
       LOGICAL              INFO
       COMMON     /ZZVERBO/ INFO
@@ -265,6 +271,13 @@ C
       EXTERNAL    MONVERT,XIT
 
 *---------------------------------------------------------------------
+      CORR2 = LOG( 100000._8 )
+
+      IF ((COORDI /= 'GEM4') .OR. (COORDO /= 'GEM4'))          THEN
+          IF (.NOT.ASSOCIATED( PSRF )) ALLOCATE( PSRF(LA) )
+          PSRF = EXP( 1.0_8 * LNSP )
+      END IF
+
 ***    CHECK THAT PR IS MONOTONIC.
 
       CALL MONVERT( PR,NPL, TOPP,BOTP,INCP, MONOTON )
@@ -317,6 +330,12 @@ C
                   PI(L) = AI(L) + BI(L) * PSRF(I)
               END DO
 
+          ELSE
+
+              DO  L=1,NPL ! Calculate LN( local pressure )
+                  PI(L) = AI(L) + BI(L) * (LNSP(I) - CORR2)
+              END DO
+
           END IF
 
 ***        COMPUTE INPUT VERTICAL DERIVATIVE OVER ALL PRESSURE INTERVALS
@@ -325,7 +344,7 @@ C
           DFDLNP(TOPP)      = RLUP
           DFDLNP(BOTP+INCP) = RLDN
 
-          PI(:) = ALOG( PI(:) )
+          IF (COORDI /= 'GEM4') PI(:) = LOG( PI(:) )
 
           DO  L=TOPP,BOTP-INCP,INCP
               DFDLNP(L+INCP) = (FPC(L+INCP)-FPC(L)) / (PI(L+INCP)-PI(L))
@@ -345,6 +364,12 @@ C
                   PO(L) = AO(L) + BO(L) * PSRF(I)
               END DO
 
+          ELSE
+
+              DO  L=1,NSL ! Calculate LN( local pressure )
+                  PO(L) = AO(L) + BO(L) * (LNSP(I) - CORR2)
+              END DO
+
           END IF
 
           IF (REVERSE)                                         THEN
@@ -355,7 +380,7 @@ C
               END DO
           END IF
   
-          PO(:) = ALOG( PO(:) )
+          IF (COORDO /= 'GEM4') PO(:) = LOG( PO(:) )
 
 ***        PERFORM VERTICAL INTERPOLATION OF FP -> FS BETWEEN THE TWO 
 ***        SETS OF PRESSURE LEVELS.

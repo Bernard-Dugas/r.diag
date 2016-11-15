@@ -1,0 +1,177 @@
+
+Description of the changes that have been make to r.diag since June 22 2015
+
+* DEVELOPMENT *
+
+Makefile :
+ - Loads binaries with RMNLIB_015.2
+ - Now exports modified scripts found in BIN
+ - Corrected syntax that accounts for FIXES
+COMMANDES :
+ - Modifies FIXES Makefile macro definition
+
+* DEVELOPMENT/INCLUDE *
+
+CDF2CCC.H :
+ - The HEAD parameter goes from 28 to 32. This implies
+   re-compiling all of the active routines in CDF2CCC/CDF2RPN
+HIGHBUF.H :
+ - Add new logical variables for HIVAL,LOVAL,RKIND in
+TOC_GEST_1.CDK, TOC_GEST_2.CDK and SET_A_B_FROM_AABB.CDK :
+ - New comdecks for vertical level initial treatment and AABB-mode setup
+DINTERN.CDK, FINTERN.CDK and CONSDIA.CDK
+ - Optimization updates via precalculation of certain constants
+
+* DEVELOPMENT/SRC/LSPGM *
+
+BINACH and CHABIN :
+ - Correct the default value for the online argument -DEF
+CONVERT :
+ - Syntax updates F77 --> F90.
+ - Add argument -append (new writing mode).
+ - Add argument -datadd (to correct CCC dates).
+ - Add error code 25 for illegal value in argument -siecle
+ - Support for DATYP=129, 133 and 134 (i.e. turbo compression).
+DXDP, GPDPD, GPHUM, GSAPL, GSAPZL, GSATHL, PGEN, VSINTH :
+ - Syntax updates F77 --> F90
+ - 64-bits I/O and arithmetic (DXDP) 
+ - Modification to the -def arguments treatment
+ - Add/update support for GEM4 input data, including AABB-mode
+ - Use comdecks toc_gest_1.cdk, toc_gest_2.cdk and set_a_b_from_AABB.cdk
+FMASK :
+ - Correct call to MERGE intrinsic function
+FSTMDIAG, TIMAVG :
+ - Makes use of and accounts for the new IP1/2/3 coding (beta versions)
+ - Add the -noip3 and -oldip3 arguments for IP3 handling (FSTMDIAG)
+ - Support for up to 128 input files (FSTMDIAG)
+GGAPS :
+ - Correct YRESI calculation for hemispheric A and B hemispheric grids
+GPASG/GSASG :
+ - Syntax updates F77 --> F90.
+ - Complete support of GEM4 input data in GSASG
+ - Modification to the -def arguments treatment
+ - Use comdecks toc_gest_1.cdk and set_a_b_from_AABB.cdk
+GPVTAT, MAKEZG :
+ - Internal documentation correction
+GSAPTP :
+ - Correct sub-surface T and GZ values for GEM-type coordinates
+GSHUMH :
+ - Syntax updates F77 --> F90.
+ - Change to the documentation concerning GEM4
+GSMSLPH :
+ - Syntax updates F77 --> F90.
+ - Add support for the GEM* family of model coordinates
+ - Use comdecks toc_gest_1.cdk, toc_gest_2.cdk and set_a_b_from_AABB.cdk
+LLAGG :
+ - Modify internal documentation on U-grid (Yin-Yang) support
+ - Correct YRESI for hemispheric A and B hemispheric grids
+Makefile :
+ - The ENTETE macro goes from 28 to 32. This implies re-compiling
+   all of the active modules in r.diag.
+ - Corrections to the syntax used in the list of .o dependencies
+ - Add dependencies to toc_gest_1.cdk, toc_gest_2.cdk and
+   set_a_b_from_AABB.cdk in the .f recepies
+MAKEZG :
+ - Modify internal documentation on U-grid (Yin-Yang) support in APPEND-mode
+SELECT, SELECT2 :
+ - Add selecting thermodynamic or dynamic levels for GEM4 data
+ - Better document the time selection process
+XLIN :
+ - Syntax updates F77 --> F90.
+ - Add optional modification of the (0,0) spectral coefficients
+   in spectral data via the -b argument
+
+* DEVELOPMENT/SRC/LSSUB *
+
+CONVSUB :
+ - Syntax updates F77 --> F90.
+ - Add CLOZREF entry point to GETZREF2
+ - Add RMZREF entry point in OUVZREF2
+ - Optional IP2 time coding in PARFILL
+ - Add support for new IP1/2/3 coding in IBUFILL/PARFILL
+ - Check dimensions while seaching for previously saved sets in SAZREF2
+ - Replace call to OUZREF by call to OUVZREF2 evrywhere in GETZREF2
+ - Define MAZDIM = dimension_en_X * dimension_en_Y, where the two
+   variables are preprocessor macros that are both set to 1000.
+   Used in GETZREF2, OUVZREF2 to support
+   2D Y-grids reference records
+COORD :
+ - Add CONVHOUR routine (equivalent to CONVPR for IP1) for IP2
+ - Add support for KIND=1001,1003, 2001 and 5003, 5004
+DIMGT :
+ - Restore capabilities in CLRLMT that were removed in 2013.
+   These turn out to be required when dealing with T10->T99
+   spectral truncations in PK84 and PK92 files
+DIVERS.C :
+ - Add ETIME_ declaration (as suggested by MFV)
+DIAG_CONVIP_PLUS :
+ - Renamed from DIAG_CONVERT_IP123. It is now a normal routine
+   rather than a module
+ - Use diag_is_invalid_kind from the new DIAG_CONVERT_IP123 module
+ - Add support for KIND=1001, 1002, 1003, 2001, 5003 and 5004
+ - Add ENCODE_RANGE and DECODE_RANGE routines
+DIAG_CONVERT_IP123 :
+ - Imported from FSTD98/RMNLIB CONVERT_IP123.F90
+ - Calls DIAG_CONVIP_PLUS rather than CONVIP_PLUS
+ - Public ENCODE*/DECODE* routines renamed to DIAG_ENCODE/DIAG_DECODE
+ - DIAG_ENCODE, DIAG_ENCODE and DIAG_IS_INVALID_KIND are the only public routines
+ - Corrections to initial documentation
+DIAG_TOC :
+ - Add the public NOSTOC routine (do not save the TocToc)
+ - Correction to comments in GetTOC_rv
+FILEV :
+ - Support time or vertical intervals via the new IP1/2/3 coding
+GEMDIAG :
+ - Optional calculation Add of the 3D local pressures in GEM4APL
+ - Local real variables declared as 64-bits in GEM4APL and GEM4ATH
+ - Add pre-calculated 3D local pressure as input argument to GEM4ATH
+ - Account for possibly different vertical levels for the FST
+   and TEMP variables (unstaggered and staggered) in GEM4ATH
+ - Local REAL fields declared REAL(8) in GEM4APL, GEM4ATH and PLAGEM4
+ - Add D_VT2GZ subroutine used for GEM4 coordinates
+GET, PUT :
+ - Syntax updates F77 --> F90.
+ - The HEAD parameter goes from 28 to 32
+ - Add the RKIND,HIVAL and LOVA arguments to GETMSET3/PUTMSET3
+ - RKIND is a valid variable name in GETHIGH/PUTHIGH
+ - Add GETHIR/PUTHIR routine that recovers/save REAL(4) variables from IBUF
+ - Add GETSAMPLZ/PUTSAMPLZ routines that retreive/save the sample
+   sizes given the IP1/2/3, DATEO, NPAS and DEET values in IBUF
+LABEL, PACCRN, REC :
+ - Syntax updates F77 --> F90.
+LSSUB, Error_messages.html :
+ - Document exit code -2 to CLRLMT
+ - Document DIAG_CCARD errors (when CCARD_OPT='DEBUG')
+Makefile :
+ - The ENTETE macro goes from 28 to 32
+ - Change the .cdk.o recipy ("rm" rather than "mv" the .f90)
+ - Add support for diag_convip_plus.ftn90
+ - Correct syntax of the convsub.o dependancies
+ - Modify the coord.o, diag_convert_ip123.o, diag_toc.o, get.o and util.o dependancies
+ - Modify the target of the second make in the default target (defining the OPTIM90 macro)
+Makefile_source98 :
+ - Add the OPTIM90, DEBUG90 and F90FLAGS macros for *.F90 targets
+ - Add support for diag_convip_plus.f90
+ - Modify the coord.o dependancies
+PAEL :
+ - Local REAL fields declared REAL(8) in ELAEL
+ - Add GEM4 support in ELAEL
+UTIL :
+ - Syntax updates F77 --> F90.
+ - If MVALUE_IS_OFF is true in JCLPNT, explicitely turn off the
+   missing value decoder for all supported datatypes
+ - Call CLOZREF in XIT after closing all open files
+UTIL2.F90 :
+ - Add LGPL license text
+ - Add DIAG_CCARD routine (a F90 CCARD clone)
+
+* DEVELOPMENT/SRC/CDF2CCC *
+
+GET_COORD2 :
+ - Recognize nong_name="model_level_number" in coordinate list
+RDLATLON2 :
+ - Add support for Y grids (unstructured) with 2D lon and lat
+   reference coordinates
+ - Add subroutine MONOTONE
+
+

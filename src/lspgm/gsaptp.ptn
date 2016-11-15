@@ -65,7 +65,7 @@
 *                     ('GEM2' AND 'GEM3' ARE THE TWO RPN DEFAULTS).
 *      LAY   (l)    = LAYERING SCHEME FOR CALCULATING LAYER INTERFACES (DEF 3).
 *
-       PTOIT (c)    = PRESSURE (PA) AT THE MODEL LID (DEF pression_au_toit).
+*      PTOIT (c)    = PRESSURE (PA) AT THE MODEL LID (DEF pression_au_toit).
 *      PREF  (d)    = REF PRESSURE WHEN COORD='GEM2' OR 'GEM3' (DEF 80000 PA).
 *      R     (i)    = REFERENCE EXPONENT WHEN COORD='GEM2' OR 'GEM3' (DEF 1.0)
 *
@@ -166,6 +166,10 @@
 *     ----------------------------------------------------------------
 *
 *     $Log: gsaptp.ptn,v $
+*     Revision 4.27  2016/10/29 20:42  dugas
+*     - Correction de la documentation.
+*     - Appel a TGZEX2 pour correction sous-terraines pour GEM/2/3.
+*
 *     Revision 4.26  2014/09/25 20:20:49  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -1106,6 +1110,10 @@
                   T(L)   = TP(L)
               END DO
 
+***            CORRECT BOTH T AND GZ UNDER THE GROUND.
+
+               CALL TGZEX2( PHI,T, P0, NWDS,PR ,NPL,GAMMA )
+
           ELSE
 
 ***            COMPUTE PHI FROM TEMPERATURE
@@ -1128,12 +1136,11 @@
      +                     PHI, SIG,NSL+1, LNSP,GZUP,0.,
      +                     AG,BG,NSL+2,FSIG,DFLNSIG,DLNSIG )
 
+***            CORRECT BOTH T AND GZ UNDER THE GROUND.
+
+               CALL TGZEX( PHI,T, LNSP, NWDS,PR ,NPL,GAMMA )
+
           END IF
-
-***        CORRECT BOTH T AND GZ UNDER THE GROUND.
-
-          IF (COORD.NE.'GEM') 
-     +    CALL TGZEX( PHI,T, LNSP, NWDS,PR ,NPL,GAMMA )
 
 ***        ACCOUNT FOR GEOPOTENIAL IN DECAMETRES.
 
@@ -1179,7 +1186,7 @@
  0011 FORMAT(BN,E10.0)
 
  5010 FORMAT(10X,I5,2E10.0,1X,A4,I5,E10.0)
- 5020 FORMAT(16I5)
+ 5020 FORMAT(16A5)
  5030 FORMAT(8A10)
 
  6010 FORMAT('0 Rlup,gamma =',2E12.3,', coord=',1X,A4,', LAY=',I5,

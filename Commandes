@@ -3,13 +3,21 @@ Exemples de commandes pour generer les binaires r.diag, cdf2ccc et cdf2rpn
 
 UQAM sans libgraph.a
 
-. s.ssmuse.dot pgi13         ; . s.ssmuse.dot vgriddesc ; make allbin RMNLIB=rmnbeta_015 FIXES=${PWD}/lib/Linux_x86-64/pgi13xx/msg.o 
-. s.ssmuse.dot gfortran-4.9  ; . s.ssmuse.dot vgriddesc ; make allbin FIXES=${PWD}/lib/Linux_x86-64/gfortran-4.9/stubs.o
+. s.ssmuse.dot dev/pgi       ; . s.ssmuse.dot vgriddesc
 
-CMC sans libgraph.a
+    ou bien
 
-. s.ssmuse.dot SI/ifortdev15 ; . s.ssmuse.dot GEM/4.6.0 ; make allbin RMNLIB=rmn_015.2 FIXES=${PWD}/lib/Linux_x86-64/intel13sp1u2/stubs.o
+. s.ssmuse.dot dev/gfortran  ; . s.ssmuse.dot vgriddesc
+
+    et ensuite
+
+FIXES="$PWD/lib/$EC_ARCH/stubs.o $PWD/lib/$EC_ARCH/moduledate.o" ; make allbin FIXES="${FIXES}"
+
+
+CMC sans libgraph.a et sans la derniere correction a moduledate
+
+. s.ssmuse.dot SI/ifortdev15 ; . s.ssmuse.dot GEM/4.6.0 ; make allbin
 s.use gmake as make ; \
-. s.ssmuse.dot SI/ifortdev15 ; . s.ssmuse.dot GEM/4.6.0 ; make allbin RMNLIB=rmn_015.2 FIXES=${PWD}/lib/AIX-powerpc7/xlf13/stubs.o
+. s.ssmuse.dot SI/ifortdev15 ; . s.ssmuse.dot GEM/4.6.0 ; make allbin
 
-Pour generer avec libgraph.a ==> Ajouter "NOPLOT='' GRAFLIB=graph" a une des commandes precedentes.
+Pour generer avec libgraph.a ==> Ajouter "NOPLOT='' GRAFLIB=graph" a une des commandes "make" precedentes.

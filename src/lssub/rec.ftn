@@ -18,6 +18,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: rec.ftn,v $
+C     Revision 3.48  2016/10/26 15:22  dugas
+C     - Legeres modifications syntaxiques F77 --> F90
+C
 C     Revision 3.47  2014/12/04 21:35:20  dugas
 C     Enlever le DATA ZERO redondant dans RECUP2.
 C
@@ -480,7 +483,7 @@ C
 
 *---------------------------------------------------------------------
     4 FORMAT(A4)
- 6001 FORMAT(' Buffer/MaxWord ',2I7,' too small for...')
+ 6001 FORMAT(' Buffer/MaxWord ',2I9,' too small for...')
 
       END 
 
@@ -507,8 +510,7 @@ C
 *---------------------------------------------------------------------
       IMPLICIT      none
 
-      INTEGER       HEAD
-      PARAMETER   ( HEAD = taille_entete )
+      INTEGER,      PARAMETER :: HEAD = taille_entete
 
       CHARACTER*4   TYPE
       CHARACTER     LINE*ligne_maximale
@@ -1069,8 +1071,7 @@ C
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
       INTEGER     NF,IBUF(HEAD+1),LEN,LENGTH,NWDS,PACK,I
       LOGICAL     OK,INFORM,HYPER
@@ -1084,10 +1085,9 @@ C
       LOGICAL              INFO
       COMMON     /ZZVERBO/ INFO
 
-      CHARACTER*4 GETHIC
-      INTEGER     GETHIGH
-      EXTERNAL    LBLCHK,PUTBUF2,WRITEF,WRITSTD,
-     +            PUTLAB,GETHIGH,GETHIC
+      CHARACTER(4),EXTERNAL :: GETHIC
+      INTEGER,     EXTERNAL :: GETHIGH
+      EXTERNAL     LBLCHK,PUTBUF2,WRITEF,WRITSTD,PUTLAB
 
 *---------------------------------------------------------------------
 ***    CHECK THE RECORD TYPE
@@ -1174,13 +1174,12 @@ C
 
       IMPLICIT      none
 
-      INTEGER       HEAD
-      PARAMETER   ( HEAD = taille_entete )
+      INTEGER,      PARAMETER :: HEAD = taille_entete
 
-      CHARACTER*4   TYPE,  NAME
+      CHARACTER*4   TYPE,  NAME,  PKTYP
       LOGICAL       SF,    ALLOC
-      REAL          XMIN,  XSCAL,XMAX
-      INTEGER       IXMIN,     IXSC,    IXMEAN
+      REAL          XMIN,  XSCAL, XMAX
+      INTEGER       IXMIN, IXSC,  IXMEAN,  DATYP
       INTEGER       LCM(3),IBUF(HEAD+1),LEN,NWDS,PACK,NBW,N,BITS,
      +              I,J,L,KIND,FWRD,LSR,LA,LR,LM,LM2,LNT,KTR, CENDI
 
@@ -1208,12 +1207,11 @@ C
       CHARACTER     FORMC*26,LINE*ligne_maximale
       INTEGER       LAC,LEN1,LEN2
 
-      LOGICAL       GETIO64
-      INTEGER       GETHIGH,DATYP
-      CHARACTER*4   GETYP,PKTYP,GETHIC
-      EXTERNAL      GETYP,LBLCHK,DECODR,DECODR2,
-     +              PACCRN,PACC92,DIMGT2,FMMM2,GETMACH,
-     +              GETIO64,GETHIGH,INFNAN,WRDSWP
+      LOGICAL,      EXTERNAL :: GETIO64
+      INTEGER,      EXTERNAL :: GETHIGH
+      CHARACTER(4), EXTERNAL :: GETHIC
+      EXTERNAL      LBLCHK,DECODR,DECODR2,INFNAN,WRDSWP,
+     +              PACCRN,PACC92,DIMGT2,FMMM2,GETMACH
 
       DATA          IBM,CRAY,IEEE / 3*.FALSE. /
 * ---------------------------------------------------------------------

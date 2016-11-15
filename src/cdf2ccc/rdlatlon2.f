@@ -37,6 +37,8 @@
 *
 *REVISIONS
 *
+* B.Dugas avril '16 :
+* - Ajouter le support des grilles de type Y
 * B.Dugas mars '15 :
 * - Faire appel a COMBLINE6 (ajouter opack3 a la liste des arguments)
 * - Verifier l'ordre des dimensions em X, Y et Z.
@@ -184,9 +186,10 @@
      .             pi    , pj    , d60   , dgrw  ,
      .             dlat1 , dlon1 , dlat2 , dlon2
 
-      logical ::   ok_lon, ok_lat, grille_Z, fill_cdf_nan
+      logical ::   ok_lon, ok_lat, grille_Y, grille_Z, fill_cdf_nan
 
       integer,save :: svsm=-1 
+      integer ::   xid2d, yid2d
       integer ::   npas,deet,datei,dateo,ip3
       real(8) ::   tdelta,tim1,tim2,zero8=0.0_8
       real(8) ::   dum81,dum82 ! Dummies for MISPAR
@@ -194,7 +197,7 @@
       real, allocatable, dimension(:,:) :: zlon,zlat
 
       CHARACTER(len=4), external :: GETYP
-      logical,     external :: checkres,idnan
+      logical,     external :: checkres,idnan,monotone
       external     puthic,puthigh
 
       LOGICAL, dimension(nvars) :: fill_message
@@ -298,7 +301,8 @@
 
 *        verifier le type de grilles: gaussiennes, lat-lon A, B ou L ???
 
-         grille_Z = .false.
+         grille_Y = .false. ; grille_Z = .false.
+
 
          if (dxcons) then
             if (ygauss .and. xglb.eq.0) then
@@ -363,22 +367,53 @@
 
          else if (.not.dxcons) then
 
-*           cette grille devrait egalement etre decrite
-*           comme une grille etiree de type Z, non tournee
+*           commencer par chercher des variables lon
+*           ET lat 2D afin de definir une grille Y ?
 
-            grille_Z = .true.
-            write(6,6064)cloche
+            xid2d = -1 ; yid2d = -1
+
+            do id=1,nvars
+
+               if (list(id)%ndim == 2 ) then
+                  if (list(id)%name == 'lon' .or.
+     .                list(id)%name == 'longitude') then
+                     xid2d = id
+                     cycle
+                  elseif 
+     .               (list(id)%name == 'lat' .or.
+     .                list(id)%name == 'latitude') then
+                     yid2d = id
+                     cycle
+                  endif
+               endif
+
+            enddo
+
+            if (xid2d > 0 .and. yid2d > 0) then
+
+               grille_Y = .true.
+               write(6,6065)cloche
+
+            else
+
+*              cette grille devrait egalement etre decrite
+*              comme une grille etiree de type Z, non tournee
+
+               grille_Z = .true.
+               write(6,6064)cloche
+
+            end if
 
          endif
 
-         if (grille_Z) then
-
-            ! On ecrit une grille de type Z non-tournee
+         if (grille_Y .or. grille_Z) then
 
             project%name = 'rotated_pole' 
 
             ni = dim(coord(xid)%dimid(1))%len
             nj = dim(coord(yid)%dimid(1))%len
+
+            allocate( zlon(ni,nj),zlat(ni,nj) )
 
             if (rlonoff < -999.999) rlonoff = 0.0
 
@@ -386,17 +421,6 @@
      +          rlonoff = -dcoordonne(1,xid) 
 
             alon(1:ni) = dcoordonne(1:ni,xid)+rlonoff
-
-            dlat1 = 0.0 ; dlon1 = 180.-rlonoff ! ces parametres correspondent a
-            dlat2 = 0.0 ; dlon2 = 270.-rlonoff ! une grille non-tournee usuelle
-
-            if (dlon1 > 360.) dlon1 = dlon1-360.
-            if (dlon1 <   0.) dlon1 = dlon1+360.
-            if (dlon2 > 360.) dlon2 = dlon2-360.
-            if (dlon2 <   0.) dlon2 = dlon2+360.
-
-            call cxgaig( 'E', ZIG1, ZIG2, ZIG3, ZIG4,
-     +                        dlat1,dlon1,dlat2,dlon2 )
 
             invj = (dcoordonne(1,yid) > dcoordonne(nj,yid))
 
@@ -408,19 +432,89 @@
                alat(1:nj) = dcoordonne(1:nj,yid)
             endif
                      
-            allocate( zlon(ni,nj),zlat(ni,nj) )
-
             do j=1,nj ; zlon(:,j) = alon(:) ; enddo
-            do i=1,ni ; zlon(i,:) = alat(:) ; enddo
+            do i=1,ni ; zlat(i,:) = alat(:) ; enddo
           
             ZIP3 = 0 ; call dset_igs( ZIP1,ZIP2,zlon,zlat,
      +                                ZTYP,ZIG1,ZIG2,ZIG3,ZIG4,
      +                                ni,nj )
-            deallocate( zlon,zlat )
 
-            call putzref( alon,alat,'Z',
-     +                    'E',ZIG1,ZIG2,ZIG3,ZIG4,
-     +                        ZIP1,ZIP2,ZIP3,ni,nj )
+            if (grille_Z) then
+
+               ! On ecrit une grille de type Z non-tournee
+
+               dlat1 = 0.0 ; dlon1 = 180.-rlonoff ! ces parametres correspondent a
+               dlat2 = 0.0 ; dlon2 = 270.-rlonoff ! une grille non-tournee usuelle
+
+               if (dlon1 > 360.) dlon1 = dlon1-360.
+               if (dlon1 <   0.) dlon1 = dlon1+360.
+               if (dlon2 > 360.) dlon2 = dlon2-360.
+               if (dlon2 <   0.) dlon2 = dlon2+360.
+
+               call cxgaig( 'E', ZIG1, ZIG2, ZIG3, ZIG4,
+     +                           dlat1,dlon1,dlat2,dlon2 )
+
+               call putzref( alon,alat,'Z',
+     +                       'E',ZIG1,ZIG2,ZIG3,ZIG4,
+     +                           ZIP1,ZIP2,ZIP3,ni,nj )
+
+            else if (grille_Y) then
+
+               ! grille Y (collection de points)
+
+               invj = .false.
+
+               call get_var( ncid,xid2d,list(xid2d)%type,
+     .                       dim(list(xid2d)%dimid(1))%len*
+     .                       dim(list(xid2d)%dimid(2))%len,
+     .                       zlon )
+               call get_var( ncid,yid2d,list(yid2d)%type,
+     .                       dim(list(yid2d)%dimid(1))%len*
+     .                       dim(list(yid2d)%dimid(2))%len,
+     .                       zlat )
+
+               ok_lon = monotone( zlon, ni,nj, 1, xincr )
+               ok_lat = monotone( zlat, ni,nj, 2, yincr )
+
+               if (ok_lon .and. ok_lat) then ! (dlon1,dlat1) = min values -1.0
+                  if (xincr) then
+                      dlon1 = minval( zlon(1 , :) )
+                  else
+                      dlon1 = minval( zlon(ni, :) )
+                  end if
+                  if (yincr) then
+                      dlat1 = minval( zlat(: , 1) )
+                  else
+                      dlat1 = minval( zlat(: ,nj) )
+                  end if
+                  if (xglb == -1) dlon1 = dlon1-1.0 ! This seems to be a non-global
+                  if (yglb == -1) dlat1 = dlat1-1.0 ! grid that can be shifted
+                  dlat2 = .10 ; dlon2 = .10
+               else
+                  dlat1 = 0.0 ; dlon1 = 0.0 ! selon la documentation
+                  dlat2 = 1.0 ; dlon2 = 1.0 ! en ligne des grilles Y
+               endif
+
+               if (dlon1 > 360.) dlon1 = dlon1-360.
+               if (dlon1 <   0.) dlon1 = dlon1+360.
+
+               call cxgaig( 'L', ZIG1, ZIG2, ZIG3, ZIG4,
+     +                           dlat1,dlon1,dlat2,dlon2 )
+
+               zlon = merge( zlon-360.,zlon,(zlon > 360.) )
+               zlon = merge( zlon+360.,zlon,(zlon <   0.) )
+                  
+               ZIP3 = 0 ; call dset_igs( ZIP1,ZIP2,zlon,zlat,
+     +                                   ZTYP,ZIG1,ZIG2,ZIG3,ZIG4,
+     +                                   ni,nj )
+
+               call putzref( zlon,zlat,'Y',
+     +                       'L',ZIG1,ZIG2,ZIG3,ZIG4,
+     +                           ZIP1,ZIP2,ZIP3,ni,nj )
+
+            endif
+
+            deallocate( zlon,zlat )
 
          end if
 
@@ -526,9 +620,13 @@
       elseif (project%name.eq.'rotated_latitude_longitude'  .or.
      .        project%name.eq.'rotated_pole'              ) then
 
-         if (ccc_pktyp(1:2).eq.'SQ')
-     .   Gtyp  = 'SUBA'
-         GRTYP = 'Z'
+         if (ccc_pktyp(1:2).eq.'SQ') Gtyp  = 'SUBA'
+
+         if (.not.grille_Y) then
+            GRTYP = 'Z'
+         else
+            GRTYP = 'Y'
+         endif
 
          IG1 = ZIP1
          IG2 = ZIP2
@@ -1109,6 +1207,8 @@ C    .                write(6,'(3A4,A)') dtyp,type,ibuf(1),GRTYP
      .        ' invj doit etre re-defini a ',L1,A/)
  6064 format(/a1,'*** Le fichier netcdf contient des grilles qui',
      .      ' sont (de type Z) non tournee et etirees')
+ 6065 format(/a1,'*** Le fichier netcdf contient des grilles qui',
+     .      ' sont (de type Y)')
  6070 format(/' Traitement des valeurs manquantes actif pour variable ',
      .        a,', npack redefini a 32 bits.',a1)
  6080 format(/' Variable sans reperes geographiques ',A/)
@@ -1508,3 +1608,91 @@ C    .                write(6,'(3A4,A)') dtyp,type,ibuf(1),GRTYP
 
 !-----------------------------------------------------------------------
       end
+      logical function monotone( variable, ni,nj, index,upward )
+
+      implicit none
+
+      ! Bernard Dugas, apr 2016 - Check for monotonicity and its direction 
+
+      integer :: index     ! Which indicy to check, first (1) or second (2) ?
+      logical :: upward    ! If monotonic, is the variable increasing ?
+      integer :: ni,nj
+      real    :: variable( ni,nj )
+
+      ! Local variables
+
+      logical :: ok
+      integer :: i,j
+!-----------------------------------------------------------------------
+
+      ok = .true.
+
+      if (index == 1) then
+
+         do j=1,nj
+            do i=2,ni
+               if (variable(i-1,j) >= variable(i,j)) then
+                  ok = .false.
+                  exit
+               endif
+            enddo
+         enddo
+
+      else if (index == 2) then
+
+         do j=2,nj
+            do i=1,ni
+               if (variable(i,j-1) >= variable(i,j)) then
+                  ok = .false.
+                  exit
+               endif
+            enddo
+         enddo
+
+      else ! Unrecognized index value
+
+         ok = .false. ;  upward = ok ; monotone = ok ; return
+
+      endif
+
+      if (ok) then  ! Monotonicaly increasing values
+
+         upward = ok ;  monotone = ok
+
+      else ! Otherwise, check for monotonicaly decreasing values
+
+         upward = ok ; ok = .true.
+
+         if (index == 1) then
+
+            do j=1,nj
+               do i=1,ni-1
+                  if (variable(i,j) <= variable(i+1,j)) then
+                     ok = .false.
+                     exit
+                  endif
+               enddo
+            enddo
+
+         else
+
+            do j=1,nj-1
+               do i=1,ni
+                  if (variable(i,j) <= variable(i,j+1)) then
+                     ok = .false.
+                     exit
+                  endif
+               enddo
+            enddo
+
+         endif
+
+         monotone = ok
+         
+      endif
+
+      return
+
+!-----------------------------------------------------------------------
+      end
+

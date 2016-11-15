@@ -18,6 +18,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: paccrn.ftn,v $
+C     Revision 3.13  2016/10/26 15:29  dugas
+C     Modification syntaxique F77 --> F90
+C
 C     Revision 3.12  2014/09/25 18:42:03  dugas
 C     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 C
@@ -126,8 +129,7 @@ C     *            UNPACKING (KIND .LT. 0).
 C----------------------------------------------------------------------
       IMPLICIT none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER, PARAMETER :: HEAD = taille_entete
 
       INTEGER  NWDS,     NBITS,    KIND,
      +         IX(1),    IXPAK(1)

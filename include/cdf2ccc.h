@@ -5,6 +5,8 @@
 !
 ! REVISIONS
 !
+! B. Dugas octobre 2016 :
+! - Le parametre HEAD passe de 28 a 32.
 ! B. Dugas juin 2013 :
 ! - Ajouter la variable fill_toler (tolerance d''erreur) 
 ! - Ajouter la variable meta-title (titre inserable dans 
@@ -276,7 +278,7 @@
      .               hyb_pt,hyb_pref,hyb_r,hyb_r2
 
 ! Entete I/O :
-      integer, parameter :: head = 28 ! taille de l''entete de ibuf
+      integer, parameter :: head = 32 ! taille de l''entete de ibuf
 
 ! Projection :
 

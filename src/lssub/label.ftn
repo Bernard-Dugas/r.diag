@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: label.ftn,v $
+C     Revision 3.30  2016/10/26 15:30  dugas
+C     Modifications syntaxiques F77 --> F90
+C
 C     Revision 3.29  2014/10/16 12:00:41  dugas
 C     Modifications commandees par la compilation avec GFORTRAN et IFORT.
 C
@@ -191,8 +194,7 @@ C
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD  = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
       LOGICAL     OK
       INTEGER     NF1,NF2,KBUF(HEAD),LBUF(HEAD)
@@ -400,10 +402,8 @@ C
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD  = taille_entete )
-      INTEGER     NSIGN
-      PARAMETER ( NSIGN = mantisse_mot_reel )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: NSIGN = mantisse_mot_reel
 
       CHARACTER*4 TYPE,PKTYP,GETYP
       INTEGER     LEN,NWDS,PACK,PK32,PK64

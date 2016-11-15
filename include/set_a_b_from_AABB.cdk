@@ -1,0 +1,75 @@
+# if defined (CDK_DOC)
+!
+! set_a_b_from_AABB.CDK
+! Code partage de definition des parametres
+! AA et BB de la coordonnee verticale
+!
+! Revision 1.0  2016/10/29 21:45  dugas
+! Version initiale
+!
+# endif
+          IUN = 0 ; IO = 0
+          IF (FNOM( IUN, 'aabb.nml', 'SQE+OLD', 0 ) == 0)      THEN
+
+              BIGBIN = -524288. ! -(2^^9)
+              ! BIGBIN = BIGBIN*BIGBIN*BIGBIN
+              A(:) = BIGBIN ; B(:) = BIGBIN
+#             if defined(OTHER_COORD)
+              AT(:) = BIGBIN ; BT(:) = BIGBIN
+#             endif
+
+              READ( IUN, NML=AABB_NML, END=0920,ERR=0920,IOSTAT=IO )
+              IER = FCLOS( IUN )
+
+              LL = 0 ; DO  L=1,MAXLEV+1
+                  IF (A(L) == BIGBIN .OR. B(L) == BIGBIN) EXIT
+                  LL = LL+1
+              END DO
+
+              ! Check the number of valid (AG,BG) pairs.
+#             if defined(NSLM1_NOT_OK)
+              IF (LL /= NSL)                                   THEN
+                  WRITE(6,6022) NSL,LL
+                  CALL                             XIT( VERBEX ,-22) 
+#             else
+              IF (LL /= NSL .AND. LL /= NSL-1)                 THEN
+                  WRITE(6,6022) NSL,LL
+                  CALL                             XIT( VERBEX ,-22) 
+              ELSE IF (LL == NSL-1 .AND. COORD /= 'GEM4')      THEN
+                  A(LL+1) = 0. ; B(LL+1) = 1.0 ! Add surface values.
+#             endif
+              END IF
+
+              WRITE(6,6110)
+
+#             if defined(OTHER_COORD)
+              IF (OTHER)                                       THEN
+
+                  LT = 0 ; DO  L=1,MAXLEV+1
+                      IF (AT(L) == BIGBIN .OR. BT(L) == BIGBIN) EXIT
+                      LT = LT+1
+                  END DO
+
+                  ! Check the number of valid (AM,BM) pairs.
+#                 if defined(NSLM1_NOT_OK)
+                  IF (LT /= NSLT)                              THEN
+                     WRITE(6,6029) NSL,LT
+                     CALL                          XIT( VERBEX ,-29) 
+#                 else
+                  IF (LT /= NSLT .AND. LT /= NSLT-1)           THEN
+                     WRITE(6,6029) NSL,LT
+                     CALL                          XIT( VERBEX ,-29) 
+                  ELSE IF (LT == NSLT-1 .AND. COORD /= 'GEM4') THEN
+                      AT(LT+1) = 0. ; BT(LT+1) = 1.0 ! Add surface values.
+#                 endif
+                  END IF
+
+                  WRITE(6,6120)
+
+              END IF
+#             endif
+
+          ELSE
+              GOTO 0920
+          END IF
+

@@ -38,11 +38,12 @@
 *
 *
 *     PURPOSE...
-*      GIVEN A SET OF FIELDS DEFINED ON CMC/RPN GRIDS,
-*      INTERPOLATE THEM TO THE GEM/DM Z-GRID. THE CODE IS
-*      BORROWED FROM THE V2.3.1. MODEL LIBRARY AND HAS
-*      THE SAME GRID DEFINITION INPUT PARAMETRES AS
-*      THE MODEL ITSELF.
+*      GIVEN A SET OF FIELDS DEFINED ON CMC/RPN GRIDS, INTERPOLATE THEM
+*      TO THE GEM/DM Z-GRID (makezg/makezgv) OR TO THE Ying-Yang U-GRID.
+*      THE CODE THAT HANDLES Z-GRID OUTPUTS IS BORROWED FROM THE V2.3.1
+*      MODEL LIBRARY AND HAS THE SAME GRID DEFINITION INPUT PARAMETRES
+*      AS THE MODEL ITSELF. THE U-GRID OUTPUT MODE IS ONLY SUPPORTED
+*      IN APPEND-MODE, AS DESCRIBED IN THE GENERAL NOTE 1) BELOW.
 *
 *
 *     INPUT FILE...
@@ -118,9 +119,10 @@
 *                this will constrain the choice of the TicTac set or of the
 *                TocToc variables. Otherwise, the first set or variable found
 *                is retained. The resulting newly interpolated data will then
-*                be APPENDED to the file. Note that this is the only option
-*                available for MAKEYY and MAKEYYV and not other parametre
-*                is supported at this time for these commands. 
+*                be APPENDED to the file. Note again that this is the only
+*                available option for MAKEYY and MAKEYYV and no other
+*                parametres are supported at this time with
+*                these two commands. 
 *
 *     NOTES FOR THE NON-PS GRID OPTIONS :
 *             2) In non-APPEND mode (which is the default), the only two
@@ -175,6 +177,10 @@
 *    2         TAPE1=GIN, TAPE2=GOUT, TAPE6=OUTPUT)
   
 *     $Log: makezg.ptn,v $
+*     Revision 4.26  2016/10/28 17:30  dugas
+*     Corrections a la documentation du support
+*     des grilles U (Ying-Yang) en mode APPEND
+*
 *     Revision 4.25  2014/10/10 19:53:43  dugas
 *     Corriger l'initialisation de GRTYP.
 *

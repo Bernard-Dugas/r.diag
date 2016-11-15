@@ -779,12 +779,14 @@ int c_findHighCoreIndex(float ax[], int ni)
 /*
    The following is an alternative to the etime fortran
    extension provided by Michel Valin in February 2013
+   with a followup modification in October 2016
 */
 
 #include <sys/time.h>
 #include <sys/resource.h>
 
 #pragma weak etime_=etime
+void etime_(float *timearray, float *time);
 void etime(float *timearray, float *time)
 {
   struct rusage usage;

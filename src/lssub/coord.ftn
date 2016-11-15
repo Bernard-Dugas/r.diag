@@ -15,6 +15,11 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: coord.ftn,v $
+*     Revision 3.44  2016/10/26 16:17  dugas
+*     - Ajouter la routine CONVHOUR (le pendant de CONVPR mais pour IP2)
+*     - Ajouter KIND=1001,1003,2001,5003,5004 dans CONVIP1 et SETKINDI 
+*     - Ajouter un message informatif dans MONVERT
+*
 *     Revision 3.43  2014/09/25 18:31:49  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 *
@@ -1119,6 +1124,54 @@ C
 *------------------------------------------------------------------
 
       end
+      SUBROUTINE convhour (ip2, dt, mode)
+
+*     IP conversion for units of hours.
+
+      implicit  none
+
+***    Arguments.
+
+      integer   ip2, mode
+      real      dt
+
+***    Local variables.
+
+      integer   kind
+      character string1 
+
+      logical            info
+      common   /zzverbo/ info
+
+*------------------------------------------------------------------
+
+      kind = -1 ; if (mode > 0) kind = 10
+
+      call diag_convip_plus( ip2, dt, kind, mode, string1,.false. )
+
+      
+      if (mode < 0)                                            then
+          ! Decoding
+          if (ip2 < 0 .or. ip2 > 32767)                        then
+              ! ip2 in NEW-STYLE coding
+              if (kind /= 10)                                  then
+                  if (info) write(6,6001) ip2,kind
+                  call                             xit('Convhour',-1 )
+              end if
+          else if (IP2 >= 0)                                   then
+              ! OLD-STYLE coding. HOURS coding not explicitely supported
+              dt = ip2 ! so we do not use the output of diag_convip_plus
+          end if
+      end if
+
+      return
+*------------------------------------------------------------------
+
+ 6001 format(' In convhour: IP2,KIND =',2I10,' is not in hours.')
+
+      end
+
+      
       SUBROUTINE convpr (ip1, pr, kind, mode)
 
       implicit none
@@ -1141,8 +1194,6 @@ C
 
       end
       SUBROUTINE convip1 (IP, P, KINDP, MODE, STRING, FLAG)
-
-      use diag_convert_ip123, only: diag_convip_plus
 
       implicit       none
 
@@ -1206,10 +1257,13 @@ C
           getkindc  = height
       Else
      +If (kind.eq.01  .or.
-     +    kind.eq.1002)                                        Then
+     +    kind.eq.1001.or.
+     +    kind.eq.1002.or.
+     +    kind.eq.1003)                                        Then
           getkindc  = eta
       Else
-     +If (kind.eq.02)                                          Then
+     +If (kind.eq.02  .or.
+     +    kind.eq.2001)                                        Then
           getkindc  = pressure
       Else
      +If (kind.eq.03)                                          Then
@@ -1220,7 +1274,9 @@ C
       Else
      +If (kind.eq.05  .or.
      +    kind.eq.5001.or.
-     +    kind.eq.5002)                                        Then
+     +    kind.eq.5002.or.
+     +    kind.eq.5003.or.
+     +    kind.eq.5004)                                        Then
           getkindc  = hybrid
       Else
      +If (kind.eq.06)                                          Then
@@ -1266,17 +1322,19 @@ C
       deftyp = getyp( 0 )
       if (deftyp.ne.'SQ') return
 
-      if (kind.eq.00 .or.
-     +    kind.eq.01 .or. kind.eq.1002 .or.
-     +    kind.eq.02 .or.
-     +    kind.eq.03 .or.
-     +    kind.eq.04 .or.
-     +    kind.eq.05 .or. kind.eq.5001 .or. kind.eq.5002 .or.
-     +    kind.eq.06 .or.
-     +    kind.eq.10 .or.
-     +    kind.eq.15 .or.
-     +    kind.eq.21 .or.
-     +    kind.eq.31)                                          then
+      if (kind.eq.00
+     +.or.kind.eq.01 .or. kind.eq.1001 .or. kind.eq.1002
+     +               .or. kind.eq.1003
+     +.or.kind.eq.02 .or. kind.eq.2001
+     +.or.kind.eq.03
+     +.or.kind.eq.04
+     +.or.kind.eq.05 .or. kind.eq.5001 .or. kind.eq.5002
+     +               .or. kind.eq.5003 .or. kind.eq.5004
+     +.or.kind.eq.06
+     +.or.kind.eq.10
+     +.or.kind.eq.15
+     +.or.kind.eq.21
+     +.or.kind.eq.31)                                          then
          vkind = kind
       else
           if (info) write(6,6001) kind
@@ -1479,6 +1537,9 @@ C
       logical   monoton,increas
       real      coord(nlev)
 
+      logical              info
+      common     /zzverbo/ info
+
 *------------------------------------------------------------------------------
       monoton = .FALSE.
 
@@ -1498,9 +1559,19 @@ C
 
       Do  l=3,nlev
           If ((     increas .And. (coord(l).Le.coord(l-1)) )
-     +   .Or.
-     +        (.Not.increas .And. (coord(l).Ge.coord(l-1)) ))   
-     +        RETURN
+     +   .Or. (.Not.increas .And. (coord(l).Ge.coord(l-1)) ))  Then 
+
+              If (info)                                        Then
+                  If (increas)                                 Then
+                      write(6,6001) l,l-1,coord(l),coord(l-1)
+                  Else
+                      write(6,6002) l,l-1,coord(l),coord(l-1)
+                  End If
+              End If
+
+              RETURN
+
+          End If
       End Do
 
       monoton = .TRUE.
@@ -1517,6 +1588,11 @@ C
 
       Return
 *------------------------------------------------------------------------------
+
+ 6001 Format('In monvert: COORD(1) < COORD(2) but COORD(',I3.3,')',
+     +       ' and COORD(',I3.3,') are equal to ',2E15.7/)
+ 6002 Format('In monvert: COORD(1) > COORD(2) but COORD(',I3.3,')',
+     +       ' and COORD(',I3.3,') are equal to ',2E15.7/)
 
       End
       subroutine genab( pia, pib, eta,

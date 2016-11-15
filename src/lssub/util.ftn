@@ -18,6 +18,12 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.122  2016/10/26 15:15:24  dugas
+C     - Explicitement desactiver tous les types de donnees
+C       manquantes dans JCLPNT lorsque MValue est faux
+C     - Ajouter appel a CLOZREF dans XIT
+C     - Modifications syntaxiques F77 --> F90
+C
 C     Revision 3.121  2015/02/13 20:21:04  dugas
 C     Mise-a-jour syntaxique F90 de QQQDOC.
 C
@@ -2131,7 +2137,20 @@ C    +                             FORM='FORMATTED' )
 
 ***        CHECK FOR THE CMC/RPN MISSING VALUE PACKAGE.
 
-          IF (MISSING_VALUE_USED() == 1)                       THEN
+          IF (MValue_IS_OFF)                                   THEN
+              ! Explicitely turn off the missing value
+              ! decoder for all supported datatypes.
+              call set_missing_value_mapping( 11, 1, DUMMY, 0,0,0 ) ! real(4)
+              call set_missing_value_mapping( 11, 1, DUMMY, 0,0,1 ) ! real(8)
+              call set_missing_value_mapping( 11, 2, DUMMY, 0,0,0 ) ! unsigned integer(4)
+              call set_missing_value_mapping( 11, 2, DUMMY, 0,1,0 ) ! unsigned integer(2)
+              call set_missing_value_mapping( 11, 2, DUMMY, 1,0,0 ) ! unsigned integer(1)
+              call set_missing_value_mapping( 11, 4, DUMMY, 0,0,0 ) ! integer(4)
+              call set_missing_value_mapping( 11, 4, DUMMY, 0,1,0 ) ! integer(2)
+              call set_missing_value_mapping( 11, 4, DUMMY, 1,0,0 ) ! integer(1)
+          ELSE IF (MISSING_VALUE_USED() == 1)                  THEN
+              ! Means that the environment variable
+              ! MISSING_VALUE_FLAGS was set. To what ?
               IER = GET_MISSING_VALUE_FLAGS(
      +              misf, misi, misui, misd, misa, misus, misb, misub )
               IF (MValue .and. MValue_READ)                    THEN
@@ -2141,10 +2160,6 @@ C    +                             FORM='FORMATTED' )
      +              misf, misi, misui, misd, misa, misus, misb, misub )
               ELSE IF (.not.MValue_IS_OFF)                     THEN
                   MValue = Vrai ; MisFlag = misd
-              ELSE
-***                EXPLICITELY TURN OFF THE MISSING VALUE DECODER.
-                  call set_missing_value_mapping( 11, 1, DUMMY, 0,0,0 )
-                  call set_missing_value_mapping( 11, 1, DUMMY, 0,0,1 )
               END IF
           ELSE IF (MValue)                                     THEN
               IF (MValue_READ)                                 THEN
@@ -3111,7 +3126,7 @@ CCC   external      etime
       EXTERNAL      memoirc,QUIT
 
       INTEGER       FSTFRM,ERR
-      EXTERNAL      FSTFRM,WRIZREF,ECRPT,GETPT,LIRPT
+      EXTERNAL      FSTFRM,WRIZREF,ECRPT,GETPT,LIRPT,CLOZREF
 
       DATA          DASH/ '----' /, 
      +              STAR/ '****' /
@@ -3247,6 +3262,8 @@ CCC   external      etime
           END IF
       END DO
 
+      CALL CLOZREF()
+
 ***    GET TOTAL ELAPSED SYSTEM TIME AS WELL AS USER TIME.
 #     if defined (AIX)
       CALL SETRTEOPTS('cpu_time_type=total_usertime')
@@ -3335,25 +3352,22 @@ CCC   external      etime
 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
       LOGICAL     OK
       INTEGER     NF,NLEV,IBUF(HEAD),I,ILEV, SKIPRENV
-      CHARACTER*4 PKTYP,GETYP,TYPE,NAME
+      CHARACTER*4 PKTYP,TYPE,NAME
 
 #     include    "zlabel.cdk"
 
-      EXTERNAL    GETYP,GETBUF2
+      INTEGER     KLE,ERR,ERR0,NI,NJ,NK
 
-      INTEGER     FSTINFX,KLE
-      EXTERNAL    FSTINFX,PRECLE,CLESUI
+      CHARACTER(4),EXTERNAL :: GETYP 
+      INTEGER,     EXTERNAL :: FSTINFX,FSTRWD
+      EXTERNAL     PRECLE,CLESUI,XIT,GETBUF2
 
       INTEGER              RNDF
       COMMON     /ZZRNDFL/ RNDF(unite_io_maximale)
-
-      INTEGER     FSTRWD,ERR,ERR0,NI,NJ,NK
-      EXTERNAL    FSTRWD,XIT
 
       LOGICAL              DEBUG
       COMMON     /ZZDEBUG/ DEBUG
@@ -3539,27 +3553,26 @@ CCC   external      etime
 
       use DIAG_TOC, only: LirTOC
 
-      IMPLICIT    none
+      IMPLICIT     none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
+      INTEGER,     PARAMETER :: HEAD = taille_entete
 
-      CHARACTER   NAME*4
-      INTEGER     IO,NF,INF,IBUF(HEAD),JBUF(HEAD),I,
-     +            ERR,NI,NJ,NK, SKIPRENV, NBR_TOC
-      LOGICAL     ERROR,OK
+      CHARACTER(4) NAME,PKTYP
+      INTEGER      IO,NF,INF,IBUF(HEAD),JBUF(HEAD),I,
+     +             ERR,NI,NJ,NK, SKIPRENV, NBR_TOC,KLE
+      LOGICAL      ERROR,OK
 
-#     include    "zlabel.cdk"
+#     include     "zlabel.cdk"
 
-      LOGICAL              INFO,DEBUG
-      COMMON     /ZZVERBO/ INFO
-      COMMON     /ZZDEBUG/      DEBUG
+      LOGICAL               INFO,DEBUG
+      COMMON      /ZZVERBO/ INFO
+      COMMON      /ZZDEBUG/      DEBUG
 
-      INTEGER     FSTINFX,KLE
-      EXTERNAL    FSTINFX,PRECLE,CLESUI,LIRPT
 
-      CHARACTER*4 GETYP,PKTYP
-      EXTERNAL    GETBUF2,GETYP,IBUFILL,SKIPREC,MESSYS
+      CHARACTER(4),EXTERNAL :: GETYP
+      INTEGER,     EXTERNAL :: FSTINFX
+      EXTERNAL     GETBUF2,IBUFILL,SKIPREC,MESSYS,
+     +             PRECLE,CLESUI,LIRPT
 *--------------------------------------------------------------------
       SKIPRENV =  0
 
@@ -3756,8 +3769,7 @@ CCC           ERROR = .FALSE.
 *                  SUPPOSE DES CARACTERES ASCII.
 
 *- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      INTEGER       stderr
-      PARAMETER   ( stderr = 0 )
+      INTEGER,      PARAMETER :: stderr = 0
 
 *     LOGICAL       op
       LOGICAL       checked_ARMNLIB
@@ -4767,8 +4779,7 @@ CCC           ERROR = .FALSE.
       LOGICAL       DONE,EQVL
       CHARACTER*(*) NOM1,NOM2
 
-      INTEGER       MAXNAM
-      PARAMETER   ( MAXNAM = 200 )
+      INTEGER,      PARAMETER :: MAXNAM = 200
 
       INTEGER       INDEX
       CHARACTER*4   TABLE(2,MAXNAM), NAME1,NAME2

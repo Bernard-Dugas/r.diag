@@ -15,6 +15,11 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: dimgt.ftn,v $
+C     Revision 3.6  2016/10/26 16:12  dugas
+C     - Restaurer les fonctionnalites de CLRLMT qui avaient ete eliminees en 2013.
+C       Elles s'averent requises dans le traitement des troncatures T10->T99 avec
+C       des fichiers PK84 ou PK92.
+C
 C     Revision 3.5  2014/10/16 12:00:36  dugas
 C     Modifications commandees par la compilation avec GFORTRAN et IFORT.
 C
@@ -165,16 +170,16 @@ C     Initial revision
       END 
 
       SUBROUTINE dimgt2 (LSR,LA,LR,LM,KTR,LRLMT,KIND,CALC)
-  
+
 ***    DEC 10/90 - B.DUGAS, RPN. (LRLMT PASSE DE AABBC A AAABBBC)
 ***    AUG 13/90 - M.LAZARE. - CALL XIT IF LR.LT.LM. 
 ***    NOV 27/88 - B.DUGAS.
-  
+
 ***    COMPUTES ROW LENGTH INFORMATION FOR SPECTRAL ARRAYS FROM VALUES 
 ***    OF LRLMT AND KIND. THE RESULT ARE RETURNED AS...
-  
+
 ***    LSR(1,M),LSR(2,M) = FIRST WORD IN ROW M OF SPECTRAL,ALP ARRAYS. 
-  
+
 ***    LRLMT IS A 5, 7 OR 9 DIGIT NUMBER FORMED BY - 100000*LR+10*LM+KTR,
 ***                                             BY - 10000*LR+10*LM+KTR,
 ***                                          OR BY - 1000*LR*10*LM+KTR
@@ -189,17 +194,17 @@ C     Initial revision
 ***    WHILE (T/R)9 TO (T/R)98 CAN MAKE USE OF EITHER THE 5 OR 7 DIGIT
 ***    REPRESENTATION. (T/R)99 TO (T/R)998 ARRAYS WILL USE THE 7-DIGIT
 ***    REPRESENTATION ONLY.
-  
+
 ***    KIND DETERMINES THE PROCESSING OPTION IN THE FOLLOWING WAY
 ***          = 0 ==> GLOBAL COEFFICIENTS INPUT, GLOBAL OUTPUT GRIDS
 ***          < 0 ==> ANTI-SYMMETRIC COEFFICIENTS, HEMISPHERIC OUTPUT 
 ***          > 0 ==> SYMMETRIC COEFFICIENTS,        "     "      " 
-  
+
 ***    IF CALC.NE.0 LSR IS NOT ACTUALLY WRITTEN BUT ALL THE OTHER 
 ***    PARAMETERS ARE RETURNED CORRECTLY.
-  
+
 ***    LA = TOTAL LENGTH OF SPECTRAL ARRAY (COMPLEX WORDS).
-  
+
 ***    NOTE THAT INVALID TRUNCATION  TYPES RETURN  WITH LA = 0. RHOM-
 ***    BOIDAL AND TRIANGULAR TRUNCATIONS ONLY ARE SUPPORTED. CONSTANT
 ***    ZERO COEFFICIENTS IN THE KIND.NE.0 CASES ARE SQUEEZED OUT FROM
@@ -402,21 +407,19 @@ C     Initial revision
       LOGICAL   CONDIT
 
 ***    PURPOSE: BUILDS LRLMT FIELD FROM THE LR, LM AND KTR FIELDS. FIVE-,
-***             SEVEN- AND NINE-DIGITS LRLMT's ARE SUPPORTED. THE CONDIT 
-***             LOGICAL SWITCH IS NOW IGNORED. T1 TO T99 USES THE FIVE DIGITS
-***             REPRESENTATION; T100 TO T999 USES SEVEN DIGITS AND NINE DIGITS 
-***             ARE USED IN THE T1000 TO T9999 RANGE
+***             SEVEN- AND NINE-DIGITS LRLMT's ARE SUPPORTED. T10 TO T99
+***             USES THE FIVE OR SEVEN DIGITS REPRESENTATION, DEPENDING
+***             ON THE VALUE OF CONDIT AND POSSIBLY OF THE 'LRLMT_DIGITS'
+***             ENVIRONMENTAL VARIABLE ; T100 TO T999 USES SEVEN DIGITS
+***             AND NINE DIGITS ARE USED IN THE T1000 TO T9999 RANGE
 
-      CHARACTER EVAL*256
-      INTEGER   DIGITS
+      CHARACTER(LEN=256), SAVE :: EVAL=' '
+      INTEGER,            SAVE :: DIGITS
 
       LOGICAL            INFO
       COMMON   /ZZVERBO/ INFO
 
       EXTERNAL  XIT,GETENVC
-
-      SAVE      EVAL
-      DATA      EVAL / ' ' /
 
 *----------------------------------------------------------------------
 ***    CONSISTENCY CHECKING.
@@ -424,21 +427,47 @@ C     Initial revision
       IF (LR .LT.0 .OR.
      +   (LM .LT.0 .OR. LR .LT.LM) .OR.
      +   (KTR.LT.0 .OR. KTR.GT.9 ) )                           THEN
-          IF (INFO) WRITE(6,6000) LR,LM,KTR
+          IF (INFO) WRITE(6,6001) LR,LM,KTR
           CALL                                     XIT(' Clrlmt',-1 )
       END IF
 
-      IF (LR.GE.1000)                                          THEN
-          CLRLMT = (MOD( LR,10000 )*10000+MOD( LM,10000 ))*10+KTR
-      ELSE IF (LR.GE.100)                                      THEN
-          CLRLMT = (MOD( LR,1000 )*1000+MOD( LM,1000 ))*10+KTR
-      ELSE
+      IF (LR > 99 .OR. LM > 99)                                THEN
+          IF (LR > 999 .OR. LM > 999)                          THEN
+              CLRLMT = (MOD( LR,10000 )*10000+MOD( LM,10000 ))*10+KTR
+          ELSE
+              CLRLMT = (MOD( LR,1000 )*1000+MOD( LM,1000 ))*10+KTR
+          END IF
+      ELSE IF (LR < 10 .AND. LM < 10)                          THEN
           CLRLMT = (LR*100+LM)*10+KTR
+      ELSE
+          IF (EVAL.EQ.' ')                                     THEN
+              CALL GETENVC( 'LRLMT_DIGITS',EVAL )
+              IF (EVAL == ' ') EVAL = ' 7'
+              READ(EVAL,'(BN,I2)') DIGITS
+              IF (DIGITS /= 5 .AND. DIGITS /= 7)               THEN
+                  IF (INFO) WRITE(6,6002) DIGITS
+                  CALL                             XIT(' Clrlmt',-2 )
+              END IF                 
+          END IF
+          IF (DIGITS == 5)                                     THEN
+              IF (CONDIT)                                      THEN
+                  CLRLMT = (LR*100+LM)*10+KTR
+              ELSE
+                  CLRLMT = (LR*1000+LM)*10+KTR
+              END IF
+          ELSE
+              IF (CONDIT)                                      THEN
+                  CLRLMT = (LR*1000+LM)*10+KTR
+              ELSE
+                  CLRLMT = (LR*100+LM)*10+KTR
+              END IF
+          END IF
       END IF
 
       RETURN
 *----------------------------------------------------------------------
 
- 6000 FORMAT(' Clrlmt found lr,lm,ktr= ',3I5,'.')
+ 6001 FORMAT(' Clrlmt found lr,lm,ktr= ',3I5,'.')
+ 6002 FORMAT(" Clrlmt found 'LRLMT_DIGITS' = ",I2)
 
       END

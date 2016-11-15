@@ -1,7 +1,12 @@
 .SUFFIXES :
 .SUFFIXES : .a .F90 .f .f90 .mod .c .o
 
-# LSSUB Makefile secondaire
+# Description: Makefile secondaire de LSSUB
+
+# Revision 3.9  2016/10/27 13:05  dugas
+# - Ajouter les macros OPTIM90, DEBUG90 et F90FLAGS pour les cibles *.F90
+# - Ajouter le traitement de diag_cpnvip_plus.f90
+# - Modifier les dependances de coord.o
 
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
@@ -28,6 +33,10 @@ OPTIM   = -O 0 -debug
 DEBUG   = $(OPTIM)
 CFLAGS  = $(DEBUG)
 FFLAGS  = $(DEBUG) -includes $(INCLUDES)/$(EC_ARCH)
+
+OPTIM90  = -O 0 -g
+DEBUG90  = $(OPTIM90)
+F90FLAGS = $(DEBUG90) -I$(INCLUDES)/$(EC_ARCH)
 
 FICHIZ  = $(DIAGS)/lib/$(EC_ARCH)/lssub$(STD).f.zip
 
@@ -59,7 +68,7 @@ default: $(LIBS)
 	/bin/rm -f $*.o
 
 .F90.a:
-	s.f90 -c $<
+	s.f90 $(F90FLAGS) -c $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
 	$(AR) rv $@ $*.o
 	$(ZIP) $(FICHIZ) $<
@@ -76,7 +85,7 @@ default: $(LIBS)
 	$(FCOMP) $<
 
 .F90.o:
-	s.f90 -c $<
+	s.f90 $(F90FLAGS) -c $<
 
 .f90.o:
 	$(FCOMP) $<
@@ -109,7 +118,8 @@ F90DECKS= \
 	gaussg.F90	util2.F90
 
 f90DECKS= \
-	diag_convert_ip123.f90 	diag_toc.f90	filter.f90
+	diag_convert_ip123.f90	diag_convip_plus.f90 	diag_toc.f90 \
+	filter.f90
 
 MODDECKS= \
 	diag_convert_ip123.mod 	diag_toc.mod
@@ -119,7 +129,7 @@ diag_toc.o: diag_toc.f90 vgrid_descriptors.mod
 get.o: get.f diag_toc.mod
 util.o: util.f  diag_toc.mod
 diag_convert_ip123.mod: diag_convert_ip123.f90
-coord.o: coord.f	diag_convert_ip123.mod
+#coord.o: coord.f	diag_convert_ip123.mod
 
 #LISTE DES CIBLES DU FICHIER recettes
 
@@ -138,6 +148,7 @@ $(LIBS): $(FDECKS) $(CDECKS) $(f90DECKS) $(F90DECKS) $(MODDECKS) \
 	$(LIBS)(coord.o)		\
 	$(LIBS)(ddl.o)	 	\
 	$(LIBS)(diag_convert_ip123.o)		\
+	$(LIBS)(diag_convip_plus.o)		\
 	$(LIBS)(diag_toc.o)		\
 	$(LIBS)(dimgt.o)		\
 	$(LIBS)(divers.o)		\

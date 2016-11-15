@@ -1,5 +1,8 @@
 #     if !defined (dimension_en_x)
-#         define  dimension_en_x 131072
+#         define  dimension_en_x 1000
+#     endif
+#     if !defined (dimension_en_y)
+#         define  dimension_en_y 1000
 #     endif
 #     if !defined (unite_io_maximale)
 #         define  unite_io_maximale 99
@@ -21,6 +24,23 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: convsub.ftn,v $
+C     Revision 3.127  2016/10/26 16:37  dugas
+C     - Remplacerle macro dimension_en_x=131072 par la paire de macros
+C       dimension_en_x=1000 et dimension_en_y=1000, ce qui permets le
+C       support des grilles de type Y (i.e. le parametre MAZDIM dans
+C       les routines GETZREF,OUVZREF2)
+C     - Ajouter dans IBUFILL et PARFILL la reconnaissance des
+C       intervals verticaux ou temporels codes dans les IP1/2/3
+C     - Utiliser (en option) le codage en heures des IP2 dans PARFILL
+C     - Dans SAVZREF, verifier les dimension en I et J lors de
+C       la recherche des TicTacs dans le fichier ZCROCHETS
+C     - Ajouter le point d'entree CLOZREF dans GETZREF
+C     - Ajouter le point d'entree RMZREF dans OUVZREF2
+C     - Appels a OUVZREF2 plutot que OUVZREF: nouvel argument logique
+C       REM qui indique de creer une nouveau fichier ZCROCHETS plutot
+C       que d'utiliser un fichier pre-existant.
+C     - Modifications syntaxiques F77 --> F90
+C
 C     Revision 3.126  2014/09/25 18:31:49  dugas
 C     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 C
@@ -428,30 +448,33 @@ c
 ***    all the necessary parameters.
 
       use DIAG_TOC, only: LirTOC
+      use diag_convert_ip123
 
       IMPLICIT    none
 
       LOGICAL     OK
       INTEGER     ibuf(*),KEY,NF
 
-      integer     MAXBITS
-      parameter ( MAXBITS = 32 )
-      integer     BITSMOT
+      integer,    parameter :: MAXBITS =  32
 #     if defined (CRAY) || defined (NEC64)
-      parameter ( BITSMOT = 64 )
+      integer,    parameter :: BITSMOT = 64
 #     else
-      parameter ( BITSMOT = 32 )
+      integer,    parameter :: BITSMOT = 32
 #     endif
 
       REAL        pr
       CHARACTER*4 type,nom,newl,alev*12
       LOGICAL     spec,four,data,coef,char,cmpl
-      INTEGER     time,lev,ilg,ilat,ihem,pack,ktr
+      INTEGER     time,lev,ilg,ilat,ihem,pack,ktr,err
       INTEGER     lsr, la,lr,lm,lrlmt,kind, i,j,k
       INTEGER*8   DATE_CONVERSION_FACTOR
 
       character   blk*16
       integer     dummy,dummy0,dummy1,dummy2, NBR_TOC
+
+      type(FLOAT_IP) :: RP1,RP2,RP3
+      integer     RANGE_KIND,k1,k2,stat
+      real        HIVAL,LOVAL
 
       REAL*8      ecoule
       INTEGER     aa,mm,jj,hh,datev
@@ -472,8 +495,8 @@ c
       COMMON     /ZZDEBUG/      debug
       COMMON     /ZZZDATE/            cdate,keepip2,datval
 
-      INTEGER     FSTPRM,ERR
-      EXTERNAL    FSTPRM,SAVZREF,PUTHIGH,PUTHIC,GETZDES
+      INTEGER,    EXTERNAL :: FSTPRM
+      EXTERNAL    SAVZREF,PUTHIGH,PUTHIC,PUTHIR,GETZDES
 
 #     include    "fstparm.cdk"
 *------------------------------------------------------------------------------
@@ -567,6 +590,30 @@ c
 
       nom = nomvar
 
+***    Evaluer RANGE_KIND,HIVAL,LOVAL tout de suite.
+***    Ils seront saives dans les mots 29,30,31 de IBUF.
+
+      stat = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
+
+      if (debug .and. stat == CONVERT_ERROR)                   then
+         write(6,6002) stat,ip1,ip2,ip3
+         call                                      xit(' Ibufill',-2 )
+      end if
+
+      k1 = RP1%kind ; k2 = RP2%kind
+
+***    Interval vertical ou de temps ?
+
+      if (RP1%hi /= RP1%lo) then      ! Interval vertical
+         HIVAL = RP1%hi ; LOVAL = RP1%lo ; RANGE_KIND = k1
+      else if (RP2%hi /= RP2%lo) then ! Interval de temps
+         HIVAL = RP2%hi ; LOVAL = RP2%lo ; RANGE_KIND = k2
+      else                            ! Aucun interval
+         HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
+      end if
+
+      if (debug) write(6,6103) RANGE_KIND,HIVAL,LOVAL
+
 ***    Est-ce qu'on traite des champs contenant
 ***    autres choses que des grilles gaussiennes ?
 
@@ -600,7 +647,7 @@ c
 
               if (dateo.eq.0)                                  then
                   dateo = 101010101
-                  if (debug) write(6,6103)
+                  if (debug) write(6,6104)
               end if
 
               ecoule = ( npas*( DBLE( deet )/ 60) )/60
@@ -892,6 +939,7 @@ c
       call puthic( nomvar,'NAME', ibuf )
       call puthic( newl,  'NEWL', ibuf )
 
+!     call puthigh( ip1,  'IP1',  ibuf )
       call puthigh( ip2,  'IP2',  ibuf )
       call puthigh( ip3,  'IP3',  ibuf )
       call puthigh( datyp,'DATYP',ibuf )
@@ -910,11 +958,16 @@ c
       pktyp = getyp( nf )
       call puthic( pktyp, 'PKTYP', ibuf )
 
+      call puthigh( range_kind,'RKIND', ibuf )
+      call puthir ( hival     ,'HIVAL', ibuf )
+      call puthir ( loval     ,'LOVAL', ibuf )
+
       RETURN
 
 *------------------------------------------------------------------------------
  0004 FORMAT(A4)
 
+ 6002 FORMAT(' Ibufill: DIAG_DECODE_ip error=',I3,', IP1,IP2,IP3=',3I11)
  6003 FORMAT(' Ibufill: grtyp ',A,' not supported by r.diag.')
 
  6101 FORMAT('*DEBUG:IBUFILL (1) DATEO=',I12,', NPAS=',I9,
@@ -923,7 +976,8 @@ c
      +       ', IG1,IG2,IG3,IG4=',4I6,', DATYP=',I6)
  6102 FORMAT('*DEBUG:IBUFILL (3) GRTYP=',A,', TYPVAR=',A,
      +       ', NOMVAR=',A,', ETIKET=',A)
- 6103 FORMAT('*DEBUG:IBUFILL found DATEO=0, reset to 101010101')
+ 6103 FORMAT('*DEBUG:IBUFILL (4) RANGE_KIND=',I3,' HIVAL,LOVAL=',2E15.7)
+ 6104 FORMAT('*DEBUG:IBUFILL found DATEO=0, reset to 101010101')
 
       END
       SUBROUTINE parfill( IBUF )
@@ -936,32 +990,34 @@ c
 
       INTEGER     ibuf(*)
 
-      integer     MAXBITS
-      parameter ( MAXBITS = 32 )
-      integer     HEAD
-      parameter ( HEAD    = taille_entete )
+      integer,    parameter :: MAXBITS =  32
+      integer,    parameter :: HEAD = taille_entete
 
+      REAL        zero,hold
       REAL        pr1,pr2
       LOGICAL     ok,value
-      REAL*8      rip2,rdeet,pphinv
-      CHARACTER*4 type,nom,hnewl,ibuf4,noma
+      REAL(8)     rip2,rdeet,pphinv
+      CHARACTER(4) type,nom,hnewl,ibuf4,noma
       INTEGER     time,lev,ilg,ilat,ihem,pack
       LOGICAL     spec,four,data,coef,char,cmpl
       INTEGER     aa,mm,jj,nlev,BITSMOT, pas
       INTEGER     lsr,lr,lm,la,ktr,lrlmt,kind1,kind2
       INTEGER     dtpr,tmpr,datchek, ni0,nj0,nk0
-      INTEGER*8   DATE_CONVERSION_FACTOR
+      INTEGER(8)  DATE_CONVERSION_FACTOR
 
       LOGICAL,    save :: turbo_compress = .true.
 
-      LOGICAL     :: MVALUE,Add64
-      REAL*8      :: RVALUE,REPSIL
+      integer     range_kind
+      real        hival,loval
 
-      CHARACTER*4 gethic
-      INTEGER     clrlmt,gethigh,getkind,newdate
-      EXTERNAL    clrlmt,lvdcode,xit,eqvnomt
+      LOGICAL     :: MVALUE,Add64
+      REAL(8)     :: RVALUE,REPSIL
+
+      REAL,       EXTERNAL  :: gethir
+      CHARACTER(4),EXTERNAL :: gethic
+      INTEGER,    EXTERNAL  :: clrlmt,gethigh,getkind,newdate
+      EXTERNAL    lvdcode,xit,eqvnomt,convhour
       EXTERNAL    dimgt2,difdatr,leadblk,convpr
-      EXTERNAL    gethic,gethigh,getkind,newdate
 
 #     include    "highbuf.cdk"
 #     include    "zlabel.cdk"
@@ -982,6 +1038,7 @@ c
       logical,    save :: message_pas_donne
       data                message_pas_donne / .true. /
 *------------------------------------------------------------------------------
+      zero  = 0.0
 
       char  = .false.
       cmpl  = .false.
@@ -1045,6 +1102,10 @@ c
       if (hightyp) grtyp  = gethic('GRTYP' ,ibuf )
       if (highvar) typvar = gethic('TYPVAR',ibuf )
 
+      if (highkin) range_kind = gethigh('RKIND',ibuf )
+      if (highhiv) hival  = gethir('HIVAL',ibuf )
+      if (highlov) loval  = gethir('LOVAL',ibuf )
+
 *     if (deet .lt.     0 .or.
 *    +    deet .gt. 32767 )
 *    +    deet  =       0
@@ -1094,8 +1155,12 @@ c
 ***                    S'assurer de la coherence entre
 ***                    les parametres ip2, npas et deet.
 
-                      if (.not.keepip2)
-     +                ip2 = NINT( npas * pphinv )
+                      if (.not.(keepip2 
+     +                    .or.  highip2 
+     +                    .or.  range_kind >= 0))              then
+                          hold = npas * pphinv
+                          call convhour( ip2, hold, +2 )
+                      end if
 
                   else
 
@@ -1111,8 +1176,12 @@ c
 ***                a un "DATE-TIME STAMP group" valide.
 
                   npas  = time
-                  if (.not.keepip2)
-     +            ip2   = NINT( npas * pphinv )
+                  if (.not.(keepip2 
+     +                .or.  highip2 
+     +                .or.  range_kind >= 0))                  then
+                      hold = npas * pphinv
+                      call convhour( ip2, hold, +2 )
+                  end if
 
               end if
 
@@ -1125,7 +1194,8 @@ c
                   npas  = time
               end if
              
-              if (.not.keepip2) ip2 = 0
+              if (.not.(keepip2 .or. highip2))
+     +            call convhour( ip2, zero, +2 )
 
           end if
 
@@ -1137,11 +1207,12 @@ c
 
 ***        on tente tout de meme de mettre a jour IP2.
 
-          if (.not.keepip2)                                    then
+          if (.not.(keepip2 .or. highip2))                     then
               if (deet /= 0)                                   then
-                  ip2 = NINT( npas * pphinv )
+                  hold = npas * pphinv
+                  call convhour( ip2, hold, +2 )
               else
-                  ip2 = 0
+                  call convhour( ip2, zero, +2 )
               end if
           end if
 
@@ -1937,7 +2008,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
 
       Character   posit*6,statf*3,namef*512,PKTYP*4
       Integer     ifrm,iouv,iclos,inom,lenam
-      Integer     ip1_kind,cmpl,err
+      Integer     ip1_kind,cmpl
       Real        AMIN,AMAX,AMEAN
 
       Character,  external :: getyp*4
@@ -2360,7 +2431,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
 
 #     include      "fstparm.cdk"
 
-      integer,      parameter :: MAZDIM = dimension_en_x
+      integer,      parameter :: MAZDIM = dimension_en_x * dimension_en_y
       integer,      parameter :: un = 1, cinq = 5
 
       character(7)  entnam
@@ -2388,8 +2459,10 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
       logical,      save :: remlocal = .false.
 
       integer       lir,err,kle
-      integer,      external :: fstluk,fstprm,fstecr,fstpos,fstinfx
-      external      xit,ouvzref,quit,makzref,messys,findyz,clesui
+      integer,      external :: fstluk,fstprm,fstecr,
+     +                          fstpos,fstinfx,fclos
+      external      xit,messys,findyz,clesui,quit
+      external      ouvzref,makzref,rmzref
 
       LOGICAL                info,debug
       COMMON       /ZZVERBO/ info
@@ -2413,7 +2486,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
 
 ***        Ouvrir le fichier zcrochet local.
 
-          call ouvzref( io,EXISTE,LOK,nrf )
+          call ouvzref2( io,EXISTE,LOK,nrf, (io == 0) )
 
           if (EXISTE .and. .not.LOK)                           THEN
 
@@ -2551,7 +2624,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
       if (io == 0 .or. check_dimensions)                       THEN
 
           if (io == 0)                                         THEN
-              call ouvzref( io,EXISTE,LOK,nrf )
+              call ouvzref2( io,EXISTE,LOK,nrf, (io == 0) )
 
               if (.not.(EXISTE .and. LOK))                     THEN
                   if (info) write(6,6001)
@@ -2621,7 +2694,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
 
       if (io.eq. 0)                                            THEN
 
-          call ouvzref( io,EXISTE,LOK,nrf )
+          call ouvzref2( io,EXISTE,LOK,nrf, (io == 0) )
 
           if (.not.(EXISTE .and. LOK))                         THEN
               if (info) write(6,6001)
@@ -2665,7 +2738,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
 
       if (io.eq. 0)                                            THEN
 
-          call ouvzref( io,EXISTE,LOK,nrf )
+          call ouvzref2( io,EXISTE,LOK,nrf, (io == 0) )
 
           if (.not.(EXISTE .and. LOK))                         THEN
               if (info) write(6,6001)
@@ -2710,7 +2783,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
 
       if (io.eq. 0)                                            THEN
 
-          call ouvzref( io,EXISTE,LOK,nrf )
+          call ouvzref2( io,EXISTE,LOK,nrf, (io == 0) )
 
           if (.not. LOK)                                       THEN
               if (info) write(6,6001)
@@ -3026,7 +3099,9 @@ CCC  +            petik.eq.retik .and.
      +            pig4 .eq.rig4  .and.
      +            pip1 .eq.rip1  .and.
      +            pip2 .eq.rip2  .and.
-     +            pip3 .eq.rip3 )                              THEN
+     +            pip3 .eq.rip3  .and.
+     +            pimx .eq.timx  .and.
+     +            pimy .eq.timy )                              THEN
 
                   if (nv == 1 .or.
      +               (nv == 2 .and. pimx*pimy > 0))            THEN
@@ -3083,8 +3158,10 @@ CCC  +            petik.eq.retik .and.
      +                                 rdate,rdelt,rpas,tmp1,tempxy
                       chaine=' '
 
+                      if (timx > 0 .and. timy > 0) cycle ! Already complete !
+
                       if (debug)
-     +                    write(6,6110) entnam,(nrc+ii),dimx,dimy,
+     +                    write(6,6110) entnam,(nrc+ii),timx,timy,
      +                                  rip1,rip2,rip3,rtypv,retik,rtypg,
      +                                  rig1,rig2,rig3,rig4,rdate,rdelt,
      +                                  rpas,tgril
@@ -3182,7 +3259,7 @@ CCC  +            petik.eq.retik .and.
       nf = abs( nfin )
 
       If (io.eq.0)                                             THEN
-          call ouvzref( io, EXISTE,LOK,nrf )
+          call ouvzref2( io, EXISTE,LOK,nrf, (io == 0) )
           If (.not.(EXISTE .and. LOK))                         THEN
               If (info) write(6,6001)
               return
@@ -3284,14 +3361,33 @@ CCC  +            petik.eq.retik .and.
       return
 *-------------------------------------------------------------------
 
+      entry clozref()
+
+      ! Close/Remove the zcrochet file if it is open
+
+      If (io /= 0)                                             THEN
+          err = fclos( io )
+          If (INFO)                                            THEN
+              If (err < 0)                                     THEN
+                  write(6,6260) err
+              Else
+                  write(6,6270)
+              End If
+          End IF
+          call rmzref()
+      End IF
+
+      return
+
+*-------------------------------------------------------------------
   999 IF (INFO)                     WRITE(6,6000) io,errno
       IF (INFO .and. chaine.ne.' ') WRITE(6,6005) chaine
       IF (INFO .and. errno .GT. 0 ) CALL MESSYS( 'In Getzref...' )
       call                                         xit(' Getzref',-3 )
 
       return
-
 *-------------------------------------------------------------------
+
  6000 FORMAT('(GET/SAV)ZREF: Unit ',I3,' returns I/O error number ',I5)
  6001 format(' Cannot open "^^" and ">>" file.')
  6002 format(' Cannot make a new "^^" and ">>" file.')
@@ -3331,6 +3427,9 @@ CCC  +            petik.eq.retik .and.
  6230 format('*DEBUG:',A7,' writing end of file record no. ',I3)
  6240 format('*DEBUG:SAVZREF initializing from unit ',I3)
  6250 format('*DEBUG:SAVZREF reading record no. ',I3,' from unit ',I3)
+ 6260 format('CLOZREF: Error ',I3,' while ',
+     +       ' attempting to close ZCROCHETS'/)
+ 6270 format('CLOZREF:  ZCROCHETS file was closed.')
 
       end
       SUBROUTINE ouvzref2 (io,EXISTE,OK,nr,rem)
@@ -3354,10 +3453,11 @@ CCC  +            petik.eq.retik .and.
 ***    Auteur: B. Dugas - 02 avril 1997
 
       integer       MAZDIM
-      parameter   ( MAZDIM = dimension_en_x )
+      parameter   ( MAZDIM = dimension_en_x * dimension_en_y )
 
       logical,      save :: remlocal = .false.
-      character*256 evalue,nomfich
+      character*256,save :: nomfich
+      character*256 evalue
       character*20  UZBIGT,TMPDIR,BIGTMP,status
       integer       lenam,errno,lonrec,dummy,kind
 
@@ -3514,9 +3614,23 @@ CCC  +            petik.eq.retik .and.
       return
 
 *-------------------------------------------------------------------
+      entry rmzref()
+
+      errno = clib_remove( TRIM( nomfich ) )
+      if (errno /= CLIB_OK )                                   THEN
+          if (info) write(6,6003) TRIM( nomfich )
+          call                                     xit(' Rmzref ',-1 )
+      else if (debug)                                          THEN
+          write(6,6106) TRIM( nomfich )
+      end if
+
+      return
+*-------------------------------------------------------------------
+
  6000 FORMAT(' Ouvzref: WKOFFIT returns kind =',I3,' for ',A)
  6001 FORMAT(' Ouvzref: TMPDIR or BIG_TMPDIR not defined.'/)
  6002 FORMAT(' Ouvzref: Unable to remove old file ',A/)
+ 6003 FORMAT(' Rmzref:  Unable to remove old file ',A/)
 
  6100 FORMAT('*DEBUG:Ouvzref (1) Openning file ',A)
  6101 FORMAT('*DEBUG:Ouvzref (2) Removing previous ZCROCHETS file')
@@ -3524,6 +3638,7 @@ CCC  +            petik.eq.retik .and.
  6103 FORMAT('*DEBUG:Ouvzref (4) fnom returns ',I3)
  6104 FORMAT('*DEBUG:Ouvzref (5) word #1 in rec=',I3,' is equal to ',I6)
  6105 FORMAT('*DEBUG:Ouvzref (6) EXISTE=',L1,' and OK=',L1)
+ 6106 FORMAT('*DEBUG:Rmzref  (1) Removing ZCROCHETS file ',A/)
 
       end
       subroutine makzref2 (nf, OK, rem)
@@ -3588,8 +3703,7 @@ CCC  +            petik.eq.retik .and.
 
 ***    Variables locales.
 
-      integer     maxn
-      parameter ( maxn = 16384 )
+      integer,    parameter :: maxn = 16384
 
       integer     i,last,
      +            nfloc (0:maxn),niloc (0:maxn),njloc (0:maxn),
@@ -3666,8 +3780,7 @@ CCCC +        IG3.eq.ig3loc(i) )                               then
 
       implicit    none
 
-      integer     MAXCLE         , MAXIO
-      parameter ( MAXCLE = 16384 , MAXIO = unite_io_maximale )
+      integer,    parameter :: MAXCLE = 16384, MAXIO = unite_io_maximale
 
       integer     NF,cle,offset,liste(*)
 
@@ -4472,6 +4585,7 @@ CCC  +           U_DATEO == descu(i)%dateo .and.
       DATA        highdat,highpas,highdel,highigi / 4*.FALSE. /
       DATA        higheti,hightyp,highvar,highdtp / 4*.FALSE. /
       DATA        highip1,highip2,highip3,highnam / 4*.FALSE. /
+      DATA        highkin,highhiv,highlov         / 3*.TRUE.  /
 
       DATA        RNDF / unite_io_maximale * 0 /
 

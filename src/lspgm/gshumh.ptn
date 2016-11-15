@@ -52,6 +52,7 @@
 *      COORD (kind 1) = 'SIG'/'ETA'/'GALC' FOR SIGMA/ETA/GAL-CHEN COORDINATE
 *                       AND THREE VARIANTS OF THE GEM VERTICAL COORDINATES,
 *                       RESPECTIVELY ('GEM2' AND 'GEM3' ARE THE TWO RPN DEFAULTS).
+*                       !!!!! Please use GPHUM for COORD='GEM4' !!!!!
 *      MOIST (kind 2) = TYPE OF MOISTURE VARIABLE FOUND IN FILE GSES. 
 *                       THE CURRENTLY SUPPORTED VALUES ARE AS FOLLOWS:
 *                       1) 'T-TD' : DEW POINT DEPRESSION  2) 'TD'   : DEW POINT
@@ -132,6 +133,10 @@
 *    3          TAPE9=GSRHUM, TAPE10=GSLNPT, TAPE5=INPUT,  TAPE6=OUTPUT) 
 *     ---------------------------------------------------------------
 *     $Log: gshumh.ptn,v $
+*     Revision 4.15  2016/10/29 20:54  dugas
+*     - Modification a la documentation concernant GEM4 .
+*     - Modifications syntaxiques de type F77 --> F90.
+*
 *     Revision 4.14  2014/09/25 20:20:49  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -194,14 +199,11 @@
 *------------------------------------------------------------------------ 
       IMPLICIT    none
 
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
-      INTEGER     HEAD
-      PARAMETER ( HEAD   = taille_entete )
-      REAL        PTMIN
-      PARAMETER ( PTMIN  = pression_au_toit )
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      REAL,       PARAMETER :: PTMIN  = pression_au_toit
 
-      CHARACTER   LIGNE*80
+      CHARACTER   LIGNE*80,PKTYP*2
       LOGICAL     OK,SPWH,MODETA,MONOTONH,MONOTONS
       CHARACTER*4 COORD,MOIST,CSHUM,CRHUM,LNSP,TEMP,NAME
       INTEGER     LETAT(MAXLEV),LETAS(MAXLEV),KBUF(HEAD),
@@ -215,7 +217,7 @@
      +            SMIN,T,ES,TD,E,SHUM,SAT,QMIN,TOPASCL,
      +            FUNMIN,PTOIT0,PREF0,R0
 
-      INTEGER,    DIMENSION(:), ALLOCATABLE         :: IBUF 
+      INTEGER,    DIMENSION(:), ALLOCATABLE        :: IBUF 
       REAL,       DIMENSION(:), ALLOCATABLE        :: F,G,SIGH
       REAL,       DIMENSION(:), ALLOCATABLE,TARGET :: PRLNPT,PSMBLN
       REAL,       DIMENSION(:), POINTER            :: PRESS,PRES
@@ -229,13 +231,13 @@
 C***  REAL             A,B,EPS1,EPS2
 C***  COMMON     /EPS/ A,B,EPS1,EPS2
 
-      LOGICAL     RPBLOC
-      CHARACTER   GETYP*4,PKTYP*2
-      INTEGER     GETSIZ2,GETSIZ,GETKIND
-      EXTERNAL    JCLPNT,GETLIGN,BURNF,GETSIZ2,GETSIZ,XIT,
-     +            CONVPR,WRITLEV,CMPLBL,COORDAB,HPALLOC,
-     +            GETFLD2,NIVCAL,PUTFLD2,LEADBLK,RPBLOC,
-     +            GETKIND,SETPT,INCTDIA,LIRPT,GETPT
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER,  EXTERNAL :: GETYP*4
+      INTEGER,    EXTERNAL :: GETSIZ2,GETSIZ,GETKIND
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,XIT,
+     +            CONVPR,WRITLEV,CMPLBL,COORDAB,
+     +            GETFLD2,NIVCAL,PUTFLD2,LEADBLK,
+     +            SETPT,INCTDIA,LIRPT,GETPT
 
       DATA        SPWH,  MODETA  / 2*.FALSE. /
       DATA        CSHUM,  CRHUM  /

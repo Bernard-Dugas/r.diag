@@ -1,10 +1,13 @@
+# if !defined (nombre_maximal_de_fichiers)
+#     define   nombre_maximal_de_fichiers 128
+# endif
 # if defined (AUTO_DOC)
 !
 ! Sequence d'appel...
-!  fstmdiag -s source [-d destination] \ 
-!          [-info [valeur]] [-e] [-f]  \ 
-!          [-nobox] [-help] [-stats]   \ 
-!          [-novar]
+!  fstmdiag -s source1 [source2 [sources3 ... ]] \ 
+!          [-d destination] [-info [valeur]] \ 
+!          [-e] [-f] [-nobox] [-help] [-stats]   \ 
+!          [-oldip3] [-noip3] [-novar]
 !        
 !
 !
@@ -15,9 +18,9 @@
 ! Objet:
 ! -----
 !  FSTMDIAG  Calcule les moyennes simples et variances des
-!            variables contenues dans un fichier. Aucune
-!            contrainte commune n'est imposee, et ce 
-!            meme sur les grilles horizontales.
+!            variables contenues dans une collection de fichiers.
+!            Aucune contrainte commune n'est imposee, et ce meme
+!            sur les grilles horizontales.
 !
 !            Les variables 1) ayant les memes noms, 2) valides
 !            au meme niveau (i.e. IP1 identiques), 3) ayant les
@@ -28,7 +31,7 @@
 !
 ! Parametres d'appel:
 ! ------------------
-!  s         Fichier source
+!  s         Fichiers sources (jusqu'a nombre_maximal_de_fichiers fichiers)
 !  d         Entete commune des fichiers destinations. Ces deux
 !            fichiers (*_moyenne et *_variance) ne doivent pas
 !            exister a l'entree, sauf si la cle f est egalement
@@ -38,7 +41,12 @@
 !  nobox     Ne pas imprimer de boites d'informations.
 !  stats     Imprimer des statistiques sur les resultats
 !  help      Afficher ce texte sur stdout et quitter.
-!  f         Forcer la re-ecriture du fichier de sortie. 
+!  noip3     Ne pas utiliser IP3 pour sauver le nombre d'echantillons.
+!  oldip3    Les donnees lues sont des moyennes produites selon le
+!            mode anterieur, i.e. le nombre d'echantillons ayant
+!            ete utilise lors du calcul se trouve dans IP3
+!            et ce, dans un format non-code.
+!  f         Forcer la re-ecriture du (ou des) fichier(s) de sortie. 
 !
 !
 ! Codes de sortie:
@@ -54,6 +62,10 @@
 !       9 Erreur d'allocation de memoire
 !      10 TMPDIR ou BIG_TMPDIR non definis
 !      11 Probleme avec deet,npas en sortie
+!      12 Plus d'un type de fichier d'entree
+!      13 Incapable de lier les fichiers d'entree
+!      14 DIAG_DECODE_ip/DIAG_ENCODE_ip error 
+!      15 Incapable de coder le nombre d'echantillons
 !
 # endif
 #     if defined (RDIAG_LICENCE)
@@ -78,6 +90,15 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.05  2016/10/28 16:20  dugas
+  ! - Tenir compte des nouvelles options de codages des IP1/2/3.
+  !   Ceci a de tres grandes incidences sur la facon dont les
+  !   nombres d'echantillons peuvent etre lus et/ou sauves.
+  ! - Le nombre de fichier d'entree passe de 1 a 128.
+  ! - Ajouter les arguments -noip3 et -oldip3 concernant
+  !   les differentes options de traitement des IP3.
+  ! - Implementer un mode informatif -info plutot bavard.
+  !
   ! Revision 1.04  2014/09/25 20:20:57  dugas
   ! Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
   !
@@ -94,39 +115,57 @@
   ! Version initiale.
   !
 
+  use diag_convert_ip123
+
   implicit      none
 
   ! *****
 
-  integer       NBRCLE
-  parameter   ( NBRCLE = 9 )
+  integer,      parameter :: NBRFICH = nombre_maximal_de_fichiers
+  integer,      parameter :: NBRARGS = 9, NBRCLE = NBRFICH+NBRARGS+1
 
   integer ::    NMAX=2000,start
 
-  real(8)       amin8,amax8,amean8,avar8
-  real(8)       heures,deltat
+  real(8)       amin8,amax8,amean8,avar8, hold8
+  real(8)       heures,deltat,heuremax,heuremin
+
   character(24) cchain
   character(15) cip1
 
   logical, dimension(:), allocatable :: done
+  real,    dimension(:), allocatable :: hiset,loset,vip1s,vip2s,vip3s
   character(len=24), dimension(:), allocatable :: chaine
-  integer, dimension(:), allocatable :: listet, listev, date, &
-           delt, niveau, heure, pas, fset, sindex, niset, njset, &
-           nkset, bits, ig1set, ig2set, ig3set, ig4set
+  integer, dimension(:), allocatable :: listet, listev, date, delt, &
+           niveau, heure, pas, fset, sindex, niset, njset, nkset, bits, &
+           ig1set, ig2set, ig3set, ig4set, rkind, k1set, k2set, k3set
 
+  ! Les variables suivantes sont utilisees pour
+  ! identifier les intervals verticaux ou d'heures
+  type(FLOAT_IP) :: RP1,RP2,RP3
+  integer     RANGE_KIND,k1,k2,k3,stat,ikind,kcode
+  real        HIVAL,LOVAL,vip1,vip2,vip3,hold
+  integer(8)  heures_5,time_range_5,vip2_5, &
+              npas_deet,npas_deet60,npas_deet3600, &
+              npasp1_deet,npasp1_deet60,npasp1_deet3600
+  real(8)  :: tdiff, time_range, SECH = 0.000277777_8 ! 1 seconds en unite d'heures
 
   character(20)  uzbigt,bigtmp,tmpdir
-  character(512) evalue,diagext,tmpdirn
+  character(512) evalue,diagext,tmpdirn, name1(NBRFICH),name2,name3
+  character(128) Format1
 
   logical              dexit,set_dexit,exist
   common       /dexit/ dexit,set_dexit,diagext
 
-  character(16) :: cles(NBRCLE),blanc=' '
-  character(512) def1(NBRCLE),def2(NBRCLE), name1,name2,name3
+  character(16) :: cles(NBRCLE),nuls,blanc=' '
+  character(64) def1(NBRCLE),def2(NBRCLE)
 
-  logical       Vrai,Faux, Forc, Elim, box, Stats, NoVar, Debug
-  integer ::    i,ii,ier,io,ipos, ibuf(1), iu1=1,iu2=2,iu3=3, &
-                ip2tot, key, nil, mdiag, nr,nref,ns, nwds,nwds0=-1
+  logical ::    info  ; common /zzverbo/ info
+  logical ::    debug ; common /zzdebug/ debug
+
+  logical       Vrai,Faux, box, Complet, Elim, Forc, NoIP3, NoVar, OldIP3, Stats
+  integer ::    i,ii,ier,io,ipos, icle, ibuf(1), iu1(NBRFICH),iu2=0,iu3=0, &
+                datevi,datevf, ip2tot, key, nil, mdiag, &
+                nr,nref,ns, nwds,nwds0=-1
 
   real,         dimension(:), allocatable :: buff
   real(8),      dimension(:), allocatable :: buff8,moyenne,variance
@@ -138,7 +177,7 @@
   character typvar*2,                  nomvar*4,             &
             etiket*12,                 grtyp*1
 
-  integer   dateo,datevo,datevf,       ni,nj,nk,             &
+  integer   dateo,datev,               ni,nj,nk,             &
             ip1,ip2,ip3,               datyp,nbits,          &
             infont,infonv,deet,npas,   extra1,extra2,extra3, &
             ig1,ig2,ig3,ig4,           swa,lng,dltf,ubc
@@ -147,13 +186,13 @@
 
   ! Declarations pour les fonctions FST.
 
-  integer   inbr1,inbr2,inbr3,ierr1,ierr2,ierr3,ftyp1,ftyp2,ftyp3
+  integer :: nbr,inbr,inbr1=0,inbr2,inbr3,ierr1,ierr2,ierr3
+  integer :: ifrm,iecr,inf,infl,iopt,iprm,ilnk,ftyp0,ftyp1,ftyp2,ftyp3
 
-  integer   ifrm,iecr,inf,infl,iopt,iprm
   integer,  external :: fstfrm, fstecr, fstlis, fstprm, fstinf, fstsui, &
-                        fstluk, fstrwd, fstinl, fstnbr, fstouv, fnom,   &
-                        fstopc, xdfopt, fstopl, wkoffit,fclos,          &
-                        exfin,  exdb
+                        fstluk, fstrwd, fstinl, fstnbr, fstouv, fstlnk, &
+                        fstunl, fstopc, xdfopt, fstopl, wkoffit,fclos,  &
+                        fnom,   exfin,  exdb
 
   external  ccard,  incdatr, getenvc,convpr, quit
 
@@ -167,20 +206,36 @@
   ! Parametres d'appel:
   ! ------------------
 
-  data cles(01)/'S.'    /,def1(01)/' '      /,def2(01)/'TAPE1'  /, &
-       cles(02)/'D.'    /,def1(02)/' '      /,def2(02)/'TAPE2'  /, &
-       cles(03)/'INFO'  /,def1(03)/'ERRORS' /,def2(03)/'INFORM' /, &
-       cles(04)/'NOBOX' /,def1(04)/'NON'    /,def2(04)/'OUI'    /, &
-       cles(05)/'HELP'  /,def1(05)/'NON'    /,def2(05)/'OUI'    /, &
-       cles(06)/'F'     /,def1(06)/'NON'    /,def2(06)/'OUI'    /, &
-       cles(07)/'STATS' /,def1(07)/'NON'    /,def2(07)/'OUI'    /, &
-       cles(08)/'NOVAR' /,def1(08)/'NON'    /,def2(08)/'OUI'    /, &
-       cles(09)/'-.'    /,def1(09)/' '      /,def2(09)/' '      /
+  ! NBRARGS=8 Arguments generaux
+  data cles(01)/'D.'    /,def1(01)/' '   /,def2(01)/'TAPE2'  /, &
+       cles(02)/'INFO'  /,def1(02)/'NON' /,def2(02)/'OUI' /, &
+       cles(03)/'NOBOX' /,def1(03)/'NON' /,def2(03)/'OUI' /, &
+       cles(04)/'HELP'  /,def1(04)/'NON' /,def2(04)/'OUI' /, &
+       cles(05)/'F'     /,def1(05)/'NON' /,def2(05)/'OUI' /, &
+       cles(06)/'STATS' /,def1(06)/'NON' /,def2(06)/'OUI' /, &
+       cles(07)/'NOVAR' /,def1(07)/'NON' /,def2(07)/'OUI' /, &
+       cles(08)/'NOIP3' /,def1(08)/'NON' /,def2(08)/'OUI' /, &
+       cles(09)/'OLDIP3'/,def1(09)/'NON' /,def2(09)/'OUI' /
+
+  ! +NBRFICH Noms de fichier d'entree
+  data cles(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'S.'   /, &
+       def1(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*' '    /, &
+       def2(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'****' /, &
+       iu1 (1:NBRFICH)/ NBRFICH* 0 /
+
+  ! +1 Argument positionel (nom du module r.diag)
+  data cles(NBRCLE) / '-.' /, &
+       def1(NBRCLE) / ' ' /,  &
+       def2(NBRCLE) / ' ' /
+
 
   data Force, Elim, box, Stats /  4*.false. /, &
-       Vrai,Faux, NoVar, Debug, ReWrit / .true.,4*.false. /
+       Vrai,Faux, NoIP3,NoVar,OldIP3,ReWrit / .true.,5*.false. /
 
   !----------------------------------------------------------------
+  def2(NBRARGS+1) = 'TAPE1'
+
+  Debug = Faux ; Info = Faux
 
   diagext = 'DIAGNOSTIC_EXIT'
   uzbigt  = 'USE_BIG_TMPDIR'
@@ -249,19 +304,30 @@
 
   if (tmpdirn == blanc)                                    then
       write(6,6010)
-      if (box) nil = exfin( 'FstMDiag','Erreur 10','NON' )
+       if (box) nil = exfin( 'FstMDiag','Erreur 10','NON' )
       call quit( 'FstMDiag',10 )
   end if
 
   ! Aller chercher les noms des deux fichiers d'E/S et
   ! traiter les differents parametres d'entrees.
 
-  100 ipos = -1
-  call ccard( cles,def2,def1,NBRCLE,ipos )
+  100 ipos = 1 ; icle = NBRCLE
+  call diag_ccard( cles,def2,def1,NBRCLE,ipos )
 
-  if (is_on(def1(5)) .or.  &
+  if (.not.IS_OFF( def1(2) )) Info = Vrai
+  if (def1(2) == 'DEBUG' ) Debug = Vrai
+
+  if (Debug)                                               then
+      print *,'icle,ipos=',icle,ipos
+      do  i=1,NBRCLE
+          write(6,'(I3,3(1x,A))') i,cles(i)(1:10),def2(i)(1:10),def1(i)(1:64)
+          if (def1(i) == ' ') exit
+      enddo
+  end if
+
+  if (is_on(def1(4)) .or.  &
      (def1(1) == ' ' .and. &
-      def1(2) == ' ' ))                                  then
+      def1(NBRARGS+1) == ' ' ))                            then
       nomprg = 'fstmdiag.ptn90'
       call qqqdoc( )
       call qqexit( 0 )
@@ -269,27 +335,41 @@
 
   ! Specifier le type de messages qu'on veut recevoir.
 
-                           iopt = fstopc( 'MSGLVL', def1(3)  , 0 )
-  if (def1(3).eq.'DEBUG' ) iopt = xdfopt( 'MSGLVL','TRIVIAL ', 0 ) 
-  if (def1(3).eq.'INFORM') iopt = xdfopt( 'MSGLVL','INFORM  ', 0 ) 
-  if (def1(3).eq.'WARNIN') iopt = xdfopt( 'MSGLVL','WARNING ', 0 ) 
-  if (def1(3).eq.'ERRORS') iopt = xdfopt( 'MSGLVL','ERROR   ', 0 ) 
-  if (def1(3).eq.'FATALE') iopt = xdfopt( 'MSGLVL','ERRFATAL', 0 ) 
-  if (def1(3).eq.'SYSTEM') iopt = xdfopt( 'MSGLVL','SYSTEM  ', 0 ) 
-  if (def1(3).eq.'CATAST') iopt = xdfopt( 'MSGLVL','SYSTEM  ', 0 ) 
+  if (def1(2) == 'DEBUG'   &
+ .or. def1(2) == 'INFORM' .or. def1(2) == 'WARNIN' &
+ .or. def1(2) == 'ERRORS' .or. def1(2) == 'FATALE' &
+ .or. def1(2) == 'SYSTEM' .or. def1(2) == 'CATAST')        then
 
-  if (def1(3).eq.'DEBUG' ) Debug = Vrai
+      ! Pour les routines FST.
+      iopt = fstopc( 'MSGLVL', def1(2)  , 0 )
+      iopt = fstopc( 'MSGLVL', def1(2)  , 1 )
+
+      ! Pour les routines XDF (bas niveau FSTD).
+      if (def1(2) == 'DEBUG' ) iopt = xdfopt( 'MSGLVL','TRIVIAL ', 0 ) 
+      if (def1(2) == 'INFORM') iopt = xdfopt( 'MSGLVL','INFORM  ', 0 ) 
+      if (def1(2) == 'WARNIN') iopt = xdfopt( 'MSGLVL','WARNING ', 0 ) 
+      if (def1(2) == 'ERRORS') iopt = xdfopt( 'MSGLVL','ERROR   ', 0 ) 
+      if (def1(2) == 'FATALE') iopt = xdfopt( 'MSGLVL','ERRFATAL', 0 ) 
+      if (def1(2) == 'SYSTEM') iopt = xdfopt( 'MSGLVL','SYSTEM  ', 0 ) 
+      if (def1(2) == 'CATAST') iopt = xdfopt( 'MSGLVL','SYSTEM  ', 0 ) 
+
+  else
+      iopt = xdfopt('MSGLVL','ERROR' , 0 )
+      iopt = fstopc('MSGLVL','ERRORS', 0 )
+  end if
 
   ! Traiter les cles de type "divers".
 
-  if (is_off( def1(4) )) box     = Vrai
-  if (is_on ( def1(6) )) Force   = Vrai
-  if (is_on ( def1(7) )) Stats   = Vrai
-  if (is_on ( def1(8) )) NoVar   = Vrai
+  if (is_off( def1(3) )) box     = Vrai
+  if (is_on ( def1(5) )) Force   = Vrai
+  if (is_on ( def1(6) )) Stats   = Vrai
+  if (is_on ( def1(7) )) NoVar   = Vrai
+  if (is_on ( def1(8) )) NoIP3   = Vrai
+  if (is_on ( def1(9) )) OldIP3  = Vrai
 
   if (Force)             ReWrit  = Vrai
 
-  if (def1(1) == blanc)                                    then
+  if (def1(NBRARGS+1) == blanc)                            then
       if (box) nil = exdb ( 'Fstmdiag', 'Rev. 1.0', 'NON' )
       write(6,6001)
       if (box) nil = exfin( 'Fstmdiag', 'Erreur 1', 'NON' )
@@ -305,51 +385,75 @@
       write(6,6201) 'BIG_TMPDIR',trim( tmpdirn )
   end if
 
-  ! Par defaut, def1(2) est egal a def1(1).
+  ! Par defaut, def1(1) est egal a def1(NBRARGS+1).
   ! Definissons name1 et name2.
 
-  if (def1(2) == blanc) def1(2) = def1(1)
-  name1 = def1(1) ; name2 = def1(2)
+  name1(1:NBRFICH) = def1(NBRARGS+1:NBRARGS+NBRFICH)
+
+  if (def1(1) == blanc) def1(1) = def1(NBRARGS+1) ; name2 = def1(1)
 
   ! Verifier l'existence et le type des fichiers I/O.
 
-  ftyp1 = wkoffit( '+' // trim( name1 ) )
+  do nbr=1,NBRFICH
 
-  ! Verifier que le premier fait reference a un fichier de 
-  ! type valide. Si les autres existent deja (i.e. ne sont pas
-  ! vides, et possiblement) en aviser l'usager et quitter.
+      ! Verifier l'existence et le type des fichiers Input
 
-  if (ftyp1 < -1)                                          then
+      ftyp1 = wkoffit( '+' // trim( name1(nbr) ) )
 
-      ! Le premier fichier est vide ou inexistant.
-      ! Verifier que le nom du fichier ne contient
-      ! pas de relocalisation de repertoire. Sinon
-      ! aller voir sur TMPDIR pour ce fichier
-
-      if (index( name1, '/' ) == 0)                        then
-          name1 = trim( tmpdirn ) // '/' // name1
-          ftyp1 = wkoffit( '+' // trim( name1 ) )
-      end if
+      ! Verifier que le premier fait reference a un fichier de 
+      ! type valide. Si les autres existent deja (i.e. ne sont pas
+      ! vides, et possiblement) en aviser l'usager et quitter.
 
       if (ftyp1 < -1)                                      then
-          write(6,6003) trim( name1 )
-          if (box) nil = exfin( 'Fstmdiag','Erreur 3','NON' )
-          call quit( ' Fstmdiag ',3 )
+
+          ! Le premier fichier est vide ou inexistant.
+          ! Verifier que le nom du fichier ne contient
+          ! pas de relocalisation de repertoire. Sinon
+          ! aller voir sur TMPDIR pour ce fichier
+
+          if (index( name1(nbr), '/' ) == 0)               then
+              name1(nbr) = trim( tmpdirn ) // '/' // name1(nbr)
+              ftyp1 = wkoffit( '+' // trim( name1(nbr) ) )
+          end if
+
+          if (ftyp1 < -1)                                  then
+              write(6,6003) trim( name1(nbr) )
+              if (box) nil = exfin( 'Fstmdiag','Erreur 3','NON' )
+              call quit( ' Fstmdiag ',3 )
+          end if
+
+          if (nbr == 1 .and. def1(1) == def1(NBRARGS+1)) name2 = name1(nbr) ! Re-Definir name2
+
       end if
 
-      if (def1(1) == def1(2)) name2 = name1 ! Re-Definir name2
+      if (ftyp1 /= 1 .and. ftyp1 /= 33)                    then
 
-  end if
+          ! Ce fichier n'est pas un fichier RND.
 
-  if (ftyp1 /= 1 .and. ftyp1 /= 33)                        then
+          write(6,6006)
+          if (box) nil = exfin( 'Fstmdiag','Erreur 6','NON' )
+          call quit( ' Fstmdiag ',6 )
 
-      ! Ce fichier n'est pas un fichier RND.
+      end if
 
-      write(6,6006)
-      if (box) nil = exfin( 'Fstmdiag','Erreur 6','NON' )
-      call quit( ' Fstmdiag ',6 )
+      if (nbr > 1 .and. ftyp0 /= ftyp1)                    then
 
-  end if
+          ! Plus d'un type de fichier d'entree.
+
+          write(6,6012)
+          if (box) nil = exfin( 'Fstmdiag','Erreur 12','NON' )
+          call quit( ' Fstmdiag ',12 )
+
+      end if
+
+      ftyp0 = ftyp1
+
+      if (nbr < NBRFICH .and. &
+         (name1(nbr+1) == ' ' .or. name1(nbr+1) == '****')) exit
+
+  end do
+
+  if (nbr == NBRFICH+1) nbr = NBRFICH ! Nombre de fichiers d'Input
 
   ! Definir name3 si on veut produire les variances. 
   if (.not.NoVar) name3 = trim( name2 ) // '_variance'
@@ -358,7 +462,7 @@
   ! si son nom est egal a celui du fichier d'entree ou
   ! que le calcul de la variance est requis.
 
-  if (def1(1) == def1(2) .or. .not.NoVar) &
+  if (def1(NBRARGS+1) == def1(1) .or. .not.NoVar) &
       name2 = trim( name2 ) // '_moyenne'
 
   ftyp2 = wkoffit( '+' // trim( name2 ) )
@@ -387,30 +491,64 @@
 
   ! Associer des unites I/O aux noms de fichiers.
 
-  ierr1 = fnom( iu1, '+' // trim( name1 ), 'STD+R/O',0 )
   ierr2 = fnom( iu2, '+' // trim( name2 ), 'STD',    0 )
   ierr3 = 0 ; if (.not.NoVar) &
   ierr3 = fnom( iu3, '+' // trim( name3 ), 'STD',    0 )
 
-  if (ierr1 /= 0 .or. ierr2 /= 0 .or. ierr3 /= 0)          then
+  do i=1,nbr
+ 
+      ierr1 = fnom( iu1(i), '+' // trim( name1(i) ), 'STD+R/O',0 )
+  
+      if (ierr1 /= 0)                                      then
+          write(6,6002)
+          if (box) nil = exfin( 'Fstmdiag', 'Erreur 2', 'NON' )
+          call quit( ' Fstmdiag ',2 )
+      end if
+
+      ! Ouvrir les fichiers.
+
+      inbr  = fstouv( iu1(i),'RND' ) ; inbr1 = inbr + inbr1
+
+  end do
+
+  inbr2  = fstouv( iu2,'RND' )
+  if (.not.NoVar) &
+  inbr3  = fstouv( iu3,'RND' )
+
+  if (ierr2 /= 0 .or. ierr3 /= 0)                              then
       write(6,6002)
       if (box) nil = exfin( 'Fstmdiag', 'Erreur 2', 'NON' )
       call quit( ' Fstmdiag ',2 )
   end if
 
-  ! Ouvrir les fichiers.
-
-  inbr1  = fstouv( iu1,'RND' )
-  inbr2  = fstouv( iu2,'RND' )
-  if (.not.NoVar) &
-  inbr3  = fstouv( iu3,'RND' )
-
   NMAX = max( NMAX, inbr1+1 )
 
-  if (NoVar)                                               then
-      write(6,6102) trim( name1 ),trim( name2 )
+  if (nbr > 1) ilnk = fstlnk( iu1,nbr )
+
+  if (ilnk > 0)                                                then
+      write(6,6013)
+      if (box) nil = exfin( 'Fstmdiag', 'Erreur 13', 'NON' )
+      call quit( ' Fstmdiag ',13 )
+  end if
+
+  if (nbr == 1)                                                then
+      if (NoVar)                                               then
+         write(6,6102) trim( name1(1) ),trim( name2 )
+      else
+         write(6,6102) trim( name1(1) ),trim( name2 ),trim( name3 )
+      end if
+  else if (nbr == 2)                                           then
+      if (NoVar)                                               then
+         write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 )
+      else
+         write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 ),trim( name3 )
+      end if
   else
-      write(6,6103) trim( name1 ),trim( name2 ),trim( name3 )
+      if (NoVar)                                               then
+         write(6,6104) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 )
+      else
+         write(6,6104) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 ),trim( name3 )
+      end if
   end if
 
   !--------------------------------------------------------
@@ -420,15 +558,18 @@
 
   allocate( listet(NMAX), stat=ier )
 
-  infl = fstinl( iu1, ni,nj,nk, -1,' ',-1,-1,-1,' ',' ', &
-                      listet,infont,NMAX )
+  infl = fstinl( iu1(1), ni,nj,nk, -1,' ',-1,-1,-1,' ',' ', &
+                         listet,infont,NMAX )
 
   allocate( niveau(infont),  delt(infont),  date(infont), &
             listev(infont),  fset(infont),   pas(infont), &
             heure (infont),  done(infont),  bits(infont), &
             niset (infont), njset(infont), nkset(infont), &
+            rkind (infont), hiset(infont), loset(infont), &
             ig1set(infont),ig2set(infont),ig3set(infont), &
-            ig4set(infont),chaine(1:infont), stat=ier )
+            ig4set(infont), vip1s(infont), k1set(infont), &
+          chaine(1:infont), vip2s(infont), k2set(infont), &
+                            vip3s(infont), k3set(infont), stat=ier )
 
   done = .false. ; nref = 0
 
@@ -459,14 +600,25 @@
 
           ! Les enregistrements de renvois sont sauves immediatement.
 
-          allocate( buff(max( nwds,4096 )), stat=ier )
+          if (nbits > 32)                                  then
+              allocate( buff8(max( nwds,4096 )), stat=ier )
+              inf  = fstluk( buff8, key, ni,nj,nk )
 
-          inf  = fstluk( buff, key, ni,nj,nk )
-          iecr = fstecr( buff,ibuf, &
-                        -nbits, iu2, dateo,deet,npas,          &
-                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
-                         etiket,grtyp, ig1,ig2,ig3,ig4,        &
-                         datyp, ReWrit )
+              iecr = fstecr( buff8,ibuf, &
+                            -nbits, iu2, dateo,deet,npas,          &
+                             ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
+                             etiket,grtyp, ig1,ig2,ig3,ig4,        &
+                             datyp, .TRUE. )
+          else
+              allocate( buff(max( nwds,4096 )), stat=ier )
+              inf  = fstluk( buff, key, ni,nj,nk )
+              
+              iecr = fstecr( buff,ibuf, &
+                            -nbits, iu2, dateo,deet,npas,          &
+                             ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
+                             etiket,grtyp, ig1,ig2,ig3,ig4,        &
+                             datyp, .TRUE. )
+          end if
 
           if (iecr < 0)                                    then
               write(6,6005) iecr,'moyenne'
@@ -477,11 +629,19 @@
 
           if (.not.NoVar)                                  then
 
-              iecr = fstecr( buff,ibuf, &
-                            -nbits, iu3, dateo,deet,npas,          &
-                             ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
-                             etiket,grtyp, ig1,ig2,ig3,ig4,        &
-                             datyp, ReWrit )
+              if (nbits > 32)                              then
+                  iecr = fstecr( buff8,ibuf, &
+                                -nbits, iu3, dateo,deet,npas,          &
+                                 ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
+                                 etiket,grtyp, ig1,ig2,ig3,ig4,        &
+                                 datyp, .TRUE. )
+              else
+                  iecr = fstecr( buff,ibuf, &
+                                -nbits, iu3, dateo,deet,npas,          &
+                                 ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
+                                 etiket,grtyp, ig1,ig2,ig3,ig4,        &
+                                 datyp, .TRUE. )
+              end if
 
               if (iecr < 0)                                then
                   write(6,6005) iecr,'variance'
@@ -492,12 +652,45 @@
 
           end if
 
-          deallocate( buff, stat=ier )
+          if (nbits > 32)                                  then
+              deallocate( buff8, stat=ier )
+          else
+              deallocate( buff, stat=ier )
+          end if
 
           done(i) = .true. ; nref = nref+1
 
           cycle LOOP1
 
+      end if
+
+      ! Evaluer RANGE_KIND,HIVAL,LOVAL
+
+      stat = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
+
+      if (stat == CONVERT_ERROR)                           then
+          write(6,6014) stat,ip1,ip2,ip3
+          ifrm = fstfrm (iu2) ; ifrm = fstfrm (iu3)
+          if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
+          call quit( ' Fstmdiag ',14 )
+      end if
+
+      k1 = RP1%kind ; k2 = RP2%kind
+
+      ! Interval vertical ou de temps ?
+
+      if (RP1%hi /= RP1%lo) then      ! Interval vertical
+         HIVAL = RP1%hi ; LOVAL = RP1%lo ; RANGE_KIND = k1
+      else if (RP2%hi /= RP2%lo) then ! Interval de temps
+         HIVAL = RP2%hi ; LOVAL = RP2%lo ; RANGE_KIND = k2
+      else                            ! Aucun interval
+         HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
+      end if
+
+      if (RANGE_KIND == -1)                                then
+          call diag_convip_plus( ip3,vip3,k3,-2,nuls,.false. )
+      else
+          vip3 = -1 ; k3 = -1
       end if
 
       write(chaine(i),0001) typvar,etiket,nomvar,grtyp
@@ -518,7 +711,21 @@
       ig3set(i) = ig3
       ig4set(i) = ig4
 
+      rkind(i)  = RANGE_KIND
+      hiset(i)  = HIVAL
+      loset(i)  = LOVAL
+
+      vip1s(i)  = RP1%hi
+      k1set(i)  = k1
+      vip2s(i)  = RP2%hi
+      k2set(i)  = k2
+      vip3s(i)  = vip3
+      k3set(i)  = k3
+
       bits(i)   = nbits
+
+      Format1='("A),",I6.5," typvar,etiket,nomvar,grtyp, ip1,ip2,ip3= ",A,3I11)'
+      if (Info) write(6,Format1) i,chaine(i),niveau(i),heure(i),fset(i)
 
   end do LOOP1
 
@@ -536,7 +743,7 @@
               start=start+1
               cycle LOOP3
           else
-              goto 999
+              goto 900
           end if
       end if
 
@@ -558,6 +765,10 @@
       ig2   = ig2set(start)
       ig3   = ig3set(start)
       ig4   = ig4set(start)
+
+      HIVAL = hiset (start)
+      LOVAL = loset (start)
+      RANGE_KIND = rkind(start)
 
       nwds = ni*nj*nk ; ier = 0
 
@@ -584,15 +795,6 @@
           call quit( ' Fstmdiag ',9 )
       end if
 
-      ! Trouver l'heure de validite du debut.
-
-      if (npas*deet /= 0 .and. ip3 == 0)                   then
-          heures = npas*DBLE( deet )/3600
-          call incdatr( datevo,dateo,heures )
-      else
-          datevo = dateo
-      end if
-
       moyenne = 0 ; variance = 0 ; deltat = 0
       nr = 0 ; ns = 0 ; ip2tot = 0 ; ii = -1
 
@@ -609,11 +811,42 @@
               ig1set(i) /= ig1    .or. &
               ig2set(i) /= ig2    .or. &
               ig3set(i) /= ig3    .or. &
-              ig4set(i) /= ig4)   cycle LOOP2
+              ig4set(i) /= ig4    .or. &
+             (rkind (i) /= RANGE_KIND .and. &
+             (rkind (i) /= -1         .or. RANGE_KIND /= KIND_HOURS) .and. &
+             (rkind (i) /= KIND_HOURS .or. RANGE_KIND /= -1        )))  then
+
+              if (Info .and. .not.done(i))                 then
+                  Format1 = '(2i6.5," chaine(i), cchain ",A,1x,A)' ; write(6,Format1) start,i,trim( chaine(i) ),trim( cchain )
+                  Format1 = '(2i6.5," niveau(i), ip1    ",2i10)'   ; write(6,Format1) start,i,niveau(i),ip1
+                  Format1 = '(2i6.5," niset (i), ni     ",2i5)'    ; write(6,Format1) start,i,niset (i), ni 
+                  Format1 = '(2i6.5," njset (i), nj     ",2i5)'    ; write(6,Format1) start,i,njset (i), nj
+                  Format1 = '(2i6.5," nkset (i), nk     ",2i5)'    ; write(6,Format1) start,i,nkset (i), nk
+                  Format1 = '(2i6.5," ig1set(i), ig1    ",2i6)'    ; write(6,Format1) start,i,ig1set(i), ig1
+                  Format1 = '(2i6.5," ig2set(i), ig2    ",2i6)'    ; write(6,Format1) start,i,ig2set(i), ig2
+                  Format1 = '(2i6.5," ig3set(i), ig3    ",2i6)'    ; write(6,Format1) start,i,ig3set(i), ig3
+                  Format1 = '(2i6.5," ig4set(i), ig4    ",2i6)'    ; write(6,Format1) start,i,ig4set(i), ig4
+                  Format1 = '(2i6.5," rkind (i), RANGE_KIND ",2I3)'; write(6,Format1) start,i,rkind (i), RANGE_KIND
+                  if (rkind (i) /= RANGE_KIND)             then
+                      if (rkind(i) /= -1)                  then
+                          Format1 = '(2i6.5," hiset(i)-loset(i) ",E23.15)' ; write(6,Format1) start,i,hiset(i)-loset(i)
+                      end if
+                      if (RANGE_KIND /= -1)                then
+                          Format1 = '(2i6.5," HIVAL-LOVAL ",E23.15)' ; write(6,Format1) start,i,HIVAL-LOVAL
+                      end if
+                  end if
+              end if
+
+              cycle LOOP2
+
+          end if
 
           ii = i ; key = listet(ii)
 
-          if (bits(ii) <= 32 )                            then
+          vip1 = vip1s(ii) ; k1 = k1set(ii)
+          vip2 = vip2s(ii) ; k2 = k2set(ii)
+
+          if (bits(ii) <= 32 )                             then
               inf  = fstluk( buff, key, ni,nj,nk )
               buff8(1:nwds) = buff(1:nwds)
           else
@@ -629,8 +862,226 @@
 
           done(i) = .true. ! On ne le lira plus cet enregistrement.
 
-          mdiag = max( 1, fset(ii) )
+          mdiag = 1 ; kcode = 0
 
+          npasp1_deet = 0 ; npasp1_deet60 = 0 ; npasp1_deet3600 = 0
+          npas_deet   = 0 ; npas_deet60   = 0 ; npas_deet3600   = 0
+
+          ! La resolution maximale du codage temporel utilise ici est de 5 secondes
+
+          if (delt(ii) /= 0)                               then
+              ! Calculs de (npas+1)*delt en unites de blocs de 5 secondes
+              npasp1_deet = nint( (pas(ii)+1)*dble( delt(ii) ) / 5., 8 )
+              npas_deet   = nint(  pas(ii)   *dble( delt(ii) ) / 5., 8 )
+              if (mod( pas(ii),60 ) == 0 .and. pas(ii)/60 /= 0) then
+                  npasp1_deet60 = nint( ((pas(ii)/60)+1)*dble( delt(ii)*60 ) / 5, 8 )
+                  npas_deet60   = nint(  (pas(ii)/60)   *dble( delt(ii)*60 ) / 5, 8 )
+              end if
+              if (mod( pas(ii),3600 ) == 0 .and. pas(ii)/3600 /= 0) then
+                  npasp1_deet3600 = nint( ((pas(ii)/3600)+1)*dble( delt(ii)*3600 ) / 5, 8 )
+                  npas_deet3600   = nint(  (pas(ii)/3600)   *dble( delt(ii)*3600 ) / 5, 8 )
+               end if
+          end if
+          
+          if (k2set(ii) == KIND_HOURS)                     then
+              vip2_5 = nint( vip2s(ii) * dble( 720 ), 8 ) ! vip2 en unites de blocs de 5 secondes
+          else
+              vip2_5 = 0
+          end if
+
+          time_range   = hiset(ii)-dble( loset(ii) )
+          time_range_5 = nint( time_range * 720, 8 ) ! time_range en unites de blocs de 5 secondes
+
+          if (pas(ii)*delt(ii) == 0             .or.  &
+
+             (RANGE_KIND       == KIND_HOURS    .and. & ! Tentative de determiner si cet
+             (npas_deet        == time_range_5  .or.  & ! enregistrement est le produit de
+              npas_deet60      == time_range_5  .or.  & ! calculs prealables de moyennes
+              npas_deet3600    == time_range_5)).or.  & ! ou bien si c'est un echantillon
+
+             (RANGE_KIND       /= KIND_HOURS    .and. &
+              RANGE_KIND       >= 0             .and. &
+             (npasp1_deet      == vip2_5        .or.  &
+              npasp1_deet60    == vip2_5        .or.  &
+              npasp1_deet3600  == vip2_5))      .or.  &
+
+             (k3set(ii)        == KIND_SAMPLES  .and. &
+              vip3s(ii)        >  0.)           .or.  &
+
+             (OldIP3  .and.  fset(ii) >  0) )              then
+
+              ! On suppose que c'est une moyenne
+              if (ii == start)                             then
+                  datevi = dateo
+                  if (npas*deet > 0)                       then
+                      tdiff = npas*DBLE( deet )/3600
+                      call incdatr( datevf,dateo,tdiff )
+                  else
+                      datevf = datevi
+                  end if
+              else
+                  datev = date(ii)
+                  call difdatr( datev,datevi,tdiff ) ; if (tdiff < 0._8) datevi = datev
+                  if (pas(ii)*delt(ii) > 0)                then
+                      tdiff = pas(ii)*DBLE( delt(ii) )/3600
+                      call incdatr( datev,date(ii),tdiff )
+                  end if
+                  call difdatr( datev,datevf,tdiff ) ; if (tdiff > 0._8) datevf = datev
+              end if
+
+          else
+              ! On suppose que c'est un echantillon
+              if (ii == start)                             then
+                  tdiff = npas*DBLE( deet )/3600
+                  call incdatr( datevi,dateo,tdiff )
+                  datevf = datevi
+              else
+                  tdiff = pas(ii)*DBLE( delt(ii) )/3600
+                  call incdatr( datev,date(ii),tdiff )
+                  call difdatr( datev,datevi  ,tdiff ) ; if (tdiff < 0._8) datevi = datev
+                  call difdatr( datev,datevf  ,tdiff ) ; if (tdiff > 0._8) datevf = datev
+              end if
+          end if
+
+          if (RANGE_KIND == KIND_HOURS)                    then
+              ! Interval de temps.
+              !  On suppose que c'est le debut d'un interval deja
+              !  moyenne lorsque (HIVAL-LOVAL) corresponds a
+              !  (NPAS+1)*DEET a la seconde pres. On doit aussi
+              !  tenir compte de la limite de 2**24-1 de DEET et
+              !  des ajustements qui auraient pu etre appliques.
+              if (npas_deet == time_range_5)             then
+                  kcode = 1
+              else &
+              if (mod( pas(ii),60 ) == 0 .and. &
+                  npas_deet60 == time_range_5)           then
+                  pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60 ; kcode = 1
+              else &
+              if (mod( pas(ii),3600 ) == 0 .and. &
+                  npas_deet3600 == time_range_5)         then
+                  pas(ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*3600 ; kcode = 1
+              end if
+              if (kcode == 1)                              then
+                  mdiag   = pas(ii)+1
+                  hival  = max( hival, hiset(ii) ) ; heures = hiset(ii)-loset(ii)
+                  loval  = min( loval, loset(ii) ) ; deltat = nint( time_range/(mdiag-1) )
+              end if
+          else if (RANGE_KIND /= -1)                       then
+              ! Interval de coordonee verticale. IP3 indisponible.
+              !  Est-ce que IP2 est deja code en heures
+              !  ou bien en un nombre d'echantillons ?
+              ! Verifier en premier pour un codage NEW-STYLE ...
+              call diag_convip_plus( heure(ii),vip2,ikind,-2,nuls,.false. ) 
+              if (ikind == KIND_HOURS)                     then 
+                  vip2_5 = nint( vip2 * 720.0_8, 8 )
+                  if (npasp1_deet == vip2_5)               then
+                      ! IP2 est encode en heures et cette derniere
+                      !  valeur est egale a (NPAS+1)*DEET/3600 ...
+                      mdiag = pas(ii)+1 ; kcode = 2
+                  else &
+                  if (npasp1_deet60 == vip2_5)             then
+                      ! ou bien a ((NPAS/60)+1)*(DEET*60)/3600 ...
+                      pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60
+                      mdiag = pas(ii)+1 ; kcode = 2
+                  else &
+                  if (npasp1_deet3600 == vip2_5)           then
+                      ! ou bien a ((NPAS/3600)+1)*(DEET*3600)/3600.
+                      pas(ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*3600
+                      mdiag = pas(ii)+1 ; kcode = 2
+                  end if
+                  if (kcode == 2)                          then
+                       mdiag  = heure(ii) ; heures = vip2 ; deltat = delt(ii)/3600._8
+                  end if
+              else &
+              if (ikind == KIND_SAMPLES)                   then
+                  ! IP2 est deja code en nombre d'echantillons
+                  mdiag = nint( vip2 ) ; kcode = 3
+                  heures = pas(ii)*dble( delt(ii) )/3600.
+                  deltat = nint( heures/(vip2-1) )
+              else
+                  if (heure(ii) == pas(ii)+1)              then
+                      ! Codage de type OLD-STYLE. Notons que ceci
+                      ! n'est pas le codage "standard" de IP2. On suppose
+                      ! alors qu'on a mis le nombre d'echantillon dans IP2
+                      ! lorsque IP2 = NPAS+1 ...
+                      heures = dble( npasp1_deet )/720._8 ; kcode = 4
+                  else &
+                  if (mod( pas(ii),60 ) == 0 .and. &
+                      heure(ii) == (pas(ii)/60)+1)         then
+                      ! ... ou bien lorsque IP2 = NPAS/60 + 1 ...
+                      heures = dble( npasp1_deet60 )/720._8 ; kcode = 4
+                      pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60
+                  else &
+                  if (mod( pas(ii),3600 ) == 0 .and. &
+                      heure(ii) == (pas(ii)/3600)+1)       then
+                      ! ... ou bien lorsque IP2 = NPAS/3600 + 1.
+                      heures = dble( npasp1_deet3600 )/720._8 ; kcode = 4
+                      pas(ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*60
+                  end if
+              end if
+              if (kcode == 4) deltat = delt(ii)/3600._8
+          else &
+          if (.not.NoIP3)                                  then
+              ! IP3 est "libre". On suppose qu'il contient alors
+              !  un nombre d'echantillons, possiblement code en
+              !  mode KIND_SAMPLES. Sinon, on ignore tout codage
+              if (fset(ii) > 32767)                        then
+                  ! call diag_convip_plus( fset(ii),vip3,ikind,-2,nuls,.false. )
+                  if (k3set(ii) == KIND_SAMPLES)           then
+                      kcode = 5 ; mdiag = nint( vip3s(ii) )
+                      if (k2set(ii) == KIND_HOURS)         then
+                          heures = vip2s(ii) ; deltat = nint( heures/mdiag )
+                      end if
+                  else
+                      kcode = 6 ; mdiag = fset(ii) ! Mode compatibilite arriere (partie 1)
+                  end if
+              else if (fset(ii) > 0)                       then
+                 ! Pas de codage, mais IP3 est non nul. On prends IP3 tel quel. Ceci est
+                  kcode = 7 ; mdiag = fset(ii) ! un mode compatibilite arriere (partie 2)
+              end if
+              if ((kcode == 5 .and. k2set(ii) /= KIND_HOURS) &
+             .or.  kcode == 6 &
+             .or.  kcode == 7)                             then
+                  heures = nint( pas(ii)*dble( delt(ii) )/5., 8 )/720._8 
+                  deltat = nint( heures/(mdiag-1) )
+              end if
+          end if
+
+          mdiag = max( 1, mdiag )
+    
+          ! Trouver l'heure de validite courante
+          ! et le deltat entre les echantillons.
+
+          if (pas(ii)*delt(ii) /= 0)                       then
+              
+              if (mdiag > 1)                               then
+                  ip2tot = ip2tot + mdiag
+              else if (nr > 1)                             then
+                  if (nr == ns)                            then
+                      deltat = nint( pas(ii)*dble( delt(ii) )/5., 8 )/720._8 - heures
+                  else
+                      ip2tot = ip2tot + deltat !? Quid !?
+                  end if
+              end if
+
+              heures = pas(ii)*DBLE( delt(ii) )/3600
+
+              if (ii == start)                             then
+                  heuremin = heures ; heuremax = heures
+              else 
+                  heuremax = max( heures, heuremax )
+                  heuremin = min( heures, heuremin )
+              end if
+
+          else
+              if (nr > 1) call difdatr( date(ii),datevf, deltat )
+              if (deltat > 0._8)                           then
+                  datevf = date(ii)
+              else
+                  deltat = -deltat
+              end if
+          end if
+          
           if (.not.NoVar) &
           variance(1:nwds) = variance(1:nwds)+mdiag*(buff8(1:nwds)*buff8(1:nwds))
           moyenne (1:nwds) = moyenne (1:nwds)+mdiag* buff8(1:nwds)
@@ -638,27 +1089,6 @@
           ns = ns+mdiag
           nr = nr+1
 
-          ! Trouver l'heure de validite courante
-          ! et le deltat entre les echantillons.
-
-          if (pas(i)*delt(ii) /= 0)                        then
-              if (fset(ii) > 1)                            then
-                  deltat = heure(ii)/(fset(ii)-1)
-                  ip2tot = ip2tot + heure(ii)
-              else if (nr > 1)                             then
-                  if (nr == ns)                            then
-                      deltat = pas(ii)*DBLE( delt(ii) )/3600 - heures
-                  else
-                      ip2tot = ip2tot + deltat
-                  end if
-              end if
-              heures = pas(ii)*DBLE( delt(ii) )/3600
-              call incdatr( datevf,date(ii),heures )
-          else
-              if (nr > 1) call difdatr( date(ii),datevf, deltat )
-              datevf = date(ii)
-          end if
-          
       end do LOOP2
 
       if (nr == 0) cycle LOOP3
@@ -677,6 +1107,8 @@
 
       ! Finaliser les calculs.
 
+      if (nr == 1) goto 200 ! Sauver le champs d'entree tel quel !
+
       moyenne  = moyenne/ns
 
       if (.not.NoVar)                                      then
@@ -688,39 +1120,19 @@
 
       ! Mettre a jour les descripteurs temporels.
 
-      if (ip2tot > 0) ip2 = ip2tot
+      dateo = datevi
+      call difdatr( datevf,datevi,heures )
 
-      dateo = datevo
-      call difdatr( datevf,datevo,heures )
-
-      if (deet /= 0 .or. nr < ns)                          then
-          if (abs( heures-nint( heures ) ) < 0.00027_8)    then ! 0.00027h < 1s
+      if (ns > 1)                                          then
+          if (deltat > 0.0_8 .and. &
+              heures*720 == deltat*(ns-1)*720)             then
+              deet = nint( deltat*3600. )
+              npas = ns-1
+          else if (nint( heures*720, 8 ) == nint( heures, 8 )*720) then ! difference < 5s
               npas = nint( heures )
               deet = 3600
           else if (deet /= 0)                              then
               npas = nint( (heures/deet)*3600 )
-          end if
-          if (deltat > 0.0_8 )                             then
-              if (nint( heures*720 ) == nint( deltat*(ns-1)*720 )) &
-                  ip2  = nint( ns*deltat )
-          else if (nr == ns)                               then
-              ip2  = 0
-          end if
-      else if (ns > 1)                                     then
-          if (deltat > 0.0_8 )                             then
-              if (nint( heures*720 ) == nint( deltat*(ns-1)*720 )) then
-                  npas = ns-1
-                  deet = nint( deltat*3600 )
-                  ip2  = nint( ns*deltat )
-              else
-                  ip2  = nint( heures )
-                  deet = 3600
-                  npas = ip2
-              end if
-          else
-              deet = 0
-              npas = 1
-              ip2  = 0
           end if
       else
           deet = 0
@@ -728,7 +1140,101 @@
           ip2  = 0
       end if
 
-      do while (deet > 16777215) 
+      ! Est-ce qu'il manques des echantillons ?
+      ! Faire les comparaisons des blocs de 5 secondes.
+      vip2 = ns*deltat ; heures_5 = nint( (ns-1)*dble( deet )/5., 8 )
+      Complet = ((heures_5 == nint( (HIVAL   -LOVAL)   *720._8, 8 )) &
+        .or.     (heures_5 == nint( (heuremax-heuremin)*720._8, 8 )))
+
+      Format1='("1) Complet, Variable, IP1,NS, VIP2,HIVAL,LOVAL=",L1,1x,A,2I9,3F15.6)'
+      if (Info) write(6,Format1) Complet,trim( chaine(ii) ),niveau(ii),NS,vip2,HIVAL,LOVAL
+      Format1='("2) heuremax,heuremin, heures, Deltat=",4E23.15)'
+      if (Info) write(6,Format1) heuremax,heuremin,heures,Deltat
+
+      if (Complet)                                         then
+          if (HIVAL > LOVAL .and. RANGE_KIND == KIND_HOURS)then
+              ! Re-Coder (HIVAL,LOVAL) dans (IP2,IP3)
+              RP1%hi = vip1  ; RP1%lo = vip1  ; RP1%kind = k1
+              RP2%hi = HIVAL ; RP2%lo = LOVAL ; RP2%kind = KIND_HOURS
+              stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 ) 
+              if (stat == CONVERT_ERROR)                   then
+                 write(6,6614) stat,RP1%hi,RP1%lo,RP1%kind, &
+                                    RP2%hi,RP2%lo,RP2%kind
+                 ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+                 if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
+                 call quit( ' Fstmdiag ',14 )
+             end if
+             npas = ns-1 ; deet = nint( 3600*(HIVAL-LOVAL)/npas )
+          else &
+          if (.not.NoIP3 .and. &
+              heuremax > heuremin .and. RANGE_KIND == -1)  then
+              ! Coder (heuremax,heuremin) dans (IP2,IP3)
+              RP1%hi = vip1     ; RP1%lo = vip1    ; RP1%kind = k1
+              RP2%hi = heuremax ; RP2%lo =heuremin ; RP2%kind = KIND_HOURS
+              stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 )
+              if (stat == CONVERT_ERROR)                   then
+                 write(6,6614) stat,RP1%hi,RP1%lo,RP1%kind, &
+                                    RP2%hi,RP2%lo,RP2%kind
+                 ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+                 if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
+                 call quit( ' Fstmdiag ',14 )
+              end if
+              npas = ns-1 ; deet = nint( 3600*(heuremax-heuremin)/npas )
+          end if
+      else &
+      if (NoIP3                     .or. &
+         (RANGE_KIND /= KIND_HOURS .and. RANGE_KIND >= 0)) then
+
+          if (vip2 <= 1000000.)                            then
+              ! Coder le nombre d'heures dans IP2
+              call diag_convip_plus( ip2,vip2,KIND_HOURS,+2,nuls,.false. )
+          else if (ns < 2000000)                           then
+              ! 1 999 999 est la limite superieure des valeurs qui pourront
+              ! etre codees correctement en mode NEW-STYLE pour KIND_SAMPLES
+              ! Coder le nombre d'echantillons dans IP3 ...
+              call diag_convip_plus( ip2,float(ns),KIND_SAMPLES,+2,nuls,.false. )
+          else
+              write(6,'(/A/)') "   Incapable  de coder le nombre d'echantillons ..."
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 15','NON' )
+              call quit( ' Fstmdiag ',15 )
+          end if
+
+      else &
+      if (RANGE_KIND == KIND_HOURS .or. RANGE_KIND < 0)    then
+
+          if (vip2 <= 1000000.)  &  ! Coder le nombre d'heures dans IP2
+              call diag_convip_plus( ip2,vip2,KIND_HOURS,+2,nuls,.false. )
+
+          if (ns < 2000000)                                then
+              ! 1 999 999 est la limite superieure des valeurs qui pourront
+              ! etre codees correctement en mode NEW-STYLE pour KIND_SAMPLES
+              ! Coder le nombre d'echantillons dans IP3 ...
+               call diag_convip_plus( ip3,float(ns),KIND_SAMPLES,+2,nuls,.false. )
+          else &
+          if (ns < 254903968)                             then
+              ! Notez que les limites des valeurs codees pour KIND_SAMPLES
+              ! sont les suivantes: 254903968   <=  IPi <= 267486880
+              IP3 = ns ; IP2 = 0
+          else ! Trop d'echantillons. Erreur !
+              write(6,6015) ns
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 15','NON' )
+              call quit( ' Fstmdiag ',15 )
+          end if
+
+      else
+          write(6,'(/A/)') "   Incapable  de coder le nombre d'echantillons ..."
+          ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+          if (box) nil = exfin( 'Fstmdiag','Erreur 15','NON' )
+          call quit( ' Fstmdiag ',15 )
+      endif
+
+      Format1 = '("3) ip1,ip2,ip3,npas,deet=",5I10)'
+      if (Info) write(6,Format1) ip1,ip2,ip3,npas,deet
+
+      do while (deet > 16777215) ! Taille limite de deet = 2**24 - 1
+          ! On tente tout de meme de conserver la valeur de deet*npas.
           if (mod( deet,60 ) == 0)                         then
               deet = deet/60 ; npas = npas*60
           else
@@ -739,13 +1245,9 @@
           end if
       end do 
 
-      ! Ecrire les resultats...
+      ! Ecrire les resultats en commencant par les moyennes.
 
-      ip3 = ns
-
-      ! ... en commencant par les moyennes.
-
-      if (nbits <= 32)                                     then
+ 200  if (nbits <= 32)                                     then
           nbits = 32 ; datyp = 5 ; buff(1:nwds) = moyenne(1:nwds)
           iecr = fstecr( buff,ibuf,                             &
                         -nbits, iu2, dateo,deet,npas,           &
@@ -776,7 +1278,7 @@
 
       ! Et maintewnant, ecrire les variances (toujours a 64 bits).
 
-      if (.not.NoVar)                                      then
+      if (.not.NoVar .and. nr > 1)                         then
 
           nbits = 64 ; datyp = 5
           iecr = fstecr( variance,ibuf,                         &
@@ -808,8 +1310,10 @@
   !------------------------------------------------------------------
   ! On fait le menage...
 
- 999  ifrm = fstfrm (iu1) ; ierr1 = fclos( iu1 )
-  ifrm = fstfrm (iu2) ; ierr2 = fclos( iu2 )
+ 900 ifrm = fstfrm (iu2) ; ierr2 = fclos( iu2 )
+
+  if (nbr > 1) ilnk = fstunl( iu1,nbr )
+  do i=1,nbr ; ifrm = fstfrm (iu1(i)) ; ierr1 = fclos( iu1(i) ) ; end do
 
   if (.not.NoVar)                                          then
       ifrm = fstfrm (iu3) ; ierr3 = fclos( iu3 )
@@ -836,13 +1340,22 @@
  6009 format(/"   Erreur d'allocation de memoire, nwds =",I6/)
  6010 format(/'   TMPDIR ou BIG_TMPDIR non definis.'/)
  6011 format(/'   Probleme avec deet,npas en sortie =',2i10/)
+ 6012 format(/"   Plus d'un type de fichier d'entree."/)
+ 6013 format(/"   Incapable de lier les fichiers d'entree."/)
+ 6014 format(/'   Erreur=',I3,' dans DECODE_ip, IP1,IP2,IP3=',3I11/) 
+ 6614 format(/'   Erreur=',I3,' dans ENCODE_ip, RP1=',2p4e14.6,I3/ &
+                                           31x,'RP2=',2p4e14.6,I3/)
+ 6015 format(/"   Trop grand nombre d'echantillons =",I11,' > 254903968'/)
 
  6100 format(//4x,' NR TV NAME ETIKET',19x,'LEV',5x,'NI',4x,'NJ', &
             11x,'MIN',11x,'MAX',10x,'MEAN',6x,'VARIANCE'//)
 
  6101 format(A,1x,I3,1x,4(A,1x),2I6,1p4e14.6)
- 6102 format(/3x,'Source...      ',A/3x,'Destination... ',A/)
- 6103 format(/3x,'Source...      ',A/3x,'Destination... ',A/18x,A/)
+ 6102 format(/3x,'Source...      ',A/3x,'Destination... ',A/:18x,A/)
+ 6103 format(/3x,I3,' Fichiers Sources... ',A/27x,A/ &
+              6x,   ' Destination... ',5x,A/:27x,A/)
+ 6104 format(/3x,I3,' Fichiers Sources... ',A/27x,'...'/27x,A/ &
+              6x,   ' Destination... ',5x,A/:27x,A/)
 
  6201 format(/'Debug ',A,'=',A/)
 

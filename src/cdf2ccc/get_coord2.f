@@ -35,6 +35,8 @@
 *
 * REVISIONS
 *
+*  B.Dugas fevrier '16 :
+*  - Reconnaitre long_name="model level number" pour la coordonnee levelist
 *  B.Dugas mars '15 :
 *  - Introduire la variante 'ht' de la coordonnee de hauteur en km.
 *  B.Dugas aout '13 :
@@ -306,10 +308,11 @@
                elseif (cfield == 'gal-chen'      ) then
                   level_desc = 'Gal-Chen Levels'
 
-               elseif (cfield == 'layers'           .or.
-     .                 cfield == 'arbitrary levels' .or.
-     .                 cfield == 'top of atmosphere'.or.
-     .                 cfield == 'soil layers'   ) then
+               elseif (cfield == 'layers'             .or.
+     .                 cfield == 'arbitrary levels'   .or.
+     .                 cfield == 'top of atmosphere'  .or.
+     .                 cfield == 'model level number' .or.
+     .                 cfield == 'soil layers'   )    then
                   level_desc = 'Arbitrary Levels'
 
                else

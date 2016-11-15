@@ -4,18 +4,18 @@
 #     if defined (AUTO_DOC)
 *
 * Sequence d'appel...
-*  convert  -rpn   fichstd    -ccrn     fichccc    [-help]    [-sqi]    \ 
-*          [-delt  [valeur]]  [-date    [valeur]]  [-info     [valeur]] \ 
-*          [-time] [-tri]     [-siecle   valeur]   [-stamp    [valeur]] \ 
-*          [-es    [valeur]]  [-mbhr]   [-laslon]  [-typvar   [valeur]] \ 
-*          [-grtyp  valeur]   [-datyp    valeur]\ 
-*          [-xg1    valeur     -xg2      valeur]   [-etiket    valeur]  \ 
-*          [-xg3    valeur     -xg4      valeur]   [-bisect]  [-nobox]  \ 
-*          [-keep   valeur]   [-lnsppa] [-pmslmb]  [-ip3dat]  [-lev1mb] \ 
-*          [-opktyp valeur]   [-newnam] [-label]   [-mvalue   [valeur]] \ 
-*          [-levtyp   valeur] [-ip1con]
-*         
+*  convert  -rpn   fichstd    -ccrn     fichccc   [-help]    [-sqi]    \ 
+*          [-delt  [valeur]]  [-date    [valeur]] [-info     [valeur]] \ 
+*          [-time] [-tri]     [-siecle   valeur]  [-stamp    [valeur]] \ 
+*          [-es    [valeur]]  [-mbhr]   [-laslon] [-typvar   [valeur]] \ 
+*          [-grtyp  valeur]   [-datyp    valeur] \ 
+*          [-xg1    valeur     -xg2      valeur]  [-etiket    valeur]  \ 
+*          [-xg3    valeur     -xg4      valeur]  [-bisect]  [-nobox]  \ 
+*          [-keep   valeur]   [-lnsppa] [-pmslmb] [-ip3dat]  [-lev1mb] \ 
+*          [-opktyp valeur]   [-newnam] [-label]  [-mvalue   [valeur]] \ 
+*          [-levtyp valeur]   [-ip1con] [-append] [-datadd   valeur ]
 *
+*         
 *
 * Auteur: B.Dugas, RPN - septembre 1990.
 * Derniere revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/convert.ptn,v 4.86 2014/12/04 00:23:37 dugas Exp $
@@ -74,13 +74,22 @@
 *          celles qui seraient lues dans le fichier d'entree
 * ip3dat = Si egal a OUI, ibuf(2) contient en fait un nombre   >  NON  /  OUI <
 *          d'echantillon qui doit etre transfere vers ip3
-* siecle = Si defini, en mode CCRN==>RPN, ibuf(2) contient     >   -1  /   -1 <
+* siecle = Si defini, en mode CCRN==>RPN, ibuf(2) contient     >   -1  /  NON <
 *          deja une date CCRN a laquelle il faut ajouter la
 *          valeur du parametre siecle. Apres ceci, on aura
 *          ibuf(2) =  ibuf(2) + ( siecle * 1 00 00 00 00 )
+*          donc en format YYYYMMDDHH
 *  stamp = Si egal a OUI, le parametre date contient deja un   >  OUI  /  NON <
 *          >DATE TIME STAMP< code. Sinon, cet argument est
 *          de la forme YYYYMMDDHHMMSS
+* datadd = Facteur additif pour construire une date valide     >    0  /  NON <
+*          en format YYYYMMDDHH. Selon sa valeur on definit
+*          aussi un facteur multiplicatif datmlt de la facon
+*          suivante:  0 <  datadd < 100, datmlt = 100
+*                   100 <= datadd < 10000, datmlt = 10000
+*                 10000 <= datadd < 1000000, datmlt = 1000000
+*          Donc, il faut que 0 < datadd < 1000000
+*          
 *   time = Avec ip3dat, date et delt, determine le traitement  >  NON  /  OUI <  
 *         du descripteur contenant l'information temporelle:
 *      a)  Si RPN==>CCRN ...
@@ -92,10 +101,14 @@
 *               Alors datev=ibuf(2) et on tente de sauver:
 *               1) ip2 et npas, si dateo et delt sont definis
 *               2) ip2 et dateo, si npas et delt le sont
-*          iii) Si delt.NE.-1 et time=OUI
+*          iii) Si datadd est defini alors on specifit datmlt
+*               selon sa valeur (i.e. 100,10000 ou 1000000) et
+*               date=datmlt*ibuf(2)+datadd et npas=ip2=0 
+*          iv)  Si delt.NE.-1 et time=OUI
 *               Alors date=datev et npas=ip2=0 
-*          iv)  Sinon
+*          v)   Sinon
 *               Alors date=dateo et npas=ibuf(2)
+*
 *
 *  label = Si RPN==>CCRN, la valeur du champs ETIKET est
 *          sous la forme d'un enregistrement de type LABEL     >  NON  /  OUI <
@@ -139,7 +152,9 @@
 * etiket = L'etiquette a inserer dans le fichier RPN           >'CCRN SEQ'/' '<
 * datyp  = Forcer l'ecriture avec un type particulier. Ceci    >    Aucune    <
 *          n'a de sens que pour les donnees reelles/entieres
-*          et n'aura aucun effet pour les donnees complexes
+*          et n'aura aucun effet pour les donnees complexes.
+*          Les types 129, 133 et 134 (i.e. turbo compression
+*          des types 1, 5 et 6) sont supportes .
 * mvalue = Valeur associee aux donnees manquante dans les      >    Aucune    <
 *          fichiers CCC. La valeur 'OFF' desactive ce
 *          traitement lors de l'ecriture de ces fichiers.
@@ -161,6 +176,8 @@
 *          selon un type particulier de compaction (PK84,PK92) >  PK84 / **** <
 *          Cette valeur peut aussi etre specifiee par la 
 *          variable d'environment DEFAULT_PACKING_TYPE
+* append = Ajouter les nouvelles donnees a un fichier          >  NON  /  OUI <
+*          de sortie deja existant
 *
 * Notes - Certains parametres peuvent etre specifies par un enregistrement
 * *       ccc de type='LABL', nom='INFO' sur lequel on ecrit:
@@ -210,6 +227,8 @@
 *      21 Series temporelles non supportees
 *      22 Probleme de series temporelles spectrales
 *      23 Options incompatibles: IP1CONV=F et OLD_STYLE_IP1=T
+*      24 Valeur illegale pour argument ATADD
+*      25 Valeur illegale pourargument SIECLE
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -304,6 +323,13 @@
 ***        CCRN a RPN.
 ***   
 *     $Log: convert.ptn,v $
+*     Revision 4.87  2016/10/27 16:02  dugas
+*     - Modifications syntaxiques F77 --> F90.
+*     - Ajouter la cle -append (nouveau mode d'ecriture).
+*     - Ajouter la cle -datadd (correction de la date CCC).
+*     - Ajouter code d'erreur 25 pour valeur illegale de -siecle
+*     - Support de DATYP=129, 133 et 134 (i.e. turbo compression).
+*
 *     Revision 4.86  2014/12/04 00:23:37  dugas
 *     Corrections pour GFORTRAN 4.9.
 *
@@ -836,15 +862,15 @@
       parameter   ( MAXBITS = 32 )
 
       integer       NBRCLE,       MAXRAP
-      parameter   ( NBRCLE = 39,  MAXRAP = nombre_de_rapports )
+      parameter   ( NBRCLE = 41,  MAXRAP = nombre_de_rapports )
 
-      character*1   neq1
+      character*1   neq1,attrib*32
       character*4   n(MAXRAP+1),esnam,newnam
       character*16  cles(NBRCLE),blanc
       character*512 def1(NBRCLE),def2(NBRCLE)
       character*512 chaine
 
-      integer       iu1,iu2,iu3, i,ipos,nrec,   lenn1,lenn2,
+      integer       iu1,iu2,iu3, i,ipos,nrec,
      +              nil,  exfin, idatm,iopdatm, inconnu,exdb,
      +              indx, idatyp,nextyp, lsr,la,lr,lm,ktr,lrlmt,
      +              imin, imax,  valeur, range, levtyp0,levtyp,
@@ -871,7 +897,7 @@
      +              suba,spec,  char,cmpl,data,bisect,box,times,
      +              sqi,mbhr,sigma, infom,infog,info,slab,keep1,
      +              lnsppa,pmslmb,ip3dat,lev1mb,ip1conv,
-     +              pascal, ok
+     +              pascal,append, ok
 
       real*8,       dimension(:), allocatable :: buffer
       external  gz2dam,  intarel, kel2cen, laslong, lnp2mb,  ms2koms, 
@@ -899,19 +925,18 @@
 
       logical   holacar, rewrit
 
-      integer   ifrm, fstfrm,xdfopt, iecr, fstecr,  wkoffit,
-     +                fstlir,fstinl, kind, fstlis,  iprm,fstprm,
-     +          inf,  fstinf,fstsui, iluk, fstluk,  rwd, fstrwd,
-     +          inbr1,fstnbr,fstouv, ierr1,fnom,    iopt,fstopc
+      integer   ifrm,iecr,kind,iprm,inf,iluk,rwd,inbr1,ierr1,iopt
 
-      integer   newdate, datchek, dtpr,tmpr, complex,complex0
+      integer,  external :: fstfrm,xdfopt, fstecr,wkoffit, newdate,
+     +                      fstlir,fstinl, fstlis,fstprm,
+     +                      fstinf,fstsui, fstluk,fstrwd,
+     +                      fstnbr,fstouv, fnom,  fstopc
 
-      external  fstnbr, fstouv, fstfrm, fstecr, fstlir,
-     +          fstlis, fstprm, fstluk, fstinf, fstinl,
-     +          fstsui, fstrwd, fstopc, ccard,  cigaxg,
-     +          cxgaig, fnom,   exfin,  exdb,   xdfopt,
-     +          iopdatm,wkoffit,fixninj,convpr, difdatr,
-     +          newdate
+      integer   datchek, dtpr,tmpr, complex,complex0
+
+      external  ccard,  cigaxg,
+     +          cxgaig, exfin,  exdb,
+     +          iopdatm,fixninj,convpr, difdatr
 
       real(8)   :: MisFlag, Epsilon = 0.01
       logical   :: MValue=.false.,MValue_READ=.false.,MValue_IS_OFF=.false.
@@ -938,10 +963,12 @@
 
       character*4   type,     type0, nom,      NEWL, hnewl
 
-      integer       ikind,    time,  lev, ilg, ilat, ihem, pack,
-     +              jbuf(taille_entete), time0,      ilg0, ilat0, ipak
+      integer       ikind, time,time0, lev, ilg,  ilat, ihem, pack,
+     +              jbuf(taille_entete),    ilg0, ilat0, ipak
 
-      
+      integer(8)    time8
+      integer       datmlt,datadd,stamp, part1,part2,hold
+
       integer,      dimension(:), allocatable :: ibuf
 
       real          pr
@@ -1029,7 +1056,10 @@
      +     cles(36)/ 'DATYP'  /,def1(36)/'-1'     /,def2(36)/'-1'     /,
      +     cles(37)/ 'IP1CON' /,def1(37)/'OUI'    /,def2(37)/'NON'    /,
      +     cles(38)/ 'MVALUE' /,def1(38)/' '      /,def2(38)/'OUI'    /,
-     +     cles(39)/ '-.'     /,def1(39)/' '      /,def2(39)/' '      /
+     +     cles(39)/ 'APPEND' /,def1(39)/'NON'    /,def2(39)/'OUI'    /,
+     +     cles(40)/ 'DATADD' /,def1(40)/'0'      /,def2(40)/'NON'    /,
+     +     cles(41)/ '-.'     /,def1(41)/' '      /,def2(41)/' '      /
+
 
       data dateo0     /  0  /
       data vkind0     / -1  /
@@ -1040,7 +1070,7 @@
       data avertis    / 'pas encore donne' /
 
       data rpn,ccrn,mbhr,info,timdat,lev1mb,pascal / 7*.false. /,
-     +     box,  lasl, tri,        holacar,rewrit  / 5*.false. /,
+     +     box,lasl,tri,append,holacar,rewrit      / 6*.false. /,
      +     infom,infog,slab,char,cmpl,data,bisect  / 7*.false. /,
      +     Faux, pmslmb,sqi,sigma,lnsppa,ip3dat    / 6*.false. /,
      +     Vrai, ip1conv, keep1                    / 3*.true.  /
@@ -1272,7 +1302,15 @@
 
 ***    A-t'on specifie un siecle ?
 
-      if (def1(33).ne.'-1') read(def1(33),10) siecle
+      if (.not.is_off(def1(33)) .and. def1(33) /= '-1')
+     +    read(def1(33),10) siecle
+
+      if (.not.(siecle == -1 .or.
+     +   (0 < siecle .and. siecle < 100)))                     then
+          write(6,6025) siecle
+          if (box) nil = exfin( 'Convert','Erreur 25','NON' )
+          call quit( 'Convert',25 )
+      end if
 
 ***    La coordonnee verticale du fichier CCC est en pascal ?
 
@@ -1325,6 +1363,52 @@
       IF (MValue .and. MValue_READ)
      +    read( EVALUE,'(BN,E20.0)') MisFlag
 
+***    Mode APPEND pour les fichiers CMC/RPN ?
+
+      if (is_on( def1(39) )) append = Vrai
+
+***    Modifier ibuf(2) avec datadd ?
+
+      datmlt = 1 ; datadd = 0
+
+      if (.not.is_off( def1(40) )) read(def1(40),10) datadd
+
+      if (datadd < 0 .or. datadd > 1000000)                then
+          write(6,6024) datadd
+          if (box) nil = exfin( 'Convert','Erreur 24','NON' )
+          call quit( 'Convert',24 )
+      else if (datadd > 0)                                 then
+
+          ! Construire un test selon la valeur de datadd
+          part1 = 19790101 ; part2 = 0
+          if (datadd < 100)                                then
+              part2 = datadd*1000000
+              datmlt = 100
+          else if (datadd < 10000)                         then
+              part1 = 19790100+(datadd/100)
+              part2 = mod( datadd,100)*1000000
+              datmlt = 10000
+          else if (datadd < 1000000)                       then
+              part1 = 19790000+(datadd/100)
+              part2 = mod( datadd,100)*1000000
+              datmlt = 1000000
+          end if
+
+          ! Test de la validite de datadd
+          ier = newdate( stamp, part1, part2, +3 )
+
+          if (ier /= 0)                                    then
+              write(6,6024) datadd
+              if (box) nil = exfin( 'Convert','Erreur 24','NON' )
+              call quit( 'Convert',24 )
+          end if
+
+          ! Definit le DATE_CONVERSION_FACTOR
+          ! associe a un format YYYYMMDDHH
+          call set_dtm( 3 )
+
+      end if
+
 ***    Definir pktyp pour toutes les unites I/O.
 
       do  i=1,99
@@ -1369,10 +1453,7 @@
           call qqexit( 0 )
       end if
 
-      lenn1 = index( def1(1) // ' ' , ' ' ) - 1
-      lenn2 = index( def1(2) // ' ' , ' ' ) - 1
-
-      write(6,6100) def1(1)(1:lenn1), def1(2)(1:lenn2)
+      write(6,6100) trim( def1(1) ), trim( def1(2) )
 
 ***    Which tmpdir directory should we use? unless
 ***    it is explicitely disallowed, always try first
@@ -1394,7 +1475,7 @@
 
 ***    tmpdirn has to be defined.
 
-      if (tmpdirn.eq.' ')                                      then
+      if (tmpdirn == ' ')                                      then
           if (info) write(6,6015)
           if (box) nil = exfin( 'Convert','Erreur 1','NON' )
           call quit( 'Convert',15 )
@@ -1405,8 +1486,8 @@
 ***    d'entrees/sorties. Au moins un d'entres eux doit exister au
 ***    depart.
 
-      ftyp1 = wkoffit( '+' // def1(1)(1:lenn1) )
-      ftyp2 = wkoffit( '+' // def1(2)(1:lenn2) )
+      ftyp1 = wkoffit( '+' // trim( def1(1) ) )
+      ftyp2 = wkoffit( '+' // trim( def1(2) ) )
 
       if (ftyp1.lt.-1 .and. ftyp2.lt.-1)                       then
 
@@ -1419,15 +1500,10 @@
           efin = index( def1(2) , '/' )
           if (efin.eq.0)                                       then
 
-              efin = index( tmpdirn // ' ' , ' ' )-1
-
 ***            Aller voir sur TMPDIR pour le fichier ccrn.
 
-              if (efin.gt.0)                                   then
-                  def1(2) = tmpdirn(1:efin) // '/' // def1(2)
-                  lenn2   = index( def1(2) // ' ' , ' ' ) - 1
-                  ftyp2   = wkoffit( '+' // def1(2)(1:lenn2) )
-              end if
+              def1(2) = trim( tmpdirn ) // '/' // def1(2)
+              ftyp2   = wkoffit( '+' // trim( def1(2) ) )
 
           end if
 
@@ -1443,8 +1519,7 @@
 
 ***            Impossible de reconnaitre ce fichier.
 
-              lenn2 = index( def1(2) // ' ' , ' ' ) - 1
-              write(6,6003) def1(2)(1:lenn2)
+              write(6,6003) trim( def1(2) )
               if (box) nil = exfin( 'Convert','Erreur 3','NON' )
               call quit( 'Convert',3 )
 
@@ -1460,11 +1535,8 @@
 
 ***        Un ou l'autre des fichiers est d'un type inconnu.
 
-          lenn1 = index( def1(1) // ' ' , ' ' ) - 1
-          lenn2 = index( def1(2) // ' ' , ' ' ) - 1
-
-          if (ftyp1.eq.-1) write(6,6003) def1(1)(1:lenn1)
-          if (ftyp2.eq.-1) write(6,6003) def1(2)(1:lenn2)
+          if (ftyp1.eq.-1) write(6,6003) trim( def1(1) )
+          if (ftyp2.eq.-1) write(6,6003) trim( def1(2) )
 
           if (box) nil = exfin( 'Convert','Erreur 3','NON' )
           call quit( 'Convert',3 )
@@ -1484,25 +1556,19 @@
 ***        pas de relocalisation de repertoire.
 
           efin = index( def1(2) , '/' )
-          if (efin.eq.0)                                       then
 
-              efin = index( tmpdirn // ' ' , ' ' )-1
+          if (efin == 0)                                       then
 
 ***            Aller voir sur TMPDIR pour le fichier ccrn.
 
-              if (efin.gt.0)                                   then
+              def1(2) = trim( tmpdirn ) // '/' // def1(2)
+              ftyp2   = wkoffit( '+' // trim( def1(2) ) )
 
-                  def1(2) = tmpdirn(1:efin) // '/' // def1(2)
-                  lenn2   = index( def1(2) // ' ' , ' ' ) - 1
-                  ftyp2   = wkoffit( '+' // def1(2)(1:lenn2) )
-
-                  if (ftyp2.eq.-1)                             then
-                      write(6,6003) def1(2)(1:lenn2)
-                      if (box) 
-     +                nil = exfin( 'Convert','Erreur 3','NON' )
-                      call quit( 'Convert',3 )
-                  end if
-
+              if (ftyp2.eq.-1)                                 then
+                  write(6,6003) trim( def1(2) )
+                  if (box) 
+     +            nil = exfin( 'Convert','Erreur 3','NON' )
+                  call quit( 'Convert',3 )
               end if
 
           end if
@@ -1513,6 +1579,13 @@
 
       if (ftyp2.eq.4 .or. ftyp2.eq.5) ccrn = Vrai
 
+***    Utiliser les cles logiques keep1, ccrn et
+***    rpn pour decider de la suite du taitement.
+
+      if (rpn .and. ccrn .and. keep1) ccrn = Faux
+      if (ftyp1.lt.0 .and.      sqi) ftyp1 = 34
+      if (ftyp1.lt.0 .and. .not.sqi) ftyp1 = 33
+
 ***    Ouvrir les fichiers rpn et ccrn.
 
       if (ftyp1.lt.-1)                                         then
@@ -1520,10 +1593,10 @@
 ***        Ouvrir/creer selon le type de fichier demande.
 
           if (sqi)                                             then
-              ierr1 = fnom( iu1, '+' // def1(1)(1:lenn1),'STD/SEQ',0 )
+              ierr1 = fnom( iu1, '+' // trim( def1(1) ),'STD+SEQ',0 )
               inbr1 = fstouv( iu1,'SEQ' )
           else
-              ierr1 = fnom( iu1, '+' // def1(1)(1:lenn1),'STD'    ,0 )
+              ierr1 = fnom( iu1, '+' // trim( def1(1) ),'STD+RND',0 )
               inbr1 = fstouv( iu1,'RND' )
           end if
 
@@ -1531,7 +1604,15 @@
 
 ***        Fichier random.
 
-          ierr1 = fnom( iu1, '+' // def1(1)(1:lenn1),'STD'    ,0 )
+          attrib = 'STD+RND'
+
+          if (ccrn .and. append)                               then
+              attrib = trim( attrib ) // '+APPEND'
+          else if (rpn)                                        then
+              attrib = trim( attrib ) // '+R/O'
+          end if
+
+          ierr1 = fnom( iu1, '+' // trim( def1(1) ), attrib, 0 )
           inbr1 = fstouv( iu1,'RND' )
 
       else if (ftyp1.eq.2 .or. ftyp1.eq.34)                    then
@@ -1545,7 +1626,15 @@
               call quit( 'Convert',12 )
           end if
 
-          ierr1 = fnom( iu1, '+' // def1(1)(1:lenn1),'STD/SEQ',0 )
+          attrib = 'STD+SEQ'
+
+          if (ccrn .and. append)                               then
+              attrib = trim( attrib ) // '+APPEND'
+          else if (rpn)                                        then
+              attrib = trim( attrib ) // '+R/O'
+          end if
+
+          ierr1 = fnom( iu1, '+' // trim( def1(1) ), attrib, 0 )
           inbr1 = fstouv( iu1,'SEQ' )
           sqi   = Vrai
 
@@ -1553,8 +1642,7 @@
 
 ***        Le fichier RPN n'en est pas un...
 
-          lenn1 = index( def1(1) // ' ' , ' ' ) - 1
-          write(6,6011) ' RPN',def1(1)(1:lenn1)
+          write(6,6011) ' RPN',trim( def1(1) )
           if (box) nil = exfin( 'Convert','Erreur 11','NON' )
           call quit( 'Convert',11 )
 
@@ -1594,8 +1682,7 @@
 
 ***            Le fichier CCRN n'en est pas un...
 
-              lenn2 = index( def1(2) // ' ' , ' ' ) - 1
-              write(6,6011) 'CCRN',def1(2)(1:lenn2)
+              write(6,6011) 'CCRN',trim( def1(2) )
               if (box) nil = exfin( 'Convert','Erreur 11','NON' )
               call quit( 'Convert',11 )
 
@@ -1603,14 +1690,22 @@
 
       end if
 
-      open( iu2, file=def1(2), form='UNFORMATTED', status=chaine )
-
-***    Utiliser les cles logiques keep1, ccrn et
-***    rpn pour decider de la suite du taitement.
-
-      if (rpn .and. ccrn .and. keep1) ccrn = Faux
-      if (ftyp1.lt.0 .and.      sqi) ftyp1 = 34
-      if (ftyp1.lt.0 .and. .not.sqi) ftyp1 = 33
+      if (.not.ccrn .and. append .and. chaine == 'OLD')        then
+#         if defined (F77)
+          OPEN( iu2, file=def1(2), FORM='UNFORMATTED',
+     +                             ACCESS='APPEND',
+     +                             STATUS=chaine )
+#         else
+          open( iu2, file=def1(2), FORM='UNFORMATTED',
+     +                             ACCESS='SEQUENTIAL',
+     +                             POSITION='APPEND',
+     +                             STATUS=chaine )
+#         endif
+      else
+          open( iu2, file=def1(2), FORM='UNFORMATTED',
+     +                             ACCESS='SEQUENTIAL',
+     +                             STATUS=chaine )
+      end if
 
       ok = setio64(.true.)
 
@@ -1727,7 +1822,26 @@
 
           end if
 
-          if (siecle.ne.-1) time = time + siecle * ( 1 00 00 00 00 )
+          time8 = time
+          if (siecle /= -1 .or. datadd /= 0)                   then
+
+***            Appliquer les modifications siecle/datadd. Verifier.
+
+              if (datadd /=  0) time8 = time8 * datmlt + datadd
+              if (siecle /= -1 .and. time8 < 100000000_8)
+     +            time8 = time8 + siecle * ( 100000000_8 )
+
+              call date2stamp( time8, hold )
+              if (time8 == 1_8 * hold)                         then
+                  ! Ceci n'est pas un date-time-stamp valide
+                  write(6,6124) siecle,time,datadd
+                  if (box) nil = exfin( 'Convert','Erreur 24','NON' )
+                  call quit( 'Convert',24 )
+              else
+                  time = hold
+              end if
+
+          end if
 
           hnewl  = gethic('NEWL',ibuf )
 
@@ -1832,7 +1946,26 @@
               ihem   =      ibuf(7)
               pack   =      ibuf(8)
 
-              if (siecle.ne.-1) time = time + siecle * ( 1 00 00 00 00 )
+              time8 = time
+              if (siecle /= -1 .or. datadd /= 0)               then
+
+***                Appliquer les modifications siecle/datadd. Verifier.
+
+                  if (datadd /=  0) time8 = time8 * datmlt + datadd
+                  if (siecle /= -1 .and. time8 < 100000000_8)
+     +                time8 = time8 + siecle * ( 100000000_8 )
+
+                  call date2stamp( time8, hold )
+                  if (time8 == 1_8 * hold)                     then
+                      ! Ceci n'est pas un date-time-stamp valide
+                      write(6,6124) siecle,time,datadd
+                      if (box) nil = exfin( 'Convert','Erreur 24','NON' )
+                      call quit( 'Convert',24 )
+                  else
+                      time = hold
+                  end if
+
+              end if
 
               hnewl  = gethic('NEWL',ibuf )
 
@@ -2665,8 +2798,7 @@
 ***        Second cas:  entrees de type rpn, sorties ccrn. Si 
 ***        le fichier ccrn existait deja, il est detruit.  
 
-          rewind iu2
-          write(6,6350)
+          if (.not.append) rewind iu2 ; write(6,6350)
 
           if (sqi)                                             then
 
@@ -3958,6 +4090,10 @@
  6021 format(/'   Le T de LRLMT =',I2,' est non supporte.'/)
  6022 format(/'   Series temporelles non supportees, IKIND =',I2/)
  6023 format(/'   Options incompatibles: IP1CONV=F et OLD_STYLE_IP1=T'/)
+ 6024 format(/'   Valeur illegale de DATADD =',I10/)
+ 6124 format(/'   Incapable de construire une date valide YYYYMMDDHH'/
+     +        '   avec les valeurs siecle,ibuf(2),datadd= ',I3,I10,I10/)
+ 6025 format(/'   Valeur illegale de SIECLE =',I10,', limites [1,99]'/)
       end
 
       Subroutine convpp (buffer,nwds,sigma,rpntyp,sens)
@@ -4588,7 +4724,7 @@
       implicit none
 
       real*8   heures
-      integer  sens, dat1,dat2,dat3,time,
+      integer  sens, dat1,dat2,dat3, time,
      +         date,deet,npas,ip2, valeur,valeur0,
      +         heurev,heureo,dtm,nil,ier
       logical  timdat,bisect
@@ -4802,7 +4938,7 @@
 ***                     Build new name from tmpdir and name. Check
 ***                     for file existence in "tmpdir" directory.
 
-                       lname = tmpdir(1:lentmp) // '/' // 'pltinfo'
+                       lname = trim( tmpdir ) // '/' // 'pltinfo'
                        inquire( file=lname,
      +                          err=999,iostat=io, exist=ex )
 
@@ -4854,8 +4990,7 @@
 
           nfinfo = nf
 
-          lentmp = index( lname // ' ' , ' ' ) - 1
-          if (message) write(6,6300) status,lname(1:lentmp)
+          if (message) write(6,6300) status,trim( lname )
 
       end if
 

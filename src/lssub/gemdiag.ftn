@@ -15,6 +15,22 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: gemdiag.ftn,v $
+*     Revision 3.31  2016/10/26 15:44  dugas
+*     - Ajouter les arguments log_presure et calclp a GEM4APL ce
+*       qui rend le calcul de la pression locale optionnelle
+*     - Les variables reelles/locales de cette routines sont
+*       maintenant toutes declarees en 64 bits
+*     - Reorganisation majeure de la routine GEM4ATH, avec l'ajout
+*       notamment la variable OTHER qui sert d'indicateur du fait
+*       que les variables FST et TEMP ne sont peut-etre pas toujours
+*       sur le meme jeux de niveaux verticaux. Les pressions locales
+*       sur ces jeux de niveaux sont maintenant specifiees en
+*       argument et non plus calculees a l'interne
+*     - Et les variables reelles/locales de cette routines sont
+*       aussi declarees en 64 bits
+*     - Ajouter la routine D_VT2GZ qui calcule le GZ hydrostatique
+*       a partir de PR et VT (adaptation du VT2GZ de la librairie GEM4)
+
 *     Revision 3.30  2015/03/30 22:15:33  dugas
 *     Initialiser les pointeurs qui seront passes a VGRIDDESCRIPTORS.
 *
@@ -188,7 +204,8 @@
       END 
 
       SUBROUTINE gem4apl (F,PS, PR,ETA, NI,NJ, NPL,NSL,
-     +                    RLUP,RLDN, IG1,IG2 )
+     +                    RLUP,RLDN, IG1,IG2,
+     +                    log_pressure,calclp )
 
 ***    INTERPOLATES MULTI-LEVEL SET OF GRIDS FROM gem4 LEVELS
 ***    TO PRESSURE LEVELS. THE INTERPOLATION IS LINEAR IN LN(PRES).
@@ -213,9 +230,11 @@
 
       IMPLICIT none
 
+      LOGICAL  calclp
       INTEGER, intent(IN)    :: NI,NJ,NPL,NSL, ETA(NSL),IG1,IG2 
       REAL,    intent(IN)    :: RLUP,RLDN, PR(NPL), PS(NI,NJ)
       REAL,    intent(INOUT) :: F(NI,NJ,*)
+      real,    dimension(:,:,:), pointer :: log_pressure
 
 ***    LOCAL WORK SPACE. 
   
@@ -223,12 +242,11 @@
       CHARACTER(15) ETA_S
       INTEGER  I,J,K,L,N, INTVL, VKIND
       INTEGER  TOPS,BOTS,INCS, TOPP,BOTP,INCP
-      REAL     FSC(NSL),DFDLNS(0:NSL+1),DLNS(NSL)
-      REAL     prlog(NPL),sig(NSL),siglog(NSL),X
-      REAL     COLF(NPL),HOLD
+      REAL(8)  FSC(NSL),DFDLNS(0:NSL+1),DLNS(NSL)
+      REAL(8)  prlog(NPL),sig(NSL),siglog(NSL),X
+      REAL(8)  COLF(NPL),HOLD
 
-      real,    dimension(:,:,:), pointer :: log_pressure
-      real,    dimension(:,:),   pointer :: pslog
+      real(8), dimension(:,:),   pointer :: pslog
 
 ***    EXTERNAL DECLARATIONS.
 
@@ -238,7 +256,12 @@
       EXTERNAL MONVERT,XIT,CONVPR
 
 *---------------------------------------------------------------------
-      nullify( log_pressure,pslog )
+      IF (.not.ASSOCIATED( pslog ))                            THEN
+          nullify( pslog )
+          ALLOCATE( pslog(NI,NJ) )
+      END IF
+
+      pslog(:,:) = LOG( PS(:,:) )
 
 ***    CHECK THAT PR IS MONOTONIC.
 
@@ -285,19 +308,12 @@
           TOPP = L
       END IF
 
-***    ALLOCATE surface pressure WORK FIELD. THE log pressure
-***    field will be allocated by gd_levels (called by LoPTOC).
+***    COMPUTE LN(LOCAL PRESSURE) OF GEM4 LEVELS ?
 
-      ALLOCATE( pslog(NI,NJ) )
-
-***    COMPUTE LN(LOCAL PRESSURE) OF GEM4 LEVELS.
-
-      CALL LoPTOC( log_pressure, ETA, PS, IG1,IG2 )
+      if (calclp) CALL LoPTOC( log_pressure, ETA, PS, IG1,IG2 )
 
 ***    LOOP OVER ALL HORIZONTAL POINTS.
   
-      pslog(:,:) = LOG( PS(:,:) )
-
       MAIN_LOOP : DO  J=1,NJ ; DO  I=1,NI
   
           siglog(:) = log_pressure(I,J,:) - pslog(I,J)
@@ -367,171 +383,157 @@
 
       END 
 
-      SUBROUTINE gem4ath (FST,NI,NJ, ETA,NSL, TH,NTHL, TEMP,ETAT,NSLT,
-     +                    PS, RLUP,RLDN, TOP,BOT,INC,TOPT,BOTT,INCT,
-     +                    IG1,IG2 )
+      SUBROUTINE gem4ath( FST,FST_PR, TEMP,TEMP_PR, TH,
+     +                    NI,NJ, NSL,NSLT,NTHL, RLUP,RLDN,
+     +                    TOP,BOT,INC,TOPT,BOTT,INCT, OTHER )
 
 ***    INTERPOLATES (IN PLACE) MULTI-LEVEL SETS OF GRIDS FROM GEM4 LEVELS
 ***    TO THETA LEVELS.  THE INTERPOLATION IS LINEAR IN LN(THETA).
+***    HORTIZONTAL DIMENSION LA=(NI,NJ)
 
-***    ALL GRIDS HAVE THE SAME HORIZONTAL SIZE (LA=NI*NJ POINTS).
-***    FST  (LA,*) = (INPUT)  GRIDS ON GEM4 T- OR D-MODEL LEVELS.
-***                = (OUTPUT) GRIDS ON THETA LEVELS.
-***    TEMP (LA,*) = INPUT GRIDS OF TEMPERATURE ON GEM4 T-MODEL LEVELS.
-***    PS   (LA)   = INPUT GRID OF SURFACE PRESSURE IN PA.
+***    NSL, NSLT and NTHL are the vertical dimensions
+***    of the FST,TEMP and TH fields, respectively.
 
-***    TH(NTHL)    = VALUES OF INPUT THETA LEVELS (K).
-***                 (MUST BE MONOTONIC AND DECREASING).
-***    ETA(NSL)   = GEM4 T- OR D-MODEL LEVELS (CODED INTEGERS) FOR FST.
-***    ETAT(NSLT) = GEM4 T-MODEL LEVELS (CODED INTEGERS) FOR TEMP.
+***    If OTHER is .true., FST and TEMP are NOT defined on the same
+***    set of levels. This is possible as GEM4 uses a staggered 
+***    vertical coordinates with differing momentum and
+***    thermodynamic sets of levels.
 
-***    RLUP       = LAPSE RATE, DF/D(LN (THETA)) USED TO EXTRAPOLATE
-***                 ABOVE TOP ETA.
-***    RLUP       = LAPSE RATE USED TO EXTRAPOLATE BELOW BOTTOM ETA.
+***    FST    (LA,NSL)  = (INPUT)  GRIDS ON GEM4 T- OR M-MODEL LEVELS.
+***           (LA,NTHL) = (OUTPUT) GRIDS ON THETA LEVELS.
+***    FST_PR (LA,NSL)  = LOG OF LOCAL PRESSURES ON FST LEVELS
 
-***    TOP        = INDEX OF THE TOP FST MODEL LEVEL
-***    BOT        = INDEX OF THE BOTTOM FST MODEL LEVEL
-***    INC        = INCREMENT USED TO GO FROM FST TOP TO FST BOTTOM
+***    TEMP   (LA,NSLT) = GRIDS OF TEMPERATURE ON GEM4 T-MODEL LEVELS.
+***    TEMP_PR(LA,NSLT) = LOG OF LOCAL PRESSURES ON TEMP LEVELS
 
-***    TOPT       = INDEX OF THE TOP TEMP MODEL LEVEL
-***    BOTT       = INDEX OF THE BOTTOM TEMP MODEL LEVEL
-***    INCT       = INCREMENT USED TO GO FROM TEMP TOP TO TEMP BOTTOM
+***    TH      (NTHL)   = THETA LEVELS FOR WHICH THE INTERPOLATION IS DONE.
 
-***    IG1,IG2    = GEM4 Grid_Desctriptors unique ID pair
+***    RLUP = LAPSE RATE, DF/D(LN (THETA)) USED TO EXTRAPOLATE ABOVE TOP ETA.
+***    RLUP = LAPSE RATE USED TO EXTRAPOLATE BELOW BOTTOM ETA.
 
-      use DIAG_TOC, only: LoPTOC
+***    TOP  = INDEX OF THE TOP FST MODEL LEVEL
+***    BOT  = INDEX OF THE BOTTOM FST MODEL LEVEL
+***    INC  = INCREMENT USED TO GO FROM FST TOP TO FST BOTTOM
+
+***    TOPT = INDEX OF THE TOP TEMP MODEL LEVEL
+***    BOTT  = INDEX OF THE BOTTOM TEMP MODEL LEVEL
+***    INCT  = INCREMENT USED TO GO FROM TEMP TOP TO TEMP BOTTOM
 
       IMPLICIT    none
 
 ***    INPUT PARAMETERS
 
+      LOGICAL     OTHER
       REAL        RLUP,RLDN
-      INTEGER     NI,NJ,NSL,NSLT,NTHL, ETA(NSL),ETAT(NSLT)
-      REAL        FST(NI,NJ,*),PS(NI,NJ),TEMP(NI,NJ,NSLT),TH(NTHL)
-      INTEGER     TOP,BOT,INC, TOPT,BOTT,INCT, IG1,IG2
+      INTEGER     NI,NJ,NSL,NSLT,NTHL
+      INTEGER     TOP,BOT,INC, TOPT,BOTT,INCT
+      REAL        FST(NI,NJ,*),TEMP(NI,NJ,NSLT),TH(NTHL)
+      REAL,       DIMENSION(:,:,:), POINTER :: FST_PR,TEMP_PR
 
 ***    WORK SPACE.
 
       INTEGER     I,J,K,L,INTVL,N,MTH(0:NSLT+1),VKIND
-      REAL        FSC(NSLT),THS(NSLT),DFDLNTH(0:NSLT+1),DLNTH(NSLT), HOLD
-      REAL        HYB(NSL),HYBT(NSLT),DLNPR(NSL),FSP(NSL),DFDLNPR(0:NSL+1)
-
-      real,       dimension(:,:,:), pointer :: fs_pr,temp_pr
+      REAL(8)     FSC(NSLT),THS(NSLT),DFDLNTH(0:NSLT+1),DLNTH(NSLT)
+      REAL(8)     DLNPR(NSL),FSP(NSL),DFDLNPR(0:NSL+1)
+      REAL(8)     LTH(NTHL),TEMPC(NSLT),PRM(NSL),PRT(NSLT)
 
       LOGICAL              INFO, NOABORT
       COMMON     /ZZVERBO/ INFO
       COMMON     /ZZABORT/       NOABORT
 
-      REAL*8                                   EPSIL
-      REAL        P0        , KAPPA
-      PARAMETER ( P0=100000., KAPPA=.2854912 , EPSIL = .999999 )
-CCC   PARAMETER ( P0=101320., KAPPA=.285714 )
+      REAL(8), PARAMETER :: P0    =   100000._8
+      REAL(8), PARAMETER :: KAPPA = 0.2854912_8
+      REAL(8), PARAMETER :: EPSIL =  0.999999_8
+      REAL(8) :: LP0, LEPSIL
 
 *---------------------------------------------------------------------------------
-      nullify( fs_pr,temp_pr )
+      LP0 = LOG( P0 ) ; LEPSIL = LOG( EPSIL ) ; LTH = LOG( TH )
 
-***    CALCULATE LOCAL PRESSURES.
-
-      IF (NSL /= NSLT)
-     +    CALL LoPTOC( fs_pr, ETA(1:NSL), PS, IG1,IG2, IN_LNP=.false. )
-
-      CALL LoPTOC( temp_pr, ETAT(1:NSLT), PS, IG1,IG2, IN_LNP=.false. )
-
-
-***    LOOP OVER ALL HORIZONTAL POINTS.
+      ! Loop over all horizontal points.
 
       DO J=1,NJ ; DO I=1,NJ
 
-          DO  L=0,NSLT+1
-              MTH(L) = 0
-          END DO
+          MTH = 0 ! Initialise inversion marker.
 
-***        COMPUTE THE POTENTIAL TEMPERATURE ON ETA LEVELS.
+          TEMPC(1:NSLT) =    TEMP(I,J,1:NSLT)
+            PRT(1:NSLT) = TEMP_PR(I,J,1:NSLT)
+            PRM(1:NSL)  =  FST_PR(I,J,1:NSL)
 
-          THS(TOPT) = TEMP(I,J,TOPT)*(P0/temp_pr(I,J,TOPT))**KAPPA
+         ! Compute LN( potential temperature ) on ETA levels.
+
+      !!! THS(TOPT) = TEMP(I,J,TOPT)*(P0/TEMP_PR(I,J,TOPT))**KAPPA !!!
+          THS(TOPT) = LOG( TEMPC(TOPT) )
+     +              + KAPPA * ( LP0 -  PRT(TOPT) ) 
           
           DO  L=TOPT+INCT,BOTT,INCT
-              THS(L) = TEMP(I,J,L)*(P0/temp_pr(I,J,L))**KAPPA
+          !!! THS(L) = TEMP(I,J,L)*(P0/TEMP_PR(I,J,L))**KAPPA !!!
+              THS(L) = LOG( TEMPC(L) )
+     +               + KAPPA * ( LP0 -  PRT(L) )
               IF (THS(L).GE.THS(L-INCT))                       THEN
-                  THS(L)      = THS(L-INCT)*EPSIL
+                  THS(L)      = THS(L-INCT)+LEPSIL
                   MTH(L-INCT) =     L-INCT
               END IF
           END DO
 
-***        COMPUTE INVERSE DELTA LN THETA ON ETA LEVELS.
+          ! Compute inverse delta ln THETA on ETA levels.
 
           DO  L=TOPT,BOTT-INCT,INCT
-              DLNTH(L) = 1./LOG( THS(L+INCT)/THS(L) )
+          !!! DLNTH(L) = 1./LOG( THS(L+INCT)/THS(L) ) !!!
+              DLNTH(L) = 1./( THS(L+INCT) - THS(L) )
           END DO
 
-          IF (NSL == NSLT .AND. INC == INCT)                   THEN
+          IF (OTHER)                                           THEN
 
-              DO  L=TOPT,BOTT,INCT
-                  FSC(L) = FST(I,J,L)
-              END DO
+              ! Interpolate FST from NSL M-model to NSLT T-model levels.
 
-          ELSE IF (NSL == NSLT)                                THEN
-
-              DO  L=TOPT,BOTT,INCT
-                  FSC(L) = FST(I,J,L)
-              END DO
-
-***            INVERSE FSC COLUMN DATA.
-
-              DO  L=1,NSLT/2
-                  HOLD          = FSC(L)
-                  FSC(L)        = FSC(NSLT+1-L)
-                  FSC(NSLT+1-L) = HOLD
-              END DO
-
-          ELSE IF (INC == INCT)                                THEN
-
-***            INTERPOLATE FS FROM NSL D-MODEL TO NSLT T-MODEL LEVELS.
-
-              DO  L=TOP,BOT,INC
-                  FSP(L) = FST(I,J,L)
-              END DO
+              FSP(1:NSL) = FST(I,J,1:NSL)
 
               DO  L=TOP,BOT-INC,INC
-                  DLNPR(L) = 1./LOG( FS_PR(I,J,L+INC)/FS_PR(I,J,L) )
+              !!! DLNPR(L) = 1./LOG( FST_PR(I,J,L+INC)/FST_PR(I,J,L) ) !!!
+                  DLNPR(L) = 1./( PRM(L+INC) - PRM(L) )
               END DO
 
-                  DFDLNPR(TOP    ) = 0.
+                  DFDLNPR(TOP    ) = RLUP
               DO  L=TOP,BOT-INC,INC
                   DFDLNPR(L  +INC) = (FSP(L+INC)-FSP(L))*DLNPR(L)
               END DO
-                  DFDLNPR(BOT+INC) = 0.
+                  DFDLNPR(BOT+INC) = RLDN
 
               K = TOP
               DO  N=TOPT,BOTT-INCT,INCT
                   DO  L=K,BOT,INC
                       INTVL=L
-                      IF (TEMP_PR(I,J,N) > FS_PR(I,J,L)) GOTO 100
+                      IF (PRT(N) > PRM(L)) GOTO 100
                   END DO
                   INTVL = BOT  +INC
   100             K     = INTVL-INC
                   IF (K == TOP -INC) K = TOP
                   FSC(N) =  FSP(K) + DFDLNPR(INTVL) *
-     +                     LOG( TEMP_PR(I,J,N)/FS_PR(I,J,L) )
+     +                     ( PRT(N) - PRM(L) )
+                       !!! LOG( TEMP_PR(I,J,N)/FST_PR(I,J,L) ) !!!
               END DO
+
+          ELSE
+
+              FSC(1:NSLT) = FST(I,J,1:NSLT)
 
           END IF
 
-***        COMPUTE VERTICAL DERIVATIVE OVER ALL ETAT INTERVALS.
+          ! Compute vertical derivative over all ETAT intervals.
 
               DFDLNTH(TOPT     ) = RLUP
           DO  L=TOPT, BOTT-INCT,INCT
               DFDLNTH(L   +INCT) = (FSC(L+INCT)-FSC(L))*DLNTH(L)
           END DO
               DFDLNTH(BOTT+INCT) = RLDN
-*---------------------------------------------------------------------------------
+!---------------------------------------------------------------------------------
 
-***        LOOP OVER THETA LEVELS TO BE INTERPOLATED.
+          ! loop over THETA levels to be interpolated.
 
           K = TOPT
           DO  N=1,NTHL
 
-***            FIND WHICH ETAT INTERVAL WE ARE IN.
+              ! Find which ETAT interval we are in.
 
               DO  L=K,BOTT,INCT
                   INTVL=L
@@ -543,16 +545,17 @@ CCC   PARAMETER ( P0=101320., KAPPA=.285714 )
 
               IF (K.EQ.TOPT-INCT) K = TOPT
 
-***            CHECK FOR INVERSION LAYERS.
+              ! Check for inversion layers.
 
               IF (MTH(K).NE.0)                                 THEN
                   IF (INFO) WRITE(6,6001) I,K,TH(N)
                   IF (.NOT.NOABORT) CALL           XIT(' Gem4ath',-1 )
               END IF
 
-***            NOW INTERPOLATE AT THIS POINT.
+              ! Now interpolate at this point.
 
-              FST(I,J,N)  = FSC(K)+DFDLNTH(INTVL)*LOG( TH(N)/THS(K) )
+            ! FST(I,J,N)  = FSC(K)+DFDLNTH(INTVL)*LOG( TH(N)/THS(K) ) !
+              FST(I,J,N)  = FSC(K)+DFDLNTH(INTVL)*( LTH(N) - THS(K) )
 
           END DO
 
@@ -576,7 +579,7 @@ CCC   PARAMETER ( P0=101320., KAPPA=.285714 )
 ***    F          =  (INPUT) GRIDS ON PRESSURE LEVELS TO BE INTERPOLATED.
 ***               =  (OUTPUT) INTERPOLATED GRIDS ON GEM4 LEVELS.
 
-***    PS         = INPUT  GRID OF SURFACE PRESSURE IN Pa.
+***    PS         = INPUT GRID OF SURFACE PRESSURE IN Pa.
 
 ***    ETA(NSL)   = INTEGER CODED GEM4 HYBRID LEVELS
 ***    PR(NPL)    = PRESSURE VALUES OF OUTPUT LEVELS (Pa).
@@ -593,8 +596,10 @@ CCC   PARAMETER ( P0=101320., KAPPA=.285714 )
       IMPLICIT none
 
       INTEGER, intent(IN)    :: NI,NJ,NPL,NSL, ETA(NSL),IG1,IG2 
-      REAL,    intent(IN)    :: RLUP,RLDN, PR(NPL), PS(NI,NJ)
+      REAL,    intent(IN)    :: RLUP,RLDN, PR(NPL)
       REAL,    intent(INOUT) :: F(NI,NJ,*)
+
+      REAL,    DIMENSION(:,:), POINTER :: PS
 
 ***    LOCAL WORK SPACE. 
   
@@ -603,12 +608,12 @@ CCC   PARAMETER ( P0=101320., KAPPA=.285714 )
       CHARACTER(15) ETA_S
       INTEGER  I,J,K,L,N, INTVL, VKIND, IER
       INTEGER  TOPS,BOTS,INCS, TOPP,BOTP,INCP
-      REAL     FPC(NPL),DFDLNS(0:NPL+1),DLNS(NPL)
-      REAL     prlog(NPL),sig(NSL),siglog(NSL),X
-      REAL     COLF(NSL),HOLD
+      REAL(8)  FPC(NPL),DFDLNS(0:NPL+1),DLNS(NPL)
+      REAL(8)  prlog(NPL),sig(NSL),siglog(NSL),X
+      REAL(8)  COLF(NSL),HOLD
 
       real,    dimension(:,:,:), pointer :: log_pressure
-      real,    dimension(:,:),   pointer :: pslog
+      real(8), dimension(:,:),   pointer :: pslog
 
 ***    EXTERNAL DECLARATIONS.
 
@@ -740,6 +745,7 @@ CCC   PARAMETER ( P0=101320., KAPPA=.285714 )
       END DO ; END DO MAIN_LOOP
 
       IF (ASSOCIATED( log_pressure )) DEALLOCATE( log_pressure, STAT=IER )
+      IF (ASSOCIATED( pslog )) DEALLOCATE( pslog, STAT=IER )
   
       RETURN
 *-------------------------------------------------------------------- 
@@ -3632,10 +3638,113 @@ CCC      deg2rad_8 = acos(-1Q0)/180.
 
 *----------------------------------------------------------------
       end 
-***s/r p0vt2gz_hyb - Compute hydrostatic GZ from P0 and VT
+
+!**s/r d_vt2gz - Compute hydrostatic GZ from PR and VT (for GEM4)
+!
+      subroutine d_lpvt2gz( F_gz, F_pr, F_vt, ni,nj,nk )
+!
+      implicit none
+!
+      integer ni,nj, Nk
+      real   F_gz(ni,nj,Nk), F_vt(ni,nj,Nk)
+      real,  pointer  :: F_pr(:,:,:)
+!
+!author
+!
+!revision
+! v4_02 - Desgagne M.       - initial version (from p0vt2gz v3.3.0)
+!         Dugas B.          - adapt to r.diag (GSAPZL)
+!
+!object
+!       see id section
+!
+!arguments
+!  Name        I/O                 Description
+!----------------------------------------------------------------
+! F_gz         O    - geopotential height on model levels
+! F_pr         I    - log of local pressure in pascals
+! F_vt         I    - virtual temperature on model levels
+!
+!implicits
+!
+      real, parameter :: rgasd=.28705e+3
+!*
+      integer i,k,ik,n
+      real*8 invdet
+      real   con,q1,q2,q3,x0,xm,xp,aa,bb,cc,dd,
+     +       zak,zbk,zck,ex,lnpis_8
+      real  vma(ni,nj,nk), vmb(ni,nj,nk), vmc(ni,nj,nk), pr(ni,nj,nk)
+!
+!     ---------------------------------------------------------------
+
+      con = -rgasd ; n = ni*nj 
+      pr(1:ni,1:nj,1:nk) = exp( F_pr(1:ni,1:nj,1:nk) )
+!
+      do k=1,Nk            
+      do i=1,n
+         x0=pr(i,1,k)
+         if (k.eq.1) then
+            xm=pr(i,1,1)
+            xp=pr(i,1,2)
+            aa=pr(i,1,3)-x0
+            bb=pr(i,1,2)-x0
+         elseif (k.eq.nk) then
+            xm=pr(i,1,Nk-1)
+            xp=pr(i,1,Nk)
+            aa=pr(i,1,Nk-1)-x0
+            bb=pr(i,1,Nk-2)-x0
+         else
+            xm=pr(i,1,k-1)
+            xp=pr(i,1,k+1)
+            aa=xm-x0
+            bb=xp-x0
+         endif
+
+         q1=alog(xp/xm)
+         q2=xp-xm
+         q3=(xp*xp - xm*xm)*0.5
+
+         q3=q3-x0*(2.0*q2-x0*q1)
+         q2=q2-x0*q1
+         cc=aa*aa
+         dd=bb*bb
+         invdet=aa*dd-bb*cc
+         invdet = 0.5/invdet
+         vma(i,1,k)=(dd*q2-bb*q3)*invdet
+         vmc(i,1,k)=(aa*q3-cc*q2)*invdet
+         vmb(i,1,k)=q1*0.5-vma(i,1,k)-vmc(i,1,k)
+      end do
+      end do
+!
+      do i=1,n
+         zak = -2.0*con*vma(i,1,nk)
+         zbk = -2.0*con*vmb(i,1,nk)
+         zck = -2.0*con*vmc(i,1,nk)
+         F_gz(i,1,nk-1) = zak * F_vt(i,1,nk-1) + zbk * F_vt(i,1,nk)
+     +                  + zck * F_vt(i,1,nk-2) + F_gz(i,1,nk)
+      end do
+!
+      do k = 1, nk-2
+         ik  = nk-1-k
+         do i=1,n
+            zak = -2.0*con*vma(i,1,ik+1)
+            zbk = -2.0*con*vmb(i,1,ik+1)
+            zck = -2.0*con*vmc(i,1,ik+1)
+            F_gz(i,1,ik) = zak * F_vt(i,1,ik  ) + zbk * F_vt(i,1,ik+1)
+     +                   + zck * F_vt(i,1,ik+2) + F_gz(i,1,ik+2)
+!
+         end do
+      end do
+!
+!     ---------------------------------------------------------------
+!
+      return
+      end
+
+***s/r d_p0vt2gz - Compute hydrostatic GZ from P0 and VT
 *
-      subroutine d_p0vt2gz_hyb (F_gz, F_pia, F_pib, F_ps, F_vt, 
-     $                             n, Nk, F_pib_L, F_sig_L)
+      subroutine d_p0vt2gz (F_gz, F_pia, F_pib, F_ps, F_vt, 
+     $                         n, Nk, F_pib_L, F_sig_L)
       implicit none
 *
       logical F_pib_L,F_sig_L
@@ -3650,7 +3759,7 @@ CCC      deg2rad_8 = acos(-1Q0)/180.
 * v3_00 - Lee v.            - treats 2D plane as 1-D vector no halos
 * v3_02 - Lemay G.          - Vectorisation
 * v3_21 - Lee V.            - Output Optimization
-* v???? - bernard dugas     - adaptation a r.diag
+*       - Bernard Dugas     - adapt to r.diag (GSAPZL)
 *
 
 *object

@@ -3,10 +3,17 @@
 *Subroutine	 #	Source File	Error Message
 *
 *Bascal		-1	coord.ftn	Illegal LAY (layering) option
+*Ccard		    util2.F90	CCARD errors active if environment CCARD_OPT='DEBUG'
+*Ccard		-21 util2.F90	Key name longer than 50 characters
+*Ccard		-22 util2.F90	Unrecognized key name
+*Ccard		-23 util2.F90	Too many argument values
+*Ccard		-24 util2.F90	Too many arguments or positional mode not allowed
+*Ccard		-25 util2.F90	Error return from call to GET_COMMAND_ARGUMENT
 *Chklvlc	-1	coord.ftn	Illegal height value
 *Clesui		-1	convsub.ftn	Illegal call to CLESUI: no INICLE initialization
 *Clesui		-2	convsub.ftn	Unknown I/O unit number
 *Clrlmt		-1	dimgt.ftn	Problems with input LR,LM,KTR values
+*Clrlmt		-2	dimgt.ftn	Problem with LRLMT_DIGITS environment variable
 *Convip_plus	-4	diag_convert_ip123.cdk90	Illegal KIND conversion requested
 *Coordab	-1	coord.ftn	COORD parameter not recognized
 *Decodr		-1	lowio.ftn	IEEE-754 real*8 overflow
@@ -158,17 +165,17 @@
 *WritUref	-1	convsub.ftn	Descripancy between internal descriptors
 *
 *
-*		The above subroutine source files can be found under
+*	The above subroutine source files can probably be found under
 *
-*			$ARMNLIB/modeles/diag_shared/rdiag/lssub
+*			$(dirname `which r.diag`)/../development/src/lssub
 *
-*	at EC/CMC. Please note as well that adding "-info" to the original
-*	  command line that generated an error may in some instances add
+*	at UQM and EC/CMC. Please note as well that adding "-info" to the original
+*	  command line that generated an error may in some instances add some
 *				relevant details.
 *
 *
 *			Contact: Dugas.Benard@uqam.ca
-*			Last Revision: October 2014.
+*			Last Revision: October 2016.
 *
 #endif
 #     if defined (RDIAG_LICENCE)
@@ -192,15 +199,19 @@
 
 ***    Auteur: B.Dugas, RPN - 21 fevier 1992.
 
-***    Cette routine contient l'historique des revisions a la version
-***    UNIX (32 bits) de LSSUB. Cette version a d'abord ete codee pour
-***    des ordinateurs de type MIPS. Certaine extension MP de Silicon
-***    Graphics sont aussi presents (-DSGI_MP).
+***    Cette routine contient l'historique des revisions de la version
+***    UNIX/LINUX (32 bits) de LSSUB. Cette version a d'abord ete
+***    codee pour des ordinateurs de type MIPS au CMC.
 
 ***    A partir de la revision 3.2, la routine contient egalement la
-***    documentation des codes d'erreurs des sou-routines de libdiag.a
+***    documentation des codes d'erreurs des sous-routines de libdiag.a
 
 *     $Log: lssub.ftn,v $
+*     Revision 3.33  2016/10/27 13:37  dugas
+*     - Ajouter erreur -2 de clrlmt.
+*     - Ajouter les erreurs de CCARD (CCARD_OPT='DEBUG')
+*     - Modifier les commentaires generaux
+*
 *     Revision 3.32  2014/12/09 20:10:54  dugas
 *     Ajouter erreur -98 de jclpnt.
 *

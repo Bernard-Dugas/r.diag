@@ -100,6 +100,11 @@
 *     ------------------------------------------------------- 
 
 *     $Log: ggaps.ptn,v $
+*     Revision 4.14  2016/10/28 17:10  dugas
+*     Correction au calcul de la resolution en Y
+*     (utilise lors d'un possible lissage) pour
+*     les grilles hemispheriques.
+*
 *     Revision 4.13  2014/09/25 20:20:48  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -482,12 +487,16 @@
                   ILG = ILG1-MOD( ILG1,2 )
                   XRESI = 360./ILG
                   YRESI = 180./ILAT
-                  IF (IG2.EQ.1) YRESI = 90./ILAT
+                  IF (IG1 == 1 .OR.
+     +                IG1 == 2)
+     +                YRESI = 90./ILAT
               ELSE
      +        IF (GRTYP.EQ.'B')                                THEN
                   XRESI = 360./(ILG1-1)
                   YRESI = 180./(ILAT-1)
-                  IF (IG2.EQ.1) YRESI = 90./(ILAT-1)
+                  IF (IG1 == 1 .OR.
+     +                IG1 == 2)
+     +                YRESI = 90./(ILAT-1)
               ELSE
      +        IF (GRTYP.EQ.'L')                                THEN
                   CALL CIGAXG( GRTYP, XG1,XG2,DLAT,DLON,
