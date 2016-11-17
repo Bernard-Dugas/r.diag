@@ -1,0 +1,823 @@
+#
+# DESCRIPTION
+#
+# fichier attribut_netcdf.dat
+# necessaire aux programmes de conversion cdf2ccc et cdf2rpn
+# NetCDF <-> ( CCCma ou CMC/RPN)
+#
+#
+# INTRODUCTION :
+#
+# Ce fichier a ete cree dans le but de faire le lien entre l'identite d'une 
+# variable dans un format CCCma ou CMC/RPN et l'identite de la meme variable
+# dans le  format NetCDF. Ainsi pour une variable donnee, nous definissons
+# le nom  associe dans chacun des formats, nous definissons aussi un facteur 
+# multiplicatif et un facteur additif qui nous permettera de faire une 
+# conversion d'unite lors de la traduction d'un format a l'autre. Finalement
+# dans le cas de la traduction vers NetCDF, une serie d'attributs associes 
+# a la variable peuvent etre definis. L'information associee a chacune des 
+# variables a ete structuree selon une syntaxe qui doit etre respectee.
+#
+# L'information contenue dans ce fichier n'est pas absolue et peut varier selon 
+# le contexte. Par exemple, les unites d'une variable en serie temporelle 
+# peuvent differer des unites de la moyenne temporelle. Il faut donc etre 
+# vigilant et verifier l'information avant l'usage.
+#
+# La presente version des convertisseurs utilise la librairie NetCDF 3.6.3.
+#
+# **********ATTENTION
+# Les unites de la variable en NetCDF peuvent changer selon l'echantillon
+# a convertir, i.e. serie aux 3 ou 6 heures, quotidienne, "monthly mean",
+# "long term mean", etc.
+# 
+# Il faut donc souvent adapter les attributs (facteurs de conversion) 
+# selon le cas avec une copie locale du fichier attribut_netcdf.dat.
+#
+# Nous suggerons fortement d'utiliser un fichier attribut 
+# different qui sera adapte aux donnees a convertir.
+# (cle -attr du programme cdf2ccc.f expliquee plus loin)
+#
+# La commande ncdump 
+# (avec cle -h pour "header information" ou -c pour "coordinate variables") 
+# permet de connaitre le contenu du fichier NetCDF a convertir
+# **********ATTENTION
+#
+# SYNTAXE: 
+#
+# L'ensemble de l'information associee a une variable est contenue a l'interieur
+# de deux delimiteurs. Le premier delimiteur (delimiteur d'ouverture) est defini 
+# par la chaine de caracteres "def_attriut[" et le second (delimiteur de fermeture
+# est "]". La ligne sur laquelle est defini le delimiteur d'ouverture est consacree
+# a l'identification de la variable, nous avons dans l'ordre le nom NetCDF, le 
+# nom cccma, le facteur multiplicatif et le facteur additif. Les lignes 
+# subsequentes sont dediees a la definition des attributs associes a la 
+# variable. Chaque attribut est defini sur une ligne differente les uns des 
+# autres. Pour un attribut nous definissons un nom d'attribut suivi d'une ou de 
+# deux valeurs correspondantes, finalement le type de la/des valeur(s) peut etre 
+# specifie si ses valeurs ne sont pas une chaine de caracteres. Dans le cas ou la
+# valeur de l'attribut est une chaine de caractere, il est possible de ne definir 
+# qu'une valeur.
+#
+#
+#           debut
+#             |                                                     fin
+#             |                                                     |
+#             .                                                     |
+# def_attribut[ name; ccname; mult; add;                            |
+#               nom_attribut = valeur_attribut;                     |
+#               nom_attribut = valeur_attribut; N;                  .
+#               nom_attribut = valeur_attribut; valeur_attribut; N; ]
+#                            .                .                   .
+#                            |                |                   |
+#                            |                |               delimiteur 
+#                            |                |
+#                            |            delimiteur
+#                            |                  
+#                        delimiteur         
+#
+#
+# nota: Il ne faut pas mettre d'espace avant le ";".
+#       Les caracteres reserves sont "[", "]", "=" et ";", donc a ne pas 
+#       utiliser dans les chaines de caracteres.
+#
+#
+# 1-Informations a fournir:
+#
+#	     name: noms NetCDF OBLIGATOIRE
+#         cccname: noms CCCma ou CMC/RPN en format A4 OBLIGATOIRE
+#            mult: facteur multiplicatif pour la conversion des unites 
+#                  NetCDF->CCCma ou CMC/RPN (type real) DEFAUT 1.0
+#             add: facteur additif pour la conversion des unites 
+#                  NetCDF->CCCma ou CMC/RPN (type real) DEFAUT 0.0
+#
+#    nom_attribut: nom de l'attribut
+# valeur_attribut: valeur associee a "nom_attribut"
+#               N: entier definissant le type de "valeur_attribut"
+#                  (2=character, 3=integer*2, 5=real*4)
+#
+# nota: conversion des unites NetCDF -> format local tel que :
+#
+#         unite(local) = mult*unite(NetCDF)+add
+#     et
+#         unite(NetCDF)= (unite(local)-add)/mult
+#
+# nota:
+#
+#  nom_attribut et valeur_attribut sont utilises pour conversion -> NetCDF
+#
+#  Si N n'est pas specifie, le pgm considere valeur_attribut comme une 
+#  chaine de caractere.
+#
+#  Il est possible de donner deux "valeur_attribut" a un "nom_attribut" 
+#  ssi ces valeurs sont des entiers (n=3) ou des reels (n=5).
+#	
+#
+# 2-Exemple de noms d'attributs utiles pour -> NetCDF :
+#
+#                 units: unite de la variable netcdf 
+#             long_name: description de la variable (i.e. fichier CONVERSION_MRCC)
+#         standard_name: nom standard de la variable selon NetCDF.
+#  unpacked_valid_range: plage de validite de la variable
+#             statistic: type de statistique (normalement des caracteres)
+#            _FillValue: valeurs de remplissage
+#             precision: precision
+#               dataset: description des donnees
+#
+# Presque tous les attributs ci-dessus ne seront pas modifies lors de la
+# conversion -> NetCDF. Par contre, l'attribut _FillValue pourra l'etre
+# si une mise a l'echelle est effectuee sur une variable via une
+# conversion en INTEGER*2 (compaction a 16 bits) ou bien
+# en INTEGER*1 (compaction a 8 bits)
+#
+# Pour definir les unites NetCDF et le contenu de la variable 'standard_name',
+# il est important de se referer aux plus recentes versions des tables qui se
+# trouvent dans http://cf-pcmdi.llnl.gov/documents/cf-standard-names
+#
+# 3-Exemple de definition d'attributs: 
+#
+# def_attribut[ mrros; TRAF; 1.0; 0.0;
+#               units = kg m-2 s-1;
+#               _FillValue = 1.e+20; 5;
+#               long_name = Surface Runoff;
+#               standard_name = surface_runoff_flux; ]
+#
+#
+# Cas particulier pour GLOB global_attributes (definis au debut de ce fichier)
+#---------------------------
+#
+# Par defaut, toute conversion -> NetCDF utilisera l'information des
+# "global_attributes" qui se trouve inclut dans ce fichier. Il est
+# donc important de l'adapter a votre usage car par defaut, on aura que:
+#
+#def_attribut[ global_attributes; GLOB;
+#              Conventions = CF-1.4;
+#              institution = RPN, Environment Canada and Universite du Quebec a Montreal;
+#              contact = Dugas.Bernard@uqam.ca or Winger.Katja@uqam.ca;
+#              comment = XXXXXX: ;
+#              institute_id = RPN/ESCER;
+#              model_id = GEM/CRCM5;
+#              references = http://www.mrcc.uqam.ca;
+#
+# Par exemple on pourrait fournir les informations suivantes :
+#
+#def_attribut[ global_attributes; GLOB;
+#              Conventions = CF-1.4;
+#              institution = Universite du Quebec a Montreal;
+#              contact = Winger.Katja@uqam.ca;
+#              comment = XXXXXX: ;
+#              creation_date = ;
+#              experiment = ;
+#              experiment_id = ;
+#              driving_experiment = ;
+#              driving_model_id = ;
+#              driving_model_ensemble_member = r1i1p1;
+#              driving_experiment_name = ;
+#              frequency = ;
+#              institute_id = UQAM;
+#              model_id = CRCM5;
+#              rcm_version_id = v1;
+#              project_id = CORDEX;
+#              CORDEX_domain = ;
+#              product = output;
+#              references = http://www.mrcc.uqam.ca;
+#
+# ou bien celles-ci :
+#
+#def_attribut[ global_attributes; GLOB;
+#              Conventions = CF-1.0;
+#              title = Donnees MRCC;
+#              description = Donnees de sorties MRCC archivees aux 6 heures;
+#              run = abg MRCC 3.7.1;
+#              run_baseline = 19601201 to 19901231;
+#              atmospheric_nesting_data = ECMWF ERA40 aux 6 heures;
+#              atmospheric_nesting_technic = large scale nudging (config PS1);
+#              prescribed_ocean_data = AMIP_AMNO_jn2003 monthly SST and sea-ice;
+#              ghg_scenario = IPCC IS92a;
+#              spinup_period = from 19570901 to 19601130 removed;
+#              mrcc_domain = AMNO 201x193 polar stereo 45km grid real at 60deg.N;
+#              nesting_relaxation_zone = surrounding 9 grid points removed;
+#              history = created 25/01/2006 by Helene Cote (netCDF3.5.0); 
+#              format_conversion = cdf2ccc 1.4.0.1;
+#              institution = Ouranos/Equipe Simulations Climatiques;
+#              reference = http://www.ouranos.ca; ]
+#
+#
+# Cas particulier pour TIME (defini au debut de ce fichier)
+#---------------------------
+# 
+# Dans une situation ou la variable a traduire (CCCma->NetCDF) est le resultat
+# d'une moyenne, il est possible de donner de l'information au sujet de cette 
+# moyenne via les attributs de la variable coordonnee "time".
+#
+# avg_period : definit la periode sur laquelle est produite la moyenne
+#
+# prev_avg_period : Si la variable moyennee etait dja une moyenne (ex. les flux),
+#                   alors il est possible de donner la periode de la moyenne 
+#                   precedante.
+#
+# def_attribut[ time; time; 
+#               long_name = time;
+#               standard_name = time;
+#               avg_period = 0000-01-00 00:00:00;
+#               prev_avg_period = 0000-00-00 06:00:00; ]
+#
+# Voir la page suivante pour plus de details:
+# http://www.esrl.noaa.gov/psd/data/gridded/conventions/cdc_netcdf_standard.shtml
+#
+#
+# Par contre, pour un fichier CMC/RPN contenant des variables moyennees
+# dans le temps, le resultat de la convertion en fichier NetCDF contiendra
+# une variable time_bnds (detaillant les periodes de moyennage) avec un
+# attribut "cell_methods" qui est defini avec la valeur "time: mean".
+# Si la periode moyennage n'est pas definie dans le fichier lui-meme,
+# il est possible d'utiliser la syntaxe '-dtsize nhours' avec le
+# convertisseur. Dans les deux cas, aucune modification au
+# present fichier d'attributs n'est requis.
+#
+#
+##
+# INFOS :
+#
+# *- CF-1.0 to 1.5 Compliance Checker:
+#    http://titania.badc.rl.ac.uk/cgi-bin/cf-checker.pl
+#
+# 1- Convention des attributs (references):
+#    http://www.cdc.noaa.gov/cdc/conventions/cdc_netcdf_standard.shtml
+#
+# 2- NetCDF Climate and Forecast (CF) Metadata Conventions:
+#    http://cf-pcmdi.llnl.gov/documents/cf-conventions/latest-cf-conventions-document-1
+#
+# 3- variable abbreviations(NOAA netcdf) (i.e. name):
+#    http://www.cdc.noaa.gov/cdc/conventions/variable_abbreviations.html
+#
+# 4- PCMDI "standard name" et unites associees (i.e. standard_name and units):
+#    http://cf-pcmdi.llnl.gov/documents/cf-standard-names/pcmdi-name-cf-standard-name-mapping
+#
+# 5- "standard name" et unites associees vs ECMWF GRIB mapping :
+#    http://cf-pcmdi.llnl.gov/documents/cf-standard-names/ecmwf-grib-mapping
+#
+# 6- informations relatives aux noms des variance CMC/RPN :
+#    $AFSISIO/datafiles/constants/stdf.variable_dictionary.xml
+#
+# 7- informations relatives a CCCma (i.e. cccname, long_name et les unites CCCma) :
+#    $CLIMLIB/data/CONVERSION_MRCC
+#
+# 8- ncdump -h nom_du_fichier : fournit info a l'ecran sur l'entete du fichier netcdf
+#
+#    ncdump -c nom_du_fichier : fournit a l'ecran valeurs des variables coordonnees
+#
+#    ncdump -v varname nom_du_fichier : fournit a l'ecran valeurs de la variable 
+#                                       varname
+#
+# AUTEUR  Guy Bergeron    juin 2003
+#
+#
+# REVISIONS :
+#
+# B. Dugas, juillet 2013 :
+#  - Enlever toutes references a l'attribut missing_value (desuet)
+#  - Corriger un commentaire sur les attributs utiles (_FillValue)
+# B. Dugas et K. Winger, juin 2012 :
+#  Ajouter les definitions des variables AP et B
+#  en support des coordonnees verticales hybrides
+# B. Dugas et K. Winger, printemps 2012 :
+#  Mise a jour pour la version cdf2ccc 2.1.1, comprenant notamment
+#  plusieurs extensions aux dictionnaires de CF Metadata 1.5 
+#
+# Anne Frigon et Guy Bergeron, sept 2003 a jan 2007 :
+#  Plusieurs modifications de compatibilite avec CF 1.0
+#
+#----------------------------------------------------------------------------------
+#
+#
+#----------------debut variables coordonnees (ne pas modifier)---------------------
+
+def_attribut[ lon; LON; 
+              units = degrees_east;
+              long_name = longitude;
+              standard_name = longitude; ]
+
+def_attribut[ lat; LAT; 
+              units = degrees_north;
+              long_name = latitude; 
+              standard_name = latitude; ]
+
+def_attribut[ xc; xc; 
+              units = m;
+              long_name = x-coordinate of polar-stereographic projection;
+              standard_name= projection_x_coordinate; ]
+
+def_attribut[ yc; yc;
+              units = m;
+              long_name = y-coordinate of polar-stereographic projection; 
+              standard_name= projection_y_coordinate; ]
+
+def_attribut[ rlon; rlon;
+              long_name = longitude in rotated pole grid;
+              units = degrees;
+              standard_name = grid_longitude; ]
+
+def_attribut[ rlat; rlat;
+              long_name = latitude in rotated pole grid;
+              units = degrees;
+              standard_name = grid_latitude; ]
+
+def_attribut[ time; time; 
+              long_name = time;
+              standard_name = time; ] 
+
+def_attribut[ plev; PRES; 0.01;
+              units = Pa;
+              long_name = Pressure Level;
+              standard_name = air_pressure; ]
+
+def_attribut[ tau; tau;
+              long_name = topographic dependent part of the gal-chen height coordinate;
+              standard_name = atmosphere_hybrid_height_coordinate;
+              definition = tau est egal a (1-ZGC/HTOIT); ]
+
+def_attribut[ eta; eta; 
+              long_name = top height dependent part of the gal-chen height coordinate;
+              standard_name = atmosphere_hybrid_height_coordinate; 
+              formula terms = eta: eta tau: tau ztop: htoit zsurface: h0;
+              definition = eta est egal a ZGC/HTOIT; ]
+
+def_attribut[ htoit; htoit;
+              units = m;
+              long_name = height of the top of the model;
+              standard_name=top_model_height; ]
+
+def_attribut[ h0; H0;
+              units = m;
+              long_name = height of the surface above mean sea level;
+              standard_name=height_above_mean_sea_level; ]
+
+def_attribut[ ap; AP;
+              units = Pa;
+              long_name = vertical coordinate formula term: ap(k); ]
+
+def_attribut[ b; B;
+              units = 1;
+              long_name = vertical coordinate formula term: b(k); ]
+
+
+#----------------FIN Variables coordonnees (NE PAS MODIFIER)---------------------
+
+#----------------GLOBAL ATTIBUTES (debut)-----------------------------------------
+
+def_attribut[ global_attributes; GLOB;
+              Conventions = CF-1.4;
+              institution = RPN, Environment Canada and Universite du Quebec a Montreal;
+              contact = Dugas.Bernard@uqam.ca or Winger.Katja@uqam.ca;
+              comment = XXXXXX: ;
+              institute_id = RPN/ESCER;
+              model_id = GEMCLIM/CRCM5;
+              references = http://www.mrcc.uqam.ca;
+
+#----------------GLOBAL ATTIBUTES (fin)-------------------------------------------
+
+def_attribut[ avrt; QQ; 1.0;
+              units = s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Absolute Vorticity;
+              standard_name = atmosphere_absolute_vorticity; ]
+
+def_attribut[ clivi; IIRM; 1.0;
+              units = kg m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Ice Water  Path;
+              standard_name = atmosphere_cloud_ice_content; ]
+
+def_attribut[ cl; CA; 0.01;
+              units = 1;
+              _FillValue = 1.e+20; 5;
+              long_name = Clouds by layer;
+              standard_name = cloud_area_fraction_in_atmosphere_layer; ]
+
+def_attribut[ clt; NF; 0.01;
+              units = 1;
+              _FillValue = 1.e+20; 5;
+              long_name = Total Cloud Fraction;
+              standard_name = cloud_area_fraction; ]
+
+def_attribut[ clwvi; IIWP; 1.0;
+              units = kg m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Condensed Water Path;
+              standard_name = atmosphere_cloud_condensed_water_content; ]
+
+def_attribut[ div; DD; 1.0;
+              units = s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Horizontal Wind Divergence;
+              standard_name = divergence_of_wind; ]
+
+def_attribut[ divp; DP; 1.0;
+              units = s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = 2D Divergence In Isobaric corrdinate;
+              standard_name = isobaric_divergence_of_wind; ]
+
+def_attribut[ dpd; ES; 1.0;
+              units = K;
+              _FillValue = 1.e+20; 5;
+              long_name = Dew Point Depression;
+              standard_name = dew_point_depression; ]
+
+def_attribut[ dpt; TD; 1.0; -273.16;
+              units = K;
+              _FillValue = 1.e+20; 5;
+              long_name = Dew Point Temperature;
+              standard_name = dew_point_temperature; ]
+
+def_attribut[ evspsbl; EVAP; 1.0;
+              units = kg m-2 s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Evaporation;
+              standard_name = water_evaporation_flux; ]
+
+def_attribut[ hfls; AV; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Upward Latent Heat Flux;
+              standard_name = surface_upward_latent_heat_flux; ]
+
+def_attribut[ hfss; AH; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Upward Sensible Heat Flux;
+              standard_name = surface_upward_sensible_heat_flux; ]
+
+def_attribut[ hur; HR; 1.0;
+              units = 1;
+              _FillValue = 1.e+20; 5;
+              long_name = Relative Humidity;
+              standard_name = relative_humidity; ]
+
+def_attribut[ hurs; RH; 1.0;
+              units = 1;
+              _FillValue = 1.e+20; 5;
+              long_name = Near-Surface Relative Humidity;
+              standard_name = relative_humidity; ]
+
+def_attribut[ hus; HU; 1.0;
+              units = 1;
+              _FillValue = 1.e+20; 5;
+              long_name = Specific Humidity;
+              standard_name = specific_humidity; ]
+
+def_attribut[ huss; DQ; 1.0;
+              units = 1;
+              _FillValue = 1.e+20; 5;
+              long_name = Near-Surface Specific Humidity;
+              standard_name = specific_humidity; ]
+
+def_attribut[ mrro; RFAC; 1.0;
+              units = kg m-2 s-1
+              _FillValue = 1.e+20; 5;
+              long_name = Total Runoff;
+              standard_name = runoff_flux; ]
+
+def_attribut[ mrros; TRAF; 1.0;
+              units = kg m-2 s-1
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Runoff;
+              standard_name = surface_runoff_flux; ]
+
+def_attribut[ mrso; IMAV; 0.001;
+              units = kg m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Total Soil Moisture;
+              standard_name = soil_moisture_content; ]
+
+def_attribut[ orog; MF; 1.0;
+              units = m;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Altitude;
+              standard_name = surface_altitude; ]
+
+def_attribut[ pr; PR; 0.001;
+              units = kg m-2 s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Precipitation;
+              standard_name = precipitation_flux; ]
+
+def_attribut[ prc; PC; 0.001;
+              units = kg m-2 s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Convective Precipitation;
+              standard_name = convective_precipitation_flux; ]
+
+def_attribut[ prhmax; PRMX; 0.001;
+              units = kg m-2 s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Daily Maximum Hourly Precipitation Rate;
+              standard_name = precipitation_flux; ]
+
+def_attribut[ prls; AE; 0.001;
+              units = kg m-2 s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Large Scale Precipitation;
+              standard_name = large_scale_precipitation_flux; ]
+
+def_attribut[ prsn; SN; 0.001;
+              units = kg m-2 s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Snowfall Flux;
+              standard_name = snowfall_flux; ]
+
+def_attribut[ prw; IWVM; 1.0;
+              units = kg m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Water Vapor Path;
+              standard_name = atmosphere_water_vapor_content; ]
+
+def_attribut[ ps; P0; 0.01;
+              units = Pa;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Air Pressure;
+              standard_name = surface_air_pressure; ]
+
+def_attribut[ psl; PN; 0.01;
+              units = Pa;
+              _FillValue = 1.e+20; 5;
+              long_name = Sea Level Pressure;
+              standard_name = air_pressure_at_sea_level; ]
+
+def_attribut[ qsb; TDRA; 1.0;
+              units = kg m-2 s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Subsurface runoff;
+              standard_name = subsurface_runoff_flux; ]
+
+def_attribut[ rlds; AD; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Downwelling Longwave Radiation;
+              standard_name = surface_downwelling_longwave_flux_in_air; ]
+
+def_attribut[ rls; AI; -1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Net LW surface radiation;
+              standard_name = surface_net_downward_longwave_flux; ]
+
+def_attribut[ rlus; AIAD; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Upwelling Longwave Radiation;
+              standard_name = surface_upwelling_longwave_flux_in_air; ]
+
+def_attribut[ rlut; AR; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = TOA Outgoing Longwave Radiation;
+              standard_name = toa_outgoing_longwave_flux; ]
+
+def_attribut[ rsds; N4; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Downwelling Shortwave Radiation;
+              standard_name = surface_downwelling_shortwave_flux_in_air; ]
+
+def_attribut[ rsdt; AB; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = TOA Incident Shortwave Radiation;
+              standard_name = toa_incoming_shortwave_flux; ]
+
+def_attribut[ rss; AS; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Net SW surface radiation;
+              standard_name = surface_net_downward_shortwave_flux; ]
+
+def_attribut[ rsus; ASN4; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Upwelling Shortwave Radiation;
+              standard_name = surface_upwelling_shortwave_flux_in_air; ]
+
+def_attribut[ rsut; AU; 1.0;
+              units = W m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = TOA Outgoing Shortwave Radiation;
+              standard_name = toa_outgoing_shortwave_flux; ]
+
+def_attribut[ rvrt; QR; 1.0;
+              units = s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Relative Vorticity;
+              standard_name = atmosphere_relatite_vorticity; ]
+
+def_attribut[ sal; AL; .01;
+              units = 1;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Albedo;
+              standard_name = surface_albedo; ]
+
+def_attribut[ sfcWind; UVAV; 1.;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Near-Surface Wind Speed;
+              standard_name = wind_speed; ]
+
+def_attribut[ sfcWindmax; UVMX; 1.;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Daily Maximum Near-Surface Wind Speed;
+              standard_name = wind_speed; ]
+
+def_attribut[ sftlf; MG; 0.01;
+              units = %;
+              _FillValue = 1.e+20; 5;
+              long_name = Land Area Fraction;
+              standard_name = land_area_fraction; ]
+
+def_attribut[ sic; GL; 0.01;
+              units = %;
+              _FillValue = 1.e+20; 5;
+              long_name = Sea Ice Area Fraction;
+              standard_name = sea_ice_fraction; ]
+
+def_attribut[ sit; I8; 1.0;
+              units = m;
+              _FillValue = 1.e+20; 5;
+              long_name = Sea Ice Thickness;
+              standard_name = sea_ice_thickness; ]
+
+def_attribut[ snc; 5P; 0.01;
+              units = %;
+              _FillValue = 1.e+20; 5;
+              long_name = Snow Area Fraction;
+              standard_name = surface_snow_area_fraction; ]
+
+def_attribut[ snd; SD; 100.0;
+              units = m;
+              _FillValue = 1.e+20; 5;
+              long_name = Snow Depth;
+              standard_name = surface_snow_thickness; ]
+
+def_attribut[ sndens; DN; 1.0;
+              units = kg m-3;
+              _FillValue = 1.e+20; 5;
+              long_name = Snow Density;
+              standard_name = snow_density; ]
+
+def_attribut[ snm; MS; 1.0;
+              units = kg m-2 s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Snow Melt;
+              standard_name = surface_snow_melt_flux; ]
+
+def_attribut[ snw; I5; 1.0;
+              units = kg m-2;
+              _FillValue = 1.e+20; 5;
+              long_name = Snow Amount;
+              standard_name = surface_snow_amount; ]
+
+def_attribut[ snlwe; I5; 100.;
+              units = m;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Snow Liquid Water Equivalent;
+              standard_name = lwe_thickness_of_surface_snow_amount; ]
+
+def_attribut[ ta; TT; 1.0; -273.16;
+              units = K;
+              _FillValue = 1.e+20; 5;
+              long_name = Air Temperature;
+              standard_name = air_temperature; ]
+
+def_attribut[ tas; TJ; 1.0; -273.16;
+              units = K;
+              _FillValue = 1.e+20; 5;
+              long_name = Near-Surface Air Temperature;
+              standard_name = air_temperature; ]
+
+def_attribut[ tasmax; T9S; 1.0; 
+              units = K;
+              _FillValue = 1.e+20; 5;
+              long_name = Daily Maximum Near-Surface Air Temperature;
+              standard_name = air_temperature; ]
+
+def_attribut[ tasmin; T5S; 1.0;
+              units = K;
+              _FillValue = 1.e+20; 5;
+              long_name = Daily Minimum Near-Surface Air Temperature;
+              standard_name = air_temperature; ]
+
+def_attribut[ tauu; S7; 1.0;
+              units = Pa;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Downward Eastward Wind Stress;
+              standard_name = surface_downward_eastward_stress; ]
+
+def_attribut[ tauv; S8; 1.0;
+              units = Pa;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Downward Northward Wind Stress;
+              standard_name = surface_downward_northward_stress; ]
+
+def_attribut[ tnmmugwd; UG; 1.0;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Eastward Wind Gravity Wave Diag Tendency;
+              standard_name = tendency_of_eastward_wind_due_to_gravity_wave_drag; ]
+
+def_attribut[ tnmmvgwd; VG; 1.0;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Northward Wind Gravity Wave Diag Tendency;
+              standard_name = tendency_of_northward_wind_due_to_gravity_wave_drag; ]
+
+def_attribut[ tnmrc; W8; 1.0;
+              units = s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Specific Humidity Tendency Due To Convection;
+              standard_name = tendency_of_specific_humidity_due_to_convection; ]
+
+def_attribut[ tntlsp; W7; 1.0;
+              units = K s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Temperature Tendency Due To Stratiform Precipitation;
+              standard_name = tendency_of_air_temperature_due_to_large_scale_precipitation; ]
+
+def_attribut[ tntlw; T7; 1.0;
+              units = K s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Temperature Tendency Due To Longwave Heating;
+              standard_name = tendency_of_air_temperature_due_to_longwave_heating; ]
+
+def_attribut[ tntmc; W6; 1.0;
+              units = K s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Temperature Tendency Due To Moist Convection;
+              standard_name = tendency_of_air_temperature_due_to_moist_convection; ]
+
+def_attribut[ tntsw; T6; 1.0;
+              units = K s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Temperature Tendency Due To Shortwave Heating;
+              standard_name = tendency_of_air_temperature_due_to_shortwave_heating; ]
+
+def_attribut[ tos; TM; 1.0;
+              units = K;
+              _FillValue = 1.e+20; 5;
+              long_name = Sea Surface Temperature;
+              standard_name = sea_surface_temperature; ]
+
+def_attribut[ ts; J8; 1.0;
+              units = K;
+              _FillValue = 1.e+20; 5;
+              long_name = Surface Temperature;
+              standard_name = surface_temperature; ]
+
+def_attribut[ ua; UU; 1.94385;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Eastward Wind Velocity;
+              standard_name = eastward_wind; ]
+
+def_attribut[ uas; UD; 1.94385;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Eastward Near-Surface Wind Velocity;
+              standard_name = eastward_wind; ]
+
+def_attribut[ va; VV; 1.94385;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Northward Wind Velocity;
+              standard_name = northward_wind; ]
+
+def_attribut[ vas; VD; 1.94385;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Northward Near-Surface Wind Velocity;
+              standard_name = northward_wind; ]
+
+def_attribut[ wa; WT1; 1.0;
+              units = m s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Vertical Air Velocity In The Local Cartesian Corrdinate;
+              standard_name = upward_air_velocity; ]
+
+def_attribut[ wap; WP; 1.;
+              units = Pa s-1;
+              _FillValue = 1.e+20; 5;
+              long_name = Vertical Air Velocity Expressed As Tendency Of Pressure;
+              standard_name = lagragian_tendency_of_air_pressure; ]
+
+def_attribut[ zg; GZ; .0980616;
+              units = m;
+              _FillValue = 1.e+20; 5;
+              long_name = Geopotential Height;
+              standard_name = geopotential_height; ]
+
+def_attribut[ zmla; H; 1.0;
+              units = m;
+              _FillValue = 1.e+20; 5;
+              long_name = Height Of Boundary Layer;
+              standard_name = atmosphere_boundary_layer_thickness; ]
+
+

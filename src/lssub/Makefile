@@ -122,11 +122,9 @@ default: $(ARCH)
 	$(FTNC) $<
 
 .ftn.txt:
-	/bin/rm -f $(MANDIR)/$*.txt $*.txt
-	$(FTNT) $< | sed s/'^[*]'/' '/ > $(MANDIR)/$*.txt
-	rsync -av $(MANDIR)/$*.txt .
+	$(FTNT) $< | sed s/'^[*]'/' '/ > $(MANDIR)/$@ ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
-	rsync -av $(MANDIR)/$*.txt $(HOSTWEB):$(DIAGWEB) ; fi
+	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 .f.a:
 	$(FCOMP) $<
@@ -260,12 +258,6 @@ initial:
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
 	if [[ `/bin/ls -L $(SOURCES)/Makefile ; echo $?` != 0 ]]; then \
 	/bin/ln -sf $(DIAGS)/src/lssub/Makefile_sources$(STD) $(SOURCES)/Makefile ; fi
-
-document: lssub.ftn
-# Creation de la documentation pour lssub
-	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
-	rsync -av $(HTMLDECKS) $(HOSTWEB):$(DIAGWEB) ; fi
-	$(MAKE) lssub.txt
 
 # Voir "Managing project with make" de O'Reilly & Associates, 1989,
 # pages 51-53, pour les details de ce qui se passe dans ce qui suit

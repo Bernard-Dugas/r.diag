@@ -125,6 +125,10 @@ libs:
 # Online documentation (which was originaly found in $ARMNLIB/man/pdoc) recipe
 
 document:
-	cd $(DIAGNOSTIQUE)/src/lspgm   ; $(MAKE) $@ ; $(MAKE) info.lspgm ;\
-	cd $(DIAGNOSTIQUE)/src/lssub   ; $(MAKE) $@ ;\
-	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE) $@
+	cd $(DIAGNOSTIQUE)/man/pdoc ; $(MAKE) $@
+
+# Clean
+
+clean:
+	cd $(DIAGNOSTIQUE)/src/lspgm   ; $(MAKE) $@ ;\
+	cd $(DIAGNOSTIQUE)/src/lssub   ; $(MAKE) $@

@@ -109,18 +109,14 @@ default:  $(LIBP)
 	$(FTNC) $*.ftn90 ; /bin/rm -f $*.ftn90
 
 .ptn.txt:
-	/bin/rm -f $(MANDIR)/$*.txt $*.txt
-	$(FTNT) $< | sed s/'^[*]'/' '/ > $(MANDIR)/$*.txt
-	rsync -av $(MANDIR)/$*.txt .
+	$(FTNT) $< | sed s/'^[*]'/' '/ > $(MANDIR)/$@ ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
-	rsync -av $(MANDIR)/$*.txt $(HOSTWEB):$(DIAGWEB) ; fi
+	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 .ptn90.txt:
-	/bin/rm -f $(MANDIR)/$*.txt $*.txt
-	$(FTNT) $< | sed s/'^[!]'/' '/ > $(MANDIR)/$*.txt
-	rsync -av $(MANDIR)/$*.txt .
+	$(FTNT) $< | sed s/'^[!]'/' '/ > $(MANDIR)/$@ ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
-	rsync -av $(MANDIR)/$*.txt $(HOSTWEB):$(DIAGWEB) ; fi
+	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 .c.o:
 	$(CC) $*.c

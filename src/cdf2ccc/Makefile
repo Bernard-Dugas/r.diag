@@ -94,11 +94,10 @@ default:  $(LIBP)
 	$(AR) rv $@ $*.o
 
 .ftn.txt:
-	/bin/rm -f $(MANDIR)/$*.txt $*.txt
-	$(FTNT) $< | sed s/'^[*]'/' '/ > $(MANDIR)/$*.txt
-	rsync -av $(MANDIR)/$*.txt .
+	$(FTNT) $< | sed s/'^[*]'/' '/ > $(MANDIR)/$@ ;\
+	rsync -a attribut_netcdf.dat $(MANDIR) ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
-	rsync -av $(MANDIR)/$*.txt $(HOSTWEB):$(DIAGWEB) ; fi
+	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 
 FTNDECKS=\
@@ -307,10 +306,6 @@ $(LIBP):	initial	$(FDECKS)	$(HDECKS)	\
 	 $(LIBP)(vers_netcdf.o)			\
 	 $(LIBP)(wrfile.o)			\
 	 $(LIBP)(wrlalo.o)
-
-document: cdf2ccc.ftn attribut_netcdf.dat	$(TXTDECKS)
-# Creation de la documentation pour cdf2ccc
-	rsync -av attribut_netcdf.dat $(MANDIR)
 
 cdf2ccc: initial cdf2ccc.ftn
 # Creation de l'executable cdf2ccc ailleurs que ailleurs que sous AIX
