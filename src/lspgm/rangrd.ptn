@@ -4,9 +4,11 @@
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
-*      rangrd  GG INPUT OUTPUT [ -n    VAL1 -name VAL2 -lon VAL3 \ 
-*                                -lat  VAL4 -npg  VAL5 -a   VAL6 \ 
-*                                -kind VAL7 VAL8 -delt VAL9 ] [ -def ]
+*      rangrd  GG INPUT OUTPUT \ 
+*          [ -n   VAL1 -name VAL2 -plv VAL3  -lon  VAL4 \ 
+*            -lat VAL5 -npg  VAL6 -a   VAL7  -delt VAL11 \ 
+*            -kind VAL5 VAL6     -t1   VAL10  VAL11 \ 
+*            -lv1  VAL12 [ VAL13 [ VAL14 ] ] -def ]
 *
 *
 *     AUTHOR - B.Dugas, AVRIL 23/87.
@@ -25,6 +27,9 @@
 *                        THIS ARGUMENT IS ALWAYS LESS THAN 99999 AND CAN
 *                        ONLY BE SET VIA THE COMMAND LINE. WHEN DEFINED,
 *                        THE INITIAL TIME IS SET TO 1979010100.
+*      DATEO (t1/t2)   = INITIAL TIME (DEF=19790101/00). THESE TWO NUMBERS
+*                        STAND FOR YYYYMMDD AND HHMMSS. AGAIN, THEY CAN
+*                        ONLY BE SET VIA THE COMMAND LINE.
 *      NAME            = DATA NAME                 (DEF='DATA')
 *      ILEV  (plv)     = NUMBER OF VERTICAL LEVELS (DEF=16,MAX=999)
 *                        IF ILEV IS NEGATIVE, EACH -ILEV LVL VALUES ARE READ WITH
@@ -51,7 +56,21 @@
 *                        'THETA'     , potential temperature coordinate
 *                        'GALCHEN'   , GalChen generalized coordinate
 *
-*      LVL             = VERTICAL LEVELS (ILEV ARE READ IN A SECOND LINE)
+*      LVL (lv1)       = VERTICAL LEVELS (ILEV ARE READ IN A SECOND LINE)
+*
+*      Notes: 1) The first input line is NOT read if any command-line
+*                parameters are passed.
+*             2) Furthermore, the second line will not be read either
+*                if the -def defaults processing mode is requested.
+*                These defaults are then as specified in the example
+*                below and ILEV is also reset to 16, for consistency.
+*             3) The results are mutiplied by the local level pressure
+*                in HPa, so that the uniform range of values goes from
+*                0 to the local pressure. The gaussian distribution has
+*                zero mean and unit variance before again being mutiplied
+*                by the local pressure.
+*             4) Finally, the -def parameter will be ignored if any
+*                level values are specified with the -lv1 parameter.
 *
 *      READ(5,5000) NSETS,NAME,ILEV,ILG,ILAT,NPACK, SEED,KIND
 *      IF (ILEV.GT.0)
@@ -61,19 +80,6 @@
 *5000  FORMAT(10X,I5,1X,A4,4I5,I10,1X,A4,i5) 
 *5001  FORMAT(16I5)
 *5002  FORMAT(8I10)
-*
-*     NOTES 1) NO INPUT CARDS ARE READ WHEN THE 'def' PARAMETRE IS SPECIFIED
-*           2) EITHER SPECIFYING THE 'def' PARAMETRE OR ENTERING AN EMPTY
-*              FIRST LINE WILL SETUP A SET OF DEFAULT VALUES.
-*              NAMELY,
-*
-*               NSETS=100, NAME='DATA', ILEV=1,LVL(1)=500, NPACK=-32, 
-*               SEED=1234567890  AND ILG=32,ILAT=16
-*
-*           3) THE RESULTS ARE MUTIPLIED BY THE LOCAL LEVEL PRESSURE IN MBS,
-*              SO THAT THE UNIFORM RANGE OF VALUES GOES FROM 0 TO THE LOCAL
-*              PRESSURE. THE GAUSSIAN DISTRIBUTION HAS ZERO MEAN AND UNIT 
-*              VARIANCE BEFORE AGAIN BEING MUTIPLIED BY THE LOCAL PRESSURE.
 *
 *
 *     EXAMPLE OF INPUT CARDS...
@@ -207,30 +213,28 @@
 *---------------------------------------------------------------------- 
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
-      INTEGER     MAXMEM
-      PARAMETER ( MAXMEM= memoire_maximale )
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      INTEGER,    PARAMETER :: MAXMEM = memoire_maximale
 
       INTEGER     SEED(1)
 
+      REAL*8      HOURS
+      LOGICAL     OK,DEF,BIGF
       CHARACTER*10 CLEVP(MAXLEV)
-      LOGICAL     OK,NODEFAU,BIGF
       REAL        PR(MAXLEV),HOLD
       CHARACTER*4 LIGNE*100,VTYP*16,DATA,NAME,KIND,PKTYP
-      INTEGER     LVL(MAXLEV),NSETS,JBUF(taille_entete),
+      INTEGER     LVL(MAXLEV),NSETS,JBUF(HEAD),STAMP,IER,
      +            JPAK,IO,ILEV,ILG,ILG1,ILAT,NPACK,NF,NWDS,
-     +            MEM,START,END,NT,J,K,L,IJL,MAXW,IER,LEN,
-     +            VKIND,VK,RESET,DEET
+     +            MEM,START,ENDL,NT,J,K,L,IJL,MAXW,LEN,
+     +            VKIND,VK,RESET,DEET,YYYYMMDD,HHMMSS
  
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       REAL,       DIMENSION(:), ALLOCATABLE :: GG
 
       REAL,       EXTERNAL :: TGAUSS
       LOGICAL,    EXTERNAL :: RPBLOC
-      INTEGER,    EXTERNAL :: GETKIND
+      INTEGER,    EXTERNAL :: GETKIND,NEWDATE
       CHARACTER*4,EXTERNAL :: GETYP,GETKINDC*16
       EXTERNAL    JCLPNT,GETLIGN,BURNF,XIT,PUTFLD2,
      +            SETLAB,CONVPR,WRITLEV,PUTHIGH
@@ -240,8 +244,8 @@
 
       DATA        DATA  /
      +           'DATA' /
-      DATA        NODEFAU , OK    /
-     +           .TRUE.   ,.TRUE. /
+      DATA        DEF   , OK    /
+     +           .FALSE.,.TRUE. /
 
       DATA      ( CLEVP(L), L=1,16 ) /
      +            '   10','   20','   30','   50',
@@ -280,6 +284,9 @@
       VKIND  =  2
       VTYP   = ' '
 
+      YYYYMMDD = 19790101
+      HHMMSS   = 00 
+
       BIGF   =.FALSE.
 
       IF (RPBLOC( ' ',LIGNE ))                                THEN
@@ -289,8 +296,17 @@
           OK = RPBLOC('N',LIGNE)
           IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) NSETS
 
+          OK = RPBLOC('NAME',LIGNE)
+          IF (OK) NAME = LIGNE
+
           OK = RPBLOC('DELT',LIGNE)
           IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) DEET
+
+          OK = RPBLOC('T1',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) YYYYMMDD
+
+          OK = RPBLOC('T12',LIGNE)
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) HHMMSS
 
           OK = RPBLOC('PLV',LIGNE)
           IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) ILEV
@@ -305,7 +321,7 @@
           IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) NPACK
 
           OK = RPBLOC('A',LIGNE)
-          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) SEED
+          IF (OK) READ(LIGNE,0005,END=901,ERR=901,IOSTAT=IO) SEED(1)
 
           OK = RPBLOC('KIND',LIGNE)
           IF (OK) KIND = LIGNE
@@ -318,7 +334,49 @@
               VKIND = GETKIND( )
           END IF
 
-          NODEFAU = .NOT.RPBLOC('DEFAUT',LIGNE)
+          DEF = RPBLOC('DEFAUT',LIGNE)
+
+          OK  = RPBLOC('LV1',LIGNE)
+
+          IF (OK)                                              THEN
+
+              DEF =.TRUE.
+
+              CLEVP(1) = LIGNE
+              ILEV     = 1
+
+              OK = RPBLOC('LV12',LIGNE)
+
+              IF (OK)                                          THEN
+
+                  CLEVP(2) = LIGNE
+                  ILEV     = 2
+
+                  OK = RPBLOC('LV13',LIGNE)
+
+                  IF (OK)                                      THEN
+
+                      CLEVP(3) = LIGNE
+                      ILEV     = 3
+
+                  END IF
+
+              END IF
+
+          ELSE
+
+              IF (DEF)                                         THEN
+                  IF (ILEV.EQ.1)                               THEN
+                      CLEVP(1) = '  500'
+                  ELSE IF (ILEV.EQ.0)                          THEN
+                      ILEV     = 16
+                  ELSE
+                      WRITE(6,6003) ILEV
+                      CALL                         XIT(' Rangrd ',-3 )
+                  END IF
+              END IF
+ 
+          END IF
 
       ELSE
 
@@ -335,6 +393,9 @@
           END IF
 
       END IF
+
+      STAMP = 0
+      IER = NEWDATE( STAMP, YYYYMMDD,HHMMSS*100, 3 )
 
       IF (ILEV.LT.0)                                           THEN
           ILEV = -ILEV
@@ -353,6 +414,24 @@
       CALL SETLAB( JBUF, 'GRID',-1,NAME,-1, ILG1,ILAT,0,NPACK ) 
       CALL LBLCHK( LEN, NWDS,JPAK,JBUF )
 
+      IF (PKTYP == 'SQ')                                 THEN
+          CALL PUTHIC( 'G'   ,'GRTYP' ,JBUF )
+          CALL PUTHIGH( 5    ,'DATYP' ,JBUF )
+          CALL PUTHIGH( 0    ,'IG1'   ,JBUF )
+          CALL PUTHIGH( 0    ,'IG2'   ,JBUF )
+          CALL PUTHIGH( 0    ,'IG3'   ,JBUF )
+          CALL PUTHIGH( 0    ,'IG4'   ,JBUF )
+          CALL PUTHIC( 'A'   ,'TYPVAR',JBUF )
+          CALL PUTHIC( 'ANAL','ETIK1' ,JBUF )
+          CALL PUTHIC( 'YSIS','ETIK2' ,JBUF )
+          CALL PUTHIC( '    ','ETIK3' ,JBUF )
+          CALL PUTHIC( '    ','ETIK4' ,JBUF )
+          CALL PUTHIC( '    ','NEWL'  ,JBUF )
+          CALL PUTHIC(  NAME ,'NAME'  ,JBUF )
+          CALL PUTHIR(  0.0  ,'HIVAL' ,JBUF )
+          CALL PUTHIR(  0.0  ,'LOVAL' ,JBUF )
+      END IF
+
       MAXW = LEN-HEAD
  
 ***    ASK FOR REQUIRED MEMORY, IF POSSIBLE ... 
@@ -364,56 +443,57 @@
           CALL                                     XIT(' Rangrd ',-1 ) 
       END IF 
  
-      ALLOCATE( IBUF(MAXW+HEAD),GG(NWDS*ILEV) )
+      ALLOCATE( IBUF(MAXW+HEAD),GG(NWDS*ILEV), STAT=IER )
  
       DO  L=1,HEAD
           IBUF(L) = JBUF(L)
       END DO
 
-      IF (DEET.NE.0 .AND. PKTYP.EQ.'SQ')                       THEN
-          CALL PUTHIGH( DEET     ,'DEET' ,IBUF )
-          CALL PUTHIGH( 010179000,'DATEO',IBUF )
+      IF (PKTYP == 'SQ' .AND.
+     +   (STAMP /=  0   .OR. DEET /= 0))                       THEN
+          CALL PUTHIGH( DEET ,'DEET' ,IBUF )
+          CALL PUTHIGH( STAMP,'DATEO',IBUF )
       END IF
 
 ***    READ LEVELS (16/CARD)
  
-      IF (NODEFAU .OR. ILEV.GT.1)                              THEN
+      IF (.NOT.DEF)                                            THEN
 
           IF (BIGF)                                            THEN
               START = 1
-              END   = MIN( ILEV, 8 )
+              ENDL  = MIN( ILEV, 8 )
 
   100         CALL GETLIGN( 5, LIGNE,80,OK )
 
                   IF (.NOT.OK) GOTO 902
                   READ( LIGNE, 5002, ERR=902,END=902,IOSTAT=IO ) 
-     +                               (CLEVP(L), L=START,END)
+     +                               (CLEVP(L), L=START,ENDL)
 
-              IF (END.LT.ILEV)                                 THEN
-                  START = END+1
-                  END   = MIN( ILEV,END+8 )
+              IF (ENDL.LT.ILEV)                                THEN
+                  START = ENDL+1
+                  ENDL  = MIN( ILEV,ENDL+8 )
                   GOTO 100
               END IF
           ELSE
               START = 1
-              END   = MIN( ILEV, 16 )
+              ENDL  = MIN( ILEV, 16 )
 
   101         CALL GETLIGN( 5, LIGNE,80,OK )
 
                   IF (.NOT.OK) GOTO 902
                   READ( LIGNE, 5001, ERR=902,END=902,IOSTAT=IO ) 
-     +                               (CLEVP(L), L=START,END)
+     +                               (CLEVP(L), L=START,ENDL)
 
-              IF (END.LT.ILEV)                                 THEN
-                  START = END+1
-                  END   = MIN( ILEV,END+16 )
+              IF (ENDL.LT.ILEV)                                THEN
+                  START = ENDL+1
+                  ENDL  = MIN( ILEV,ENDL+16 )
                   GOTO 101
               END IF
           END IF
 
-      END IF
+          CALL BURNF 
 
-      IF (NODEFAU) CALL BURNF 
+      END IF
 
 ***    CHECK LVL CODING.
 
@@ -458,20 +538,20 @@
  
 ***        DO IT FOR ALL LEVELS. 
 
-          END = 0
+          ENDL = 0
 
           DO 200 L=1,ILEV 
 
 ***            APPLY CURRENT SEED. 
 
-              START = END+1
-              END   = END+NWDS
+              START = ENDL+1
+              ENDL  = ENDL+NWDS
 
               IF (KIND.EQ.'UNIF')                              THEN
-                  CALL RANDOM_NUMBER( GG(START:END) )
-                  GG(START:END) =  PR(L)*GG(START:END)
+                  CALL RANDOM_NUMBER( GG(START:ENDL) )
+                  GG(START:ENDL) =  PR(L)*GG(START:ENDL)
               ELSE IF (KIND.EQ.'GAUS')                         THEN
-                  DO  IJL=START,END
+                  DO  IJL=START,ENDL
                       GG(IJL) = PR(L)*TGAUSS(RESET)
                   END DO
               END IF
@@ -481,7 +561,13 @@
 ***        SAVE FIELD. 
  
           IBUF(2) = NT 
-*         IF (PKTYP.EQ.'SQ') CALL PUTHIGH( NT,'NPAS',IBUF )
+
+          IF (PKTYP.EQ.'SQ')                                 THEN
+              CALL PUTHIGH( NT,'NPAS',IBUF )
+              HOURS = NT * (DEET/3600.0_8)
+              CALL INCDATR( IBUF(2),STAMP,HOURS )
+          END IF
+
           CALL PUTSET2( 11, GG, LVL,ILEV, IBUF,MAXW )
  
   300 CONTINUE 
@@ -506,6 +592,8 @@
  5002 FORMAT(8A10) 
 
  6001 FORMAT(' Missing at least ',I6,'words of available memory.')
+ 6003 FORMAT(' Unsupported default ILEV=',I3,'. Only 1- and 16-level'
+     +       ' defaults are provided.')
 #     if defined (AIX)
  6100 FORMAT(/' Nsets=',I5,',  name= ',A,',',4X,'ilev= ',I5,', ilg=', 
      +     I5,','/'  ilat=',I5,', npack=',I5,', seed= ',E15.5,

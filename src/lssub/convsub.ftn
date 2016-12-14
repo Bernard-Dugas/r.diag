@@ -463,7 +463,8 @@ c
 #     endif
 
       REAL        pr
-      CHARACTER*4 type,nom,newl,alev*12
+      CHARACTER*12 alev,alev2
+      CHARACTER*4 type,nom,newl
       LOGICAL     spec,four,data,coef,char,cmpl
       INTEGER     time,lev,ilg,ilat,ihem,pack,ktr,err
       INTEGER     lsr, la,lr,lm,lrlmt,kind, i,j,k
@@ -578,18 +579,6 @@ c
      +              grtyp,ig1,ig2,ig3,ig4, swa,lng,dltf,ubc,
      +              extra1,extra2,extra3 )
 
-      if (debug)                                               then
-          call  get_ip1_string( ip1,alev )
-          call leadblk( alev )
-          write(6,6101) dateo,npas,deet, ni,nj,nk,nbits,ip1,
-     +                  trim(alev),ip2,ip3,ig1,ig2,ig3,ig4,datyp
-          write(6,6102) grtyp,typvar,nomvar,etiket
-      end if
-
-***    Il n'y a ici aucune conversion de noms.
-
-      nom = nomvar
-
 ***    Evaluer RANGE_KIND,HIVAL,LOVAL tout de suite.
 ***    Ils seront saives dans les mots 29,30,31 de IBUF.
 
@@ -612,7 +601,28 @@ c
          HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
       end if
 
-      if (debug) write(6,6103) RANGE_KIND,HIVAL,LOVAL
+      if (debug)                                               then
+          call  get_ip1_string( ip1,alev ) ;  call leadblk( alev )
+          call  get_ip1_string( ip2,alev2 ) ; call leadblk( alev2 )
+          if (RANGE_KIND >= 0)                                 then
+              if (RANGE_KIND == KIND_HOURS)                    then
+                  write(6,6105) dateo,npas,deet, ni,nj,nk,nbits,ip1,
+     +                  trim(alev),ig1,ig2,ig3,ig4
+              else
+                  write(6,6106) dateo,npas,deet, ni,nj,nk,nbits,
+     +                  ip2,trim(alev2),ig1,ig2,ig3,ig4
+              end if
+          else
+              write(6,6101) dateo,npas,deet, ni,nj,nk,nbits,ip1,
+     +               trim(alev),ip2,trim(alev2),ip3,ig1,ig2,ig3,ig4
+          end if
+          write(6,6102) grtyp,typvar,nomvar,etiket,datyp
+          if (RANGE_KIND >= 0) write(6,6103) RANGE_KIND,HIVAL,LOVAL
+      end if
+
+***    Il n'y a ici aucune conversion de noms.
+
+      nom = nomvar
 
 ***    Est-ce qu'on traite des champs contenant
 ***    autres choses que des grilles gaussiennes ?
@@ -972,12 +982,20 @@ c
 
  6101 FORMAT('*DEBUG:IBUFILL (1) DATEO=',I12,', NPAS=',I9,
      +       ', DEET=',I5,', NI,NJ,NK=',3I5,', NBITS=',I5/
-     +       '*DEBUG:IBUFILL (2) IP1,IP2,IP3=',I9,' ( ',A,' ) ',2I7,
-     +       ', IG1,IG2,IG3,IG4=',4I6,', DATYP=',I6)
+     +       '*DEBUG:IBUFILL (2) IP1,IP2,IP3=',2(I9,' ( ',A,' ) '),I9,
+     +       ', IG1,IG2,IG3,IG4=',4I6)
  6102 FORMAT('*DEBUG:IBUFILL (3) GRTYP=',A,', TYPVAR=',A,
-     +       ', NOMVAR=',A,', ETIKET=',A)
+     +       ', NOMVAR=',A,', ETIKET=',A,', DATYP=',I6)
  6103 FORMAT('*DEBUG:IBUFILL (4) RANGE_KIND=',I3,' HIVAL,LOVAL=',2E15.7)
  6104 FORMAT('*DEBUG:IBUFILL found DATEO=0, reset to 101010101')
+ 6105 FORMAT('*DEBUG:IBUFILL (1) DATEO=',I12,', NPAS=',I9,
+     +       ', DEET=',I5,', NI,NJ,NK=',3I5,', NBITS=',I5/
+     +       '*DEBUG:IBUFILL (2) IP1=',I9,' ( ',A,' ) ',14X,
+     +       ', IG1,IG2,IG3,IG4=',4I6)
+ 6106 FORMAT('*DEBUG:IBUFILL (1) DATEO=',I12,', NPAS=',I9,
+     +       ', DEET=',I5,', NI,NJ,NK=',3I5,', NBITS=',I5/
+     +       '*DEBUG:IBUFILL (2) IP2=',I9,' ( ',A,' ) ',
+     +       ', IG1,IG2,IG3,IG4=',4I6)
 
       END
       SUBROUTINE parfill( IBUF )
@@ -1052,7 +1070,8 @@ c
       if (debug .and. HEAD .ge. 9)                             then
           write(6,6101) (ibuf(jj),jj=9,16)
           write(6,6102) (ibuf(jj),jj=17,24)
-          write(6,6103) HEAD ,(ibuf(jj),jj=25,HEAD)
+          write(6,6103) (ibuf(jj),jj=25,28)
+          write(6,6104) HEAD ,(ibuf(jj),jj=29,HEAD)
       end if
 
       call GET_DCF( DATE_CONVERSION_FACTOR ) ! Different DATE format ?
@@ -1579,7 +1598,8 @@ c    +        nlev.ne. 1   )  ig2 = nlev
  0004 FORMAT(A4)
  0016 FORMAT(4A4)
 
- 6103 FORMAT('*DEBUG:PARFILL (4) Ibuf 25 a ',I2,' =',1X,4A4)
+ 6104 FORMAT('*DEBUG:PARFILL (4) Ibuf 29 a ',I2,' = ',I2,3(1x,Z8))
+ 6103 FORMAT('*DEBUG:PARFILL (4) Ibuf 25 a 28 =',1X,4A4)
  6102 FORMAT('*DEBUG:PARFILL (3) Ibuf 17 a 24 =',2I6,1X,Z8,I11,2I8,2(1X,A))
  6101 FORMAT('*DEBUG:PARFILL (2) Ibuf  9 a 16 =',2(A4,1X),3I8,I12,2I6)
      +                                          

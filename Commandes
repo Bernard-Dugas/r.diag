@@ -3,16 +3,17 @@ Exemples de commandes pour generer les binaires r.diag, cdf2ccc et cdf2rpn
 
 UQAM sans libgraph.a
 
-. s.ssmuse.dot dev/pgi       ; . s.ssmuse.dot vgriddesc
-
+. s.ssmuse.dot dev/pgi
     ou bien
-
-. s.ssmuse.dot dev/gfortran  ; . s.ssmuse.dot vgriddesc
+. s.ssmuse.dot dev/gfortran
+    ou bien
+. s.ssmuse.dot dev/intel
 
     et ensuite
 
-FIXES="$PWD/lib/$EC_ARCH/stubs.o $PWD/lib/$EC_ARCH/moduledate.o" ; make allbin FIXES="${FIXES}"
-
+. s.ssmuse.dot vgriddesc
+FIXES="$PWD/lib/$EC_ARCH/stubs.o $PWD/lib/$EC_ARCH/moduledate.o"
+make allbin FIXES="${FIXES}"
 
 CMC sans libgraph.a et sans la derniere correction a moduledate
 

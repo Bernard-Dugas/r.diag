@@ -45,7 +45,13 @@
 !  oldip3    Les donnees lues sont des moyennes produites selon le
 !            mode anterieur, i.e. le nombre d'echantillons ayant
 !            ete utilise lors du calcul se trouve dans IP3
-!            et ce, dans un format non-code.
+!            et ce, dans un format non-code. Avertissement:
+!               **************************************
+!              **** Toutes les donnees lues seront ****
+!              **** alors traitees en consequence  ****
+!               **************************************
+!            Cette cle ne peut etre specifiee si un des fichiers
+!            d'entree contient un intervalle code via les IP1/2/3
 !  f         Forcer la re-ecriture du (ou des) fichier(s) de sortie. 
 !
 !
@@ -66,6 +72,7 @@
 !      13 Incapable de lier les fichiers d'entree
 !      14 DIAG_DECODE_ip/DIAG_ENCODE_ip error 
 !      15 Incapable de coder le nombre d'echantillons
+!      16 Inconsistance: OldIP3 specifie et RANGE_KIND >= 0
 !
 # endif
 #     if defined (RDIAG_LICENCE)
@@ -162,9 +169,10 @@
   logical ::    info  ; common /zzverbo/ info
   logical ::    debug ; common /zzdebug/ debug
 
-  logical       Vrai,Faux, box, Complet, Elim, Forc, NoIP3, NoVar, OldIP3, Stats
+  logical       Complet, Complet1, Complet2, Sample
+  logical       Vrai,Faux, box, Elim, Forc, NoIP3, NoVar, OldIP3, Stats
   integer ::    i,ii,ier,io,ipos, icle, ibuf(1), iu1(NBRFICH),iu2=0,iu3=0, &
-                datevi,datevf, ip2tot, key, nil, mdiag, &
+                datevi,datevf,dateosp, ip2tot, key, nil, mdiag, &
                 nr,nref,ns, nwds,nwds0=-1
 
   real,         dimension(:), allocatable :: buff
@@ -177,7 +185,7 @@
   character typvar*2,                  nomvar*4,             &
             etiket*12,                 grtyp*1
 
-  integer   dateo,datev,               ni,nj,nk,             &
+  integer   dateo,datev,datev0,        ni,nj,nk,             &
             ip1,ip2,ip3,               datyp,nbits,          &
             infont,infonv,deet,npas,   extra1,extra2,extra3, &
             ig1,ig2,ig3,ig4,           swa,lng,dltf,ubc
@@ -206,7 +214,7 @@
   ! Parametres d'appel:
   ! ------------------
 
-  ! NBRARGS=8 Arguments generaux
+  ! NBRARGS=9 Arguments generaux
   data cles(01)/'D.'    /,def1(01)/' '   /,def2(01)/'TAPE2'  /, &
        cles(02)/'INFO'  /,def1(02)/'NON' /,def2(02)/'OUI' /, &
        cles(03)/'NOBOX' /,def1(03)/'NON' /,def2(03)/'OUI' /, &
@@ -795,8 +803,10 @@
           call quit( ' Fstmdiag ',9 )
       end if
 
+      heuremax = HIVAL ; heuremin = LOVAL
       moyenne = 0 ; variance = 0 ; deltat = 0
       nr = 0 ; ns = 0 ; ip2tot = 0 ; ii = -1
+      Complet = Faux ; dateosp = -1
 
       LOOP2 : do i=start,infont
 
@@ -841,7 +851,17 @@
 
           end if
 
+          if (OldIP3 .and. rkind (i) >=0)                  then
+              write(6,6016) i,rkind (i),niveau(i),heure(i),fset(i)
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 16','NON' )
+              call quit( ' Fstmdiag ',16 )
+          end if
+
           ii = i ; key = listet(ii)
+
+          ! RANGE_KIND indique qu'a trouve un intervalle d'heures
+          if (rkind(ii) == KIND_HOURS) RANGE_KIND = KIND_HOURS
 
           vip1 = vip1s(ii) ; k1 = k1set(ii)
           vip2 = vip2s(ii) ; k2 = k2set(ii)
@@ -894,13 +914,13 @@
 
           if (pas(ii)*delt(ii) == 0             .or.  &
 
-             (RANGE_KIND       == KIND_HOURS    .and. & ! Tentative de determiner si cet
+             (rkind(ii)        == KIND_HOURS    .and. & ! Tentative de determiner si cet
              (npas_deet        == time_range_5  .or.  & ! enregistrement est le produit de
               npas_deet60      == time_range_5  .or.  & ! calculs prealables de moyennes
               npas_deet3600    == time_range_5)).or.  & ! ou bien si c'est un echantillon
 
-             (RANGE_KIND       /= KIND_HOURS    .and. &
-              RANGE_KIND       >= 0             .and. &
+             (rkind(ii)        /= KIND_HOURS    .and. &
+              rkind(ii)        >= 0             .and. &
              (npasp1_deet      == vip2_5        .or.  &
               npasp1_deet60    == vip2_5        .or.  &
               npasp1_deet3600  == vip2_5))      .or.  &
@@ -921,29 +941,40 @@
                   end if
               else
                   datev = date(ii)
-                  call difdatr( datev,datevi,tdiff ) ; if (tdiff < 0._8) datevi = datev
+                  if (datev /= datevi)                     then
+                      call difdatr( datev,datevi,tdiff ) ; if (tdiff < 0._8) datevi = datev
+                  end if
                   if (pas(ii)*delt(ii) > 0)                then
                       tdiff = pas(ii)*DBLE( delt(ii) )/3600
                       call incdatr( datev,date(ii),tdiff )
                   end if
-                  call difdatr( datev,datevf,tdiff ) ; if (tdiff > 0._8) datevf = datev
+                  if (datev /= datevf)                     then
+                      call difdatr( datev,datevf,tdiff ) ; if (tdiff > 0._8) datevf = datev
+                  end if
               end if
+
+              Sample = Faux
 
           else
               ! On suppose que c'est un echantillon
               if (ii == start)                             then
                   tdiff = npas*DBLE( deet )/3600
-                  call incdatr( datevi,dateo,tdiff )
-                  datevf = datevi
+                  call incdatr( datev0,dateo,tdiff )
+                  datevf = datev0 ; datevi = datev0
               else
                   tdiff = pas(ii)*DBLE( delt(ii) )/3600
                   call incdatr( datev,date(ii),tdiff )
-                  call difdatr( datev,datevi  ,tdiff ) ; if (tdiff < 0._8) datevi = datev
-                  call difdatr( datev,datevf  ,tdiff ) ; if (tdiff > 0._8) datevf = datev
+                  if (datev /= datevi)                     then
+                      call difdatr( datev,datevi  ,tdiff ) ; if (tdiff < 0._8) datevi = datev
+                  end if
+                  if (datev /= datevf)                     then
+                      call difdatr( datev,datevf  ,tdiff ) ; if (tdiff > 0._8) datevf = datev
+                  end if
               end if
+              Sample = Vrai
           end if
 
-          if (RANGE_KIND == KIND_HOURS)                    then
+          if (rkind(ii)  == KIND_HOURS)                    then
               ! Interval de temps.
               !  On suppose que c'est le debut d'un interval deja
               !  moyenne lorsque (HIVAL-LOVAL) corresponds a
@@ -966,7 +997,7 @@
                   hival  = max( hival, hiset(ii) ) ; heures = hiset(ii)-loset(ii)
                   loval  = min( loval, loset(ii) ) ; deltat = nint( time_range/(mdiag-1) )
               end if
-          else if (RANGE_KIND /= -1)                       then
+          else if (rkind(ii)  /= -1)                       then
               ! Interval de coordonee verticale. IP3 indisponible.
               !  Est-ce que IP2 est deja code en heures
               !  ou bien en un nombre d'echantillons ?
@@ -1025,7 +1056,7 @@
               ! IP3 est "libre". On suppose qu'il contient alors
               !  un nombre d'echantillons, possiblement code en
               !  mode KIND_SAMPLES. Sinon, on ignore tout codage
-              if (fset(ii) > 32767)                        then
+              if (fset(ii) > 32767 .and. .not.OldIP3)      then
                   ! call diag_convip_plus( fset(ii),vip3,ikind,-2,nuls,.false. )
                   if (k3set(ii) == KIND_SAMPLES)           then
                       kcode = 5 ; mdiag = nint( vip3s(ii) )
@@ -1052,7 +1083,7 @@
           ! Trouver l'heure de validite courante
           ! et le deltat entre les echantillons.
 
-          if (pas(ii)*delt(ii) /= 0)                       then
+          if (.not.OldIP3 .and. pas(ii)*delt(ii) /= 0)     then
               
               if (mdiag > 1)                               then
                   ip2tot = ip2tot + mdiag
@@ -1067,10 +1098,83 @@
               heures = pas(ii)*DBLE( delt(ii) )/3600
 
               if (ii == start)                             then
-                  heuremin = heures ; heuremax = heures
+                  if (HIVAL >= 0.0)                        then
+                      heuremax = HIVAL
+                      heuremin = LOVAL 
+                  else
+                      heuremax = heures
+                      if (Sample)                          then
+                          heuremin = heures
+                      else
+                          heuremin = 0
+                      end if
+                  end if
+              else 
+                  if (hiset(ii) >= 0.0)                    then
+                      heuremax = max( DBLE( hiset(ii) ), heuremax )
+                      heuremin = min( DBLE( loset(ii) ), heuremin )
+                  else if (datev /= datev0)                then
+                      ! Re-definir heuremin/heuremax p/r a un nouveau dateo ?
+                      if (date(ii) /= dateo)               then
+                         if (Sample)                       then
+                             if (dateosp /= date(ii))      then
+                                 ! Nouveau DATEO "S"ample "P"recedent
+                                 dateosp = date(ii)
+                                 call difdatr( dateo,dateosp,tdiff )
+                                 if (tdiff == LOVAL)           then
+                                     ! On ajoute des echantillons plus recents a
+                                     ! une moyenne complete d'une meme experience
+                                     heuremax = max( heures, heuremax )
+                                     heuremin = min( heures, heuremin )
+                                 else
+                                     call difdatr( datevi,date(ii),tdiff )
+                                     if (tdiff > 0._8)             then
+                                         ! On ajoute des echantillons plus
+                                         ! recents a une moyenne incomplete
+                                         dateo = date(ii)
+                                         heuremax = max( heures, heuremax+tdiff )
+                                         heuremin = min( heures, heuremin+tdiff )
+                                     else
+                                         heuremax = max( heures, heuremax )
+                                         heuremin = min( heures, heuremin )
+                                    end if
+                                end if
+                             else
+                                 heuremax = max( heures, heuremax )
+                                 heuremin = min( heures, heuremin )
+                             end if
+                         else
+                             call difdatr( date(ii),dateo,tdiff )
+                             if (tdiff > 0._8)             then
+                                 heuremax = max( heures+tdiff, heuremax )
+                                 heuremin = min( tdiff, heuremin )
+                             else
+                                 heuremax = max( heures, heuremax )
+                                 heuremin = min( heures, heuremin )
+                             end if
+                         end if
+                      else
+                          heuremax = max( heures, heuremax )
+                          heuremin = min( heures, heuremin )
+                      end if
+                  else ! datev == datev0 et on des echantillons valides
+                       ! au meme moment.
+                      heuremax = max( heures, heuremax )
+                      heuremin = min( heures, heuremin )
+                      heures = heuremax - heuremin
+                      deltat = 0.0
+                  end if
+              end if
+
+
+          else if (OldIP3)                                 then
+
+              call difdatr( datevf,datevi,heures )
+              
+              if (ii == start)                             then
+                  heuremin = 0 ; heuremax = heures
               else 
                   heuremax = max( heures, heuremax )
-                  heuremin = min( heures, heuremin )
               end if
 
           else
@@ -1105,9 +1209,10 @@
           call quit( ' Fstmdiag ',8 )
       end if
 
-      ! Finaliser les calculs.
+      ! Finaliser les calculs si on a un seule enregistrements,
+      ! sauf si on a trouve un ancien format de moyenne temporelle
 
-      if (nr == 1) goto 200 ! Sauver le champs d'entree tel quel !
+      if (nr == 1 .and. .not.OldIP3) goto 200 ! Sauver le champs d'entree tel quel !
 
       moyenne  = moyenne/ns
 
@@ -1121,13 +1226,15 @@
       ! Mettre a jour les descripteurs temporels.
 
       dateo = datevi
-      call difdatr( datevf,datevi,heures )
+      if (.not.OldIP3) call difdatr( datevf,datevi,heures )
 
       if (ns > 1)                                          then
           if (deltat > 0.0_8 .and. &
               heures*720 == deltat*(ns-1)*720)             then
               deet = nint( deltat*3600. )
-              npas = ns-1
+              npas = ns-1 ; Complet = Vrai
+          else if (datevi == datevf)                       then
+              npas = 0 ; deet = 0 ; dateo = datev0
           else if (nint( heures*720, 8 ) == nint( heures, 8 )*720) then ! difference < 5s
               npas = nint( heures )
               deet = 3600
@@ -1142,45 +1249,65 @@
 
       ! Est-ce qu'il manques des echantillons ?
       ! Faire les comparaisons des blocs de 5 secondes.
-      vip2 = ns*deltat ; heures_5 = nint( (ns-1)*dble( deet )/5., 8 )
-      Complet = ((heures_5 == nint( (HIVAL   -LOVAL)   *720._8, 8 )) &
-        .or.     (heures_5 == nint( (heuremax-heuremin)*720._8, 8 )))
+      if (datevf == datevi)                                then
+         vip2 = heuremax-heuremin
+      else
+         vip2 = ns*deltat ; heures_5 = nint( (ns-1)*dble( deet )/5., 8 )
+      end if
+      Complet1 = (Complet &
+        .and.   (heures_5 == nint( (HIVAL   -LOVAL)   *720._8, 8 )))
+      Complet2 = (Complet &
+        .and.   (heures_5 == nint( (heuremax-heuremin)*720._8, 8 )))
 
       Format1='("1) Complet, Variable, IP1,NS, VIP2,HIVAL,LOVAL=",L1,1x,A,2I9,3F15.6)'
       if (Info) write(6,Format1) Complet,trim( chaine(ii) ),niveau(ii),NS,vip2,HIVAL,LOVAL
       Format1='("2) heuremax,heuremin, heures, Deltat=",4E23.15)'
       if (Info) write(6,Format1) heuremax,heuremin,heures,Deltat
 
-      if (Complet)                                         then
-          if (HIVAL > LOVAL .and. RANGE_KIND == KIND_HOURS)then
-              ! Re-Coder (HIVAL,LOVAL) dans (IP2,IP3)
-              RP1%hi = vip1  ; RP1%lo = vip1  ; RP1%kind = k1
-              RP2%hi = HIVAL ; RP2%lo = LOVAL ; RP2%kind = KIND_HOURS
-              stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 ) 
-              if (stat == CONVERT_ERROR)                   then
-                 write(6,6614) stat,RP1%hi,RP1%lo,RP1%kind, &
-                                    RP2%hi,RP2%lo,RP2%kind
-                 ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
-                 if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
-                 call quit( ' Fstmdiag ',14 )
-             end if
-             npas = ns-1 ; deet = nint( 3600*(HIVAL-LOVAL)/npas )
-          else &
-          if (.not.NoIP3 .and. &
-              heuremax > heuremin .and. RANGE_KIND == -1)  then
-              ! Coder (heuremax,heuremin) dans (IP2,IP3)
-              RP1%hi = vip1     ; RP1%lo = vip1    ; RP1%kind = k1
-              RP2%hi = heuremax ; RP2%lo =heuremin ; RP2%kind = KIND_HOURS
-              stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 )
-              if (stat == CONVERT_ERROR)                   then
-                 write(6,6614) stat,RP1%hi,RP1%lo,RP1%kind, &
-                                    RP2%hi,RP2%lo,RP2%kind
-                 ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
-                 if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
-                 call quit( ' Fstmdiag ',14 )
-              end if
-              npas = ns-1 ; deet = nint( 3600*(heuremax-heuremin)/npas )
+      if (Complet1 .and.&
+          HIVAL > LOVAL .and. RANGE_KIND == KIND_HOURS)    then
+          ! Re-Coder (HIVAL,LOVAL) dans (IP2,IP3)
+          RP1%hi = vip1  ; RP1%lo = vip1  ; RP1%kind = k1
+          RP2%hi = HIVAL ; RP2%lo = LOVAL ; RP2%kind = KIND_HOURS
+          stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 ) 
+          if (stat == CONVERT_ERROR)                       then
+              write(6,6614) stat,RP1%hi,RP1%lo,RP1%kind, &
+                                 RP2%hi,RP2%lo,RP2%kind
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
+              call quit( ' Fstmdiag ',14 )
           end if
+          npas = ns-1 ; deet = nint( 3600*(HIVAL-LOVAL)/npas )
+      else &
+      if (Complet2 .and. .not.NoIP3 .and. &
+          heuremax > heuremin .and. &
+         (RANGE_KIND == -1 .or. RANGE_KIND == KIND_HOURS)) then
+          ! Coder (heuremax,heuremin) dans (IP2,IP3)
+          RP1%hi = vip1     ; RP1%lo = vip1    ; RP1%kind = k1
+          RP2%hi = heuremax ; RP2%lo =heuremin ; RP2%kind = KIND_HOURS
+          stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 )
+          if (stat == CONVERT_ERROR)                       then
+              write(6,6614) stat,RP1%hi,RP1%lo,RP1%kind, &
+                                 RP2%hi,RP2%lo,RP2%kind
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
+              call quit( ' Fstmdiag ',14 )
+          end if
+          npas = ns-1 ; deet = nint( 3600*(heuremax-heuremin)/npas )
+      else &
+      if (Complet .and. .not.NoIP3)                        then
+          ! Coder (heures,0.0) dans (IP2,IP3)
+          RP1%hi = vip1   ; RP1%lo = vip1 ; RP1%kind = k1
+          RP2%hi = heures ; RP2%lo = 0.0  ; RP2%kind = KIND_HOURS
+          stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 )
+          if (stat == CONVERT_ERROR)                       then
+              write(6,6614) stat,RP1%hi,RP1%lo,RP1%kind, &
+                                 RP2%hi,RP2%lo,RP2%kind
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
+              call quit( ' Fstmdiag ',14 )
+          end if
+          npas = ns-1 ; deet = nint( 3600*(heures/npas) )
       else &
       if (NoIP3                     .or. &
          (RANGE_KIND /= KIND_HOURS .and. RANGE_KIND >= 0)) then
@@ -1346,6 +1473,8 @@
  6614 format(/'   Erreur=',I3,' dans ENCODE_ip, RP1=',2p4e14.6,I3/ &
                                            31x,'RP2=',2p4e14.6,I3/)
  6015 format(/"   Trop grand nombre d'echantillons =",I11,' > 254903968'/)
+ 6016 format(/'   OldIP3=T et enregistrement ',I5,' contient RANGE_KIND=',I2/ &
+              '   IP1,IP2,IP3 = ',3I10/)
 
  6100 format(//4x,' NR TV NAME ETIKET',19x,'LEV',5x,'NI',4x,'NJ', &
             11x,'MIN',11x,'MAX',10x,'MEAN',6x,'VARIANCE'//)

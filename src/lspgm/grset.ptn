@@ -223,38 +223,31 @@
 *-----------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
+      REAL*8      HOURS,TIM
       CHARACTER*10 CLEVP(MAXLEV)
-      LOGICAL     OK,DEF,BIGF,LAST
-      CHARACTER   LIGNE*80,NAME*4,VTYP*16
-      REAL        G,TWOPI,ZERO,OMEG,P,CLJ,
+      LOGICAL     OK,DEF,BIGF,LAST 
+      REAL        TWOPI,OMEG,P,CLJ,
      +            A,B,C,D,RK,PR(MAXLEV),RLON
-      REAL*8      SL,WL,CL,RADL,WOSSL,HOURS,TIM
-      INTEGER     LVL(MAXLEV),HEAD,JBUF(taille_entete),I,J,K,L,ILG1,
-     +            ILATH,IBUF,NF,NSETS,ILEV,ILG,ILAT,
+      CHARACTER*4 LIGNE*80,VTYP*16,NAME,PKTYP
+      INTEGER     LVL(MAXLEV),JBUF(HEAD),I,J,K,L,ILG1,
+     +            ILATH,NF,NSETS,ILEV,ILG,ILAT,IJ,
      +            NPACK,LEN,NWDS,JPAK,MAXW,NT,DEET,
      +            IER,IO,LIM1,LIM2,VKIND,VK,DEBUT,
-     +            YYYYMMDD,HHMMSS,stamp
+     +            YYYYMMDD,HHMMSS,STAMP
 
-      POINTER   ( IG,     G(1) )
-      POINTER   ( IB,  IBUF(8) )
+      REAL,       DIMENSION(:), ALLOCATABLE :: G
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      REAL(8),    DIMENSION(:), ALLOCATABLE :: SL,WL,CL,RADL,WOSSL
 
-      POINTER   ( ISL,   SL(1) )
-      POINTER   ( IWL,   WL(1) )
-      POINTER   ( ICL,   CL(0:1) )
-      POINTER   ( IRL, RADL(1) )
-      POINTER   ( IOL,WOSSL(1) )
-
-      LOGICAL     RPBLOC
-      INTEGER     GETKIND,newdate
-      CHARACTER*4 GETYP,PKTYP,GETKINDC*16
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETKIND,NEWDATE
+      CHARACTER*4,EXTERNAL :: GETYP,GETKINDC*16
       EXTERNAL    MACSPE,JCLPNT,GETLIGN,XIT,BURNF,
-     +            SETLAB,LBLCHK,HPALLOC,GAUSSG,
-     +            TRIGL,PUTFLD2,CONVPR,WRITLEV,GETYP,
-     +            RPBLOC,PUTHIGH,GETKIND,GETKINDC,
-     +            newdate
+     +            SETLAB,LBLCHK,GAUSSG,PUTHIGH,
+     +            TRIGL,PUTFLD2,CONVPR,WRITLEV
  
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -274,10 +267,6 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/grset.ptn,v $'
 
 *-----------------------------------------------------------------------
-***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
-
-      CALL MACSPE( HEAD,ZERO )
-
 ***    ACCEDER LES FICHIERS D'E/S.
 
                    NF = 3
@@ -529,20 +518,32 @@
       CALL SETLAB( JBUF, 'GRID',0,NAME,0,ILG1,ILAT,0,NPACK )
       CALL LBLCHK( LEN, NWDS,JPAK,JBUF )
 
+      IF (PKTYP.EQ.'SQ')                                 THEN
+          CALL PUTHIC( 'G'   ,'GRTYP' ,JBUF )
+          CALL PUTHIGH( 5    ,'DATYP' ,JBUF )
+          CALL PUTHIGH( 0    ,'IG1'   ,JBUF )
+          CALL PUTHIGH( 0    ,'IG2'   ,JBUF )
+          CALL PUTHIGH( 0    ,'IG3'   ,JBUF )
+          CALL PUTHIGH( 0    ,'IG4'   ,JBUF )
+          CALL PUTHIC( 'A'   ,'TYPVAR',JBUF )
+          CALL PUTHIC( 'ANAL','ETIK1' ,JBUF )
+          CALL PUTHIC( 'YSIS','ETIK2' ,JBUF )
+          CALL PUTHIC( '    ','ETIK3' ,JBUF )
+          CALL PUTHIC( '    ','ETIK4' ,JBUF )
+          CALL PUTHIC( '    ','NEWL'  ,JBUF )
+          CALL PUTHIC(  NAME ,'NAME'  ,JBUF )
+          CALL PUTHIR(  0.0  ,'HIVAL' ,JBUF )
+          CALL PUTHIR(  0.0  ,'LOVAL' ,JBUF )
+      END IF
+
       MAXW = LEN-HEAD
 
-      CALL HPALLOC( IB,LEN, IER,0 )
-      CALL HPALLOC( IG,NWDS,IER,0 )
+      ! Allocate working arrays.
 
-***    DEFINE GAUSSIAN POINTERS. NOTE THAT THESE REFLECT REAL*8
-***    QUANTITIES AND SHOULD ONLY BE ACCESSED THROUGH SUCH MEANS
-***    AS THE 'DOUBLE' FUNCTION.
+      ALLOCATE( IBUF(LEN),G(NWDS), SL(ILAT),WL(ILAT),
+     +          CL(ILAT),RADL(ILAT),WOSSL(ILAT), STAT=IER )
 
-      CALL HPALLOC( ISL,ILAT,IER,8 )
-      CALL HPALLOC( IWL,ILAT,IER,8 )
-      CALL HPALLOC( ICL,ILAT,IER,8 )
-      CALL HPALLOC( IRL,ILAT,IER,8 )
-      CALL HPALLOC( IOL,ILAT,IER,8 )
+      ! Define GAUSSIAN grid parameters.
 
       CALL GAUSSG( ILATH, SL,WL,CL,RADL,WOSSL )
       CALL TRIGL ( ILATH, SL,WL,CL,RADL,WOSSL )
@@ -568,24 +569,26 @@
       END IF
 
       DO 310 NT=DEBUT,NSETS-1
-         TIM = NT
+         TIM = NT ; IJ = 0
 
          DO 310 L=1,ILEV
             P = PR(L)
 
-            DO 210 J=0,ILAT-1
+            DO 210 J=1,ILAT
                CLJ = CL(J)
 
                DO 200 I=1,ILG
-                  RLON=FLOAT(I-1)
+                  IJ = IJ+1 ; RLON=FLOAT(I-1)
 
-                  G(J*ILG1+I) = A + B*P 
+                  G(IJ) = A + B*P 
      +        + ( C + D*P ) * ( SIN(OMEG*TIM) + 2.0*SIN(RK*RLON) ) * CLJ
 
   200          CONTINUE
 
-               IF (ILG.NE.ILG1)
-     +         G(J*ILG1+ILG1) = G(J*ILG1+1)
+               IF (ILG /= ILG1)                                THEN
+                   IJ = IJ+1
+                   G(IJ) = G((J-1)*ILG1+1) 
+               END IF
 
   210       CONTINUE
 
