@@ -1759,7 +1759,9 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
       RANGE_KIND = GETHIGH( 'RKIND',IBUF )
 
-      COMPLET = ( ((NPAS)*dble( deet )/3600.) == dble( HIVAL-LOVAL ) )
+      ! Comparaison a 5 seconds pres
+      COMPLET = ( NINT( NPAS*dble( deet )/5, 8) ==
+     +            NINT( dble( HIVAL-LOVAL )*720., 8) )
 
       IF (COMPLET .and. HIVAL > LOVAL .and.
      +   (RANGE_KIND == -1 .or. RANGE_KIND == KIND_HOURS))                         THEN
@@ -1785,19 +1787,20 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
      +                           kIND_SAMPLES,+2,NULS,.FALSE. )
           CALL PUTHIGH( IP2,'IP2',IBUF )
       ELSE
-     +IF (NSAMPZ < 10 000 000)                                                     THEN 
+     +IF (NSAMPZ < 2 000 000)                                                     THEN 
           ! HIVAL = LOVAL et IP2 et IP3 sont "libres". On place
           !  le nombre d'echantillons code en mode KIND_SAMPLES
           !  dans IP3 et IP2=NSAMPZ*DEET ou on suppose que DEET
           !  contient l'interval entre les echantillons
           deet = GETHIGH('DEET',IBUF ) ; HOLD = NSAMPZ*DBLE( DEET )/3600.
-          CALL Diag_CONVIP_plus( IP2,HOLD,kIND_HOURS,+2,NULS,.FALSE. )
+          IF (HOLD <= 1000000.)
+     +    CALL Diag_CONVIP_plus( IP2,HOLD,kIND_HOURS,+2,NULS,.FALSE. )
           CALL Diag_CONVIP_plus( IP3,FLOAT( NSAMPZ ),
      +                           kIND_SAMPLES,+2,NULS,.FALSE. )
           CALL PUTHIGH( IP2,'IP2',IBUF )
           CALL PUTHIGH( IP3,'IP3',IBUF )
       ELSE
-     +IF (10 000 000 <= NSAMPZ .AND. NSAMPZ < 254903968)                           THEN
+     +IF (2 000 000 <= NSAMPZ .AND. NSAMPZ < 254903968)                           THEN
           ! Ecrire NSAMPZ en format non-code dans IP3. IP2 = 0
           IP3 = NSAMPZ ; IP2 = 0
           CALL PUTHIGH( IP2,'IP2',IBUF )

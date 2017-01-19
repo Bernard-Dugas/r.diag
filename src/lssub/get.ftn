@@ -2056,7 +2056,7 @@ C     END IF
  6012 FORMAT(' Getmset2: Stripping CHAR and LABL records from input.')
 
       END
-      SUBROUTINE getmset3 (NF, G, SET,NIP3,RKIND,HIVAL,LOVAL,NSET,
+      SUBROUTINE getmset3 (NF, G, SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
      +                            LEV,VARIAB,STEP, IBUF,MAXPK,OK )
 
 ***    Juin 2009 - B.Dugas, RPN.
@@ -2067,7 +2067,11 @@ C     END IF
 ***    niveaux correspondant se trouve dans les champs
 ***    d'entree VARIAB et LEV, respectivement.
 
-***    P/R a getmset2, cette routine retourne les valeurs de IP3.
+***    P/R a getmset2, cette routine retourne 1) le nombre d'echantillons
+***    associe aux moyennes NSAMP, le cas echeant, 2) le type de codage
+***    des IP1/2/3 rencontre, RKIND, et enfin 3) les bornes de l'interval
+***    temporel correspondant aux moyennes temporelles, HIVAL et LOVAL
+***    et ce, encore une fois, le cas echeant.
 
       IMPLICIT    none
 
@@ -2079,7 +2083,7 @@ C     END IF
       CHARACTER * ( * ) VARIAB(*)
       INTEGER     NF,NSET,MAXPK
       REAL        G(*),HIVAL(*),LOVAL(*)
-      INTEGER     SET(0:*),NIP3(*),RKIND(*),LEV(*),IBUF(*),STEP(*)
+      INTEGER     SET(0:*),NSAMP(*),RKIND(*),LEV(*),IBUF(*),STEP(*)
       
 ***    Variables locales.
 
@@ -2087,7 +2091,7 @@ C     END IF
       LOGICAL     IO64B,MVALUE,LVAL
       REAL(8)     G8,EPSILON,MISFLAG
       CHARACTER(4) NOM,KIND,RECABT,HNEWL
-      INTEGER     JBUF(HEAD)
+      INTEGER     JBUF(HEAD),IPM
       INTEGER     POSIT,I,J,K,NWDS,NR,TIME,NIV,NLEV
       CHARACTER   NIV_S*15,MESSAG*10,ZHOLD*80
 
@@ -2225,8 +2229,8 @@ C     END IF
                   GOTO 200
               END IF
 
-              ! Determiner le nombre d'echantillons NIP3
-              NIP3(I) = GETSAMPLZ( RKIND(I),HIVAL(I),LOVAL(I), IBUF )
+              ! Determiner le nombre d'echantillons NSAMP
+              NSAMP(I) = GETSAMPLZ( RKIND(I),HIVAL(I),LOVAL(I),IPM, IBUF )
 
 ***            COMPARER LES NIVEAUX LUS ET SPECIFIE EN ENTREE.
 
@@ -2346,10 +2350,9 @@ C     END IF
      +                KIND,TIME,NOM,NIV, IBUF,MAXPK,OK )
                   END IF
 
-                  ! Determiner le nombre d'echantillons NIP3
+                  ! Determiner le nombre d'echantillons NSAMP
                   IF (J == SET(I-1)+1)
-     +            NIP3(I) = GETSAMPLZ( RKIND(I),HIVAL(I),LOVAL(I),IBUF )
-                      
+     +            NSAMP(I) = GETSAMPLZ( RKIND(I),HIVAL(I),LOVAL(I),IPM,IBUF )
 
                   ZLABEL = ZHOLD
 
@@ -3906,7 +3909,20 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
  6001 FORMAT(' Gethir: unknown character parameter name ',A)
 
       END
-      INTEGER FUNCTION GETSAMPLZ( RKIND,HIVAL,LOVAL, IBUF )
+      INTEGER FUNCTION GETIPMODE( IBUF )
+
+      INTEGER, EXTERNAL :: GETSAMPLZ
+
+      INTEGER NSAMPZ,RKIND,IPMODE,IBUF(*)
+      REAL    HIVAL,LOVAL
+
+      NSAMPZ = GETSAMPLZ( RKIND,HIVAL,LOVAL,IPMODE, IBUF )
+
+      GETIPMODE = IPMODE
+
+      RETURN
+      END
+      INTEGER FUNCTION GETSAMPLZ( RKIND,HIVAL,LOVAL,IPMODE, IBUF )
 
       ! Objet:
       ! Cherche a determiner le nombre d'echantillons qui a pu
@@ -3935,15 +3951,18 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
       ! Arguments
 
       INTEGER,     INTENT(IN)  :: IBUF(*)
-      INTEGER,     INTENT(OUT) :: RKIND
+      INTEGER,     INTENT(OUT) :: RKIND,IPMODE
       REAL,        INTENT(OUT) :: HIVAL,LOVAL
 
       ! Variables locales
 
-      REAL         VIP2,VIP3
-      REAL(8)      TIME_RANGE,NPASP1_DEET
-      INTEGER      IP1,IP2,IP3, NPAS,DEET,IKIND, NSAMPZ
-      CHARACTER(4) NULS,PKTYP
+      REAL(8)      TDIFF
+      REAL         VIP2,VIP3,HEURES
+      INTEGER(8)   TIME_RANGE,VIP2_5,
+     +             NPAS_DEET,  NPAS_DEET60,  NPAS_DEET3600,
+     +             NPASP1_DEET,NPASP1_DEET60,NPASP1_DEET3600
+      INTEGER      IP1,IP2,IP3, NPAS,DEET,IKIND, NSAMPZ, DATEO,DATEV, IPM
+      CHARACTER(2) NULS,PKTYP
 
       CHARACTER(4),EXTERNAL :: GETHIC
       INTEGER,     EXTERNAL :: GETHIGH
@@ -3951,13 +3970,14 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
 !------------------------------------------------------------------------------
       NSAMPZ = 1 ! Initialiser au cas on le decodage ne donne rien
+      IPMODE =-1
 
-      PKTYP = GETHIC('PKTYP',IBUF ) ; PKTYP(3:4) = '  '
+      PKTYP = GETHIC('PKTYP',IBUF )
 
       IF (PKTYP /= 'SQ')                                       THEN
           ! Comparer IBUF(2) a la plus petite valeur
           ! associee a un "DATE-TIME STAMP group" valide.
-          IF (IBUF(2) < 01 01 00 01 0) NSAMPZ = IBUF(2)
+          IF (IBUF(2) < 01 01 00 01 0) GETSAMPLZ = IBUF(2)
           RETURN
       END IF
 
@@ -3967,20 +3987,49 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
       HIVAL = GETHIR ('HIVAL',IBUF )
       LOVAL = GETHIR ('LOVAL',IBUF )
 
-      DEET = GETHIGH('DEET',IBUF ) ; NPAS = GETHIGH('NPAS',IBUF )
+      DATEO = GETHIGH('DATEO',IBUF )
+      DEET  = GETHIGH('DEET',IBUF )
+      NPAS  = GETHIGH('NPAS',IBUF )
 
-      NPASP1_DEET =  (NPAS+1)*DBLE( DEET )
+      HEURES = 0.
+
+      NPAS_DEET   = 0 ; NPAS_DEET60   = 0 ; NPAS_DEET3600   = 0
+      NPASP1_DEET = 0 ; NPASP1_DEET60 = 0 ; NPASP1_DEET3600 = 0
+
+      IF (DEET > 0.)                                           THEN
+          NPAS_DEET   = NINT(  NPAS   *DBLE( DEET )/5., 8 )
+          NPASP1_DEET = NINT( (NPAS+1)*DBLE( DEET )/5., 8 )
+          HEURES = NPAS*(DBLE( DEET )/60.)/60.
+          IF (MOD( NPAS,60 ) == 0 .AND. NPAS/60 /= 0) THEN
+             NPASP1_DEET60 = NINT( ((NPAS/60)+1)*DBLE( DEET*60 ) / 5, 8 )
+             NPAS_DEET60   = NINT(  (NPAS/60)   *DBLE( DEET*60 ) / 5, 8 )
+          END IF
+          IF (MOD( NPAS,3600 ) == 0 .AND. NPAS/3600 /= 0) THEN
+             NPASP1_DEET3600 = NINT( ((NPAS/3600)+1)*DBLE( DEET*3600 ) / 5, 8 )
+             NPAS_DEET3600   = NINT(  (NPAS/3600)   *DBLE( DEET*3600 ) / 5, 8 )
+          END IF
+      END IF
+          
+      IF (RKIND >=0) IPMODE = 1
 
       IF (RKIND == KIND_HOURS)                                 THEN
 
           ! Interval de temps.
           !  On suppose que c'est le debut d'un interval deja
           !  moyenne lorsque (HIVAL-LOVAL) corresponds a
-          !  (NPAS+1)*DEET a la seconde pres.
+          !  (NPAS+1)*DEET a 5 secondes pres.
 
-          TIME_RANGE = (HIVAL-DBLE( LOVAL ))*3600.0
+          TIME_RANGE = NINT( (HIVAL-DBLE( LOVAL ))*720., 8 )
 
-          IF (ABS( NPASP1_DEET-TIME_RANGE ) < 1._8) NSAMPZ = NPAS+1
+          IF (NPAS_DEET     == TIME_RANGE)                     THEN
+              NSAMPZ = NPAS+1
+          ELSE
+     +    IF (NPAS_DEET60   == TIME_RANGE)                     THEN
+              NSAMPZ = (NPAS/60)+1
+          ELSE
+     +    IF (NPAS_DEET3600 == TIME_RANGE)                     THEN
+              NSAMPZ = (NPAS/3600)+1
+          END IF
 
       ELSE IF (RKIND /= -1)                                    THEN
 
@@ -3989,39 +4038,49 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
           !  ou bien en un nombre d'echantillons ?
 
           IP2 = GETHIGH( 'IP2',IBUF )
+          CALL Diag_CONVIP_plus( IP2,VIP2,IKIND,-2,NULS,.FALSE. )
+          VIP2_5 = NINT( VIP2*720._8, 8 )
 
-          IF (IP2 <= 32767 .AND. IP2 == NPAS+1)                THEN
+          IF (IKIND == KIND_HOURS)                             THEN
 
-              ! Non. Codage de type OLD-STYLE. On suppose
-              ! qu'on a mis le nombre d'echantillon dans IP2
-              ! lorsque IP2 = NPAS+1
-
-              NSAMPZ = IP2
-
-          ELSE ! Codage NEW-STYLE. Decoder IP2
-
-              CALL Diag_CONVIP_plus( IP2,VIP2,IKIND,-2,NULS,.FALSE. )
-
-              IF (IKIND == KIND_SAMPLES)                       THEN
-
-                  ! IP2 est deja code en nombre d'echantillons
-                  NSAMPZ = NINT( VIP2 )
-
-              ELSE IF (IKIND == KIND_HOURS)                    THEN
-
-                  IF (ABS( NPASP1_DEET-VIP2*3600._8 ) < 1._8)  THEN
-                      ! IP2 est encode en heures et cette derniere
-                      !  valeur est egale a (NPAS+1)*DEET/3600
-                      NSAMPZ = NPAS+1
-                  END IF
-
+              ! IP2 est encode en heures et cette derniere
+              !  valeur est egale a (NPAS+1)*DEET/3600 
+              IF (NPASP1_DEET     == VIP2_5)                   THEN
+                  NSAMPZ = NPAS+1
+              ELSE
+     +        IF (NPASP1_DEET60   == VIP2_5)                   THEN
+                  NSAMPZ = (NPAS/60)+1
+              ELSE
+     +        IF (NPASP1_DEET3600 == VIP2_5)                   THEN
+                  NSAMPZ = (NPAS/3600)+1
               END IF
+
+          ELSE IF (IKIND == KIND_SAMPLES)                      THEN
+
+              ! IP2 est deja code en nombre d'echantillons
+              NSAMPZ = NINT( VIP2 )
+
+          ELSE
+
+              ! Codage de type OLD-STYLE. On suppose qu'on
+              ! a mis le nombre d'echantillon dans IP2
+              ! lorsque IP2 = NPAS+1
+              IF (IP2 == NPAS+1
+     +       .OR.(IP2 == (NPAS/60)+1    .AND.
+     +            MOD( NPAS,60 ) == 0)
+     +       .OR.(IP2 == (NPAS/3600)+1  .AND.
+     +            MOD( NPAS,3600 ) == 0))                      THEN
+                  NSAMPZ = IP2
+              END IF
+
+              IF (NSAMPZ > 1) IPMODE = 0
 
           END IF
 
-      ELSE ! IP3 est "libre". On suppose qu'il contient alors
-           !  un nombre d'echantillons, possiblement code en
-           !  mode KIND_SAMPLES. Sinon, on ignore tout codage
+      ELSE ! IP3 est "libre". On suppose qu'il contient alors un
+           !  nombre d'echantillons, possiblement code en mode
+           !  KIND_SAMPLES. Sinon, on ignore tout codage et
+           !  on est en mode de compatibilite arriere
 
           IP3 = MAX( 1, GETHIGH( 'IP3',IBUF ) )
 
@@ -4030,14 +4089,16 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
               CALL Diag_CONVIP_plus( IP3,VIP3,IKIND,-2,NULS,.FALSE. )
 
               IF (IKIND == KIND_SAMPLES)                       THEN
-                  NSAMPZ = NINT( VIP3 )
+                  NSAMPZ = NINT( VIP3 ) ; IPMODE = 1
               ELSE
-                  NSAMPZ = IP3 ! Mode compatibilite arriere (partie 1)
+                  ! Mode compatibilite arriere (partie 1)
+                  NSAMPZ = IP3 ; LOVAL = 0. ; HIVAL = HEURES ; IPMODE = 0
               END IF
 
-          ELSE ! Pas de codage. On prends IP3 tel quel
+          ELSE IF (IP3 > 1)                                    THEN
 
-              NSAMPZ = IP3 ! Mode compatibilite arriere (partie 2)
+              ! Mode compatibilite arriere (partie 2)
+              NSAMPZ = IP3 ; LOVAL = 0. ; HIVAL = HEURES ; IPMODE = 0
 
           END IF
 
@@ -4047,5 +4108,6 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
       RETURN
 !------------------------------------------------------------------------------
+ 6001 FORMAT(' New- and Old-style IP1/2/3 coding detected in data.')
 
       END FUNCTION GETSAMPLZ

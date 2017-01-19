@@ -93,22 +93,23 @@
 *-----------------------------------------------------------------------------
       IMPLICIT     none
 
-      INTEGER      MAXLEV
-      PARAMETER  ( MAXLEV = 999 )
+      INTEGER,     PARAMETER :: HEAD = taille_entete
+      INTEGER,     PARAMETER :: MAXLEV = 999
 
       LOGICAL      OK
-      REAL         FACT
-      CHARACTER*4  NSD,TYPE,NAME
-      INTEGER      JBUF(taille_entete),NWDS,MAXW,LEN,JPAK,NF,
-     +             LEV(MAXLEV),NLEV,NLEVB,I,IER,NREC,N
+      REAL(8)      FACT
+      REAL         HI,LO
+      CHARACTER(4) NSD,TYPE,NAME,PKTYP*2
+      INTEGER      JBUF(HEAD),NWDS,MAXW,LEN,JPAK,NF,RK,IER,
+     +             LEV(MAXLEV),NLEV,NLEVB,I,NREC,N,IPMODE
 
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
-      REAL,       DIMENSION(:), ALLOCATABLE :: X
+      REAL(8),    DIMENSION(:), ALLOCATABLE :: X
 
-      INTEGER      GETSIZ2,GETHIGH
-      CHARACTER    PKTYP*2,GETYP*4
-      EXTERNAL     JCLPNT,GETSIZ2,GETSET2,PUTSET2,
-     +             CMPLBL,XIT,GETYP,GETHIGH
+      LOGICAL,     EXTERNAL :: SETIO64
+      CHARACTER(4),EXTERNAL :: GETYP*4
+      INTEGER,     EXTERNAL :: GETSIZ2,GETSAMPLZ
+      EXTERNAL     JCLPNT,GETSET2,PUTSET2,CMPLBL,XIT
 
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
@@ -128,6 +129,10 @@
 ***    RETREIVE FILE TYPE.
 
       PKTYP = GETYP( 1 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
 
 ***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF DATA INFO BUFFERS.
 
@@ -160,7 +165,7 @@
 ***        IGNORE LABEL OR CHARACTER RECORDS.
 
           WRITE(TYPE,4) IBUF(1)
-          IF (TYPE.EQ.'LABL' .OR. TYPE.EQ.'CHAR') GOTO 100
+          IF (TYPE == 'LABL' .OR. TYPE == 'CHAR') GOTO 100
 
 ***        CHECK SIZES.
 
@@ -170,22 +175,22 @@
 ***        IBUF(2) OR IP3 CONTAINS THE SAMPLE SIZE.
 
                              N = IBUF(2)
-          IF (PKTYP.EQ.'SQ') N = GETHIGH('IP3',IBUF )
+          IF (PKTYP == 'SQ') N = GETSAMPLZ( RK,HI,LO,IPMODE, IBUF )
 
-          IF (N.LE.1)                                          THEN 
+          IF (N <= 1)                                          THEN 
               NREC = NREC+1 
               WRITE(6,6030) NREC ; CALL PRTLAB( IBUF )
               CALL                                 XIT('  Vbasd ',-3 )
           END IF
 
-          FACT = SQRT( FLOAT( N )/FLOAT( N-1 ) ) 
+          FACT = SQRT( DBLE( N )/DBLE( N-1 ) ) 
 
           DO  I=1,NWDS*NLEV
               X(I) = FACT*SQRT( X(I) )
           END DO
 
                                  WRITE(NAME,0004) IBUF(3)
-          IF (NAME(1:2).EQ.'CO') READ (NSD, 0004) IBUF(3)
+          IF (NAME(1:2) == 'CO') READ (NSD, 0004) IBUF(3)
 
           CALL PUTSET2( 2, X, LEV,NLEV, IBUF,MAXW ) 
 

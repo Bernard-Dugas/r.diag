@@ -7,7 +7,7 @@
 !  fstmdiag -s source1 [source2 [sources3 ... ]] \ 
 !          [-d destination] [-info [valeur]] \ 
 !          [-e] [-f] [-nobox] [-help] [-stats]   \ 
-!          [-oldip3] [-noip3] [-novar]
+!          [-noip3] [-novar]
 !        
 !
 !
@@ -34,24 +34,14 @@
 !  s         Fichiers sources (jusqu'a nombre_maximal_de_fichiers fichiers)
 !  d         Entete commune des fichiers destinations. Ces deux
 !            fichiers (*_moyenne et *_variance) ne doivent pas
-!            exister a l'entree, sauf si la cle f est egalement
+!            exister a l'entree, sauf si la cle -f est egalement
 !            specifiee. Par defaut, d = s.
 !  novar     Ne pas calculer les variances, seulement les moyennes
 !  info      Niveau des messages retournes (ERRORS/INFORM/DEBUG).
 !  nobox     Ne pas imprimer de boites d'informations.
 !  stats     Imprimer des statistiques sur les resultats
 !  help      Afficher ce texte sur stdout et quitter.
-!  noip3     Ne pas utiliser IP3 pour sauver le nombre d'echantillons.
-!  oldip3    Les donnees lues sont des moyennes produites selon le
-!            mode anterieur, i.e. le nombre d'echantillons ayant
-!            ete utilise lors du calcul se trouve dans IP3
-!            et ce, dans un format non-code. Avertissement:
-!               **************************************
-!              **** Toutes les donnees lues seront ****
-!              **** alors traitees en consequence  ****
-!               **************************************
-!            Cette cle ne peut etre specifiee si un des fichiers
-!            d'entree contient un intervalle code via les IP1/2/3
+!  noip3     Ignorer IP3 pour lire et/ou sauver le nombre d'echantillons.
 !  f         Forcer la re-ecriture du (ou des) fichier(s) de sortie. 
 !
 !
@@ -70,9 +60,9 @@
 !      11 Probleme avec deet,npas en sortie
 !      12 Plus d'un type de fichier d'entree
 !      13 Incapable de lier les fichiers d'entree
-!      14 DIAG_DECODE_ip/DIAG_ENCODE_ip error 
+!      14 Erreur dans DECODE_ip/ENCODE_ip
 !      15 Incapable de coder le nombre d'echantillons
-!      16 Inconsistance: OldIP3 specifie et RANGE_KIND >= 0
+!      16 Melange de nouveau et ancien codage des IP1/2/3
 !
 # endif
 #     if defined (RDIAG_LICENCE)
@@ -129,7 +119,7 @@
   ! *****
 
   integer,      parameter :: NBRFICH = nombre_maximal_de_fichiers
-  integer,      parameter :: NBRARGS = 9, NBRCLE = NBRFICH+NBRARGS+1
+  integer,      parameter :: NBRARGS = 8, NBRCLE = NBRFICH+NBRARGS+1
 
   integer ::    NMAX=2000,start
 
@@ -171,9 +161,9 @@
 
   logical       Complet, Complet1, Complet2, Sample
   logical       Vrai,Faux, box, Elim, Forc, NoIP3, NoVar, OldIP3, Stats
-  integer ::    i,ii,ier,io,ipos, icle, ibuf(1), iu1(NBRFICH),iu2=0,iu3=0, &
-                datevi,datevf,dateosp, ip2tot, key, nil, mdiag, &
-                nr,nref,ns, nwds,nwds0=-1
+  integer ::    i,ii,ier,io,iter, ipos,icle, ibuf(1), iu1(NBRFICH), &
+                iu2=0,iu3=0, datevi,datevf,dateosp, ip2tot, key, &
+                nil, mdiag, nr,nref,ns, nwds,nwds0=-1
 
   real,         dimension(:), allocatable :: buff
   real(8),      dimension(:), allocatable :: buff8,moyenne,variance
@@ -214,7 +204,7 @@
   ! Parametres d'appel:
   ! ------------------
 
-  ! NBRARGS=9 Arguments generaux
+  ! NBRARGS=8 Arguments generaux
   data cles(01)/'D.'    /,def1(01)/' '   /,def2(01)/'TAPE2'  /, &
        cles(02)/'INFO'  /,def1(02)/'NON' /,def2(02)/'OUI' /, &
        cles(03)/'NOBOX' /,def1(03)/'NON' /,def2(03)/'OUI' /, &
@@ -222,8 +212,8 @@
        cles(05)/'F'     /,def1(05)/'NON' /,def2(05)/'OUI' /, &
        cles(06)/'STATS' /,def1(06)/'NON' /,def2(06)/'OUI' /, &
        cles(07)/'NOVAR' /,def1(07)/'NON' /,def2(07)/'OUI' /, &
-       cles(08)/'NOIP3' /,def1(08)/'NON' /,def2(08)/'OUI' /, &
-       cles(09)/'OLDIP3'/,def1(09)/'NON' /,def2(09)/'OUI' /
+       cles(08)/'NOIP3' /,def1(08)/'NON' /,def2(08)/'OUI' /
+  !    cles(09)/'OLDIP3'/,def1(09)/'NON' /,def2(09)/'OUI' /
 
   ! +NBRFICH Noms de fichier d'entree
   data cles(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'S.'   /, &
@@ -373,7 +363,7 @@
   if (is_on ( def1(6) )) Stats   = Vrai
   if (is_on ( def1(7) )) NoVar   = Vrai
   if (is_on ( def1(8) )) NoIP3   = Vrai
-  if (is_on ( def1(9) )) OldIP3  = Vrai
+! if (is_on ( def1(9) )) OldIP3  = Vrai
 
   if (Force)             ReWrit  = Vrai
 
@@ -531,10 +521,10 @@
 
   NMAX = max( NMAX, inbr1+1 )
 
-  if (nbr > 1) ilnk = fstlnk( iu1,nbr )
+  ilnk = 0 ; if (nbr > 1) ilnk = fstlnk( iu1,nbr )
 
   if (ilnk > 0)                                                then
-      write(6,6013)
+      write(6,6013) nbr,ilnk
       if (box) nil = exfin( 'Fstmdiag', 'Erreur 13', 'NON' )
       call quit( ' Fstmdiag ',13 )
   end if
@@ -803,10 +793,9 @@
           call quit( ' Fstmdiag ',9 )
       end if
 
-      heuremax = HIVAL ; heuremin = LOVAL
-      moyenne = 0 ; variance = 0 ; deltat = 0
-      nr = 0 ; ns = 0 ; ip2tot = 0 ; ii = -1
-      Complet = Faux ; dateosp = -1
+      heuremax = HIVAL ; heuremin = LOVAL ; moyenne = 0
+      variance = 0 ; deltat = 0 ; nr = 0 ; ns = 0 ; ip2tot = 0
+      nr = 0 ; ns = 0 ; Complet = Faux ; OldIP3 = Faux ; dateosp = -1
 
       LOOP2 : do i=start,infont
 
@@ -849,13 +838,6 @@
 
               cycle LOOP2
 
-          end if
-
-          if (OldIP3 .and. rkind (i) >=0)                  then
-              write(6,6016) i,rkind (i),niveau(i),heure(i),fset(i)
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
-              if (box) nil = exfin( 'Fstmdiag','Erreur 16','NON' )
-              call quit( ' Fstmdiag ',16 )
           end if
 
           ii = i ; key = listet(ii)
@@ -912,23 +894,23 @@
           time_range   = hiset(ii)-dble( loset(ii) )
           time_range_5 = nint( time_range * 720, 8 ) ! time_range en unites de blocs de 5 secondes
 
-          if (pas(ii)*delt(ii) == 0             .or.  &
-
+          if (pas(ii)*delt(ii) == 0                   &
+         .or.                                         &
              (rkind(ii)        == KIND_HOURS    .and. & ! Tentative de determiner si cet
              (npas_deet        == time_range_5  .or.  & ! enregistrement est le produit de
               npas_deet60      == time_range_5  .or.  & ! calculs prealables de moyennes
-              npas_deet3600    == time_range_5)).or.  & ! ou bien si c'est un echantillon
-
+              npas_deet3600    == time_range_5))      & ! ou bien si c'est un echantillon
+         .or.                                         &
              (rkind(ii)        /= KIND_HOURS    .and. &
               rkind(ii)        >= 0             .and. &
              (npasp1_deet      == vip2_5        .or.  &
               npasp1_deet60    == vip2_5        .or.  &
-              npasp1_deet3600  == vip2_5))      .or.  &
-
+              npasp1_deet3600  == vip2_5))            &
+         .or.                                         &
              (k3set(ii)        == KIND_SAMPLES  .and. &
-              vip3s(ii)        >  0.)           .or.  &
-
-             (OldIP3  .and.  fset(ii) >  0) )              then
+              vip3s(ii)        >  0.)                 &
+         .or.                                         &
+             (.not.noIP3 .and.fset(ii) >  0) )             then
 
               ! On suppose que c'est une moyenne
               if (ii == start)                             then
@@ -978,7 +960,7 @@
               ! Interval de temps.
               !  On suppose que c'est le debut d'un interval deja
               !  moyenne lorsque (HIVAL-LOVAL) corresponds a
-              !  (NPAS+1)*DEET a la seconde pres. On doit aussi
+              !  (NPAS+1)*DEET a 5 secondes pres. On doit aussi
               !  tenir compte de la limite de 2**24-1 de DEET et
               !  des ajustements qui auraient pu etre appliques.
               if (npas_deet == time_range_5)             then
@@ -1056,19 +1038,20 @@
               ! IP3 est "libre". On suppose qu'il contient alors
               !  un nombre d'echantillons, possiblement code en
               !  mode KIND_SAMPLES. Sinon, on ignore tout codage
-              if (fset(ii) > 32767 .and. .not.OldIP3)      then
+              if (fset(ii) > 32767)                        then
                   ! call diag_convip_plus( fset(ii),vip3,ikind,-2,nuls,.false. )
                   if (k3set(ii) == KIND_SAMPLES)           then
                       kcode = 5 ; mdiag = nint( vip3s(ii) )
                       if (k2set(ii) == KIND_HOURS)         then
                           heures = vip2s(ii) ; deltat = nint( heures/mdiag )
                       end if
-                  else
-                      kcode = 6 ; mdiag = fset(ii) ! Mode compatibilite arriere (partie 1)
+                  else  ! Premier mode de compatibilite arriere
+                      kcode = 6 ; mdiag = fset(ii) ; OldIP3 = .true.
                   end if
               else if (fset(ii) > 0)                       then
-                 ! Pas de codage, mais IP3 est non nul. On prends IP3 tel quel. Ceci est
-                  kcode = 7 ; mdiag = fset(ii) ! un mode compatibilite arriere (partie 2)
+                 ! Pas de codage, mais IP3 est non nul. On prends IP3 tel
+                 ! quel. Ceci est un second mode de compatibilite arriere
+                  kcode = 7 ; mdiag = fset(ii) ; OldIP3 = .true.
               end if
               if ((kcode == 5 .and. k2set(ii) /= KIND_HOURS) &
              .or.  kcode == 6 &
@@ -1076,6 +1059,13 @@
                   heures = nint( pas(ii)*dble( delt(ii) )/5., 8 )/720._8 
                   deltat = nint( heures/(mdiag-1) )
               end if
+          end if
+
+          if (OldIP3 .and. rkind (i) >=0)                  then
+              write(6,6016) start,i,trim( chaine(i) )
+              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 16','NON' )
+              call quit( ' Fstmdiag ',16 )
           end if
 
           mdiag = max( 1, mdiag )
@@ -1360,12 +1350,13 @@
       Format1 = '("3) ip1,ip2,ip3,npas,deet=",5I10)'
       if (Info) write(6,Format1) ip1,ip2,ip3,npas,deet
 
+      iter = 0
       do while (deet > 16777215) ! Taille limite de deet = 2**24 - 1
           ! On tente tout de meme de conserver la valeur de deet*npas.
-          if (mod( deet,60 ) == 0)                         then
-              deet = deet/60 ; npas = npas*60
+          if (mod( deet,60 ) == 0 .and. iter < 2)          then
+              deet = deet/60 ; npas = npas*60 ; iter = iter+1
           else
-              write(6,6011) deet,npas
+              write(6,6011) deet,npas,iter
               ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
               if (box) nil = exfin( 'Fstmdiag','Erreur 11','NON' )
               call quit( ' Fstmdiag ',11 )
@@ -1466,15 +1457,16 @@
  6008 format(/'   Erreur ',i5,' durant la lecture (fstprm).'/)
  6009 format(/"   Erreur d'allocation de memoire, nwds =",I6/)
  6010 format(/'   TMPDIR ou BIG_TMPDIR non definis.'/)
- 6011 format(/'   Probleme avec deet,npas en sortie =',2i10/)
+ 6011 format(/'   Probleme avec deet,npas en sortie =',2i10,', iter=',i1/)
  6012 format(/"   Plus d'un type de fichier d'entree."/)
- 6013 format(/"   Incapable de lier les fichiers d'entree."/)
+ 6013 format(/'   Incapable de lier les ',I3.3," fichiers d'entree."/ &
+              '   Erreur (fstlnk) =',I3/)
  6014 format(/'   Erreur=',I3,' dans DECODE_ip, IP1,IP2,IP3=',3I11/) 
  6614 format(/'   Erreur=',I3,' dans ENCODE_ip, RP1=',2p4e14.6,I3/ &
                                            31x,'RP2=',2p4e14.6,I3/)
  6015 format(/"   Trop grand nombre d'echantillons =",I11,' > 254903968'/)
- 6016 format(/'   OldIP3=T et enregistrement ',I5,' contient RANGE_KIND=',I2/ &
-              '   IP1,IP2,IP3 = ',3I10/)
+ 6016 format(/'   Melange de nouveau et ancien codage des IP1/2/3.'/ &
+              '   Voir les enregistrements ',2I10,1x,A/)
 
  6100 format(//4x,' NR TV NAME ETIKET',19x,'LEV',5x,'NI',4x,'NJ', &
             11x,'MIN',11x,'MAX',10x,'MEAN',6x,'VARIANCE'//)

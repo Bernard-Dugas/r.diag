@@ -37,6 +37,9 @@
 *
 *REVISIONS
 *
+* B.Dugas janvier '17 :
+* - Utiliser PUTSAMPLZ pour sauver le
+*   nombre d'echantillons svsm dans IBUF
 * B.Dugas avril '16 :
 * - Ajouter le support des grilles de type Y
 * B.Dugas mars '15 :
@@ -1040,7 +1043,8 @@
                         call puthigh( dateo,'DATEO',ibuf )
                         call puthigh( npas, 'NPAS', ibuf )
                         call puthigh( deet, 'DEET', ibuf )
-                        call puthigh( svsm, 'IP3' , ibuf )
+                      ! call puthigh( svsm, 'IP3' , ibuf )
+                        call putsamplz( svsm, ibuf )
                      else
                         call decodate( ncid,tim1,ccctime )
                         if (nint( dt ) >=  1) then

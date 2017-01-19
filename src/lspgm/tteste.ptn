@@ -157,6 +157,7 @@
 *      11 CANNOT READ RECORD IN VY
 *      12 MORE THAN ONE SIZE IN YBAR AND/OR VY
 *      13 MORE THAN ONE SIZE IN XBAR AND/OR YBAR
+*      14 MEMORY ALLOCATION PROBLEM
 *
 *     NON-FATAL CONDITIONS... 
 *     101 VERY SMALL VALUES FOUND IN VX OR VY
@@ -272,43 +273,36 @@
 *---------------------------------------------------------------------------- 
       IMPLICIT     none
 
-      INTEGER      MAXLEV
-      PARAMETER  ( MAXLEV = 999 )
+      INTEGER,     PARAMETER :: HEAD = taille_entete
+      INTEGER,     PARAMETER :: MAXLEV = 999
 
-      CHARACTER*4  NAMEX,NAMEY,NAMEVX,NAMEVY
+      REAL         LO,HI
+      CHARACTER(4) NAMEX,NAMEY,NAMEVX,NAMEVY
       CHARACTER    LIGNE*80,SLEV*15,CMATCH*15
       LOGICAL      OK,OK1,OK2,OK3,LNXNY,NRMLXIT,
      +             MASK,MATCH,NMATCH,NORETRY,VAR
-      REAL*8       D,K,P,T,WK1,WK2,WK3,WK4,ALPHA,SP,SDIF
-      CHARACTER*4  TYPE,GRID,SUBA,ZONL,CMDIF,CMASK,CD,CK,CT
-      REAL*8       XBAR,YBAR,VX,VY,FMASK,DIF,ANX,ANY,DFP,FACT,
+      CHARACTER(4) TYPE,GRID,SUBA,ZONL,
+     +             PKTYP,CMASK,CD,CK,CMDIF,CT
+      REAL(8)      ALPHA,SP,SDIF,ANX,ANY,DFP,FACT,
      +             EPSVX(MAXLEV),EPSVY(MAXLEV),EPSV(MAXLEV),FNX,
      +             FNY,EPSX(MAXLEV),EPSY(MAXLEV),EPS(MAXLEV)
-      INTEGER      IBUFW(taille_entete),IBUFX(taille_entete),IBUFY(taille_entete),IBUFZ(taille_entete)
-      INTEGER      IBUF,LEV(MAXLEV),NLEV,NLEVX,NLEVY,NLVVX,NLVVY,
+      INTEGER      IBUFW(HEAD),IBUFX(HEAD),IBUFY(HEAD),IBUFZ(HEAD),
+     +             LEV(MAXLEV),NLEV,NLEVX,NLEVY,NLVVX,NLVVY,RK,IPM,
      +             IO,NX,NY,MAXW,NWDS,WHERE,NF,LEN,LEN1,LEN2,LEN3,
      +             LEN4,MAXW1,MAXW2,MAXW3,MAXW4,XPAK,YPAK,IER,NREC,
      +             KIND,IVAR,CNT,I,L,NDFP,MEM
+      
+      INTEGER,    DIMENSION(:),ALLOCATABLE        :: IBUF
+      REAL(8),    DIMENSION(:),ALLOCATABLE,TARGET :: D,K,WK1,WK2
+      REAL(8),    DIMENSION(:),ALLOCATABLE        :: T,P,DIF,FMASK
+      REAL(8),    DIMENSION(:),POINTER            :: VY,VX,XBAR,YBAR,WK3,WK4
 
-      POINTER    ( P1,     D(1) ),( P12,    VY(1) ),( P13,   WK4(1) )
-      POINTER    ( P2,     T(1) )
-      POINTER    ( P3,     K(1) ),( P32,    VX(1) ),( P33,   WK3(1) )
-      POINTER    ( P4,     P(1) )
-      POINTER    ( P5,   WK1(1) ),( P52,  XBAR(1) )
-      POINTER    ( P6,   WK2(1) ),( P62,  YBAR(1) )
-      POINTER    ( P7,   DIF(1) )
-      POINTER    ( P8, FMASK(1) )
-      POINTER    ( P9,  IBUF(8) )
-
-      REAL*8       CALCEPS8
-      CHARACTER*4  PKTYP,GETYP
-      INTEGER      GETSIZ2,GETHIGH
-      LOGICAL      RPBLOC,SETIO64,is_on
-      EXTERNAL     JCLPNT,GETSTAT,GETLIGN,BURNF,HPALLOC,
-     +             PROBT,HTEST,GETSIZ2,WRITLEV2,HPDEALLC,
-     +             GETSET2,CMPLBL,XIT,PUTSET2,CALCEPS8,
-     +             GETYP,GETHIGH,PUTHIC,RPBLOC,SETIO64,
-     +             is_on
+      CHARACTER(4),EXTERNAL :: GETYP
+      REAL(8),     EXTERNAL :: CALCEPS8
+      LOGICAL,     EXTERNAL :: RPBLOC,SETIO64,is_on
+      INTEGER,     EXTERNAL :: GETSIZ2,GETHIGH,GETSAMPLZ
+      EXTERNAL     JCLPNT,GETSTAT,GETLIGN,BURNF,is_on,PROBT,
+     +             HTEST,WRITLEV2,GETSET2,XIT,CMPLBL,PUTSET2
 
 #     include     "zlabel.cdk"
 
@@ -478,29 +472,25 @@
      +   (TYPE .NE.GRID .AND.
      +    TYPE .NE.SUBA .AND.
      +    TYPE .NE.ZONL ) ) )                                  THEN
-          WRITE(6,6051) NLEV,NLEVY,NLVVX,NLVVY
+          WRITE(6,6151) NLEV,NLEVY,NLVVX,NLVVY
           CALL                                     XIT(' Tteste ',-3 )
       END IF
 
       MEM = MAX( MAXW,NWDS*NLEV )
 
-      CALL HPALLOC( P1,6*MEM,IER,8 )
-      P2 = LOC(     D(MEM+1) )
-      P3 = LOC(     T(MEM+1) )
-      P4 = LOC(     K(MEM+1) )
-      P5 = LOC(     P(MEM+1) )
-      P6 = LOC(   WK1(MEM+1) )
+      ALLOCATE( D(MEM),T(MEM),K(MEM),P(MEM),WK1(MEM),WK2(MEM),
+     +          DIF(MEM),FMASK(MEM),IBUF(LEN), STAT=IER )
 
-      P12 = P1
-      P13 = P1
-      P32 = P3
-      P33 = P3
-      P52 = P5
-      P62 = P6
+      IF (IER /= 0)                                            THEN
+          WRITE(6,6014) IER,8*MEM,LEN
+          CALL                                     XIT(' Tteste ',-14)
+      END IF
 
-      CALL HPALLOC( P7,2*MEM+LEN,IER,8 )
-      P8 = LOC(   DIF(MEM+1) )
-      P9 = LOC( FMASK(MEM+1) )
+      ! Equivalences.
+      VY => D ; WK4 => D
+      VX => K ; WK3 => K
+      XBAR => WK1
+      YBAR => WK2
 *-----------------------------------------------------------------------
 
  1000 CONTINUE
@@ -512,17 +502,16 @@
           IF (.NOT.OK)                                         THEN 
 
               IF (NREC.EQ.0)                                   THEN
-                  WRITE(6,6010) 
+                  WRITE(6,6004) 
                   CALL                             XIT(' Tteste ',-4 ) 
               END IF
 
               IF (MAXW.EQ.0)                                   THEN
-                  CALL                             HPDEALLC(P1,IER,0 )
-                  CALL                             HPDEALLC(P7,IER,0 )
+                  DEALLOCATE( D,T,K,P,WK1,WK2,DIF,FMASK,IBUF )
                   GOTO 100
               END IF
 
-              WRITE(6,6060) NREC 
+              WRITE(6,6100) NREC 
 
               IF (NRMLXIT.AND.MATCH)                           THEN
                   CALL                             XIT(' Tteste ', 0 )
@@ -542,7 +531,7 @@
 
           CALL CMPLBL( 0,IBUF, 0,IBUFW, OK1 )
 
-          DO  I=1,taille_entete 
+          DO  I=1,HEAD 
               IBUFW(I) = IBUF(I) 
           END DO
 
@@ -550,13 +539,13 @@
 
           IF (LNXNY)                                           THEN
               IF (PKTYP(1:2).EQ.'SQ')                          THEN
-                  NX = GETHIGH('IP3',IBUF )
+                  NX = GETSAMPLZ( RK,HI,LO,IPM,IBUF )
               ELSE
                   NX = IBUFW(2)
               END IF
           END IF
           IF (NX.LT.1)                                         THEN 
-              WRITE(6,6080) NX
+              WRITE(6,6005) NX
               CALL                                 XIT(' Tteste ',-5 ) 
           END IF
 
@@ -571,11 +560,10 @@
               IF (.NOT.OK)                                     THEN
                   IF (MAXW.EQ.0)                               THEN
                       CALL PRECEDE( 1,NLEVX )
-                      CALL                         HPDEALLC(P1,IER,0 )
-                      CALL                         HPDEALLC(P7,IER,0 )
+                      DEALLOCATE( D,T,K,P,WK1,WK2,DIF,FMASK,IBUF )
                       GOTO 100
                   END IF
-                  WRITE(6,6020) 
+                  WRITE(6,6006) 
                   CALL                             XIT(' Tteste ',-6 ) 
               END IF
 
@@ -595,8 +583,8 @@
      +           (TYPE .NE.GRID .AND.
      +            TYPE .NE.SUBA .AND.
      +            TYPE .NE.ZONL )   )                          THEN
-                  WRITE(6,6060) NREC
-                  WRITE(6,6050) ; WRITE(6,6051) NLEVX,NLVVX
+                  WRITE(6,6100) NREC
+                  WRITE(6,6150) ; WRITE(6,6151) NLEVX,NLVVX
                   CALL PRTLAB( IBUFW ) ; CALL PRTLAB( IBUF )
                   CALL                             XIT(' Tteste ',-7 )
               END IF
@@ -650,8 +638,7 @@
                                   CALL PRECEDE( 1,-1 )
                      IF (NX.GT.1) CALL PRECEDE( 2,-1 )
                   END IF
-                  CALL                             HPDEALLC(P1,IER,0 )
-                  CALL                             HPDEALLC(P7,IER,0 )
+                  DEALLOCATE( D,T,K,P,WK1,WK2,DIF,FMASK,IBUF )
                   GOTO 100
               END IF
               IF (NORETRY)                                     THEN
@@ -659,7 +646,7 @@
                   ZNAME = NAMEX ; NORETRY = .FALSE.
                   GOTO 1100
               ELSE
-                  WRITE(6,6030)
+                  WRITE(6,6008)
                   CALL                             XIT(' Tteste ',-8 ) 
               END IF
           END IF
@@ -686,26 +673,26 @@
 
           CALL CMPLBL( 0,IBUF, 0,IBUFW, OK1 )
 
-          DO  I=1,taille_entete 
+          DO  I=1,HEAD 
               IBUFY(I) = IBUF(I) 
           END DO
 
           IF (LNXNY)                                           THEN
               IF (PKTYP(1:2).EQ.'SQ')                          THEN
-                  NY = GETHIGH('IP3',IBUF )
+                  NY = GETSAMPLZ( RK,HI,LO,IPM,IBUF )
               ELSE
                   NY = IBUFY(2)
               END IF
           END IF 
           IF (NY.LT.1)                                         THEN 
-              WRITE(6,6090) NY
+              WRITE(6,6009) NY
               CALL                                 XIT(' Tteste ',-9 ) 
           END IF
 
           FNY  = DBLE( NY ) 
 
           IF (NX+NY.LT.3)                                      THEN
-              WRITE(6,6120) NX,NY 
+              WRITE(6,6010) NX,NY 
               CALL                                 XIT(' Tteste ',-10 )
           END IF
 
@@ -722,8 +709,7 @@
                                    CALL PRECEDE( 1,NLEVX )
                       IF (NX.GT.1) CALL PRECEDE( 2,NLVVX )
                                    CALL PRECEDE( 3,NLEVY )
-                      CALL                         HPDEALLC(P1,IER,0 )
-                      CALL                         HPDEALLC(P7,IER,0 )
+                      DEALLOCATE( D,T,K,P,WK1,WK2,DIF,FMASK,IBUF )
                       ZNAME = ' '
                       GOTO 100
                   END IF
@@ -732,7 +718,7 @@
                       ZNAME = NAMEVX ; NORETRY = .FALSE.
                       GOTO 1200
                   ELSE
-                      WRITE(6,6040) 
+                      WRITE(6,6011) 
                       CALL                         XIT(' Tteste ',-11 ) 
                   END IF
               END IF
@@ -765,8 +751,8 @@
      +           (TYPE .NE.GRID .AND.
      +            TYPE .NE.SUBA .AND.
      +            TYPE .NE.ZONL )   )                          THEN
-                  WRITE(6,6060) NREC
-                  WRITE(6,6050) ; WRITE(6,6051) NLEVY,NLVVY
+                  WRITE(6,6100) NREC
+                  WRITE(6,6150) ; WRITE(6,6151) NLEVY,NLVVY
                   CALL PRTLAB( IBUFY ) ; CALL PRTLAB( IBUF )
                   CALL                             XIT(' Tteste ',-12 )
               END IF
@@ -809,8 +795,8 @@
 
           IF (.NOT.OK  .OR.
      +        NLEVX.NE.NLEVY)                                  THEN
-              WRITE(6,6060) NREC
-              WRITE(6,6050)
+              WRITE(6,6100) NREC
+              WRITE(6,6150)
               CALL PRTLAB( IBUFW ) ; CALL PRTLAB( IBUFY )
               CALL                                 XIT(' Tteste ',-13 ) 
           END IF
@@ -883,7 +869,7 @@
 
 ***        WRITE OUT THE RESULTS 
 
-          DO  I=1,taille_entete 
+          DO  I=1,HEAD 
               IBUF(I)=IBUFW(I) 
           END DO
 
@@ -941,13 +927,13 @@
 ***    EOF ON UNIT #5. 
 
  8000 CONTINUE
-      WRITE(6,6070) 
+      WRITE(6,6001) 
       CALL                                         XIT(' Tteste ',-1 )
 
 ***    EOF ON UNIT 1 and/OR 3.
 
  9000 CONTINUE
-      WRITE(6,6150) 
+      WRITE(6,6002) 
       CALL                                         XIT(' Tteste ',-2 )
 
 *-------------------------------------------------------------------------
@@ -957,27 +943,29 @@
 
  5010 FORMAT(10X,E10.0,2F5.0,2I5)
 
- 6010 FORMAT(' File of means for variable X empty.')
- 6020 FORMAT(' Unexpected eof on file of X variance.')
- 6030 FORMAT(' Unexpected eof on file of Y means.')
- 6040 FORMAT(' Unexpected eof on file of Y variance.')
- 6050 FORMAT(' Corresponding field labels do not match.')
- 6051 FORMAT(' Number of levels found: ',4I5)
- 6060 FORMAT(' Conducted T-Tests on ',I5,' pairs of mean fields.')
- 6070 FORMAT('  The TTESTE card is missing.')
- 6080 FORMAT(' Illegal # of control obs. NX= ',I10)
- 6090 FORMAT(' Illegal # of experimental obs. NY= ',I10)
+ 6001 FORMAT('  The TTESTE card is missing.')
+ 6002 FORMAT(' ** Unable to begin reading mean files **.')
+ 6004 FORMAT(' File of means for variable X empty.')
+ 6005 FORMAT(' Illegal # of control obs. NX= ',I10)
+ 6006 FORMAT(' Unexpected eof on file of X variance.')
+ 6008 FORMAT(' Unexpected eof on file of Y means.')
+ 6009 FORMAT(' Illegal # of experimental obs. NY= ',I10)
+ 6010 FORMAT(' Illegal # of data points, NX= ',I10,', NY= ',I10)
+ 6011 FORMAT(' Unexpected eof on file of Y variance.')
+ 6014 FORMAT(' Error ',I10,' while allocating ',I10,' REAL(8)',
+     +       ' words and ',I6,' INTEGER(4) words.')
+
+ 6100 FORMAT(' Conducted T-Tests on ',I5,' pairs of mean fields.')
  6110 FORMAT(' TTESTE.   ',E10.1,2F5.0,2I5)
- 6120 FORMAT(' Illegal # of data points, NX= ',I10,', NY= ',I10)
  6130 FORMAT(' WARNING ',I6,' detected very small sdif out of ',A,I7,
      +       ' computed values at level ',A)
  6140 FORMAT(' ** NOTE - Unmatched mean field names ',A,1X,A,' **.')
- 6150 FORMAT(' ** Unable to begin reading mean files **.')
+ 6150 FORMAT(' Corresponding field labels do not match.')
+ 6151 FORMAT(' Number of levels found: ',4I5)
  6161 FORMAT(' While looking for  ',A,', found ',A,' in means...')
  6162 FORMAT(' While looking for  ',A,', found ',A,' in variances...')
  6170 FORMAT(/' Strict name matching is ON !'/)
  6171 FORMAT(/' Strict name matching UNAVAILABLE !'/)
-
 *-----------------------------------------------------------------------
 
       END 

@@ -2028,7 +2028,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
 
       Character   posit*6,statf*3,namef*512,PKTYP*4
       Integer     ifrm,iouv,iclos,inom,lenam
-      Integer     ip1_kind,cmpl
+      Integer     ip1_kind,cmpl,iter
       Real        AMIN,AMAX,AMEAN
 
       Character,  external :: getyp*4
@@ -2126,6 +2126,20 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
           HOLDio = SETio64( HOLDio )
       End If
 
+      iter = 0
+      Do While (deet > 16777215) ! Taille limite de deet = 2**24 - 1
+          ! On tente tout de meme de conserver la valeur de deet*npas
+          ! Ce probleme peut survenir lors du calcul de moyennes
+          ! temporelles sur de longs intervals mais avec un
+          ! petit nombre d'echantillons
+          If (mod( deet,60 ) == 0 .and. iter < 2)              Then
+              deet = deet/60 ; npas = npas*60 ; iter = iter+1
+          Else
+              If (INFO) write(6,6004) deet,npas,iter
+              Call                                 XIT(' WritSTD',-4 )
+          End If
+      End Do 
+
 ***    L'ecrire.
 
       cle = fstecr( IBUF(debut),buffer,
@@ -2183,6 +2197,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
  6002 FORMAT(' WritSTD: unable to open file ',A,', unit ',I2)
  6003 FORMAT(' WritSTD: unit ',I2,' contains more than one of #,',
      +       ' Y or Z grid types.')
+ 6004 format(' Problem with sizes of deet,npas=',2I10,', iter=',I1)
 
  6100 FORMAT('*DEBUG:WRITSTD',5X,'Min,Max,Mean =',3(1PE15.6),
      +       ' nbits = ',I3)

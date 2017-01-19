@@ -30,7 +30,8 @@
 *  d         Fichier destination. Celui-ci ne doit pas exister
 *            a l'entree, sauf si la cle f est egalement specifiee.
 *
-*  split     Separer le resultat du tri, une date par fichier.            
+*  split     Separer le resultat du tri, une date-time-stamp unuique
+*            par fichier. Option supplementaire "PARJOUR"/"BYDAY"            
 *
 *  dateo \ 
 *  typvar \  Cles selon laquelle le tri est effectue. Specifier
@@ -192,10 +193,10 @@
       integer       anne,mois,jour,heur
 
       real          press
-      integer       YYYYMMDD,HHMMSSHH,valnum, kind,bidon
+      integer       YYYYMMDD,YYYYMMDD0,HHMMSSHH,valnum, kind,bidon
       real,         allocatable,dimension(:) :: niveau1
       integer,      allocatable,dimension(:) :: niveau2,
-     +              liste,  date1, date2, delt, 
+     +              liste,  date1, date2, delt, listerenv,
      +              sindex, fset1, fset2,
      +              heure,  pas1,  pas2
 
@@ -213,9 +214,9 @@ C    +              valnum,kind
       logical              dexit,set_dexit,exist
       common       /dexit/ dexit,set_dexit,diagext
 
-      character*16  cles(NBRCLE),blanc
-      character*512 def1(NBRCLE),def2(NBRCLE),nomfich
-      integer       iu1,iu2,     ipos, i,ier,io,
+      character*16  cles(NBRCLE),blanc,option
+      character*512 def1(NBRCLE),def2(NBRCLE),nomfich,nomrenv
+      integer       iu1,iu2,iu3, ipos, i,ier,io,j,
      +              nil,exfin,   idatm, exdb,
      +              ind01,ind11,ind21,ind31, i0,i1,i2,i3,
      +              ind02,ind12,ind22,ind32,
@@ -224,9 +225,9 @@ C    +              valnum,kind
       logical       Vrai,  Faux,
      +              box,   message, sqi,   Force, Desc,  Elim,
      +              noDAT, noTYP,   noETI, noNOM, noPAS, noIP1,
-     +              noIP3, SplitD
+     +              noIP3, SplitD,  ByDay
 
-      integer       elimin, nw
+      integer       elimin, nw, nbrrenv, infonbr
 
       real,         allocatable, dimension(:) :: buff
       integer,      allocatable, dimension(:) :: ibuf
@@ -238,11 +239,13 @@ C    +              valnum,kind
       character typvar*2,                  nomvar*4,
      +          etiket*12,                 grtyp
 
-      integer   dateo,datev,datev0,        ni,nj,nk,  
+      integer   dateo,datev,               ni,nj,nk,  
      +          ip1,ip2,ip3,               datyp,nbits,
      +          infon,deet,npas,           extra1,extra2,extra3,
      +          ig1,ig2,ig3,ig4,           swa,lng,dltf,ubc,
      +          lenn1,lenn2
+
+      integer   datev0,datevm3h
 
       logical   rewrit,rewrit0
 
@@ -268,7 +271,7 @@ C    +              valnum,kind
      +          getenvc,convpr, incdatr
 
       integer   ifrm,   iecr,   iprm,   iopt,
-     +          inf,    infl,   inbr1,  inbr2, 
+     +          inf,    infl,   inbr1,  inbr2, inbr3, 
      +          ierr1,  ierr2,  ftyp1,  ftyp2
 
       character nomprg*256
@@ -302,12 +305,12 @@ C    +              valnum,kind
 
       data blanc / ' ' / 
 
-      data message, box       /    2*.false.   /,
-     +     Force, Desc, Elim  /    3*.false.   /,
-     +     noDAT, noTYP, noETI,
+      data message, box        /    2*.false.   /,
+     +     Force, Desc, Elim   /    3*.false.   /
+      data noDAT, noTYP, noETI,
      +     noNOM, noPAS, noIP1,
-     +     noIP3, SplitD      /    8*.false.   /
-     +     Vrai,Faux, rewrit0 / .true.,2*.false. /
+     +     SplitD,ByDay, noIP3 /    9*.false.   /
+      data Vrai,Faux, rewrit0  /.true.,2*.false./
       data sqi / .false. /
 
 ***    Numeros d'E/S, etc...
@@ -415,7 +418,16 @@ C    +              valnum,kind
       if ( is_on  (   def1(14) ).or.
      +     is_on  (   def1(15) ))   Desc    = Vrai
       if ( is_on  (   def1(16) ))   Elim    = Vrai
-      if ( is_on  (   def1(19) ))   SplitD  = Vrai
+
+      call low2up( def1(19),option )
+      if (option == 'BYDAY' .or.
+     +    option == 'PARJOUR')      ByDay   = Vrai
+
+      if (ByDay)                                               then
+                                    SplitD  = Vrai
+      else
+          if (is_on(  def1(19) ))   SplitD  = Vrai
+      end if
 
       if (Elim)                     elimin  = 0
 !!!   if (Force)                    rewrit0 = Vrai
@@ -502,11 +514,12 @@ C    +              valnum,kind
           ierr2 = fnom( iu2, '+' // trim( def1(2) ),'STD+RND',0)
       end if
       else
-          ierr2  = 0; iu2 = 0
+          ierr2  = 0; iu2 = 0 ; iu3 = 0
       end if
 
       if (ierr1.ne.0 .or. ierr2.ne.0)                          then
-          write(6,6002)
+          if (ierr1 /= 0) write(6,6002) trim( def1(1) )
+          if (ierr2 /= 0) write(6,6002) trim( def1(2) )
           if (box) nil = exfin( 'FstTRI', 'Erreur 2', 'NON' )
           call quit( ' FstTri ',2 )
       end if
@@ -569,6 +582,7 @@ C    +              valnum,kind
 
       chaine2(infon+1) = ' '
       niveau2(infon+1) =  0
+      nbrrenv = 0
 
       do i=1,infon
 
@@ -593,14 +607,19 @@ C    +              valnum,kind
 
               if (SplitD .and. iu2 == 0)                       then
                   if (def1(2) == blanc)                        then
-                      write(nomfich,6660) trim( def1(1) )
+                      write(nomrenv,6660) trim( def1(1) )
                   else
-                      write(nomfich,6660) trim( def1(2) )
+                      write(nomrenv,6660) trim( def1(2) )
                   end if
-                  if (fnom( iu2,trim( nomfich ),'STD',0) == 0) then
+                  if (fnom( iu2,trim( nomrenv ),'STD',0) == 0) then
                       inbr2 = fstouv( iu2,'RND' )
                   else
-                      write(6,6002)
+                      write(6,6002) trim( nomrenv )
+                      if (box) nil = exfin( 'FstTRI', 'Erreur 2', 'NON' )
+                      call quit( ' FstTri ',2 )
+                  end if
+                  if (inbr2 < 0)                               then
+                      write(6,6222) inbr2,trim( nomrenv )
                       if (box) nil = exfin( 'FstTRI', 'Erreur 2', 'NON' )
                       call quit( ' FstTri ',2 )
                   end if
@@ -612,11 +631,26 @@ C    +              valnum,kind
 ***            Les enregistrements de renvois sont sauves immediatement.
 
               inf  = fstluk( buff, liste(i),ni,nj,nk )
+
+              if (inf.lt.0)                                    then
+                  write(6,6007) inf
+                  if (box) nil = exfin( 'FstTRI','Erreur 7','NON' )
+                  call quit( ' FstTri ',7 )
+              end if
+
               iecr = fstecr( buff,ibuf,
      +                      -nbits, iu2, dateo,deet,npas,
      +                       ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,
      +                       etiket,grtyp, ig1,ig2,ig3,ig4,
      +                       datyp, rewrit )
+
+              if (iecr.lt.0)                                   then
+                  write(6,6005) iecr
+                  if (box) nil = exfin( 'FstTRI','Erreur 5','NON' )
+                  call quit( ' FstTri ',5 )
+              end if
+
+              nbrrenv = nbrrenv+1
 
           end if
 
@@ -841,13 +875,36 @@ C    +              valnum,kind
       end if
 
       if (SplitD .and. iu2 > 0)                                then
-          write(6,6103) trim( nomfich )
-          ifrm = fstfrm( iu2 )
-          ifrm = fclos ( iu2 )
-          iu2  = 0
+
+          write(6,6103) trim( nomrenv )
+          ifrm = fstfrm( iu2 ) ; ifrm = fclos ( iu2 ) ; iu2  = 0
+
+          if (nbrrenv > 0)                                     then
+
+              allocate( listerenv(nbrrenv),stat=ier )
+              if (ier /= 0) goto 999
+
+              ! Ouvrir de nouveau le fichier nomrenv mais sous iu3
+              if (fnom( iu3,trim( nomrenv ),'STD',0) == 0)     then
+                  inbr3 = fstouv( iu3,'RND' )
+              else
+                  write(6,6002) trim( nomrenv )
+                  if (box) nil = exfin( 'FstTRI', 'Erreur 2', 'NON' )
+                  call quit( ' FstTri ',2 )
+              end if
+              if (inbr3 < 0)                                   then
+                  write(6,6222) inbr3,trim( nomrenv )
+                  if (box) nil = exfin( 'FstTRI', 'Erreur 2', 'NON' )
+                  call quit( ' FstTri ',2 )
+              end if
+              infl = fstinl( iu3, ni,nj,nk, -1,' ',-1,-1,-1,' ',' ',
+     +                            listerenv,infonbr,nbrrenv )
+
+          end if
+
       end if
 
-      rewrit = rewrit0 ; datev0 = -1 ; nomfich = blanc
+      rewrit = rewrit0 ; YYYYMMDD0 = -1 ; datev0 = -1 ; nomfich = blanc
 
       do i=1,infon
 
@@ -881,24 +938,63 @@ C    +              valnum,kind
               datev = dateo
           end if
 
-          if (SplitD )                                         then
-              if (datev /= datev0)                             then
+          ier = newdate( datev, YYYYMMDD,HHMMSSHH, -3 )
+
+          if (ByDay)                                           then
+              ! Notons que 00Z est plutot traite
+              ! comme 24Z, i.e. dans le jour precedent
+              if (HHMMSSHH == 0)                               then
+                  heur8 = -3.; call incdatr( datevm3h,datev,heur8 )
+                  ier = newdate( datevm3h, YYYYMMDD,HHMMSSHH, -3 )
+              end if
+              datev0 = datev
+          else
+              YYYYMMDD0 = YYYYMMDD
+          end if
+
+          if (SplitD)                                          then
+              if ((.not.ByDay .and. datev    /= datev0   )
+     +       .or. (     ByDay .and. YYYYMMDD /= YYYYMMDD0))    then
 
 ***                Changer de fichier de sortie.
 
                   if (nomfich /= blanc)                        then
+
+                      ! Copier tous les enregistrements de renvois
+                      do j=1,nbrrenv !  avant de fermer ce fichier
+                          inf  = fstluk( buff, listerenv(j),ni,nj,nk )
+                          iprm = fstprm( inf, dateo,deet,npas, ni,nj,nk,
+     +                          nbits,datyp, ip1,ip2,ip3, typvar,nomvar,
+     +                          etiket,grtyp,ig1,ig2,ig3,ig4, swa,lng,
+     +                          dltf,ubc,extra1,extra2,extra3 )
+                          iecr = fstecr( buff,ibuf,
+     +                          -nbits, iu2, dateo,deet,npas,
+     +                           ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,
+     +                           etiket,grtyp, ig1,ig2,ig3,ig4,
+     +                           datyp, rewrit )
+                      end do
+
                       ifrm = fstfrm( iu2 )
                       ifrm = fclos ( iu2 )
+
                   end if
 
-***                Construire le nouveau nom avec datev.
+***                Construire le nouveau nom avec datev ou YYYYMMDD.
 
-                  ier = newdate( datev, YYYYMMDD,HHMMSSHH, -3 )
-
-                  if (def1(2) == blanc)                        then
-                      write(nomfich,6666) trim(def1(1)),YYYYMMDD,HHMMSSHH
+                  if (ByDay)                                   then
+                      if (def1(2) == blanc)                        then
+                          write(nomfich,6666) trim(def1(1)),YYYYMMDD
+                      else
+                          write(nomfich,6666) trim(def1(2)),YYYYMMDD
+                      end if
                   else
-                      write(nomfich,6666) trim(def1(2)),YYYYMMDD,HHMMSSHH
+                      if (def1(2) == blanc)                        then
+                          write(nomfich,6666) trim(def1(1)),
+     +                                        YYYYMMDD,HHMMSSHH
+                      else
+                          write(nomfich,6666) trim(def1(2)),
+     +                                        YYYYMMDD,HHMMSSHH
+                      end if
                   end if
 
 ***                On ouvre le fichier.
@@ -906,14 +1002,19 @@ C    +              valnum,kind
                   if (fnom( iu2,trim( nomfich ),'STD',0) == 0) then
                       inbr2 = fstouv( iu2,'RND' )
                   else
-                      write(6,6002)
+                      write(6,6002) trim( nomfich )
+                      if (box) nil = exfin( 'FstTRI', 'Erreur 2', 'NON' )
+                      call quit( ' FstTri ',2 )
+                  end if
+                  if (inbr2 < 0)                               then
+                      write(6,6222) inbr2,trim( nomfich )
                       if (box) nil = exfin( 'FstTRI', 'Erreur 2', 'NON' )
                       call quit( ' FstTri ',2 )
                   end if
 
-***                Sauver le datev courant dans datev0.
+***                Sauver les valeurs courantes de datev et YYYYMMDD.
 
-                  datev0 = datev
+                  datev0 = datev ; YYYYMMDD0 = YYYYMMDD
 
               end if
           end if
@@ -1040,6 +1141,28 @@ C    +              valnum,kind
 
       end do
 
+      if (SplitD .and. nbrrenv > 0)                            then
+
+          ! Copier tous les enregistrements de renvois
+          !  avant de fermer ce dernier fichier
+
+          if (nomfich /= blanc)                        then
+              do j=1,nbrrenv
+                  inf  = fstluk( buff, listerenv(j),ni,nj,nk )
+                  iprm = fstprm( inf, dateo,deet,npas, ni,nj,nk,
+     +                          nbits,datyp, ip1,ip2,ip3, typvar,nomvar,
+     +                          etiket,grtyp,ig1,ig2,ig3,ig4, swa,lng,
+     +                          dltf,ubc,extra1,extra2,extra3 )
+                  iecr = fstecr( buff,ibuf,
+     +                          -nbits, iu2, dateo,deet,npas,
+     +                           ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,
+     +                           etiket,grtyp, ig1,ig2,ig3,ig4,
+     +                           datyp, rewrit )
+              end do
+          end if
+
+      end if
+
 *-----------------------------------------------------------------------
 ***    On fait le menage...
 
@@ -1070,7 +1193,8 @@ CCC   if (ier.ne.0) print *,'erreur dans hpcheck=',ier
      +        '   ', A/)
 
  6001 format(/'   Deux noms de fichiers sont requis a l''entree...'/)
- 6002 format(/'   Impossible d''associer un nom a une unite d''E/S...'/)
+ 6002 format(/"   Impossible d'associer un nom a une unite d'E/S"/3x,A/)
+ 6222 format(/'   Erreur ',i5," durant l'ouverture (fstouv) "/3x,A/)
  6003 format(/'   Le fichier source doit exister au depart...'/)
  6004 format(/'   Le fichier destination existe deja...'/)
  6005 format(/'   Erreur ',i5,' durant ecriture (fstecr).'/)
@@ -1083,7 +1207,7 @@ CCC   if (ier.ne.0) print *,'erreur dans hpcheck=',ier
  6012 format(/'   Incapable de forcer la re-ecriture.'/)
 
  6660 format(A,'_renvois')
- 6666 format('+',A,'_',I8.8,'-',I8.8)
+ 6666 format('+',A,'_',I8.8,:,'-',I8.8)
 
       end
 #     endif

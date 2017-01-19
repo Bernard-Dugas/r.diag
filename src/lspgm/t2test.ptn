@@ -205,6 +205,7 @@
 *      22 COV1 NOT THE SAME SIZE AS U1BAR
 *      23 MISSING COV2 ARRAY
 *      24 COV2 NOT THE SAME SIZE AS U2BAR
+*      25 MEMORY ALLOCATION PROBLEM
 *
 *     NON-FATAL CONDITIONS...
 *     101 VERY SMALL DENOMINATORS IN T**2 STATISTIC
@@ -307,45 +308,42 @@
 *-------------------------------------------------------------------------------
       IMPLICIT   none
 
-      INTEGER      HEAD
-      PARAMETER  ( HEAD = taille_entete )
-      INTEGER      MAXLEV
-      PARAMETER  ( MAXLEV = 999 )
+      INTEGER,     PARAMETER :: HEAD = taille_entete
+      INTEGER,     PARAMETER :: MAXLEV = 999
 
-      CHARACTER    LIGNE*80
-      REAL*8       D,F,K,P,WK1,WK2,WK3,ALPHA,T22
-      LOGICAL      OK,OK1,OK2,LN1N2,VAR,NRMLXIT,MASK,MATCH 
-      CHARACTER*4  CK,CD,CF,CDU,CDV,CAMP,CMASK,GRID,SUBA,ZONL,TYPE
-      REAL         A1,A2,DU,DV,AMP,S1P2,S2P2,S1P,S2P,FMASK,FN1,FN2,
-     +             AN1,AN2,FACT,FACT1,FACT2,FACT3,ROP,EPSA1(MAXLEV),
-     +             EPSA2(MAXLEV),EPS1P(MAXLEV),EPS2P(MAXLEV),SU,SV,
-     +             EPSROP(MAXLEV),EPS(MAXLEV),SDIF
-      INTEGER      IBUF1(HEAD),IBUF2(HEAD),FIRST1(HEAD),FIRST2(HEAD),
-     +             IBUF,IO,N1,N2,IVAR,KIND,NREC,IER,WHERE,I,
-     +             L,LEV(MAXLEV),NLEV,NLEV1,NLEV2,MAXW,NWDS,
-     +             CNT,NFF,LEN,LEN1,LEN2,MAXW1,MAXW2,
-     +             XPAK,YPAK,NDF,MEM,LEV2(MAXLEV)
+      REAL         LO,HI
+      CHARACTER    LIGNE*80,PKTYP*2
+      LOGICAL      OK,OK1,OK2,LN1N2,VAR,
+     +             NRMLXIT,MASK,MATCH 
+      CHARACTER(4) CK,CD,CF,CDU,CDV,CAMP,
+     +             CMASK,GRID,SUBA,ZONL,TYPE
+      REAL(8)      ALPHA,S1P,S2P,FN1,FN2,SDIF,AN1,
+     +             AN2,FACT,FACT1,FACT2,FACT3,ROP,SU,SV,
+     +             EPS(MAXLEV),EPSA1(MAXLEV),EPSA2(MAXLEV),
+     +             EPS1P(MAXLEV),EPS2P(MAXLEV),EPSROP(MAXLEV)
+      INTEGER      IBUF1(HEAD),IBUF2(HEAD),
+     +             FIRST1(HEAD),FIRST2(HEAD),
+     +             LEV(MAXLEV),LEV2(MAXLEV),IPM,
+     +             NLEV,NLEV1,NLEV2,MAXW,NWDS,MEM,
+     +             IO,N1,N2,IVAR,KIND,NREC,IER,WHERE,I,L,
+     +             CNT,NFF,LEN,LEN1,LEN2,MAXW1,MAXW2,RK,
+     +             XPAK,YPAK,NDF
 
-      POINTER    ( P1,     F(1) ),( P12,     D(1) )
-      POINTER                     ( P13,    A2(1) ),( P14,   T22(1) )
-      POINTER    ( P2,     K(1) ),( P22,     P(1) ),( P23,  S2P2(1) )
-      POINTER    ( P3,   WK1(1) ),( P32,    DU(1) )
-      POINTER    ( P4,   WK2(1) ),( P42,    DV(1) )
-      POINTER    ( P5,   WK3(1) ),( P52,   AMP(1) ),( P53,  S1P2(1) )
-      POINTER    ( P6, FMASK(1) ),( P62,    A1(1) )
-      POINTER    ( P7,  IBUF(8) )
+      INTEGER,     DIMENSION(:),ALLOCATABLE        :: IBUF
+      REAL(8),     DIMENSION(:),ALLOCATABLE,TARGET :: F,K,WK1,WK2,WK3,FMASK
+      REAL(8),     DIMENSION(:),POINTER            :: D,A2,T22, P,S2P2, 
+     +                                                DU,DV,AMP,S1P2,A1
 
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
 
-      LOGICAL      RPBLOC
-      REAL*8       CALCEPS8
-      CHARACTER    PKTYP*2,GETYP*4
-      INTEGER      GETSIZ2,GETHIGH 
-      EXTERNAL     JCLPNT,GETSTAT,GETLIGN,BURNF,HPALLOC,
-     +             PROBF,HTEST,GETSIZ2,WRITLEV2,RPBLOC,
-     +             GETSET2,CMPLBL,XIT,PUTSET2,CALCEPS8,
-     +             GETYP,GETHIGH
+      CHARACTER(4),EXTERNAL :: GETYP
+      REAL(8),     EXTERNAL :: CALCEPS8
+      LOGICAL,     EXTERNAL :: RPBLOC,SETIO64
+      INTEGER,     EXTERNAL :: GETSIZ2,GETSAMPLZ
+      EXTERNAL     JCLPNT,GETSTAT,GETLIGN,BURNF,
+     +             PROBF,HTEST,WRITLEV2,GETSET2,
+     +             CMPLBL,XIT,PUTSET2
 
       DATA         GRID  /'GRID'/,
      +             SUBA  /'SUBA'/,
@@ -378,6 +376,10 @@
       CALL GETSTAT( 27,LIGNE )
       IF (LIGNE.EQ.'OLD' .OR.
      +    LIGNE.EQ.'NEW') MASK = .TRUE.
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
 
@@ -416,7 +418,7 @@
 
       END IF
 
-      WRITE(6,6020) ALPHA,AN1,AN2,IVAR 
+      WRITE(6,6100) ALPHA,AN1,AN2,IVAR 
       N1 = INT( AN1+0.0001 )
       N2 = INT( AN2+0.0001 )
 
@@ -459,31 +461,27 @@
      +   (TYPE .NE.GRID .AND.
      +    TYPE .NE.SUBA .AND.
      +    TYPE .NE.ZONL )   )                                  THEN
-          WRITE(6,6030) NLEV,NLEV2
+          WRITE(6,6009) TYPE,NLEV,NLEV2
           CALL                                     XIT(' T2test ',-3 )
       END IF
 
       MEM = MAX( MAXW,NWDS*NLEV )
 
-      CALL HPALLOC( P1,5*MEM,IER,8 )
-      P2 = LOC(     F(MEM+1) )
-      P3 = LOC(     K(MEM+1) )
-      P4 = LOC(   WK1(MEM+1) )
-      P5 = LOC(   WK2(MEM+1) )      
+      ALLOCATE( F(MEM),K(MEM),WK1(MEM),WK2(MEM),WK3(MEM),
+     +          FMASK(MEM),IBUF(LEN), STAT=IER )
 
-      P12 = P1
-      P13 = P1
-      P14 = P1
-      P22 = P2
-      P23 = P2
-      P32 = P3
-      P42 = P4
-      P52 = P5
-      P53 = P5
+      IF (IER /= 0)                                            THEN
+          WRITE(6,6025) IER,6*MEM,LEN
+          CALL                                     XIT(' T2test ',-25)
+      END IF
 
-      CALL HPALLOC( P6,MEM+LEN,IER,0 )
-      P62 = P6
-      P7  = LOC( FMASK(MEM+1) )
+      ! EQUIVALENCES ...
+      D   => F   ; A2   => F ; T22 => F
+      P   => K   ; S2P2 => K
+      AMP => WK3 ; S1P2 => WK3
+      DV  => WK2
+      DU  => WK1
+      A1  => FMASK
 *-----------------------------------------------------------------------
 
       KIND = 1 
@@ -496,10 +494,10 @@
 
           IF (.NOT.OK)                                         THEN 
               IF (NREC.EQ.0)                                   THEN
-                  WRITE(6,6090) 
+                  WRITE(6,6004) 
                   CALL                             XIT(' T2test ',-4 ) 
               END IF
-              WRITE(6,6030) NREC 
+              WRITE(6,6300) NREC 
               IF (NRMLXIT.AND.MATCH)                           THEN
                   CALL                             XIT(' T2test ', 0 )
               ELSE 
@@ -520,13 +518,13 @@
 
           IF (LN1N2)                                           THEN
               IF (PKTYP.EQ.'SQ')                               THEN
-                  N1 = GETHIGH('IP3',IBUF1 )
+                  N1 = GETSAMPLZ( RK,HI,LO,IPM,IBUF1 )
               ELSE
                   N1 = IBUF1(2)
               END IF
           END IF
           IF (N1.LT.1)                                         THEN 
-              WRITE(6,6050) N1
+              WRITE(6,6005) N1
               CALL                                 XIT(' T2test ',-5 ) 
           END IF
 
@@ -537,7 +535,7 @@
           CALL GETSET2( 16, A2, LEV,NLEV2, IBUF,MAXW,OK ) 
 
           IF (.NOT.OK)                                         THEN 
-              WRITE(6,6100)
+              WRITE(6,6006)
               CALL                                 XIT(' T2test ',-6 )
           END IF
 
@@ -551,20 +549,20 @@
 
           IF (LN1N2)                                           THEN
               IF (PKTYP.EQ.'SQ')                               THEN
-                  N2 = GETHIGH('IP3',IBUF2 )
+                  N2 = GETSAMPLZ( RK,HI,LO,IPM,IBUF2 )
               ELSE
                   N2 = IBUF2(2)
               END IF
           END IF
           IF (N2.LT.1)                                         THEN 
-              WRITE(6,6060) N2
+              WRITE(6,6007) N2
               CALL                                 XIT(' T2test ',-7 ) 
           END IF
 
           FN2  = FLOAT( N2 ) 
 
           IF (N1+N2.LE.3)                                      THEN
-              WRITE(6,6070) N1,N2 
+              WRITE(6,6008) N1,N2 
               CALL                                 XIT(' T2test ',-8 ) 
           END IF
 
@@ -576,9 +574,8 @@
      +       (TYPE .NE.GRID .AND.
      +        TYPE .NE.SUBA .AND.
      +        TYPE .NE.ZONL )   )                              THEN
-              WRITE(6,6030) NREC
-              WRITE(6,6080)
-              WRITE(6,6081) NLEV1,NLEV2
+              WRITE(6,6300) NREC
+              WRITE(6,6009) TYPE,NLEV1,NLEV2
               CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF2 )
               CALL                                 XIT(' T2test ',-9 )
           END IF
@@ -604,7 +601,7 @@
           CALL GETSET2( 13, A1, LEV,NLEV1, IBUF,MAXW,OK ) 
 
           IF (.NOT.OK)                                         THEN 
-              WRITE(6,6110)
+              WRITE(6,6010)
               CALL                                 XIT(' T2test ',-10 )
           END IF
 
@@ -623,7 +620,7 @@
           CALL GETSET2( 18, A2, LEV,NLEV2, IBUF,MAXW,OK ) 
 
           IF (.NOT.OK)                                         THEN 
-              WRITE(6,6120)
+              WRITE(6,6011)
               CALL                                 XIT(' T2test ',-11 )
           END IF
 
@@ -642,9 +639,8 @@
           IF (.NOT.OK       .OR.
      +        NLEV1.NE.NLEV .OR.
      +        NLEV2.NE.NLEV )                                  THEN
-              WRITE(6,6030) NREC
-              WRITE(6,6080)
-              WRITE(6,6081) NLEV1,NLEV2
+              WRITE(6,6300) NREC
+              WRITE(6,6009) TYPE,NLEV1,NLEV2
               CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF2 )
               CALL                                 XIT(' T2test ',-12 )
           END IF
@@ -668,7 +664,7 @@
               CALL GETSET2( 12, A1, LEV,NLEV1, IBUF,MAXW,OK )
 
               IF (.NOT.OK)                                     THEN
-                  WRITE(6,6130) 
+                  WRITE(6,6013) 
                   CALL                             XIT(' T2test ',-13 ) 
               END IF
 
@@ -678,9 +674,8 @@
 
               IF (.NOT.OK        .OR.
      +            NLEV1.NE.NLEV  )                             THEN
-                  WRITE(6,6030) NREC
-                  WRITE(6,6080)
-                  WRITE(6,6081) NLEV1,NLEV
+                  WRITE(6,6300) NREC
+                  WRITE(6,6009) TYPE,NLEV1,NLEV
                   CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF )
                   CALL                             XIT(' T2test ',-14 )
               END IF
@@ -725,7 +720,7 @@
               CALL GETSET2( 17, A2, LEV,NLEV2, IBUF,MAXW,OK )
 
               IF (.NOT.OK)                                     THEN
-                  WRITE(6,6140) 
+                  WRITE(6,6015) 
                   CALL                             XIT(' T2test ',-15 ) 
               END IF
 
@@ -735,9 +730,8 @@
 
               IF (.NOT.OK        .OR.
      +            NLEV2.NE.NLEV  )                             THEN
-                  WRITE(6,6030) NREC
-                  WRITE(6,6080)
-                  WRITE(6,6081) NLEV2,NLEV
+                  WRITE(6,6300) NREC
+                  WRITE(6,6009) TYPE,NLEV2,NLEV
                   CALL PRTLAB( IBUF2 ) ; CALL PRTLAB( IBUF )
                   CALL                             XIT(' T2Test ',-16 )
               END IF
@@ -791,7 +785,7 @@
               CALL GETSET2( 14, A1, LEV,NLEV1, IBUF,MAXW,OK )
 
               IF (.NOT.OK)                                     THEN
-                  WRITE(6,6150) 
+                  WRITE(6,6017) 
                   CALL                             XIT(' T2test ',-17 ) 
               END IF
 
@@ -801,9 +795,8 @@
 
               IF (.NOT.OK        .OR.
      +            NLEV1.NE.NLEV  )                             THEN
-                  WRITE(6,6030) NREC
-                  WRITE(6,6080)
-                  WRITE(6,6081) NLEV1,NLEV
+                  WRITE(6,6300) NREC
+                  WRITE(6,6009) TYPE,NLEV1,NLEV
                   CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF )
                   CALL                             XIT(' T2test ',-18 )
               END IF
@@ -836,7 +829,7 @@
               CALL GETSET2( 19, A2, LEV,NLEV2, IBUF,MAXW,OK )
 
               IF (.NOT.OK)                                     THEN
-                  WRITE(6,6160) 
+                  WRITE(6,6019) 
                   CALL                             XIT(' T2test ',-19 ) 
               END IF
 
@@ -846,9 +839,8 @@
 
               IF (.NOT.OK        .OR.
      +            NLEV2.NE.NLEV  )                             THEN
-                  WRITE(6,6030) NREC
-                  WRITE(6,6080)
-                  WRITE(6,6081) NLEV2,NLEV
+                  WRITE(6,6300) NREC
+                  WRITE(6,6009) TYPE,NLEV2,NLEV
                   CALL PRTLAB( IBUF2 ) ; CALL PRTLAB( IBUF )
                   CALL                             XIT(' T2Test ',-20 )
               END IF
@@ -891,7 +883,7 @@
               CALL GETSET2( 15, A1, LEV,NLEV1, IBUF,MAXW,OK )
 
               IF (.NOT.OK)                                     THEN
-                  WRITE(6,6170) 
+                  WRITE(6,6021) 
                   CALL                             XIT(' T2test ',-21 ) 
               END IF
 
@@ -901,9 +893,8 @@
 
               IF (.NOT.OK        .OR.
      +            NLEV1.NE.NLEV  )                             THEN
-                  WRITE(6,6030) NREC
-                  WRITE(6,6080)
-                  WRITE(6,6081) NLEV1,NLEV
+                  WRITE(6,6300) NREC
+                  WRITE(6,6009) TYPE,NLEV1,NLEV
                   CALL PRTLAB( IBUF1 ) ; CALL PRTLAB( IBUF )
                   CALL                             XIT(' T2test ',-22 )
               END IF
@@ -924,7 +915,7 @@
               CALL GETSET2( 20, A2, LEV,NLEV2, IBUF,MAXW,OK )
 
               IF (.NOT.OK)                                     THEN
-                  WRITE(6,6180) 
+                  WRITE(6,6023) 
                   CALL                             XIT(' T2test ',-23 ) 
               END IF
 
@@ -934,9 +925,8 @@
 
               IF (.NOT.OK        .OR.
      +            NLEV2.NE.NLEV  )                             THEN
-                  WRITE(6,6030) NREC
-                  WRITE(6,6080)
-                  WRITE(6,6081) NLEV2,NLEV
+                  WRITE(6,6300) NREC
+                  WRITE(6,6009) TYPE,NLEV2,NLEV
                   CALL PRTLAB( IBUF2 ) ; CALL PRTLAB( IBUF )
                   CALL                             XIT(' T2Test ',-24 )
               END IF
@@ -1056,23 +1046,16 @@
 
           CALL HTEST( P, NWDS*NLEV, ALPHA,KIND, K,D )
 
-***        TRANSFER K,D TO DU,DV.
-
-          DO  I=1,NWDS*NLEV
-              DU(I) = K(I)
-              DV(I) = D(I)
-          END DO
-
 ***        WRITE OUT K-VALUES. 
 
           READ(CK,0004) IBUF(3)
-          CALL PUTSET2( 25, DU, LEV,NLEV, IBUF,MAXW ) 
+          CALL PUTSET2( 25, K, LEV,NLEV, IBUF,MAXW ) 
           IF (NREC.EQ.0) CALL PRTLAB( IBUF )
 
 ***        WRITE OUT D-VALUES. 
 
           READ(CD,0004) IBUF(3)
-          CALL PUTSET2( 26, DV, LEV,NLEV, IBUF,MAXW ) 
+          CALL PUTSET2( 26, D, LEV,NLEV, IBUF,MAXW ) 
           IF (NREC.EQ.0) CALL PRTLAB( IBUF )
 
 ***        WRITE OUT MASK-VALUES IF REQUIRED.
@@ -1089,13 +1072,13 @@
 ***    EOF ON UNIT #5. 
 
  8000 CONTINUE
-      WRITE(6,6070) 
+      WRITE(6,6001) 
       CALL                                         XIT(' T2test ',-1 )
 
 ***    EOF ON UNIT 11 and/OR 16.
 
  9000 CONTINUE
-      WRITE(6,6150) 
+      WRITE(6,6002) 
       CALL                                         XIT(' T2test ',-2 )
 
 *-------------------------------------------------------------------------
@@ -1105,28 +1088,32 @@
 
  5010 FORMAT(10X,E10.0,2F5.0,I5)
 
- 6010 FORMAT(' The T2test card is missing.')
- 6020 FORMAT(' T2test.   ',e10.1,2F5.0,I5)
- 6030 FORMAT(' Conducted F-tests on ',I5,' pairs of mean fields.')
- 6050 FORMAT(' Illegal # of control obs. N1= ',I10)
- 6060 FORMAT(' Illegal # of experimental obs. N2= ',I10)
- 6070 FORMAT(' Illegal # of data points, N1= ',I10,', N2= ',I10)
- 6080 FORMAT(' Labels on mean fields do not match.')
- 6081 FORMAT(' Number of levels found: ',2I5)
- 6090 FORMAT(' File of means for variable U1 empty.')
- 6100 FORMAT(' Unexpected eof on U2 means file.')
- 6110 FORMAT(' Unexpected eof on V1 means file.')
- 6120 FORMAT(' Unexpected eof on V2 means file.')
- 6130 FORMAT(' Unexpected eof on U1 variance/s.d. file.')
- 6140 FORMAT(' Unexpected eof on U2 variance/s.d. file.')
- 6150 FORMAT(' Unexpected eof on V1 variance/s.d. file.')
- 6160 FORMAT(' Unexpected eof on V2 variance/s.d. file.')
- 6170 FORMAT(' Unexpected eof on (U1,V1) covariance file.')
- 6180 FORMAT(' Unexpected eof on (U2,V2) covariance file.')
- 6190 FORMAT(' Insufficient array size= ',I10,', for # pts= ',I10)
+ 6001 FORMAT(' Problem reading parameters.')
+ 6002 FORMAT(' Error in GETSIZ2 with U1BAR and/or U2BAR.')
+ 6004 FORMAT(' File of means for variable U1 empty.')
+ 6005 FORMAT(' Illegal # of control obs. N1= ',I10)
+ 6006 FORMAT(' Unexpected eof on U2 means file.')
+ 6007 FORMAT(' Illegal # of experimental obs. N2= ',I10)
+ 6008 FORMAT(' Illegal # of data points, N1= ',I10,', N2= ',I10)
+ 6009 FORMAT(' Labels of fields do not match.'/' OR...'/
+     +       ' Illegal record type found: ',A/' OR...'/
+     +       ' Different number of levels found: ',2I5)
+ 6010 FORMAT(' Unexpected eof on V1 means file.')
+ 6011 FORMAT(' Unexpected eof on V2 means file.')
+ 6013 FORMAT(' Unexpected eof on U1 variance/s.d. file.')
+ 6015 FORMAT(' Unexpected eof on U2 variance/s.d. file.')
+ 6017 FORMAT(' Unexpected eof on V1 variance/s.d. file.')
+ 6019 FORMAT(' Unexpected eof on V2 variance/s.d. file.')
+ 6021 FORMAT(' Unexpected eof on (U1,V1) covariance file.')
+ 6023 FORMAT(' Unexpected eof on (U2,V2) covariance file.')
+ 6025 FORMAT(' Error ',I10,' while allocating ',I10,' REAL(8)',
+     +       ' words and ',I6,' INTEGER(4) words.')
+
+ 6100 FORMAT(' T2test.   ',e10.1,2F5.0,I5)
  6200 FORMAT(' Warning ',I6,' detected very small denominators',
      +       ' out of ',I6,' computed T**2-values at level ',I6)
  6210 FORMAT(' ** Note - Unmatched mean field names **.')
+ 6300 FORMAT(' Conducted F-tests on ',I5,' pairs of mean fields.')
 *-----------------------------------------------------------------------
 
       END 

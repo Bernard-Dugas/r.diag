@@ -1,4 +1,3 @@
-#     include "diagmacros.cdk"
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
@@ -245,47 +244,42 @@
 *---------------------------------------------------------------------------
       IMPLICIT    none
  
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 1999 )
+      INTEGER,    PARAMETER :: MAXLEV = 1999
+      INTEGER,    PARAMETER :: HEAD = taille_entete
 
-      REAL        ZERO
-      CHARACTER*4 TYPE,CCOV,KIND
-      CHARACTER   VALEUR*5,NAMEF*256
+      CHARACTER(4) TYPE,CCOV,KIND
+      REAL(8)     HEURE,MISFLAG,EPSILON
       LOGICAL     OK,ZEROM,MVALUE,MISSOUT
-      REAL*8      COV,AVF,AVG,HEURE, F,G, MISFLAG,EPSILON
-      INTEGER     I,K,L,MAXW1,MAXW2,LEN1,LEN2,HEAD,IBUF,NS,IER,
-     +            LEVA(MAXLEV,2),LEVB(MAXLEV,2),KBUF(taille_entete),KPAK,
-     +            LBUF(taille_entete),LPAK,LEN,NWDS,MAXW,MEM,NF,NLEV,
-     +            CMPL,STEP(MAXLEV),NSETA,NSETB,LN,IER1,IER2,
+      CHARACTER   VALEUR*5,NAMEF*256,PKTYP*2,VERBE*8
+      INTEGER     I,K,L,MAXW1,MAXW2,LEN1,LEN2,NS,IER,
+     +            LEVA(MAXLEV,2),LEVB(MAXLEV,2),KBUF(HEAD),KPAK,
+     +            LBUF(HEAD),LPAK,LEN,NWDS,MAXW,MEM,NF,NLEV,
+     +            CMPL,STEP(MAXLEV),NSETA,NSETB,IER1,IER2,
      +            IER3,DEET,DATEI,DATEO,NPAS,ALLR8,NPG,IO,
-     +            SETA(0:MAXLEV),SETB(0:MAXLEV),
-     +            MA,MB,MC
+     +            SETA(0:MAXLEV),SETB(0:MAXLEV)
 
       CHARACTER*20 VARIA(MAXLEV),VARIB(MAXLEV)
 
-      POINTER   ( PI,IBUF(8) )
-
-      POINTER   ( PC, COV(1) )
-      POINTER   ( PF,   F(1) ),( PMF, AVF(1) )
-      POINTER   ( PG,   G(1) ),( PMG, AVG(1) )
-      POINTER   ( PA,MA(2,1) ),( PB, MB(2,1) ),(PMC,MC(1))
+      INTEGER,    DIMENSION(:),  ALLOCATABLE        :: IBUF,MC
+      INTEGER,    DIMENSION(:,:),ALLOCATABLE,TARGET :: MA
+      INTEGER,    DIMENSION(:,:),POINTER            :: MB
+      REAL(8),    DIMENSION(:),  ALLOCATABLE        :: COV,F,AVF,G,AVG
 
 #     include "machtype.cdk" 
 
       CHARACTER   NOMPRG*256,NMPRG*256
       COMMON     /PROGNAM/ NOMPRG
 
-      CHARACTER*4 GETYP,PKTYP*2
-      LOGICAL     RPBLOC,SETIO64
-      INTEGER     GETSIZ4,GETHIGH
-      EXTERNAL    GETSIZ4,RPBLOC,JCLPNT,CMPLBL,
-     +            GETYP,GETHIGH,INCDATR,SETIO64,
-     +            HPALLOC,HPDEALLC,XIT,GETNAM,
-     +            MISPAR
+      CHARACTER(4),EXTERNAL :: GETYP
+      LOGICAL,    EXTERNAL :: RPBLOC,SETIO64
+      INTEGER,    EXTERNAL :: GETSIZ4,GETHIGH
+      EXTERNAL    JCLPNT,GETVERB,CMPLBL,
+     +            XIT,GETNAM,MISPAR
 
       DATA        ALLR8 / 1 /, NPG / 999 /
       DATA        CCOV  / 'COV' /
       DATA        KIND  / 'STD' /
+      DATA        VERBE / 'NUL' /
 *====================================================================
 
       DATA NMPRG /
@@ -296,16 +290,15 @@
       NOMPRG =  NMPRG
       ZEROM  = .FALSE.
 
-***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
-
-      CALL MACSPE( HEAD,ZERO )
-
 ***    ACCEDER LES FICHIERS D'E/S.
 
       NS = 0
       NF = 5
       CALL JCLPNT( NF, 11,12,13,14, 6 )
- 
+
+      CALL GETVERB( VERBE ) ; CALL low2up( VERBE,VERBE )
+      IF (VERBE == 'STDEV') CALL STDEV
+
                    MISSOUT = .FALSE.
       IF (NF.EQ.4) MISSOUT = .TRUE.
 
@@ -363,9 +356,8 @@
       IF (NS.EQ.0)                                             THEN
 
           CALL GETNAM( 11,NAMEF )
-          LN = INDEX( NAMEF // ' ' , ' ' )
 
-          WRITE(6,6300) NAMEF(1:LN-1)
+          WRITE(6,6300) TRIM( NAMEF )
           CALL PRTLAB( KBUF )
           WRITE(6,6250) (VARIA(SETA(K))(1:4),K=1,NSETA)
 
@@ -381,9 +373,8 @@
           END IF
 
           CALL GETNAM( 12,NAMEF )
-          LN = INDEX( NAMEF // ' ' , ' ' )
 
-          WRITE(6,6300) NAMEF(1:LN-1)
+          WRITE(6,6300) TRIM (NAMEF )
           CALL PRTLAB( LBUF )
           WRITE(6,6250) (VARIB(SETB(L))(1:4),L=1,NSETB)
 
@@ -407,15 +398,19 @@
 
       MEM  = NWDS*SETA(NSETA)
 
-      ALLOC_NABT
-      CALL HPALLOC( PF, LEN+2*MEM*CMPL,IER1,8 )     ! F   + G,IBUF
+      ALLOCATE( F(MEM*CMPL),G(MEM*CMPL),IBUF(LEN),   STAT=IER1 )
+
       IF (NS.EQ.0)                                             THEN
-          CALL HPALLOC( PC, ALLR8*MEM*CMPL,IER2,8 ) ! COV + AVG,AVF
-          CALL HPALLOC( PA,     5*MEM     ,IER3,0 ) ! MA  + MB, MC
+          IF (ZEROM)                                           THEN
+              ALLOCATE( COV(MEM*CMPL),
+     +                  AVF(MEM*CMPL),AVG(MEM*CMPL), STAT=IER2 )
+          ELSE
+              ALLOCATE( COV(MEM*CMPL),               STAT=IER2 )
+          END IF
+          ALLOCATE( MA(2,MEM),MB(2,MEM),MC(MEM),     STAT=IER3 )
       ELSE
           IER2 = 0 ; IER3 = 0
       END IF
-      ALLOC_ABT
 
       IER = MAX( IER1,IER2,IER3 )
 
@@ -426,46 +421,10 @@
           CALL                                     XIT(' Timcov ' ,-6 )
       END IF
 
-      PG  = LOC(    F(MEM*CMPL+1) )             ! G
-      PI  = LOC(    G(MEM*CMPL+1) )             ! IBUF
-
-      IF (NS.EQ.0)                                             THEN
-
-          PB  = LOC( MA(1,MEM+1) )              ! MB
-          PMC = LOC( MB(1,MEM+1) )              ! MC
-
-
-          IF (ZEROM)                                           THEN
-              PMF = LOC( COV(MEM*CMPL+1) )      ! AVF
-              PMG = LOC( AVF(MEM*CMPL+1) )      ! AVG
-          END IF
-
-      END IF
-
 ***    IBUF(2) TREATMENT DEPENDS ON THE INPUT FILE TYPE.
 
       PKTYP = GETYP( 11 )
       
-      IF (PKTYP.EQ.'SQ' .AND. NS.EQ.0)                         THEN
-
-***        SAVE DEET AS WELL AS INITIAL DATE AND
-***        CURRENT TIMESTEP READ FROM SECOND FILE.
-
-          DEET  = GETHIGH('DEET' ,LBUF )
-          NPAS  = GETHIGH('NPAS' ,LBUF )
-          DATEO = GETHIGH('DATEO',LBUF )
-
-***        CALCULATE CURRENT DATE.
-
-          IF (DEET.NE.0)                                       THEN
-              HEURE = (NPAS*(DBLE( DEET )/60.))/60.
-              CALL INCDATR( DATEI,DATEO,HEURE )
-          ELSE
-              DATEI = DATEO
-          END IF
-          
-      END IF
-
       NS = NS+1
 
 ***    DO THE WORK.
@@ -473,12 +432,12 @@
       CALL COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
      +              SETA,SETB,LEVA,LEVB,VARIA,VARIB,STEP,
      +              MEM,HEAD, NSETA,NSETB,MAXW, OK,ZEROM,
-     +             .TRUE., PKTYP,NPAS,DATEI,NPG, MAXLEV,
+     +             .TRUE., PKTYP, NPG, MAXLEV,
      +              EPSILON,MISSOUT,MVALUE,MISFLAG,
      +              MA,MB,MC,KIND )
 
       IF (.NOT.OK .AND. MAXW.EQ.0)                             THEN
-          CALL HPDEALLC( PF, IER,0 )  
+          DEALLOCATE( F,G,IBUF )  
           GOTO 100
       END IF
 
@@ -493,15 +452,12 @@
       NOMPRG =  NMPRG
       ZEROM  = .FALSE.
 
-***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
-
-      CALL MACSPE( HEAD,ZERO )
-
 ***    ACCEDER LES FICHIERS D'E/S.
 
       NS = 0
       NF = 4
-      CALL JCLPNT( NF, 11,13,14, 6 )
+      
+      IF (VERBE == 'NUL') CALL JCLPNT( NF, 11,13,14, 6 )
  
                    MISSOUT = .FALSE.
       IF (NF.EQ.3) MISSOUT = .TRUE.
@@ -547,9 +503,8 @@
       IF (NS.EQ.0)                                             THEN
 
           CALL GETNAM( 11,NAMEF )
-          LN = INDEX( NAMEF // ' ' , ' ' )
 
-          WRITE(6,6300) NAMEF(1:LN-1)
+          WRITE(6,6300) TRIM( NAMEF )
           CALL PRTLAB( KBUF )
           WRITE(6,6250) (VARIA(SETA(K))(1:4),K=1,NSETA)
 
@@ -576,15 +531,20 @@
 
       MEM  = NWDS*SETA(NSETA)
 
-      ALLOC_NABT
-      CALL HPALLOC( PF, LEN+2*MEM*CMPL,IER1,8 )     ! F   + G
+      ALLOCATE( F(MEM*CMPL),G(MEM*CMPL),IBUF(LEN),   STAT=IER1 )
+
       IF (NS.EQ.0)                                             THEN
-          CALL HPALLOC( PC, ALLR8*MEM*CMPL,IER2,8 ) ! COV + AVF,AVG
-          CALL HPALLOC( PA,     3*MEM     ,IER3,0 ) ! MA  + MA,MC
+          IF (ZEROM)                                           THEN
+              ALLOCATE( COV(MEM*CMPL),
+     +                  AVF(MEM*CMPL),AVG(MEM*CMPL), STAT=IER2 )
+          ELSE
+              ALLOCATE( COV(MEM*CMPL),               STAT=IER2 )
+          END IF
+          ALLOCATE( MA(2,MEM),MC(MEM),               STAT=IER3 )
+          MB => MA              ! MA and MB equivalenced
       ELSE
           IER2 = 0 ; IER3 = 0
       END IF
-      ALLOC_ABT
 
       IER = MAX( IER1,IER2,IER3 )
 
@@ -595,44 +555,10 @@
           CALL                                     XIT('  Stdev ' ,-6 )
       END IF
 
-      PG  = LOC(   F(MEM*CMPL+1) )              ! G
-      PI  = LOC(   G(MEM*CMPL+1) )              ! IBUF
-
-      IF (NS.EQ.0)                                             THEN
-
-          PB  = PA                              ! MB AND MA EQUIVALENCED
-          PMC = LOC( MB(1,MEM+1) )              ! MC
-
-          IF (ZEROM)                                            THEN
-              PMF = LOC( COV(MEM*CMPL+1) )      ! AVF
-              PMG = LOC( AVF(MEM*CMPL+1) )      ! AVG
-          END IF
-
-      END IF
-
 ***    IBUF(2) TREATMENT DEPENDS ON THE INPUT FILE TYPE.
 
       PKTYP = GETYP( 11 )
       
-      IF (PKTYP.EQ.'SQ' .AND. NS.EQ.0)                        THEN
-
-***        SAVE DEET AS WELL AS INITIAL DATE AND CURRENT TIMESTEP.
-
-          DEET  = GETHIGH('DEET' ,KBUF )
-          NPAS  = GETHIGH('NPAS' ,KBUF )
-          DATEO = GETHIGH('DATEO',KBUF )
-
-***        CALCULATE CURRENT DATE.
-
-          IF (DEET.NE.0)                                       THEN
-              HEURE = (NPAS*(DBLE( DEET )/60.))/60.
-              CALL INCDATR( DATEI,DATEO,HEURE )
-          ELSE
-              DATEI = DATEO
-          END IF
-          
-      END IF
-
       NS = NS+1
 
 ***    DO THE WORK.
@@ -640,12 +566,12 @@
       CALL COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
      +              SETA,SETA,LEVA,LEVA,VARIA,VARIA,STEP,
      +              MEM,HEAD, NSETA,NSETA,MAXW, OK,ZEROM,
-     +             .FALSE., PKTYP,NPAS,DATEI,NPG, MAXLEV,
+     +             .FALSE., PKTYP, NPG, MAXLEV,
      +              EPSILON,MISSOUT,MVALUE,MISFLAG,
      +              MA,MB,MC, KIND )
 
       IF (.NOT.OK .AND. MAXW.EQ.0)                             THEN
-          CALL HPDEALLC( PF, IER,1 )  
+          DEALLOCATE( F,G,IBUF )
           GOTO 200
       END IF
 
@@ -678,7 +604,7 @@
       SUBROUTINE COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
      +                    SETA,SETB,LEVA,LEVB,VARIA,VARIB,STEP,
      +                    MEM,HEAD, NSETA,NSETB,MAXW, OK,ZEROM,
-     +                    TIMCOV, PKTYP,NPAS,DATEI,NPG, MAXLEV,
+     +                    TIMCOV, PKTYP, NPG, MAXLEV,
      +                    EPSILON,MISSOUT,MVALUE,MISFLAG,
      +                    MA,MB,MC,KIND )
 *-------------------------------------------------------------------------
@@ -688,26 +614,25 @@
       COMPLEX*16  CWORD
       LOGICAL     OK,ZEROM,TIMCOV,MVALUE,MISSOUT
       CHARACTER*4 CCOV,CHOLD(MAXLEV),JOBN*8,PKTYP*2
-      INTEGER     NPAS,DATEI,MEM,HEAD,DEET,HOLD,JOURF,
-     +            JOURI,HEURF,HEURI,ANNEE,JOUR,DATIM(14),
-     +            NSETA,NSETB,NRECS,NSETS,MOIS,DATEO,NPG,
-     +            SETA(0:NSETA),SETB(0:NSETB),MAXLEV,I,IK,K,
+      INTEGER     SETA(0:NSETA),SETB(0:NSETB),I,IK,K,M,
      +            LEVA(MAXLEV,2),LEVB(MAXLEV,2),STEP(*),
-     +            KBUF(8),IBUF(8), MAXW,CMPL,DATEF,
-     +            MA(2,MEM),MB(2,MEM),MC(MEM),M
+     +            KBUF(8),IBUF(8), MAXW,CMPL,DATEV,
+     +            NPAS,MEM,HEAD,DEET,HOLD,SAMPLZ,
+     +            NSETA,NSETB,DATEO,NPG,MAXLEV,
+     +            MA(2,MEM),MB(2,MEM),MC(MEM)
       REAL*8      COV(CMPL,MEM),AVF(CMPL,MEM),AVG(CMPL,MEM),
-     +            F(CMPL,MEM),G(CMPL,MEM),AR,AI,EPS,
+     +            F(CMPL,MEM),G(CMPL,MEM),AR,AI,EPS,TDIFF,
      +            EPSILON,HEURE,MISFLAG,OVNSET
+
+      LOGICAL,    SAVE :: SAMPLES = .TRUE.
+      INTEGER,    SAVE :: DATEF,DATEI,DATEOI, NRECS, NSETS=0
+      REAL,       SAVE :: HIVAL=-1,LOVAL=-1
 
       CHARACTER*20 VARIA(MAXLEV),VARIB(MAXLEV)
 
-      SAVE        NRECS, NSETS
-
-      INTEGER     GETHIGH
-      EXTERNAL    XIT,GETMSET2,PUTMSET2,PRECEDE,
-     +            PUTHIC,GETHIGH,PUTHIGH,DATMGP2
-
-      DATA        NSETS / 0 /
+      INTEGER,    EXTERNAL :: GETHIGH
+      EXTERNAL    XIT,GETMSET2,PUTMSET2,PRECEDE,INCDATR,
+     +            DIFDATR,PUTHIC,PUTHIGH,PUTHIR,PUTSAMPLZ
 *-------------------------------------------------------------------------
 
       CHOLD = ' '
@@ -890,6 +815,46 @@
               END DO
           END IF
 
+          IF (PKTYP.EQ.'SQ')                                   THEN
+
+              ! Define time information.
+
+              DEET  = GETHIGH('DEET' ,IBUF ) ; HEURE = 0.0
+              DATEO = GETHIGH('DATEO',IBUF ) ; DATEV = DATEO
+
+              IF (NSETS == 0)   DATEOI = DATEO ; 
+              IF (SAMPLES .AND. DATEO /= DATEOI) SAMPLES = .FALSE.
+
+              IF (DEET /= 0)                                   THEN
+                  NPAS  = GETHIGH('NPAS' ,IBUF )
+                  HEURE = (NPAS*(DBLE( DEET )/60.))/60.
+                  IF (NSETS == 0)                              THEN
+                      LOVAL = HEURE ; HIVAL = LOVAL
+                  ELSE IF (SAMPLES)                            THEN
+                      LOVAL = MIN( LOVAL,SNGL( HEURE ) )
+                      HIVAL = MAX( HIVAL,SNGL( HEURE ) )
+                  END IF
+              END IF
+
+              ! Possibly redefine DATEI and/or DATEF.
+
+              IF (HEURE > 0.0_8) CALL INCDATR( DATEV,DATEO,HEURE )
+
+              IF (NSETS == 0)                                  THEN
+                  DATEI = DATEV ; DATEF = DATEV
+              END IF
+
+              IF (DATEV /= DATEI)                              THEN
+                  CALL DIFDATR( DATEV,DATEI,tdiff )
+                  IF (TDIFF < 0._8) DATEI = DATEV
+              END IF
+              IF (DATEV /= DATEF)                              THEN
+                  CALL DIFDATR( DATEV,DATEF,tdiff )
+                  IF (TDIFF > 0._8) DATEF = DATEV
+              END IF
+
+          END IF
+
       NRECS = NRECS+SETA(NSETA)
       NSETS = NSETS+1
       GOTO 100
@@ -1055,69 +1020,23 @@
 
       IF (PKTYP.EQ.'SQ')                                       THEN
 
-***        RETREIVE CURRENT DATE AND SAVE IT IN DATEF.
-
-          DEET  = GETHIGH('DEET' ,IBUF )
-          DATEO = GETHIGH('DATEO',IBUF )
-          NPAS  = GETHIGH('NPAS' ,IBUF )
-
-          IF (DEET.NE.0)                                       THEN
-              HEURE = (NPAS*(DBLE( DEET )/60.))/60. 
-              CALL INCDATR( DATEF,DATEO,HEURE )
-          ELSE
-              DATEF = DATEO
-          END IF
-          
-***        ACCOUNT FOR DECREASING TIME:
-***        DATEI MUST BE THE EARLIEST TIME.
-
-***        CALCULATE JULIAN DAY CORRESPONDING TO DATEF.
-
-          DATIM(14) = DATEF
-          CALL DATMGP2( DATIM )
-
-          HEURF = DATIM(5)
-          ANNEE = DATIM(4)
-          JOUR  = DATIM(3)
-          MOIS  = DATIM(2)
-
-          CALL JDATEC( JOURF, ANNEE,MOIS,JOUR )
-
-***        CALCULATE JULIAN DAY CORRESPONDING TO DATEI.
-
-          DATIM(14) = DATEI
-          CALL DATMGP2( DATIM )
-
-          HEURI = DATIM(5)
-          ANNEE = DATIM(4)
-          JOUR  = DATIM(3)
-          MOIS  = DATIM(2)
-
-          CALL JDATEC( JOURI, ANNEE, MOIS, JOUR )
-
-***        THIS IS WHERE WE ENSURE INCREASING TIME.
-
-          IF (JOURF.LT.JOURI .OR.
-     +       (JOURF.EQ.JOURI .AND. HEURF.LT.HEURI))            THEN
-
-              HOLD  = DATEF
-              DATEF = DATEI
-              DATEI = HOLD
-
-          END IF
-
           CALL DIFDATR( DATEF,DATEI,HEURE )
+
+          IF (.NOT.SAMPLES)                                    THEN
+              HIVAL = HEURE ; LOVAL = 0.
+          END IF
 
           IF (DEET.NE.0)                                       THEN
           
 ***            PUT VALIDITY DATE OF FIRST SET IN DATEO. THE
-***            SAMPLE SIZE IS SAVED IN IP3 AND THE NUMBER OF
-***            TIMESTEPS SPANNING THE SET GOES TO IBUF(2).
+***            SAMPLE SIZE IS SAVED IN NPAS+1 AND THE NUMBER
+***            OF TIMESTEPS SPANNING THE SET GOES TO IBUF(2).
 ***            THE CALCULATED VALIDITY DATE THAT WILL BE
-***            SAVED ON THE FILE WILL CORRESPOND TO
-***            THE LAST SAMPLE.
+***            SAVED ON THE FILE WILL CORRESPOND TO THAT
+***            OF THE LATEST SAMPLE.
 
-              NPAS = NINT( (HEURE*60.)/(DBLE( DEET )/60.) )
+              NPAS = NSETS-1
+              DEET = NINT( (HEURE*3600._8)/NPAS )
 
           ELSE
 
@@ -1129,10 +1048,14 @@
 
           END IF
 
-          CALL PUTHIGH( NSETS,'IP3'  ,IBUF )
           CALL PUTHIGH( DATEI,'DATEO',IBUF )
           CALL PUTHIGH( DEET ,'DEET' ,IBUF )
           CALL PUTHIGH( NPAS ,'NPAS' ,IBUF )
+
+          CALL PUTHIR ( HIVAL,'HIVAL',IBUF ) 
+          CALL PUTHIR ( LOVAL,'LOVAL',IBUF ) 
+
+          CALL PUTSAMPLZ( NSETS,IBUF )
 
           IBUF(2) = NPAS
 

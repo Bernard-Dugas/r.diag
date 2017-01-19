@@ -39,6 +39,10 @@
 *         
 *REVISIONS
 *
+*  B. Dugas janvier 2017 :
+*  - Utiliser GETSAMPLZ pour definir IP3, i.e. le nombre 
+*    d'echantillons correspondant a une moyenne temporelles
+*    a partir des informations dans la section haute de IBUF
 *  B. Dugas mars 2015 :
 *  - Correctif lie ax appels GET_TOC/VGRID.
 *  B. Dugas juillet 2013 :
@@ -123,10 +127,11 @@
       integer maxwrd
       common /maxwrd/ maxwrd
 
-      integer length,nwds,nblen,opack
+      real    hi,lo
+      integer length,nwds,nblen,opack, rk,ipm
 
       character(len=4), external :: gethic
-      integer,          external :: gethigh
+      integer,          external :: gethigh,getsamplz
       integer(8),       external :: grosse_date
 
 *-----------------------------------------------------------------------
@@ -190,7 +195,7 @@
       label(nlev,cvar)=ibuf(4) ; name(cvar)=ibuf(3)
       cstep(1,cvar)=grosse_date( ibuf )
       if (ccc_pktyp(1:2) == 'SQ') then
-         ip3  (1,cvar) = gethigh( 'IP3'  ,ibuf )
+         ip3  (1,cvar) = getsamplz( rk,hi,lo,ipm, ibuf )
          dateo(1,cvar) = gethigh( 'DATEO',ibuf )
          if (.not.(miss_ccc_def .or. fill_ccc_def)) then
             call MISPAR( ok2,RVALUE,REPSIL )
@@ -276,7 +281,7 @@
          infvar(cvar)%len(nt)=itime
          cstep(itime,cvar) = nstep
          if (ccc_pktyp(1:2) == 'SQ') then
-            ip3  (itime,cvar) = gethigh( 'IP3'  ,ibuf )
+            ip3  (itime,cvar) = getsamplz( rk,hi,lo,ipm, ibuf )
             dateo(itime,cvar) = gethigh( 'DATEO',ibuf )
             if (.not.(miss_ccc_def .or. fill_ccc_def)) then
                call MISPAR( ok2,RVALUE,REPSIL )
@@ -656,6 +661,7 @@
 *
 *REVISIONS
 *
+*  Bernard Dugas jan 2017 : utiliser getmsamplz pour definir IP3
 *  Bernard Dugas mai 2008 : ladate est maintenant en format date-time-stamp
 *  Bernard Dugas nov 2008 : invj = .not.invj pour les grilles de type Z
 *  Bernard Dugas mai 2009 : tenir compte de GRTYP=Z et ZTYP=N ou S (en plus de E)
@@ -664,14 +670,14 @@
 ******
 
       CHARACTER(len=4), external :: GETHIC
-      INTEGER,external :: GETHIGH,NEWDATE
+      INTEGER,external :: GETHIGH,NEWDATE,GETSAMPLZ
 
       real(8)      DELTAT
 
       character    ZTYP,GRTYP
 
       integer      DATEO, IP1, IP3, dtpr, tmpr,
-     .             datchek, i, ni, nj,
+     .             datchek, i, ni, nj, rk, ipm,
      .             ZIG1, ZIG2, ZIG3, ZIG4,
      .             IG1, IG2, IG3, IG4,
      .             DEET, NPAS, NHOUR
@@ -679,7 +685,7 @@
       real         olat    , olon  , dlat  , dlon  ,
      .             pi      , pj    , d60   , dgrw  ,
      .             dlat1   , dlon1 , dlat2 , dlon2 ,
-     .             latproj , nhem  , dx,dy
+     .             latproj , nhem  , dx,dy , lo,hi
 
 *-----------------------------------------------------------------------
 
@@ -721,7 +727,8 @@
       DATEO = GETHIGH('DATEO', IBUF )
 CCC   IP1   = GETHIGH( 'IP1' , IBUF )
       IP1   = IBUF(4)
-      IP3   = GETHIGH( 'IP3' , IBUF )
+CCC   IP3   = GETHIGH( 'IP2' , IBUF )
+      IP3   = GETSAMPLZ( RK,HI,LO,IPM, IBUF )
       DEET  = GETHIGH('DEET' , IBUF )
       NPAS  = GETHIGH('NPAS' , IBUF )
 

@@ -1,0 +1,86 @@
+
+Description of the changes that have been make to r.diag since December 14 2016
+
+* DEVELOPMENT/SRC/CDF2CCC *
+
+INQ_FILE :
+ - Use GETSAMPLZ to define the time-mean sample
+   sizes (IP3) rather that retreiving them directly
+   from the IP3 in the high IBUF section
+RDLALON2 : 
+ - Use PUTSAMPLZ to save the time-mean sample
+   sizes (SVSM) rather that simply writing them
+   to IP3 in the high IBUF section
+
+* DEVELOPMENT/SRC/LSPGM *
+
+FSTMDIAG :
+ - Remove argument -oldip3. The code will now determine
+   wether this condition appies on the fly.
+ - Limit the possible npas,deet modifications to account for a
+   "deet > 16777215" situation to a maximum of two iterations.
+FSTTRI :
+ - Add a "PARJOUR" or "BYDAY" optional value to the -split argument.
+   Output files are then written for separate days and their names are
+   in a *_YYYMMDD format. This is a user-requested modification.
+ - Write the accessory records (>>,^^,!!,HY) to these "split" files
+   as well as to the *_renvois output file.
+ - More extensive error checking of function return codes.
+T2TEST :
+ - 64-Bits I/O mode.
+ - Major syntax updates F77 --> F90.
+ - Use GETSAMPLZ to determine the sample sizes for CMC/RPN files.
+TIMAVG :
+ - Reproduce the support of the new IP1/2/3 coding implemented in
+   FSTMDIAG, but still accounting for the extra limitations that
+   come with TIMAVG with respect to FSTMDIAG. One of these limitations
+   implies that sample and average data cannot be mixed in the same
+   file. These changes are mainly implemented via modified calls to
+   the GETMSET3/PUTMSET3 subroutine and a new call to GETIPMODE.
+ - Simplify the DATE-TIME-STAMP calculations. As part of this, all
+   calls to DATMGP2 and JDATEC were removed/replaced.
+TIMCOV :
+ - Major syntax updates F77 --> F90.
+ - Correction for debug-mode calls to STDEV.
+ - Again, reproduce the support of the new IP1/2/3 coding implemented
+   in FSTMDIAG, but still accounting for the even greater limitations
+   that come with TIMCOV with respect to FSTMDIAG. The sample sizes
+   for CMC/RPN files are determined via a call to GETSAMPLZ.
+ - And again, simplify the DATE-TIME-STAMP calculations. As part
+   of this, all calls to DATMGP2 and JDATEC were removed/replaced.
+TTESTA,TTESTE :
+ - Syntax updates F77 --> F90.
+ - Use GETSAMPLZ to determine the sample sizes for CMC/RPN files.
+VBASD :
+ - 64-Bits I/O mode.
+ - Use GETSAMPLZ to determine the sample sizes for CMC/RPN files.
+
+* DEVELOPMENT/SRC/LSSUB *
+
+CONVSUB :
+ - Add to WRITSTD the same code that attempts to correct
+   a possible "deet > 16777215" situation in FSTMDIAG. This
+   comes with a new error exit code (-4) in that routine.
+GET :
+ - Modify calls to GETSAMPLZ in GETMSET3 (extra argument).
+ - Add GETIPMODE function (new or old IP1/2/3 coding ?).
+ - Account for a possible "deet > 16777215" modified npas,deet
+   pair in GETSAMPLZ. This was already done in FSTMDIAG.
+ - In general, make sure that GETSAMPLZ supports the same
+   coding options for the average record descriptors as
+   found in FSTMDIAG.
+LSSUB :
+ - Document (via the command-line) the -4 WRITSTD error exit code.
+PUT :
+ - Again, make sure that PUTSAMPLZ supports the same coding
+   options for the time-average record descriptors as in FSTMDIAG.
+UTIL :
+ - Premptive removal of any left-over $TMPDIR/zcrochets files
+   at program startup in JCLPNT. The presence of this file is
+   a signal that an older version of r.diag was called rencently. 
+   This 'zcrochets' file in incompatible with the current version.
+
+* DEVELOPMENT/MAN/PDOC *
+
+Error_messages :
+ - Document (via html) the -4 WRITSTD error exit code.

@@ -1379,6 +1379,19 @@ C
           CALL                                     XIT(' Jclpnt ',-10 )
       END IF
 
+***    CHECK THAT THERE IS NO LEFT-OVER zcrochets FILES
+***    IN THE TEMPORARY DIRECTORY. OTHERWISE, REMOVE IT.
+
+      NAME = TRIM( TMPDIRN ) // '/zcrochets'
+      COMMAND = 'INQUIRE' ; IU = -1
+      INQUIRE( FILE=NAME,ERR=999,IOSTAT=IO,EXIST=EX )
+
+      IF (EX)                                                  THEN
+          NAME = 'rm -rf ' // TRIM( NAME )
+          CALL SYSTEM( TRIM( NAME ) )
+          NAME = ' '
+      END IF
+
 ***    CHECK TO SEE IF THE "NA" (GENERIC NO ABORT)
 ***    COMMAND PARAMETRE HAS BEEN SPECIFIED.
 
