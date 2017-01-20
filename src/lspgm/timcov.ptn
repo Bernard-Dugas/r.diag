@@ -297,7 +297,7 @@
       CALL JCLPNT( NF, 11,12,13,14, 6 )
 
       CALL GETVERB( VERBE ) ; CALL low2up( VERBE,VERBE )
-      IF (VERBE == 'STDEV') CALL STDEV
+      IF (VERBE == 'STDEV') GOTO 150 ! CALL STDEV
 
                    MISSOUT = .FALSE.
       IF (NF.EQ.4) MISSOUT = .TRUE.
@@ -449,7 +449,8 @@
       STOP
 *---------------------------------------------------------------------
       ENTRY stdev
-      NOMPRG =  NMPRG
+
+  150 NOMPRG =  NMPRG
       ZEROM  = .FALSE.
 
 ***    ACCEDER LES FICHIERS D'E/S.
