@@ -53,6 +53,9 @@
 *
 *REVISIONS
 *
+*     Bernard Dugas        janvier 2017
+*     Ajouter le support des donnees de type nf_int
+*
 *     Bernard Dugas        fevrier 2009
 *     Ajouter le support des donnees de type nf_byte
 *
@@ -83,6 +86,11 @@
 
             status=nf_put_att_int2(ncid,varid,attr(n)%name,attr(n)%type,
      .                                      attr(n)%len,attr(n)%i2value)
+
+         else if (attr(n)%type.eq.nf_int)then    ! integer*4
+
+            status=nf_put_att_int(ncid,varid,attr(n)%name,attr(n)%type,
+     .                                      attr(n)%len,attr(n)%ivalue)
 
          else if (attr(n)%type.eq.nf_float)then    ! real*4
 

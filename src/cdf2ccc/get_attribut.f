@@ -33,6 +33,8 @@
 *
 * REVISIONS
 *
+*     Bernard Dugas, janvier 2017 :
+*     - Ajouter le support des donnees de type nf_int
 *     Bernard Dugas, mars 2015 :
 *     - Verifier que le nombre de valeurs des attributs
 *       entiers ou reels est <= max_len.
@@ -92,7 +94,11 @@
          else if (type.eq.nf_short) then
 
             status=nf_get_att_int2 (ncid,varid,name, i2vals)
-            
+
+         else if (type.eq.nf_int) then
+
+            status=nf_get_att_int (ncid,varid,name, ivals)
+
          else if (type.eq.nf_float) then
 
             status=nf_get_att_real (ncid,varid,name, rvals)

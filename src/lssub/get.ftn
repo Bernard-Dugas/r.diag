@@ -3724,6 +3724,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 ***    Variables locales.
 
       INTEGER           VALUE
+      CHARACTER(4)      PKTYP
       CHARACTER(8)      NOM
 
       LOGICAL                    info
@@ -3738,6 +3739,10 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
       nom = NAME
       call LOW2UP( nom,nom )
+
+***    Definir PKTYP
+
+      WRITE(PKTYP,'(A4)') IBUF(10)
 
 ***    On connait ce nom ?
 
@@ -3773,7 +3778,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
             VALUE = IBUF(22)
          CASE('RKIND')
             VALUE = IBUF(29)
-
+            IF (PKTYP(1:2) /= 'SQ') VALUE = -1
          CASE DEFAULT
             IF (INFO) WRITE(6,6001) NOM
             CALL                                   XIT(' Gethigh',-1 )
@@ -3978,6 +3983,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
           ! Comparer IBUF(2) a la plus petite valeur
           ! associee a un "DATE-TIME STAMP group" valide.
           IF (IBUF(2) < 01 01 00 01 0) GETSAMPLZ = IBUF(2)
+          RKIND = -1
           RETURN
       END IF
 

@@ -869,6 +869,8 @@ CCC           call swapa4( ibuf(1) )
       END 
       SUBROUTINE prtlab2 (PREFIX,IBUF)
 
+      use           diag_convert_ip123, only : KIND_HOURS
+
       IMPLICIT      none
 
 ***    THIS ROUTINE WRITES OUT THE 8-WORD LABEL IN IBUF TO UNIT 6.
@@ -883,14 +885,16 @@ CCC           call swapa4( ibuf(1) )
 ***      2) Use GET_IP1_STRING to decode IBUF(4) and print result
 ***      3) Add ENTRY PRTLAB for cases without prefix arguments
 
-      INTEGER   I,J,NPAS,err
-      CHARACTER(LEN=12) :: SLEV
-      CHARACTER(LEN=18) :: SDAT
+      INTEGER   I,J,J2,NPAS,err,IP3,RKIND, HIV,LOV
+      CHARACTER(LEN=6)  :: HICA,LOCA
+      CHARACTER(LEN=12) :: SLEV,SLEV2
+      CHARACTER(LEN=36) :: SDAT
 
       INTEGER(8) :: DATE_CONVERSION_FACTOR
       integer    :: YYYYMMDD,HHMMSSHH
 
       integer, external :: newdate,gethigh
+      real,    external :: gethir
 
       INTEGER, SAVE :: LEN_PREFIX=0
 
@@ -928,6 +932,8 @@ CCC           call swapa4( ibuf(1) )
 
       ENDIF
 
+      rkind = GETHIGH( 'RKIND',IBUF )
+
 ***    DECODE IBUF(4).
 
       CALL GET_IP1_STRING( IBUF(4),SLEV )
@@ -940,12 +946,45 @@ CCC           call swapa4( ibuf(1) )
 
       IF (J == 0) J = LEN_TRIM( SLEV )
 
+      IF (rkind /= -1)                                         THEN
+          IF (rkind == KIND_HOURS)                             THEN
+              HIV = NINT( GETHIR( 'HIVAL',IBUF ) )
+              LOV = NINT( GETHIR( 'LOVAL',IBUF ) )
+              IF (LOV < 1000000. .AND. HIV < 1000000.)         THEN
+                  WRITE(LOCA,'(I6)') LOV
+                  DO  J=1,LEN_TRIM( LOCA )
+                      IF (LOCA(J:J) /= ' ') EXIT
+                  END DO
+                  SDAT = TRIM( SDAT ) // ' ('
+     +                                // LOCA(J:LEN_TRIM( LOCA ))
+                  WRITE(HICA,'(I6)') HIV
+                  DO  J=1,LEN_TRIM( HICA )
+                      IF (HICA(J:J) /= ' ') EXIT
+                  END DO
+                  SDAT = TRIM( SDAT ) // ' -> '
+     +                                // HICA(J:LEN_TRIM( HICA ))
+     +                                // ' H)'
+              END IF
+          ELSE
+              IP3 = GETHIGH( 'IP3',IBUF )
+              CALL GET_IP1_STRING( IP3,SLEV2 )
+              DO  J2=LEN_TRIM( SLEV2 ),1,-1
+                 IF (SLEV2(J2:J2) == ' ') EXIT
+              END DO
+              IF (J2 == 0) J2 = LEN_TRIM( SLEV2 )
+              SLEV = SLEV(1:J) // '-> ' // SLEV2(1:J2)
+              J = LEN_TRIM( SLEV )
+          END IF
+      END IF
+
 ***    PRINT WITH APPROPRIATE FORMAT.
 
       IF (LEN_PREFIX > 0)                                      THEN
-          WRITE(6,6000) PREFIX,IBUF(1),TRIM(SDAT),IBUF(3),SLEV(1:J),(IBUF(I),I=5,8)
+          WRITE(6,6000) PREFIX,IBUF(1),TRIM(SDAT),IBUF(3),
+     +                         SLEV(1:J),(IBUF(I),I=5,8)
       ELSE
-          WRITE(6,6001)        IBUF(1),TRIM(SDAT),IBUF(3),SLEV(1:J),(IBUF(I),I=5,8)
+          WRITE(6,6001)        IBUF(1),TRIM(SDAT),IBUF(3),
+     +                         SLEV(1:J),(IBUF(I),I=5,8)
       END IF
 
       LEN_PREFIX = 0
@@ -959,6 +998,8 @@ CCC           call swapa4( ibuf(1) )
       END 
       SUBROUTINE prtlab3 (CHAINE,IBUF)
 
+      use           diag_convert_ip123, only : KIND_HOURS
+
       IMPLICIT      none
 
 ***    THIS ROUTINE WRITES OUT THE 8-WORD LABEL IN IBUF TO CHAINE.
@@ -968,22 +1009,66 @@ CCC           call swapa4( ibuf(1) )
 
 ***   SEPT 10/2009 - B.Dugas
 
-      INTEGER   I,npas
-      CHARACTER(LEN=15) :: SLEV
-      CHARACTER(LEN=18) :: SDAT
-      CHARACTER(LEN=80) :: ICHAINE
+      INTEGER   I,IP3,J,npas,RKIND,HIV,LOV
+      CHARACTER(LEN=6)  :: HICA,LOCA
+      CHARACTER(LEN=15) :: SLEV1,SLEV2
+      CHARACTER(LEN=36) :: SDAT,SLEV
+      CHARACTER(LEN=100) :: ICHAINE
 
+      real,    external :: GETHIR
       integer, external :: GETHIGH
 
 *-------------------------------------------------------------------- 
 ***    DECODE IBUF(2).
 
-      npas = GETHIGH('NPAS',IBUF )
+      rkind = GETHIGH('RKIND',IBUF )
+      npas  = GETHIGH('NPAS' ,IBUF )
       CALL PDATE2( SDAT,IBUF(2),npas )
 
 ***    DECODE IBUF(4).
 
-      CALL GET_IP1_STRING( IBUF(4),SLEV )
+      CALL GET_IP1_STRING( IBUF(4),SLEV1 )
+
+      IF (rkind /= -1)                                         THEN
+          IF (rkind == KIND_HOURS)                             THEN
+              HIV = NINT( GETHIR( 'HIVAL',IBUF ) )
+              LOV = NINT( GETHIR( 'LOVAL',IBUF ) )
+              IF (LOV < 1000000. .AND. HIV < 1000000.)         THEN
+                  WRITE(LOCA,'(I6)') LOV
+                  DO  J=1,LEN_TRIM( LOCA )
+                      IF (LOCA(J:J) /= ' ') EXIT
+                  END DO
+                  SDAT = TRIM( SDAT ) // ' ('
+     +                                // LOCA(J:LEN_TRIM( LOCA ))
+                  WRITE(HICA,'(I6)') HIV
+                  DO  J=1,LEN_TRIM( HICA )
+                      IF (HICA(J:J) /= ' ') EXIT
+                  END DO
+                  SDAT = TRIM( SDAT ) // ' -> '
+     +                                // HICA(J:LEN_TRIM( HICA ))
+     +                                // ' H)'
+              END IF
+              SLEV = SLEV1
+          ELSE
+              IP3 = GETHIGH( 'IP3',IBUF )
+              CALL GET_IP1_STRING( IP3,SLEV2 )
+              IF (SLEV2 /= ' ')                                 THEN
+                  ! Remove leading blanks
+                  DO  J=1,LEN_TRIM( SLEV2 )
+                      IF (SLEV2(J:J) /= ' ') EXIT
+                  END DO
+                  SLEV2 = SLEV2(J:LEN_TRIM( SLEV2 ))
+              END IF
+              DO  J=LEN_TRIM( SLEV1 ),1,-1
+                  ! Remove trailing units
+                  IF (SLEV1(J:J) == ' ') EXIT
+              END DO
+              IF (J == 0) J = LEN_TRIM( SLEV1 )
+              SLEV = SLEV1(1:J) // '-> ' // TRIM( SLEV2 )
+          END IF
+      ELSE
+          SLEV = SLEV1
+      END IF
 
 ***    PRINT TO ICHAINE WITH APPROPRIATE FORMAT.
 
@@ -994,7 +1079,7 @@ CCC           call swapa4( ibuf(1) )
       RETURN
 *-------------------------------------------------------------------- 
 
- 6000 FORMAT(2X,A4,A,1X,A4,A,2I6,I10,I8)
+ 6000 FORMAT(2X,A4,A,1X,A4,1X,A,2I6,I10,I8)
 
       END 
       SUBROUTINE PDATE2( CHAINE,STAMP,NPAS )

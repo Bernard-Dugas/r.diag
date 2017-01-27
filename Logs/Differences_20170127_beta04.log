@@ -1,0 +1,22 @@
+
+Description of the changes that have been make to r.diag since December 14 2016
+
+* DEVELOPMENT/SRC/LSSUB *
+
+GET :
+ - GETHIGH returns RKIND=-1 for CCC-type files
+LABEL :
+ - Modify PRTLAB and PRTLAB3 so as to indicate the presence
+   of ranges in time or in the vertical coordinate. This change
+   impacts about 80% of the r.diag main modules
+
+* DEVELOPMENT/SRC/CDF2CCC *
+
+RDLATLON2 : 
+ - Save the time bounds value in HIVAL and LOVAL in highbuf when the
+   sample size can be specified via the "-dt" command-line argument.
+   The time bounds are then saved in IP2/IP3. Otherwise, HIVAL-LOVAL
+   is saved in IP2. In all cases, the DATEO/DATEV values correspond
+   to the first and last samples used in the time-mean calculations
+GET_ATTRIBUT/PUT_ATTRIBUT :
+ - Consider NF_INT data

@@ -16,6 +16,8 @@
 !
       subroutine rdlatlon2 (NCID,FUNIT)
 
+      use          diag_convert_ip123
+
       implicit none
 
       include 'netcdf.inc'
@@ -37,9 +39,11 @@
 *
 *REVISIONS
 *
-* B.Dugas janvier '17 :
-* - Utiliser PUTSAMPLZ pour sauver le
-*   nombre d'echantillons svsm dans IBUF
+* B.Dugas janvier '23 :
+* - Utiliser PUTSAMPLZ pour sauver le nombre d'echantillons
+*   svsm dans IBUF apres avoir place HIVAL et LOVAL dans la
+*   section haute de IBUF lorsque leur taille est specifie 
+*   avec l'argument -dt. Sinon, on sauve tim2-tim1 dans IP2.
 * B.Dugas avril '16 :
 * - Ajouter le support des grilles de type Y
 * B.Dugas mars '15 :
@@ -175,7 +179,7 @@
 
 ******RPN/CMC :
 
-      character(len=1)   GRTYP,pGRTYP
+      character(len=1)   GRTYP,pGRTYP,NULS
       character(len=128) ETIKET,string,level_value
       character(len=4),  save :: Gtyp='GRID',Ztyp='ZONL',Dtyp='DATA'
 
@@ -191,9 +195,14 @@
 
       logical ::   ok_lon, ok_lat, grille_Y, grille_Z, fill_cdf_nan
 
-      integer,save :: svsm=-1 
+******general :
+
+      integer,save :: svsm=-1,rkind=-1
+      real,save    :: hival=-1.,loval=-1.
+
+      real    ::   hold
       integer ::   xid2d, yid2d
-      integer ::   npas,deet,datei,dateo,ip3
+      integer ::   npas,deet,datei,dateo,ip2,ip3
       real(8) ::   tdelta,tim1,tim2,zero8=0.0_8
       real(8) ::   dum81,dum82 ! Dummies for MISPAR
 
@@ -201,7 +210,7 @@
 
       CHARACTER(len=4), external :: GETYP
       logical,     external :: checkres,idnan,monotone
-      external     puthic,puthigh
+      external     puthic,puthigh,putsamplz,Diag_CONVIP_plus
 
       LOGICAL, dimension(nvars) :: fill_message
 
@@ -1028,22 +1037,30 @@
                         call decodate( ncid,tim2, ccctime )
                         call difdatr( ccctime,dateo, tdelta )
                         if (nint( dt ) <  1) then
-                           npas = nint( tdelta )
-                           deet = 3600
+                           npas = nint( tdelta ) ; deet = 3600
+                           if (tim2-tim1 <= 1000000._8)         then
+                               hold = tim2-tim1 
+                               CALL Diag_CONVIP_plus
+     +                         ( IP2,hold,kIND_HOURS,+2,NULS,.FALSE. )
+                           else
+                               IP2 = nint( tim2-tim1 )
+                           end if
+                           call            puthigh( IP2, 'IP2',ibuf )
+                           svsm = 1 ; call puthigh( svsm,'IP3',ibuf )
                         else
-                           npas = nint( tdelta / (dt/3600.0_8) )
-                           deet = dt
-                        endif
-                        if (svsm == -1) then ! Number of samples
-                           call decodate( ncid,tim1, datei )
-                           call difdatr( ccctime,datei, tdelta )
-                           svsm = nint( tdelta / (deet/3600.0_8) )
-                           if (svsm <= 1) svsm = 0
+                           loval = tim1
+                           svsm = nint( tdelta / (dt/3600.0_8) )
+                           npas = svsm-1 ; deet = nint( dt )
+                           tdelta = dt / 3600.0_8 ; hival = tim2-tdelta
+                           call incdatr( datei,dateo,tim1+tdelta )
+                           dateo = datei
                         endif
                         call puthigh( dateo,'DATEO',ibuf )
                         call puthigh( npas, 'NPAS', ibuf )
                         call puthigh( deet, 'DEET', ibuf )
-                      ! call puthigh( svsm, 'IP3' , ibuf )
+                        call puthigh( rkind,'RKIND',ibuf )
+                        call puthir( hival, 'HIVAL',ibuf )
+                        call puthir( loval, 'LOVAL',ibuf )
                         call putsamplz( svsm, ibuf )
                      else
                         call decodate( ncid,tim1,ccctime )
