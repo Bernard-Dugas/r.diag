@@ -231,7 +231,7 @@ end subroutine swap
 ! SUMMARY
 ! produce a valid (ip1,ip2,ip3) triplet from (real value,kind) pairs
 ! SYNOPSIS
- FUNCTION encode_ip_0(IP1,IP2,IP3,RP1,RP2,RP3) RESULT(status) BIND (C,name='EncodeIp')
+ FUNCTION encode_ip_0(IP1,IP2,IP3,RP1,RP2,RP3) RESULT(status) BIND (C,name='DiagEncodeIp')
 ! INPUTS
 ! RP1 must contain a level (or a pair of levels) in the atmosphere
 ! RP2 must contain  a time (or a pair of times)
@@ -313,7 +313,7 @@ end function encode_ip_0
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,name='DecodeIp')
+function decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,name='DiagDecodeIp')
 !
 ! INPUTS
 !  ip1/2/3 should be encoded "new style" but old style encoding is accepted
@@ -414,7 +414,7 @@ end function decode_ip_0
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function encode_ip_1(IP,RP) result(status) BIND (C,name='EncodeIp_v')
+function encode_ip_1(IP,RP) result(status) BIND (C,name='DiagEncodeIp_v')
 ! NOTES
 ! (see encode_ip_0) 
   implicit none  ! coupled (rp1,rp2,rp3) to (ip1,ip2,ip3) conversion with type enforcement
@@ -435,7 +435,7 @@ end function encode_ip_1
 ! SUMMARY
 ! vector version of decode_ip_0
 ! SYNOPSIS
-function decode_ip_1(RP,IP) result(status) BIND (C,name='DecodeIp_v')
+function decode_ip_1(RP,IP) result(status) BIND (C,name='DiagDecodeIp_v')
 ! NOTES
 ! (see decode_ip_0) 
   implicit none ! coupled (ip1,ip2,ip3) to (rp1,rp2,rp3) conversion with type enforcement
@@ -459,7 +459,7 @@ end function decode_ip_1
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function encode_ip_2(IP1,IP2,IP3,P1,kkind1,P2,kkind2,P3,kkind3) result(status) BIND(C,name='ConvertPKtoIP')
+function encode_ip_2(IP1,IP2,IP3,P1,kkind1,P2,kkind2,P3,kkind3) result(status) BIND(C,name='DiagConvertPKtoIP')
 ! INPUTS
 !  P1,kkind1 must be a level
 !  P2,kkind2 should be a time but a level is accepted (and flagged as a WARNING)
@@ -534,7 +534,7 @@ end function encode_ip_2
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function decode_ip_2(RP1,kind1,RP2,kind2,RP3,kind3,IP1V,IP2V,IP3V) result(status) BIND(C,name='ConvertIPtoPK')
+function decode_ip_2(RP1,kind1,RP2,kind2,RP3,kind3,IP1V,IP2V,IP3V) result(status) BIND(C,name='DiagConvertIPtoPK')
 implicit none 
 
 ! ARGUMENTS
@@ -629,11 +629,11 @@ end function decode_ip_2
 !===============================================================================================
 !****f* rmnlib/encode_ip_3
 ! SUMMARY
-! vector version of encode_ip_2 (ConvertPKtoIP)
+! vector version of encode_ip_2 (Diag_ConvertPKtoIP)
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function encode_ip_3(IP,RP,kind) result(status) BIND(C,name='ConvertPKtoIP_v')
+function encode_ip_3(IP,RP,kind) result(status) BIND(C,name='DiagConvertPKtoIP_v')
 ! RESULT
 ! same as encode_ip_2
 ! NOTES
@@ -656,7 +656,7 @@ end function encode_ip_3
 ! SUMMARY
 !vector version of decode_ip_2
 ! SYNOPSIS
-function decode_ip_3(RP,kind,IP) result(status) BIND(C,name='ConvertIPtoPK_v')
+function decode_ip_3(RP,kind,IP) result(status) BIND(C,name='DiagConvertIPtoPK_v')
 ! RESULT
 ! same as decode_ip_2
 ! NOTES
