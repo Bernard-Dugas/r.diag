@@ -161,7 +161,7 @@
 
   logical       Complet, Complet1, Complet2, Sample
   logical       Vrai,Faux, box, Elim, Forc, NoIP3, NoVar, OldIP3, Stats
-  integer ::    i,ii,ier,io,iter, ipos,icle, ibuf(1), iu1(NBRFICH), &
+  integer ::    i,ii,j,ier,io,iter, ipos,icle, ibuf(1), iu1(NBRFICH), &
                 iu2=0,iu3=0, datevi,datevf,dateosp, ip2tot, key, &
                 nil, mdiag, nr,nref,ns, nwds,nwds0=-1
 
@@ -215,23 +215,28 @@
        cles(08)/'NOIP3' /,def1(08)/'NON' /,def2(08)/'OUI' /
   !    cles(09)/'OLDIP3'/,def1(09)/'NON' /,def2(09)/'OUI' /
 
-  ! +NBRFICH Noms de fichier d'entree
-  data cles(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'S.'   /, &
-       def1(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*' '    /, &
-       def2(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'****' /, &
-       iu1 (1:NBRFICH)/ NBRFICH* 0 /
+  ! Ce qui suit ne fonctionne pas avec IFORT...
+  ! data cles(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'S.'   /, &
+  !      def1(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*' '    /, &
+  !      def2(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'****' /, &
+  !      iu1 (1:NBRFICH)/ NBRFICH* 0 /
 
   ! +1 Argument positionel (nom du module r.diag)
   data cles(NBRCLE) / '-.' /, &
        def1(NBRCLE) / ' ' /,  &
        def2(NBRCLE) / ' ' /
 
-
   data Force, Elim, box, Stats /  4*.false. /, &
        Vrai,Faux, NoIP3,NoVar,OldIP3,ReWrit / .true.,5*.false. /
 
   !----------------------------------------------------------------
   def2(NBRARGS+1) = 'TAPE1'
+
+  ! Initialisation explicite des +NBRFICH
+  ! arguments de noms de fichiers d'entree
+  do i=NBRARGS+1,NBRARGS+NBRFICH
+      cles(i) = 'S.' ; def1(i) = ' ' ; def2(i) = '****'
+  end do
 
   Debug = Faux ; Info = Faux
 
@@ -318,8 +323,13 @@
   if (Debug)                                               then
       print *,'icle,ipos=',icle,ipos
       do  i=1,NBRCLE
-          write(6,'(I3,3(1x,A))') i,cles(i)(1:10),def2(i)(1:10),def1(i)(1:64)
-          if (def1(i) == ' ') exit
+          if (def1(i) == ' ' .and. i /= NBRCLE)            then
+              j=NBRCLE
+              write(6,'(I3,3(1x,A))') j,cles(j)(1:10),def2(j)(1:10),def1(j)(1:64)
+              exit
+          else
+              write(6,'(I3,3(1x,A))') i,cles(i)(1:10),def2(i)(1:10),def1(i)(1:64)
+          end if
       enddo
   end if
 
