@@ -3492,9 +3492,11 @@ CCC  +            petik.eq.retik .and.
 
       logical,      save :: remlocal = .false.
       character*256,save :: nomfich
+      character*10, save :: CPID=' '
       character*256 evalue
       character*20  UZBIGT,TMPDIR,BIGTMP,status
       integer       lenam,errno,lonrec,dummy,kind
+      integer       pid,getpid,i
 
       LOGICAL                info,debug
       COMMON       /ZZVERBO/ info
@@ -3521,6 +3523,18 @@ CCC  +            petik.eq.retik .and.
       OK     = .false.
       nr     =  0
 
+      ! Determiner le numero du processus en court.
+
+      if (cpid == ' ')                                         THEN
+          PID    = getpid() ; write(CPID,'(I10)') PID
+          do i=1,10 ; if (CPID(i:i) /= ' ') exit ; end do
+          if (i == 11)                                         THEN
+              CPID = '0'
+          else
+              CPID = CPID(i:10)
+          end if
+      end if
+
       errno  =  0
 
 ***    A-t'on specifie un nom pour ce fichier ?
@@ -3529,20 +3543,18 @@ CCC  +            petik.eq.retik .and.
       if (evalue.ne.' ')                                       THEN
 
           nomfich = evalue
-          lenam   = index( nomfich // ' ' , ' ' ) - 1
-          kind    = wkoffit( '+' // nomfich(1:lenam) )
+          kind    = wkoffit( '+' // trim( nomfich ) )
 
       else
 
 ***        Non ? Alors voici son nom par defaut.
 
-          nomfich = 'zcrochets'
-          lenam   = 9
+          nomfich = 'zcrochets' // trim( CPID )
 
 ***        Est-ce que celui-ci existe dans le repertoire courant ?
 ***        Nous cherchons un fichier de type non-vide.
 
-          kind = wkoffit( nomfich(1:lenam) )
+          kind = wkoffit( trim( nomfich ) )
           if (kind.le.-1)                                      THEN
 
 ***            Non. As-t'on un TMPDIR ?
@@ -3569,20 +3581,20 @@ CCC  +            petik.eq.retik .and.
                   if (info) write(6,6001)
                   call                             xit(' Ouvzref ',-1 )
               else
-                  lenam   = index( evalue // ' ' , ' ' ) - 1
-                  nomfich = evalue(1:lenam) // '/' // nomfich
+
+                  nomfich = trim( evalue ) // '/' // nomfich
 
 ***                Est-ce que fichier existe dans le TMPDIR ?
 
-                  lenam = lenam+10
-                  kind  = wkoffit( '+' // nomfich(1:lenam) )
+                  kind  = wkoffit( '+' // trim( nomfich ) )
+
               end if
 
           end if
 
       end if
 
-      if (debug) write(6,6100) nomfich(1:lenam)
+      if (debug) write(6,6100) trim( nomfich )
 
 ***    Repartir avec un nouveau fichier ?
 
@@ -3603,10 +3615,10 @@ CCC  +            petik.eq.retik .and.
       if (kind.ge.-1)                                          THEN
           status = status // '+OLD'
           EXISTE = .true.
-          if (info) write(6,6000) kind,nomfich(1:lenam)
+          if (info) write(6,6000) kind,trim( nomfich )
       else
           EXISTE = .false.
-          if (kind.eq.-2) call system('rm -f ' // nomfich(1:lenam))
+          if (kind.eq.-2) call system('rm -f ' // trim( nomfich ))
       end if
 
       if (debug) write(6,6102) EXISTE,status
@@ -3618,9 +3630,9 @@ CCC  +            petik.eq.retik .and.
 
           lonrec = 2*MAZDIM+18
 
-          errno  = fnom( io, '+' // nomfich(1:lenam), status, lonrec )
+          errno  = fnom( io, '+' // trim( nomfich ), status, lonrec )
 
-          if (debug) write(6,6103) errno
+          if (debug) write(6,6103) errno,io
 
           if (errno.ne.0) goto 400
 
@@ -3670,7 +3682,7 @@ CCC  +            petik.eq.retik .and.
  6100 FORMAT('*DEBUG:Ouvzref (1) Openning file ',A)
  6101 FORMAT('*DEBUG:Ouvzref (2) Removing previous ZCROCHETS file')
  6102 FORMAT('*DEBUG:Ouvzref (3) EXIST=',L1,' and status=',A)
- 6103 FORMAT('*DEBUG:Ouvzref (4) fnom returns ',I3)
+ 6103 FORMAT('*DEBUG:Ouvzref (4) fnom returns ',I3,' and io=',I3)
  6104 FORMAT('*DEBUG:Ouvzref (5) word #1 in rec=',I3,' is equal to ',I6)
  6105 FORMAT('*DEBUG:Ouvzref (6) EXISTE=',L1,' and OK=',L1)
  6106 FORMAT('*DEBUG:Rmzref  (1) Removing ZCROCHETS file ',A/)
