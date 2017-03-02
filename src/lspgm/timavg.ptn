@@ -150,8 +150,9 @@
 *     Revision 4.40  2016/10/28 17:46  dugas
 *     Tenir compte des nouvelles options de codages des IP1/2/3.
 *     Ceci a de tres grandes incidences sur la facon dont les
-*     nombres d'echantillons peuvent etre lus et/ou sauves
-*     (version Alpha, a reviser).
+*       nombres d'echantillons peuvent etre lus et/ou sauves.
+*     Les appels a (get/put)mset3 sont donc remplaces par
+*       des appels a (get/put)mset4 (ajouts d'arguments).
 *
 *     Revision 4.39  2014/09/25 20:20:54  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
@@ -361,8 +362,8 @@
       LOGICAL,    EXTERNAL :: SETIO64,RPBLOC
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
       INTEGER,    EXTERNAL :: GETSIZ4,GETHIGH,GETIPMODE
-      EXTERNAL    MACSPE,JCLPNT,XIT,GETMSET3,MISPAR,JDATEC,
-     +            WRITLEV2,PUTMSET3,PUTHIC,PUTHIGH,INCDATR,
+      EXTERNAL    MACSPE,JCLPNT,XIT,GETMSET4,MISPAR,JDATEC,
+     +            WRITLEV2,PUTMSET4,PUTHIC,PUTHIGH,INCDATR,
      +            DIFDATR,GETVERB,DATMGP2
 
       CHARACTER   NOMPRG*256
@@ -782,7 +783,7 @@
 
 ***            READ THE PREVIOUSLY ACCUMULATED VALUES.
 
-              CALL GETMSET3( 12, AVG,
+              CALL GETMSET4( 12, AVG,
      +                           SET,NSAMPA,RKINDA,HIVALA,LOVALA,NSET,
      +                           LEV,VARIAB,STEP, IBUF,MAXW,ACCOK )
 
@@ -825,7 +826,7 @@
 
 ***                READ THE PREVIOUSLY MISSING DATA INDICATORS.
 
-                  CALL GETMSET3( 13, MA,
+                  CALL GETMSET4( 13, MA,
      +                               SET,NMIS,RKM,HIM,LOM,NSET,
      +                               LEV,VARIAB,STEP, IBUF,MAXW,OK2 )
 
@@ -882,7 +883,7 @@
 
 ***            READ THE FIRST SET. STOP IF THE FILE IS EMPTY.
 
-              CALL GETMSET3( 11, F,
+              CALL GETMSET4( 11, F,
      +                           SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
      +                           LEV,VARIAB,STEP, IBUF,MAXW,OK )
 
@@ -956,7 +957,7 @@
 
 ***                READ THE MISSING DATA INDICATORS.
 
-                  CALL GETMSET3( 14, MF,
+                  CALL GETMSET4( 14, MF,
      +                               SET,NMIS,RKM,HIM,LOM,NSET,
      +                               LEV,VARIAB,STEP, IBUF,MAXW,OK )
 
@@ -1023,7 +1024,7 @@
 
 ***    TIMESTEP LOOP. GET THE NEXT SET FROM FILE 11.
   
-  200 CALL GETMSET3( 11, F,
+  200 CALL GETMSET4( 11, F,
      +                   SET,NSAMPB,RKINDB,HIVALB,LOVALB,NSET,
      +                   LEV,VARIAB,STEP, IBUF,MAXW,OK )
 
@@ -1126,7 +1127,7 @@
 
 ***            READ THE MISSING DATA INDICATORS INTO MF.
 
-              CALL GETMSET3( 14, MF,
+              CALL GETMSET4( 14, MF,
      +                           SET,NMIS,RKM,HIM,LOM,NSET,
      +                           LEV,VARIAB,STEP, IBUF,MAXW,OK )
 
@@ -1349,7 +1350,7 @@
 
 ***    SAVE AVERAGES.
 
-      CALL PUTMSET3( 12, AVG, SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
+      CALL PUTMSET4( 12, AVG, SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
      +                        LEV,VARIAB,MAXLEV, IBUF,MAXW )
 
       IF (MISSOUT)                                             THEN
@@ -1358,7 +1359,7 @@
 
           IF (PKTYP.EQ.'SQ') CALL PUTHIC( 'MV','TYPVAR',IBUF )
 
-          CALL PUTMSET3( 13, MA,  SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
+          CALL PUTMSET4( 13, MA,  SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
      +                            LEV,VARIAB,MAXLEV,
      +                            IBUF,MAXW )
 

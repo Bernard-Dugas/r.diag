@@ -40,6 +40,9 @@
 *
 *REVISIONS
 *
+*  B. Dugas fevrier '17 :
+*   - Remplacer UDUNITS_PATH par UDUNITS2_XML_PATH
+*   - Remplacer udunits.dat par udunits2.xml
 *  B. Dugas juin '13 :
 *   - Enlever la limitation de juste definir des valeurs manquantes
 *     lorsqu'on lit des fichier NetCDF. L'operation en mode inverse
@@ -260,7 +263,7 @@
      .  def(26)/'(R) Argument desuet. Utiliser plutot fill_ccc'       /,
      .  def(27)/'(R) Valeur de remplissage dans fichier CCCma'        /,
      .  def(28)/'(I) Hemisphere 1nord 2sud pour grille PS vers CCC'   /,
-     .  def(29)/'(C) Chemin complet du fichier udunits.dat'           /,
+     .  def(29)/'(C) Chemin complet du fichier udunits2.xml'          /,
      .  def(30)/"(R) Deplacement des longitudes d'une grille tournee" /,
      .  def(31)/'(R) Pression au toit de la coordonnee hybride (Pa)'  /,
      .  def(32)/'(R) Pression de reference pour la coordonnee hybride'/,
@@ -784,11 +787,11 @@ CCC     endif
 ***    print * , 'dans lire_arg.f CLE 28 def1(28)=======',def1(28) !debug
 ***    print * , 'dans lire_arg.f CLE 28 cle_nhem=======',cle_nhem !debug
 
-      CALL GETENVC( 'UDUNITS_PATH',EVALUE )
+      CALL GETENVC( 'UDUNITS2_XML_PATH',EVALUE )
 
       if (evalue.eq.' ') then
          if(def1(29).eq.'?') then
-            write(6,6001) ' Fichier udunits.dat ?'
+            write(6,6001) ' Fichier udunits2.xml ?'
             call                                   xit('lire_arg',  -29)
          else
             udunits_dat = def1(29)

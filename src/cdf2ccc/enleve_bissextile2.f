@@ -1,4 +1,3 @@
-#     if defined (RDIAG_LICENCE)
 !---------------------------------- LICENCE BEGIN -------------------------------
 ! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
 ! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
@@ -13,12 +12,11 @@
 ! along with this library; if not, write to the Free Software Foundation, Inc.,
 ! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 !---------------------------------- LICENCE END ---------------------------------
-#     endif
+
       subroutine enleve_bissextile2(ncid,xxtime,xtime)
 
       implicit none
 
-#     include "udunits.inc"
       include 'netcdf.inc'
       include 'cdf2ccc.h'
 
@@ -30,10 +28,14 @@
 *     Modifier le nombre d'heures ecoulees depuis la date de depart si la
 *     simulation a ete fait sens annee bissextile. Ajoutons 24 heures pour 
 *     chaque annee bisstexile ecoulee dans la simulation. Le decodeur de 
-*     date de UDUNITS concidere uniquement le cas avec annees bissextiles.
+*     date de UDUNITS2 considere uniquement le cas avec annees bissextiles.
 *     
 * REVISIONS
 *
+*   Bernard Dugas  fev '17 :
+*    Tout le traitement de type udunits (y compris 
+*    l'initialisation) se fait maintenant dans
+*    la routine udparse3 qui remplace udparse2
 *   Bernard Dugas  oct '08 :
 *   - nettoyer la variable unitstring au retour de nf_get_att_text
 *   - Tenir compte du cas ou "unitstring(30:32) == '0.0'"
@@ -45,7 +47,9 @@
 *
 ******
 
-*UDUNITS :
+*UDUNITS2 :
+
+      integer, parameter :: sense=+1
 
       integer   year,  mounth,  day,  hour, minute, sec
       integer  iyear, imounth, iday, ihour,iminute,isec
@@ -66,10 +70,6 @@
       integer julian_day
 
 *-----------------------------------------------------------------------
-
-      if (boot) retcode=utopen(udunits_dat)
-      boot=.false.
-
       xtime=xxtime
 
 *     Definir la date 
@@ -81,8 +81,8 @@
       call clean_char( unitstring,dummy,nlen )
       unitstring = dummy
 
-      call udparse2(unitstring,xtime,year,mounth,day,
-     .                               hour,minute,sec)
+      call udparse3( unitstring,udunits_dat,sense,xtime,
+     .               year,mounth,day,hour,minute,sec )
 
 *     Combien d'annees bissextiles se sont ecoulees depuis "units"
 
@@ -104,8 +104,8 @@
       do i=1,nyear
 
          dtime=dtime+dble(nhrs)
-         call udparse2(unitstring,dtime,nyear,nmounth,nday,
-     .                                  nhour,nminute,nsec)
+         call udparse3(unitstring,udunits_dat,sense,dtime,
+     .                  nyear,nmounth,nday,nhour,nminute,nsec )
 
          if(nday.ne.iiday) then
             nleap=nleap+1
@@ -118,8 +118,8 @@
       
       xtime=xtime+dble(nleap*24)
 
-      call udparse2(unitstring,xtime,iyear,imounth,iday,
-     .                               ihour,iminute,isec)
+      call udparse3( unitstring,udunits_dat,sense,xtime,
+     .               iyear,imounth,iday,ihour,iminute,isec )
 
       lag=0
       if ((mod(iyear,4  ).eq.0 .and. mod(iyear,100).ne.0) .or.

@@ -126,13 +126,12 @@
      .                   meta_title,direction,attunit,ccc_pktyp
 
 !
-!UDUNITS :
+!UDUNITS2 :
 
-      logical(4) boot
-      common /booting/ boot,udunits_dat
-      character(512) udunit_def,udunits_dat  ! fichier d''initialisation UDUNITS
+      common /booting/ udunits_dat
+      character(512) udunit_def,udunits_dat  ! fichier d''initialisation UDUNITS2
 
-      parameter (udunit_def="/usr/local/etc/udunits.dat")
+      parameter (udunit_def="/opt/udunits2/share/udunits/udunits2.xml")
 
 
 !

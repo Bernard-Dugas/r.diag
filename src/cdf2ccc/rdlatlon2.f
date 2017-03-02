@@ -1587,8 +1587,8 @@ C    .                write(6,'(3A4,A)') dtyp,type,ibuf(1),GRTYP
 
       character fmt8*8,nombre*2
       character(len=128) clocal,debut,fin
-      real    valeur
-      integer i,ib,vkind
+      real      valeur
+      integer   i,ib,vkind
 !-----------------------------------------------------------------------
 
       clocal = level_value
@@ -1598,8 +1598,8 @@ C    .                write(6,'(3A4,A)') dtyp,type,ibuf(1),GRTYP
       debut = clocal(1:ib-1)
       fin   = clocal(ib+1:128)
 
-      write(nombre,'(i2.2)') max( ib-1,10 )
-      fmt8='(E'//nombre//'.'//nombre//')'
+      write(nombre,'(i2.2)') min( max( ib-1, 10 ), 20 )
+      fmt8='(E'//nombre//'.0)'
       read(debut,fmt8) valeur
 
       if (ib == len_trim( clocal )+1) then

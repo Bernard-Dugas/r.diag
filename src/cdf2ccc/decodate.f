@@ -1,4 +1,3 @@
-#     if defined (RDIAG_LICENCE)
 !---------------------------------- LICENCE BEGIN -------------------------------
 ! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
 ! Copyright (C) 1990-2010 - Division de Recherche en Prevision Numerique
@@ -13,26 +12,26 @@
 ! along with this library; if not, write to the Free Software Foundation, Inc.,
 ! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 !---------------------------------- LICENCE END ---------------------------------
-#     endif
-      subroutine decodate(ncid,DTIME,outime)
+
+      subroutine decodate( ncid, DTIME,ouTime )
 *
       implicit none
 
-#     include "udunits.inc"
       include 'netcdf.inc'
       include 'cdf2ccc.h'
       include 'infomem.h'
 
       integer ncid
-      real*8  dtime
+      real*8  DTIME
       
-      integer outime
+      integer ouTime
 
 * AUTEUR Guy Bergeron   mai 2003
 *
-*     Definir la date dans le format AAAAMMDDHH (outime) a partir de 
-*     l'attribut "units" de la variable coordonnee "time" ssi "units" est 
-*     different de "unitless". Si non, outime est affectee par dtime.
+*     Definir la date dans un format date-time-stamp CMC/RPN (ouTime) a
+*     partir de l'attribut "units" de la variable coordonnee "time" ssi
+*     "units" est different de "unitless". Si non, ouTime est affectee
+*     par DTIME.
 *
 *     Les valeurs de la variable de coordonnee "time" correspondent a des 
 *     nombres de secondes, d'heures, ou de jours et ce en fonction de 
@@ -49,6 +48,10 @@
 *
 *REVISION:
 *
+*     Fevrier 2017 - Bernard Dugas :
+*           tout le traitement de type udunits (y compris 
+*           l'initialisation) se fait maintenant dans
+*           la routine udparse3 qui remplace udparse2
 *     Juillet 2012 - Bernard Dugas :
 *           le traitement de l'option 'unitstring = "day as %y%m%d.%f"'
 *           est corrige et rendu independant du calendrier specifie
@@ -78,12 +81,12 @@
 *           variable temporelle
 *
 *     Nov.  2009 - Bernard Dugas :
-*           outime est maintenant calcule par def_date2
+*           ouTime est maintenant calcule par def_date2
 *           puisqu'on le garde format DateTimeStamp
 *
 *     Fev.  2009 - Bernard Dugas :
 *           ajouter la routine DECODATE2 (identique a 
-*           DECODATE sauf retour outime en INTEGER*8)
+*           DECODATE sauf retour ouTime en INTEGER*8)
 *
 *     Mai   2008 - Bernard Dugas :
 *           appel a UDPARSE2 generalise
@@ -101,15 +104,17 @@
 *           ajout de cal_date pour le cas "Season DJF MAM JJA SON"
 *
 *     Juin  2004 - Guy Bergeron : 
-*           agrument d'appel en real*8 dtime au lieu de real*4 xtime
+*           agrument d'appel en real*8 DTIME au lieu de real*4 xtime
 *
 *     Juil. 2004 - Guy Bergeron : 
 *           appel de udparse conditionnel a la valeur de "units"
 * 
 ******
 
-      integer timeid,iyear,imonth,iday,ihour,iminute,isecond,status
-      integer part1,part2,timestamp2,ier,nlen
+      integer, parameter :: sense=+1
+
+      integer timeid,iyear,imonth,iday,ihour,iminute,isecond
+      integer part1,part2,timestamp2,ier,nlen,status
       integer, save :: timestamp1=0
       integer iii(32),i,j
       real retcode
@@ -125,9 +130,7 @@
 
       data  unitstring /''/      ! initialisation a vide 
 *-----------------------------------------------------------------------
-*     initialisation UDUNITS :
-      if (boot) retcode=utopen(udunits_dat)
-      boot=.false. ; calendarstring=' '
+      calendarstring=' '
 
 *     Extraire l'attribut "units" de la coordonnee "time" :
 
@@ -153,16 +156,16 @@
       call up2low( unitstring,unitstring )
 
       if(unitstring.eq."unitless") then
-         outime=dtime
+         ouTime=DTIME
 
       else if (unitstring(1:06)=="day as") then
 
          if (unitstring(8:16) == "%y%m%d.%f") then
-            if (dtime==0) then
-               outime = -1 
+            if (DTIME==0) then
+               ouTime = -1 
                return
             else
-               nombre = dtime ; fraction = dtime-nombre
+               nombre = DTIME ; fraction = DTIME-nombre
                write(string,'(I8.8)') nombre
                read(string,'(i4.4,i2.2,i2.2)') iyear,imonth,iday
                fraction=int( 86400*fraction )
@@ -172,7 +175,7 @@
             endif
          endif
 
-         call def_date2( outime, iyear,imonth, iday,
+         call def_date2( ouTime, iyear,imonth, iday,
      .                           ihour,iminute,isecond, 'encode' )
 
       else
@@ -192,21 +195,21 @@
             endif
 
             if (unitstring(1:6).eq."season") then
-               call cal_date(unitstring,dtime,iyear,imonth,iday,ihour)
+               call cal_date(unitstring,DTIME,iyear,imonth,iday,ihour)
 
             else if (unitstring(1:10).eq."julian day") then
-               call datec( nint( dtime ), iyear,imonth,iday )
+               call datec( nint( DTIME ), iyear,imonth,iday )
 
             else if (unitstring(1:12).eq."months since" .or.
      .               unitstring(1:11).eq."years since") then
-               call cal_date(unitstring,dtime,iyear,imonth,iday,ihour)
+               call cal_date(unitstring,DTIME,iyear,imonth,iday,ihour)
 
             else if (unitstring(1:10).eq."days since"     .or.
      .               unitstring(1:11).eq."hours since"    .or.
      .               unitstring(1:13).eq."minutes since"  .or.
      .               unitstring(1:13).eq."seconds since") then
-               call udparse2(unitstring,dtime,iyear,imonth,iday,
-     .                                        ihour,iminute,isecond)
+               call udparse3(unitstring,udunits_dat,sense,DTIME,
+     .                       iyear,imonth,iday,ihour,iminute,isecond)
 
             endif
                
@@ -247,8 +250,8 @@
 *              decoder l'origine de la coordonnee temporelle
 
                hours = 0
-               call udparse2(unitstring,hours,iyear,imonth,iday,
-     .                                  ihour,iminute,isecond)
+               call udparse3(unitstring,udunits_dat,sense,hours,
+     .                       iyear,imonth,iday,ihour,iminute,isecond)
             
                part1 =  (iyear*100+imonth )*100+iday
                part2 = ((ihour*100+iminute)*100+isecond)*100
@@ -257,13 +260,13 @@
             endif
 
             if      (unitstring(1:10) ==    'days since') then
-               hours = dtime*24.
+               hours = DTIME*24.
             else if (unitstring(1:11) ==   'hours since') then
-               hours = dtime
+               hours = DTIME
             else if (unitstring(1:13) == 'minutes since') then
-               hours = dtime/60.
+               hours = DTIME/60.
             else if (unitstring(1:13) == 'seconds since') then
-               hours = dtime/3600.
+               hours = DTIME/3600.
             endif
 
             call incdatr( timestamp2,timestamp1, hours )
@@ -306,21 +309,21 @@
 *           decoder l'origine de la coordonnee temporelle
 
             hours = 0
-            call udparse2(unitstring,hours,iyear,imonth,iday,ihour,
-     .                                        iminute,isecond)
+            call udparse3(unitstring,udunits_dat,sense,hours,
+     .                    iyear,imonth,iday,ihour,iminute,isecond)
             
             if      (unitstring(1:11) ==   'years since') then
-               elapsed  = nint( dtime*360*86400,8 )
+               elapsed  = nint( DTIME*360*86400,8 )
             else if (unitstring(1:12) ==  'months since') then
-               elapsed  = nint( dtime*30*86400,8 )
+               elapsed  = nint( DTIME*30*86400,8 )
             else if (unitstring(1:10) ==    'days since') then
-               elapsed  = nint( dtime*86400,8 )
+               elapsed  = nint( DTIME*86400,8 )
             else if (unitstring(1:11) ==   'hours since') then
-               elapsed  = nint( dtime*3600,8 )
+               elapsed  = nint( DTIME*3600,8 )
             else if (unitstring(1:13) == 'minutes since') then
-               elapsed  = nint( dtime*60,8 )
+               elapsed  = nint( DTIME*60,8 )
             else if (unitstring(1:13) == 'seconds since') then
-               elapsed  = nint( dtime,8 )
+               elapsed  = nint( DTIME,8 )
             endif
 
             isecond     = isecond + mod( elapsed, 60_8 )
@@ -383,15 +386,13 @@
 
          endif
 
-         call def_date2( outime, iyear,imonth, iday,
+         call def_date2( ouTime, iyear,imonth, iday,
      .                           ihour,iminute,isecond, 'encode' )
-
-CCC      outime=iyear*1000000+imonth*10000+iday*100+ihour
 
       endif
 
       if (.false.)write(6,*)' decodate :',trim(unitstring),': ',      !debug
-     .                        dtime,' : ',outime                      !debug
+     .                        DTIME,' : ',ouTime                      !debug
 *-----------------------------------------------------------------------
  6001 format(/'DECODAT: Un-supported time units with',
      .        ' non-gregorian calendar... ',A/)
@@ -399,15 +400,20 @@ CCC      outime=iyear*1000000+imonth*10000+iday*100+ihour
  6101 format(/' In DECODATE: Leap Years will be accounted for...'//)
 
       end
-      subroutine decodate2(ncid,DTIME,outime)
+      subroutine decodate2( ncid, DTIME,ouTime )
 
       implicit none
 
+*     Definir la date dans le format AAAAMMDDHH (outime) a partir de 
+*     l'attribut "units" de la variable coordonnee "time" ssi "units" est 
+*     different de "unitless". Si non, outime est affectee par dtime.
+
+      integer, parameter :: sense=1
+
       integer   ncid
-      real*8    dtime
-      integer*8 outime
+      real*8    DTIME
+      integer*8 ouTime
  
-#     include "udunits.inc"
       include 'netcdf.inc'
       include 'cdf2ccc.h'
 
@@ -419,9 +425,6 @@ CCC      outime=iyear*1000000+imonth*10000+iday*100+ihour
 
       data  unitstring /''/      ! initialisation a vide 
 *-----------------------------------------------------------------------
-*     initialisation UDUNITS :
-      if (boot) retcode=utopen(udunits_dat)
-      boot=.false.
 
 *     Extraire l'attribut "units" de la coordonnee "time" :
 
@@ -438,36 +441,36 @@ CCC      outime=iyear*1000000+imonth*10000+iday*100+ihour
       call up2low( unitstring,unitstring )
 
       if(unitstring.eq."unitless") then
-         outime=dtime
+         ouTime=DTIME
 
       else
 
          ihour=0 ; iminute = 0 ; isecond = 0
          
          if (unitstring(1:6).eq."season") then
-            call cal_date(unitstring,dtime,iyear,imonth,iday,ihour)
+            call cal_date(unitstring,DTIME,iyear,imonth,iday,ihour)
 
          else if (unitstring(1:10).eq."julian day") then
-            call datec( nint( dtime ), iyear,imonth,iday )
+            call datec( nint( DTIME ), iyear,imonth,iday )
 
          else if (unitstring(1:12).eq."months since" .or.
      .            unitstring(1:11).eq."years since") then
-            call cal_date(unitstring,dtime,iyear,imonth,iday,ihour)
+            call cal_date(unitstring,DTIME,iyear,imonth,iday,ihour)
 
          else if (unitstring(1:10).eq."days since"     .or.
      .            unitstring(1:11).eq."hours since"    .or.
      .            unitstring(1:13).eq."minutes since"  .or.
      .            unitstring(1:13).eq."seconds since") then
-            call udparse2(unitstring,dtime,iyear,imonth,iday,ihour,
-     .                                     iminute,isecond)
+            call udparse3(unitstring,udunits_dat,sense,DTIME,
+     .                    iyear,imonth,iday,ihour,iminute,isecond)
 
          else
-            call udparse2(unitstring,dtime,iyear,imonth,iday,ihour,
-     .                                     iminute,isecond)
+            call udparse3(unitstring,udunits_dat,sense,DTIME,
+     .                   iyear,imonth,iday,ihour,iminute,isecond)
 
          endif
 
-         outime =          isecond 
+         ouTime =          isecond 
      .          + cent * ( iminute
      .          + cent * ( ihour
      .          + cent * ( iday 
@@ -476,7 +479,7 @@ CCC      outime=iyear*1000000+imonth*10000+iday*100+ihour
 
       endif
 
-      if (.false.)write(6,*)" decodate :",trim(unitstring),": ",      !debug
-     .                        dtime," : ",outime                      !debug
+      if (.false.)write(6,*)" decodate2 :",trim(unitstring),": ",     !debug
+     .                        DTIME," : ",ouTime                      !debug
 *-----------------------------------------------------------------------
       end

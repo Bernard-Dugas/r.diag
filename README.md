@@ -58,8 +58,13 @@
  has to be installed and active (see mfvalin/rmnlib on github.com). As
  well, the Vgrid Descriptors package used in the GEM v4+ model also has
  to be available. Furthermore, to generate the two cdf2xxx executables,
- the old NetCDF v3.6 and UdUnits v1.2 library packages also have to
- available. Most of the code available here is written in FORTRAN.
+ the NetCDF v4 and UdUnits v2 library packages also have to available.
+ These in turn require the hdf5, dl, z and expat libraries.
+
+ Most of the code available here is written in FORTRAN. As a
+ consequnce of this, the conversion tool now uses a FORTRAN to
+ C wrapper for the UDUNITS2 C routines which is again available
+ on github.com (see mfvalin/wrapper-code/udunits).
 
  Some versions of the toolkit may also use the DDFUN90 package as
  produced by  David H. Bailey of the NERSC, Lawrence Berkeley Lab.
@@ -79,5 +84,5 @@
  Software Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : April 2015
+ Last revision : February 2017
 

@@ -1,0 +1,97 @@
+Description of the changes that have been make to r.diag since January 27 2017
+
+* DEVELOPMENT *
+
+Commandes :
+ - Add crc32.o to the list of fixes. This file is being provided by
+   Michel Valin to eliminate a linker collision between libz and RMNLIB.
+   This is a temporary fix until RMNLIB can be corrected.
+Makefile :
+ - Generate the cdf2ccc/cdf2rpn binaries with the netcdf4 and udunits2
+   libraries as well as Michel Valin's f_udunits_2.f90 FORTRAN to C wrapper.
+   This also implies explicitely using the hdf5, dl, z and expat libraries.
+   The converter no longer calls udunits functions directly but only calls
+   the interface routines found in f_udunits_2.f90. The wrapper object
+   code is also inserted into the new static udunits2 library.
+README.md :
+ - Account for the NetCDF and UdUnits developments presented above.
+
+* DEVELOPMENT/INCLUDE *
+
+CDF2CCC.H :
+ - Account for the new default udunits2 XML initialisation
+   file name that is saved in the udunit_def variable.
+ - Remove the BOOT logical variable.
+
+* DEVELOPMENT/LIB *
+
+CRC32.C :
+ - Added to eliminate a linker collision between libz and RMNLIB.
+   Again, this is a temporary fix until RMNLIB can be corrected.
+
+* DEVELOPMENT/SRC/LSPGM *
+
+GGSTAT/INVNTRY :
+ - Increase the size of the retrun buffer
+   for PRTLAB3 from 72 to 100 characters.
+TIMAVG :
+ - Replace calls to GETMSET3/PUTMSET3 by calls to GETMSET4/PUTMSET4,
+   accounting for their new calling sequences (extra arguments).
+
+* DEVELOPMENT/SRC/LSSUB *
+
+GET :
+ - Restore the pre-20161110 version of GETMSET3.
+ - Rename the new version to GETMSET4, again to 
+   account for its new calling sequence
+PUT :
+ - Restore the pre-20161110 version of PUTMSET3.
+ - Rename the new version to PUTMSET4, again to 
+   account for its new calling sequence
+
+* DEVELOPMENT/SRC/CDF2CCC *
+
+CDF2CCC :
+ - Modify the internal documentation to reflect the use of
+   the UDUNITS v2 library, namely the "UDUNITS2_XML_PATH"
+   environment variable which should point to the
+   udunits2.xml internal configuration file.
+DECODATE, ENCODATE, ENLEVE_BISSEXTILE2  :
+ - The .ftn versions are replaced by .f versions, as the
+   udunits.inc that needed to be pre-processed in order to
+   define the UD_POINTER as INTEGER*8 is no longer used
+ - All UDUNITS2-related calls are now done by udparse3.
+INITALISE :
+ - Remove initalisation of the boot variable from the block data section
+LIRE_ARG :
+ - Modify the -udunits argument documentation to reflect the
+   path of the new udunits2.xml initialisation file.
+ - Modify the udunits environmewnt variable which is now called
+   "UDUNITS2_XML_PATH". This should reflect the full path name
+   of the udunits2.xml file to be used at execution time. Please
+   note that the default is to use the file saved at the same
+   time as the UDUNITS2 library was generated.
+Makefile :
+ - Add the udunits2, hdf5_hl, hdf5, dl and z libraries
+   and remove the reference to the udunits library.
+ - Add support for files with .f90 extensions.
+ - The RMNLIB macro points to rmn_015.2 and UDUNITS macro
+   points to the "udunits2 expat" pair of libraries.
+ - Remove all references to decodate.ftn, encodate.ftn,
+   enleve_bisesextile.ftn, udparse.ftn and uduerr.ftn.
+ - Add relevant references to udparse.f90.
+RDLATLON2 :
+ - Correction to the decode_single_level subroutine
+   to account for values >= 1.0.
+UDPARSE :
+ - The .ftn version is replaced by a .f90 version that now
+   handles both the actual encoding and decoding of the
+   Gregorian calendar dates.
+ - The main routine name is changed to UDPARSE3 to
+   account for the routine's expanded calling sequence.
+ - The new interface to the UDUNITS2 library is handled
+   via a use statement of the f_udunit2_f module.
+ - The UD_PARSE_ERROR routine is added. It is called by
+   udparse3 to print relevant UDUNITS2 error messages.
+UDUERR :
+ - This routine is now obsolete and has been removed.

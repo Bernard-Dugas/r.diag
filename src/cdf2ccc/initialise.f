@@ -71,7 +71,6 @@
 
       include 'cdf2ccc.h'
 
-      data boot   /.true./
       data spec   /.false./            
       data chklvl /.false./
       data time_bnds_L /.false./

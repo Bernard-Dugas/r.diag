@@ -24,11 +24,11 @@
 *
 * $ARMNLIB/modeles/diag/bin/$BASE_ARCH
 *
-* You will need to define a UDUNITS environment variable.
+* You will need to define a UDUNITS2 environment variable.
 *
-* The following can be used:
+* For example:
 *
-* export UDUNITS_PATH=/data/dormrb04/armn/armnrbd/NetCDF-UdUnits/etc/udunits.dat
+* export UDUNITS2_XML_PATH=/opt/udunits2/share/udunits/udunits2.xml
 *
 * You will also have to provide a CMC-RPN/NetCDF or CCCMA/NetCDF
 * dictionary that defines name and unit conversions.
@@ -179,7 +179,7 @@
 *  description(25) = (C) Nom du fichier dictionnaire (def: attribut_netcdf.dat)
 *  description(27) = (R) Valeur de remplissage dans sortie
 *  description(28) = (I) 1=Hem Nord, 2=Hem Sud pour grille PS vers CCCma
-*  description(29) = (C) Chemin complet du fichier 'udunits.dat'
+*  description(29) = (C) Chemin complet du fichier 'udunits2.xml'
 *  description(30) = (R) Deplacement des longitudes d'une grille tournee
 *  description(31) = (R) Pression au toit de la coordonnee hybride (Pa)
 *  description(32) = (R) Pression de reference pour la coordonnee hybride
@@ -236,7 +236,7 @@
 * proleptic_gregorian, 365_day (or noleap) and 360-day. The two 'gregorian'
 * options only differ before 1582-10-15:  the standard one then follows the
 * Julian 365.25-day year, while the proleptic extends the 365.2425-day
-* year backward in time. UDUNITS follows the 'gregorian' calendar. This
+* year backward in time. UDUNITS2 follows the 'gregorian' calendar. This
 * last argument is mainly used when converting to the NetCDF format, as
 * a calendar attribute should always be found in the time coordinate
 * desctiption of CF-Metadata compliant NetCDF files.
@@ -309,6 +309,8 @@
 *
 *REVISIONS
 *
+*  Bernard Dugas fevrier 2017 :
+*  - Passer de udunits v1 a udunits v2 (tests avec 2.1.24)
 *  Bernard Dugas octobre 2013 :
 *  - Mettre a jour la documentation automatique quand a l'usage
 *    du fichier lev_remplacement.txt. Voir la routine def_level.f

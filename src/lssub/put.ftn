@@ -774,8 +774,9 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
  0004 FORMAT(A4)
 
       END
-      SUBROUTINE putmset3 (NF, G, SET,NIP3,RKIND,HIVAL,LOVAL,NSET,
-     +                            LEV,VARIAB,MAXV, IBUF,MAXPK)
+      SUBROUTINE putmset3 (NF, G, SET,NIP3,NSET,
+     +                            LEV,VARIAB,MAXV,
+     +                            IBUF,MAXPK)
 
 ***    Juin 2001 - B.Dugas, RPN.
 
@@ -784,6 +785,97 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 ***    effectuee l'ecriture.  L'information sur les noms et
 ***    niveaux correspondant se trouve dans les champs
 ***    d'entree VARIAB et LEV, respectivement.
+
+      IMPLICIT    none
+
+      INTEGER     HEAD
+      PARAMETER ( HEAD = taille_entete )
+
+      REAL        G(*),GR8
+      INTEGER     NF,NSET,MAXV,MAXPK
+      CHARACTER * ( * ) VARIAB(MAXV)
+      INTEGER     SET(0:NSET),NIP3(NSET),LEV(MAXV,2),IBUF(*)
+
+***    Variables locales.
+
+      INTEGER     POSIT,I,NWDS,NLEV,DEBSET
+      CHARACTER*4 KIND, HOLDN*20
+
+      REAL*8          G8
+      POINTER   ( PG8,G8(1) ),( PGR8,GR8(*) )
+
+      LOGICAL     GETIO64,IO64B
+      EXTERNAL    GETIO64,PUTSET2,PUTHIGH,PUTHIC
+
+*-------------------------------------------------------------------
+      WRITE(KIND,0004) IBUF(1)
+
+          IO64B     = GETIO64( IO64B )
+
+      IF (IO64B) PG8 = LOC( G(1) )
+
+                          NWDS = IBUF(5)*IBUF(6)
+      IF (KIND.EQ.'ZONL') NWDS = IBUF(5)
+      IF (KIND.EQ.'CMPL' .OR.
+     +    KIND.EQ.'FOUR' .OR.
+     +    KIND.EQ.'SPEC') NWDS = NWDS * 2
+      IF (KIND.EQ.'CHAR' .AND.
+     +   .NOT.IO64B      .AND.
+     +    IBUF(8).EQ.-64) NWDS = NWDS * 2
+
+      DO  I=1,NSET
+
+          DEBSET = SET(I-1)+1
+
+          READ(VARIAB(DEBSET),0004) IBUF(3)
+          POSIT = SET(I-1)*NWDS+1
+          NLEV  = SET(I)-SET(I-1)
+
+CCC       IF (LEV(DEBSET,2).NE.-1)
+CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
+
+          CALL PUTHIGH( NIP3(I),'IP3'  ,IBUF )
+
+          HOLDN = VARIAB(DEBSET)
+          IF (HOLDN(17:20).NE.' ')
+     +        CALL PUTHIC( HOLDN(17:20),'ETIK4' ,IBUF )
+          IF (HOLDN(13:16).NE.' ')
+     +        CALL PUTHIC( HOLDN(13:16),'ETIK3' ,IBUF )
+          IF (HOLDN(09:12).NE.' ')
+     +        CALL PUTHIC( HOLDN(09:12),'ETIK2' ,IBUF )
+          IF (HOLDN(05:08).NE.' ')
+     +        CALL PUTHIC( HOLDN(05:08),'ETIK1' ,IBUF )
+
+          IF (IO64B)                                           THEN
+              PGR8 = LOC( G8(POSIT) )
+              CALL putset2( NF, GR8, LEV(DEBSET,1),NLEV, IBUF,MAXPK )
+          ELSE
+              CALL putset2( NF, G (POSIT), LEV(DEBSET,1),NLEV,
+     +                                     IBUF,MAXPK )
+          END IF
+
+      END DO
+
+      RETURN
+*-------------------------------------------------------------------
+
+ 0004 FORMAT(A4)
+
+      END
+      SUBROUTINE putmset4 (NF, G, SET,NIP3,RKIND,HIVAL,LOVAL,NSET,
+     +                            LEV,VARIAB,MAXV, IBUF,MAXPK)
+
+***    Juin 2016 - B.Dugas, UQAM.
+
+***    Cette routine ecrit un pas de temps complet de SET(NSET)
+***    enregistrements La routine PUTSET2 est utilisee pour
+***    effectuee l'ecriture.  L'information sur les noms et
+***    niveaux correspondant se trouve dans les champs
+***    d'entree VARIAB et LEV, respectivement. 
+
+***    De plus, le type de codage RKIND (vertical ou temporel)
+***    IP1/2/3 ainsi que les extremas HIVAL et LOVAL sont aussi
+***    possiblement ecrits.
 
       IMPLICIT    none
 

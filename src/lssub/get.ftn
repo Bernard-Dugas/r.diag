@@ -2056,10 +2056,372 @@ C     END IF
  6012 FORMAT(' Getmset2: Stripping CHAR and LABL records from input.')
 
       END
-      SUBROUTINE getmset3 (NF, G, SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
-     +                            LEV,VARIAB,STEP, IBUF,MAXPK,OK )
+      SUBROUTINE getmset3 (NF, G, SET,NIP3,NSET, LEV,VARIAB,STEP,
+     +                            IBUF,MAXPK,OK )
 
 ***    Juin 2009 - B.Dugas, RPN.
+
+***    Cette routine lit un pas de temps complet de SET(NSET)
+***    enregistrements.  La routine GETSET2 est utilisee pour
+***    effectuee la lecture. L'information sur les noms et
+***    niveaux correspondant se trouve dans les champs
+***    d'entree VARIAB et LEV, respectivement.
+
+***    P/R a getmset2, cette routine retourne les valeurs de IP3.
+
+      IMPLICIT    none
+
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+
+      REAL        G(*),GR8
+      LOGICAL     OK,IO64B,MVALUE,LVAL
+      REAL(8)     G8,EPSILON,MISFLAG
+      CHARACTER*4 NOM,KIND,RECABT,HNEWL
+      INTEGER     NF,NSET,MAXPK,JBUF(HEAD),NIP3(*)
+      INTEGER     SET(0:*),LEV(*),IBUF(*),STEP(*)
+      INTEGER     POSIT,I,J,K,NWDS,NR,TIME,NIV,NLEV
+      CHARACTER   NIV_S*15,MESSAG*10,ZHOLD*80
+
+      CHARACTER*4,SAVE :: NEWL = 'NEWL'
+      LOGICAL,    SAVE :: NEW_LEV = .FALSE.,PP_LEV=.FALSE.
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: INT_LEV
+      INTEGER,    DIMENSION(:), ALLOCATABLE, SAVE :: SAV_LEV
+
+      CHARACTER * ( * ) VARIAB(*)
+
+      CHARACTER(LEN=15) :: EXT_SLEV,INT_SLEV
+
+      POINTER   ( PG,G8(*) ),( PGR8,GR8(*) )
+
+      INTEGER              INFMOT(0:unite_io_maximale)
+      COMMON     /LIRZXL/  INFMOT
+
+      LOGICAL              INFO,SINGLZ,NOABORT
+      COMMON     /ZZVERBO/ INFO
+      COMMON     /ZZZSNGL/      SINGLZ
+      COMMON     /ZZABORT/             NOABORT
+
+#     include    "zlabel.cdk"
+
+      LOGICAL,    EXTERNAL :: GETIO64
+      INTEGER,    EXTERNAL :: GETHIGH
+      CHARACTER*4,EXTERNAL :: GETHIC
+      EXTERNAL    GETSET2,GETFLD2,
+     +            GETRABT,XIT,CMPLBL,RECGET,
+     +            GET_IP1_STRING
+
+      SAVE        MESSAG
+      DATA        MESSAG / 'AUCUN' /
+*-------------------------------------------------------------------
+
+      NR = 0 ; MVALUE = .FALSE.
+
+      ALLOCATE( INT_LEV(SET(NSET)) )
+
+      IF (.NOT.ALLOCATED( SAV_LEV) )                           THEN
+          ALLOCATE( SAV_LEV(SET(NSET)) )
+          DO  I=1,NSET
+              DO  J=SET(I-1)+1,SET(I)
+                  SAV_LEV(J) = J-SET(I-1)
+              END DO
+          END DO
+      ELSE IF (NEW_LEV)                                        THEN
+          NEW_LEV = .FALSE.
+      END IF
+
+      CALL GETRABT( RECABT )
+
+      DO  J=1,HEAD
+          JBUF(J) = IBUF(J)
+      END DO
+
+***    READ NEXT FIELD AND DETERMINE KIND AND SIZE.
+
+  100 CALL RECGET( NF, ' ',-1,' ',-1, IBUF,MAXPK,OK )
+      IF (.NOT.OK) RETURN
+
+      TIME = IBUF(2)
+
+      WRITE(KIND,4) IBUF(1)
+      IF (KIND.NE.'LABL' .AND.
+     +    KIND.NE.'DATA' .AND.
+     +    KIND.NE.'CHAR' .AND.
+     +    .NOT.SINGLZ )                                        THEN
+
+                              NWDS = IBUF(5)*IBUF(6)
+          IF (KIND.EQ.'ZONL') NWDS = IBUF(5)
+          IF (KIND.EQ.'CMPL' .OR.
+     +        KIND.EQ.'FOUR' .OR.
+     +        KIND.EQ.'SPEC') NWDS = NWDS * 2
+
+              IO64B     = GETIO64( IO64B )
+          IF (IO64B) PG = LOC( G(1) )
+
+          CALL PRECEDE( NF,1 )
+
+***        THE FILE IS ORDERED AS A GRID SET OR IS A MULTI-
+***        LEVEL ZONAL ARRAY. TRY TO READ ALL THE SETS.
+
+          DO  I=1,NSET
+
+***             SAUVER LE DERNIER IBUF DANS JBUF.
+
+              DO  J=1,HEAD
+                  JBUF(J) = IBUF(J)
+              END DO
+
+              POSIT = SET(I-1) * NWDS + 1
+
+  200         IF (IO64B)                                       THEN
+                  PGR8 = LOC( G8(POSIT) )
+                  CALL getset2( NF, GR8(1)   , INT_LEV(SET(I-1)+1),NLEV,
+     +                                         IBUF,MAXPK,OK )
+              ELSE
+                  CALL getset2( NF, G (POSIT), INT_LEV(SET(I-1)+1),NLEV,
+     +                                         IBUF,MAXPK,OK )
+              END IF
+
+***            GESTION DES NIVEAUX CONTENUS DANS LES ENREGISTREMENTS '++'.
+
+              IF (KIND == 'ZONL')                              THEN
+                  HNEWL = GETHIC('NEWL',IBUF )
+                  IF (NLEV /= INFMOT(NF) .OR. HNEWL == NEWL)   THEN
+                      ! Sauver les niveaux TROUVES dans le dernier '++' (PP).
+                      SAV_LEV(SET(I-1)+1:SET(I)) = INT_LEV(SET(I-1)+1:SET(I))
+                      NEW_LEV = .TRUE. ; PP_LEV = .TRUE.
+                  ELSE IF (PP_LEV)                             THEN
+                      IF (NEW_LEV)                             THEN
+                          IF (I > 1 .AND.
+     +                        NLEV == SET(I-1)-SET(I-2))       THEN
+                              ! Definir SAV_LEV pour ce jeu de niveaux
+                              SAV_LEV(SET(I-1)+1:SET(I)) = SAV_LEV(SET(I-2)+1:SET(I-1))
+                          END IF
+                      END IF
+                      IF (NLEV == SET(I)-SET(I-1))
+     +                    INT_LEV(SET(I-1)+1:SET(I)) = SAV_LEV(SET(I-1)+1:SET(I))
+                  END IF
+              END IF
+
+              WRITE(KIND,0004) IBUF(1)
+              WRITE(NOM ,0004) IBUF(3)
+
+              NIP3(I) = MAX( 1, GETHIGH( 'IP3',IBUF ) )
+
+              IF (KIND.EQ.'LABL' .OR. KIND.EQ.'CHAR')          THEN
+                  IF (INFO)                                    THEN
+                      IF (MESSAG.NE.'deja donne')              THEN
+                          MESSAG  = 'deja donne'
+                          WRITE(6,6012)
+                     END IF
+                  END IF
+                  DO  J=1,HEAD
+                      IBUF(J) = JBUF(J)
+                  END DO
+                  GOTO 200
+              END IF
+
+***            COMPARER LES NIVEAUX LUS ET SPECIFIE EN ENTREE.
+
+              IF (.NOT.NOABORT)                                THEN
+                  DO  J=SET(I-1)+1,SET(I)
+                      IF (INT_LEV(J) /= LEV(J)) EXIT
+                  END DO
+              ELSE
+                  J = SET(I)+1
+              END IF
+
+              IF (.NOT.OK                      .OR. 
+     +             NOM  /= VARIAB(SET(I))(1:4) .OR.
+     +             NLEV /= SET(I)-SET(I-1)     .OR.
+     +             J    /= SET(I)+1)                           THEN
+ 
+                  IF (INFO .AND.
+     +               (J    /= SET(I)+1            .OR.
+     +                NOM  /= VARIAB(SET(I))(1:4) .OR.
+     +                NLEV /= SET(I)-SET(I-1)))                THEN
+
+                      IF (J    /= SET(I)+1)                    THEN
+                          CALL GET_IP1_STRING( INT_LEV(J),INT_SLEV )
+                          CALL GET_IP1_STRING(     LEV(J),EXT_SLEV )
+                          WRITE(6,6003)
+     +                       VARIAB(SET(I))(1:4),TRIM( EXT_SLEV ),
+     +                       NOM                ,TRIM( INT_SLEV )
+                      ELSE IF (NOM  /= VARIAB(SET(I))(1:4))    THEN
+                          WRITE(6,6013) VARIAB(SET(I))(1:4),NOM
+                      ELSE
+                          WRITE(6,6001) SET(I)-SET(I-1),
+     +                              VARIAB(SET(I))(1:4), NLEV,NOM
+                      END IF
+
+                  ELSE IF (INFO .AND. MAXPK.NE.0)              THEN
+
+                      WRITE(6,6001) SET(I)-SET(I-1),
+     +                              VARIAB(SET(I))(1:4), NLEV,NOM
+
+                  END IF
+
+                  OK = .FALSE.
+                  RETURN
+***               CALL                         XIT('Getmset3',-1 )
+
+              END IF
+
+              CALL CMPLBL( 0, JBUF, 0,IBUF, OK )
+          
+              IF (.NOT.OK .OR. IBUF(2) .NE. TIME)              THEN
+
+                  IF (INFO)                                    THEN
+                      WRITE(6,6002)
+                      CALL PRTLAB2( ' First ibuf: ',JBUF )
+                      CALL PRTLAB2( ' Last  ibuf: ',IBUF )
+                  END IF
+
+                  OK = .FALSE.
+                  RETURN
+***               CALL                        XIT('Getmset3',-2 )
+
+              END IF
+
+***           SAVE STEP IN CASE OF MULTI LEVEL ZONAL DATA.
+
+              DO  J=NR+1,NR+NLEV
+                  STEP(J) = IBUF(2)
+              END DO
+
+***            PRESENCE DE VALEURS MANQUANTES ?
+
+              CALL MISPAR( LVAL,MISFLAG,EPSILON )
+              MVALUE = (LVAL .OR. MVALUE)
+
+              NR = NR+NLEV
+
+          END DO
+
+      ELSE IF (SINGLZ .OR. KIND.EQ.'DATA')                     THEN
+
+***        MODE D'OPERATION SIMPLIFIE POUR DONNEES DE TYPE 'DATA'
+***        ET POUR LE MODE NIVEAU-PAR-NIVEAU. ENTRE AUTRES, LE
+***        MODE DE FONCTIONNEMENT "SERIES TEPORELLES" N'EST PAS
+***        SUPPORTE...
+
+              IO64B     = GETIO64( IO64B )
+          IF (IO64B) PG = LOC( G(1) )
+
+          NWDS = IBUF(5)*IBUF(6)
+
+          CALL PRECEDE( NF,1 )
+
+***        SAUVER LES 8 PREMIERS MOTS DE IBUF DANS JBUF.
+
+          DO  I=1,HEAD
+              JBUF(I) = IBUF(I)
+          END DO
+
+***        LIRE LES SET(NSET) ENREGISTREMENTS DANS L'ORDRE.
+
+          DO  I=1,NSET
+              DO  J=SET(I-1)+1,SET(I)
+
+                  POSIT  = (J-1) * NWDS + 1
+
+                  NIV    = LEV(J)
+                  NOM    = VARIAB(J)
+
+                  ZHOLD  = ZLABEL
+                  ZLABEL = VARIAB(J)(5:20)
+
+                  IF (IO64B)                                   THEN
+                      CALL getfld28( NF, G8(POSIT), 
+     +                KIND,TIME,NOM,NIV, IBUF,MAXPK,OK )
+                  ELSE
+                      CALL getfld2( NF, G (POSIT), 
+     +                KIND,TIME,NOM,NIV, IBUF,MAXPK,OK )
+                  END IF
+
+                  NIP3(I) = MAX( 1, GETHIGH( 'IP3',IBUF ) )
+
+                  ZLABEL = ZHOLD
+
+                  IF (.NOT.OK)                                 THEN
+                      IF (RECABT.EQ.'&NON' .AND.
+     +                    MAXPK .EQ. 0     .AND.
+     +                    NR    .GT. 0     )               
+     +                    CALL PRECEDE( NF, NR )   
+                      IF (INFO)                                THEN
+                         CALL GET_IP1_STRING( NIV,NIV_S )
+                         WRITE(6,6011) NOM,TRIM( NIV_S )
+                      END IF
+                      RETURN
+                  END IF
+
+                  CALL CMPLBL( 0, JBUF, 0,IBUF, OK )
+          
+                  IF (.NOT.OK)                                 THEN
+
+                      IF (INFO)                                THEN
+                          WRITE(6,6002)
+                          CALL PRTLAB2( ' First ibuf: ',JBUF )
+                          CALL PRTLAB2( ' Last  ibuf: ',IBUF )
+                      END IF
+
+                      RETURN
+***                   CALL                         XIT('Getmset3',-2 )
+
+                  END IF
+
+                  NR       = NR+1
+                  STEP(NR) = IBUF(2)
+
+***                PRESENCE DE VALEURS MANQUANTES ?
+
+                  CALL MISPAR( LVAL,MISFLAG,EPSILON )
+                  MVALUE = (LVAL .OR. MVALUE)
+
+              END DO
+          END DO
+
+      ELSE
+
+***        IGNORER LE ENREGISTREMENTS DE TYPE 'CHAR' ET 'LABL'.
+
+          IF (INFO)                                            THEN
+              IF (MESSAG.NE.'deja donne')                      THEN
+                  MESSAG  = 'deja donne'
+                  WRITE(6,6012)
+              END IF
+          END IF
+          DO  J=1,HEAD
+              IBUF(J) = JBUF(J)
+          END DO
+          GOTO 100
+
+      END IF
+
+***    ACTIVER LES VALEURS MANQUANTES SI ELLES ONT ETE
+***    DETECTEES DANS AU MOINS UN JEUX D'ENREGISTREMENTS.
+
+      IF (MVALUE) CALL SET_MISPAR( MISFLAG,EPSILON )
+
+      RETURN
+*-------------------------------------------------------------------
+
+    4 FORMAT(A4)
+
+ 6001 FORMAT(' Getmset3: While trying to read ',I5,' levels of ',A,
+     +       ' found ',I5,' levels of ',A/)
+ 6002 FORMAT(' Getmset3: More than one size ...')
+ 6003 FORMAT(' Getmset3: While looking for variable ',A,' at level ',A,
+     +       ' found ',A,' at ',A/)
+ 6013 FORMAT(' Getmset3: While looking for variable ',A,' found ',A/)
+
+ 6011 FORMAT(' Getmset3: Unable to find ',A4,' at level ',A,' ...')
+ 6012 FORMAT(' Getmset3: Stripping CHAR and LABL records from input.')
+
+      END
+      SUBROUTINE getmset4 (NF, G, SET,NSAMP,RKIND,HIVAL,LOVAL,NSET,
+     +                            LEV,VARIAB,STEP, IBUF,MAXPK,OK )
+
+***    Juin 2016 - B.Dugas, UQAM.
 
 ***    Cette routine lit un pas de temps complet de SET(NSET)
 ***    enregistrements.  La routine GETSET2 est utilisee pour
@@ -2274,7 +2636,7 @@ C     END IF
 
                   OK = .FALSE.
                   RETURN
-***               CALL                         XIT('Getmset3',-1 )
+***               CALL                         XIT('Getmset4',-1 )
 
               END IF
 
@@ -2290,7 +2652,7 @@ C     END IF
 
                   OK = .FALSE.
                   RETURN
-***               CALL                        XIT('Getmset3',-2 )
+***               CALL                        XIT('Getmset4',-2 )
 
               END IF
 
@@ -2379,7 +2741,7 @@ C     END IF
                       END IF
 
                       RETURN
-***                   CALL                         XIT('Getmset3',-2 )
+***                   CALL                         XIT('Getmset4',-2 )
 
                   END IF
 
@@ -2421,15 +2783,15 @@ C     END IF
 
     4 FORMAT(A4)
 
- 6001 FORMAT(' Getmset3: While trying to read ',I5,' levels of ',A,
+ 6001 FORMAT(' Getmset4: While trying to read ',I5,' levels of ',A,
      +       ' found ',I5,' levels of ',A/)
- 6002 FORMAT(' Getmset3: More than one size ...')
- 6003 FORMAT(' Getmset3: While looking for variable ',A,' at level ',A,
+ 6002 FORMAT(' Getmset4: More than one size ...')
+ 6003 FORMAT(' Getmset4: While looking for variable ',A,' at level ',A,
      +       ' found ',A,' at ',A/)
- 6013 FORMAT(' Getmset3: While looking for variable ',A,' found ',A/)
+ 6013 FORMAT(' Getmset4: While looking for variable ',A,' found ',A/)
 
- 6011 FORMAT(' Getmset3: Unable to find ',A4,' at level ',A,' ...')
- 6012 FORMAT(' Getmset3: Stripping CHAR and LABL records from input.')
+ 6011 FORMAT(' Getmset4: Unable to find ',A4,' at level ',A,' ...')
+ 6012 FORMAT(' Getmset4: Stripping CHAR and LABL records from input.')
 
       END
       SUBROUTINE getset2 (NF,G,LEV,NLEV,IBUF,MAXPK,OK)

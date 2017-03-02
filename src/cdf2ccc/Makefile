@@ -1,5 +1,5 @@
 .SUFFIXES :
-.SUFFIXES : .txt .ftn .f .h .o .a
+.SUFFIXES : .txt .ftn .f .f90 .h .o .a
 
 # CDF2CCC Makefile
 
@@ -53,9 +53,9 @@ LIBP     = $(LIBDIR)/lib$(MALIB).a
 
 DDFUN90  = ddfun90
 DIAGLIB  = diag_sq$(STD)_g
-lNetCDF  = netcdff netcdf
-RMNLIB   = rmn_015
-UDUNITS  = udunits
+lNetCDF  = netcdff netcdf hdf5_hl hdf5 dl z
+RMNLIB   = rmn_015.2
+UDUNITS  = udunits2 expat
 VGDLIB   = descrip
 
 LIBPATH  = $(LIBDIR) $(EXTRAS)/lib
@@ -85,7 +85,15 @@ default:  $(LIBP)
 .f.o:
 	$(FC) $<
 
+.f90.o:
+	$(FC) $<
+
 .f.a:
+	$(FC) $<
+	$(AR) rv $@ $*.o
+	/bin/rm -f $*.o
+
+.f90.a:
 	$(FC) $<
 	$(AR) rv $@ $*.o
 	/bin/rm -f $*.o
@@ -99,10 +107,8 @@ default:  $(LIBP)
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
-
-FTNDECKS=\
-	 decodate.ftn	encodate.ftn	enleve_bissextile2.ftn \
-	 udparse.ftn	uduerr.ftn
+F90DECKS= \
+	 udparse.f90
 
 FDECKS= \
 	 affecte_attr.f	affecte_coord.f	affecte_dim.f	affecte_var.f \
@@ -122,8 +128,8 @@ FDECKS= \
 	 trier.f	valide_range.f	vers_cccma.f	vers_netcdf.f \
 	 wrfile.f	wrlalo.f
 
-EXTRAF= \
-	cdf2ccc.f	decodate.f	encodate.f	enleve_bissextile2.f	udparse.f	uduerr.f
+EXTRAF= 	\
+	 cdf2ccc.f
 
 
 OBJECTS= \
@@ -141,7 +147,7 @@ OBJECTS= \
 	 justifie_droite.o	les_arg.o	lire_arg.o	lire_cccvar.o \
 	 minmaxchar.o	nblen.o	possibilite.o	put_attribut.o \
 	 put_var.o	rdlatlon2.o		rdspec2.o	scanfile.o \
-	 trier.o		udparse.o	uduerr.o \
+	 trier.o		udparse.o \
 	 valide_range.o	vers_cccma.o	vers_netcdf.o	wrfile.o \
 	 wrlalo.o
 
@@ -158,9 +164,7 @@ HDECKS= \
 
 TXTDECKS =	cdf2ccc.txt
 
-
-
-FICHIERS = $(FTNDECKS) $(FDECKS) $(HDECKS)
+FICHIERS = $(F90DECKS) $(FDECKS) $(HDECKS)
 
 # Dependances des fichiers .txt et .o
 
@@ -178,7 +182,7 @@ $(LIBP)(cal_date.o):			cal_date.f	$(INCLUDES)/cdf2ccc.h
 $(LIBP)(cdf2ccc.o):			cdf2ccc.ftn	$(INCLUDES)/cdf2ccc.h
 $(LIBP)(combline.o): 		combline.f	$(INCLUDES)/cdf2ccc.h 
 $(LIBP)(conv_unit.o): 		conv_unit.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h 
-$(LIBP)(decodate.o):			decodate.ftn	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h  
+$(LIBP)(decodate.o):			decodate.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h  
 $(LIBP)(def_attr_projection.o): def_attr_projection.f $(INCLUDES)/cdf2ccc.h $(INCLUDES)/ztypmem.h
 $(LIBP)(def_cccma.o):		def_cccma.f	$(INCLUDES)/cdf2ccc.h 
 $(LIBP)(def_dim_coord.o):	def_dim_coord.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h		$(INCLUDES)/workmem.h 
@@ -187,8 +191,8 @@ $(LIBP)(def_spectral_truncation.o):	def_spectral_truncation.f	$(INCLUDES)/cdf2cc
 $(LIBP)(define_list.o):		define_list.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h 
 $(LIBP)(define_netcdf.o):	define_netcdf.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h 
 $(LIBP)(define_var.o):		define_var.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h 
-$(LIBP)(encodate.o):			encodate.ftn	$(INCLUDES)/cdf2ccc.h 
-$(LIBP)(enleve_bissextile2.o):	enleve_bissextile2.ftn	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/format.h 
+$(LIBP)(encodate.o):			encodate.f	$(INCLUDES)/cdf2ccc.h 
+$(LIBP)(enleve_bissextile2.o):	enleve_bissextile2.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/format.h 
 $(LIBP)(eval_lonlat.o):		eval_lonlat.f	$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCLUDES)/infomem.h	$(INCLUDES)/varmem.h	$(INCLUDES)/ztypmem.h
 $(LIBP)(eval_xcyc.o):		eval_xcyc.f	$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/infomem.h 	$(INCLUDES)/varmem.h 
 $(LIBP)(get_attr.o):			get_attr.f		$(INCLUDES)/cdf2ccc.h 	$(INCLUDES)/workmem.h 
@@ -300,7 +304,6 @@ $(LIBP):	initial	$(FDECKS)	$(HDECKS)	\
 	 $(LIBP)(scanfile.o)			\
 	 $(LIBP)(trier.o)			\
 	 $(LIBP)(udparse.o)			\
-	 $(LIBP)(uduerr.o)			\
 	 $(LIBP)(valide_range.o)		\
 	 $(LIBP)(vers_cccma.o)			\
 	 $(LIBP)(vers_netcdf.o)			\
