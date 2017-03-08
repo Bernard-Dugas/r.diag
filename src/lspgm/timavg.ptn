@@ -1224,7 +1224,7 @@
       GOTO 200
  
 ***    STOP IF THE LAST SET IS NOT COMPLETE.
- 
+
   300 IF (ACCUM   .OR.
      +   (SAMPLES .AND. VERBE.EQ.'timavg'))                    THEN
           NMIN = MINVAL( NSAMP(1:NSET) )
@@ -1243,7 +1243,28 @@
           WRITE(6,6350) NR,NRECS
           CALL                                     XIT( VERBE ,-4 )
       END IF
- 
+       
+      IF (NSETS == 1)                                          THEN
+
+          ! Restore original data and exit !
+
+          IF (.NOT.(TIMIN .OR. TIMAX))                         THEN
+              DO  K=1,NSET
+                  M0 = NWDS*SET(K-1)+1
+                  M1 = NWDS*SET(K)
+                  AVG(M0:M1) = AVG(M0:M1)/NSAMP(K)
+              END DO
+          END IF
+
+          CALL PUTMSET4( 12, AVG, SET,NSAMP,RKIND,
+     +                            HIVAL,LOVAL,NSET,
+     +                            LEV,VARIAB,MAXLEV,
+     +                            IBUF,MAXW )
+
+          CALL                                     XIT( VERBE , 0 )
+
+      END IF
+
       NSAMP(1:NSET) = NSAMP(1:NSET)+NSAMPA(1:NSET)
       NSETS         = NSAMP(1)
 
