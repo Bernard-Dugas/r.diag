@@ -2618,19 +2618,20 @@ C     END IF
                           CALL GET_IP1_STRING( INT_LEV(J),INT_SLEV )
                           CALL GET_IP1_STRING(     LEV(J),EXT_SLEV )
                           WRITE(6,6003)
-     +                       VARIAB(SET(I))(1:4),TRIM( EXT_SLEV ),
-     +                       NOM                ,TRIM( INT_SLEV )
+     +                     TRIM( VARIAB(SET(I))(1:4) ),TRIM( EXT_SLEV ),
+     +                     TRIM( NOM )                ,TRIM( INT_SLEV )
                       ELSE IF (NOM  /= VARIAB(SET(I))(1:4))    THEN
-                          WRITE(6,6013) VARIAB(SET(I))(1:4),NOM
+                          WRITE(6,6013)
+     +                          TRIM( VARIAB(SET(I))(1:4) ),TRIM( NOM )
                       ELSE
                           WRITE(6,6001) SET(I)-SET(I-1),
-     +                              VARIAB(SET(I))(1:4), NLEV,NOM
+     +                    TRIM( VARIAB(SET(I))(1:4) ), NLEV,TRIM( NOM )
                       END IF
 
                   ELSE IF (INFO .AND. MAXPK.NE.0)              THEN
 
                       WRITE(6,6001) SET(I)-SET(I-1),
-     +                              VARIAB(SET(I))(1:4), NLEV,NOM
+     +                    TRIM( VARIAB(SET(I))(1:4) ), NLEV,TRIM( NOM )
 
                   END IF
 
@@ -3613,7 +3614,11 @@ C 100 IER = MEMOIRC( 0 )
           IF (NLEV + SET(NSET).GE.MAXV .OR. NLEV.LE.0)         THEN
               IF (DEBUG)                                       THEN
                   WRITE(NAME,0004) JBUF(3)
-                  WRITE(6,6100) NLEV+SET(NSET),MAXV,NAME(1:4)
+                  IF (NLEV > 0)                                THEN
+                      WRITE(6,6100) NF,NLEV,SET(NSET),MAXV,NAME(1:4)
+                  ELSE
+                      WRITE(6,6101) NF
+                  END IF
               END IF
               GOTO 300
           END IF
@@ -3677,7 +3682,7 @@ C 100 IER = MEMOIRC( 0 )
       LEN     = MAX(             MAXLEN  , MAXSWRD0 + HEAD )
 CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
-      IF (DEBUG .AND. MAXWRD0 .NE. INIMAX) WRITE(6,6200) MAXWRD0
+      IF (DEBUG .AND. MAXWRD0 .NE. INIMAX) WRITE(6,6200) NF,MAXWRD0
 
       GETSIZ4 = LEN - HEAD
 
@@ -3690,8 +3695,10 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
  6001 FORMAT(' Getsiz4: More than one size ...')
 
- 6100 FORMAT('*DEBUG:GETSIZ4',5X,'TOO MANY RECORDS IN SET, IGNORING ',A)
- 6200 FORMAT('*DEBUG:GETSIZ4',5X,'MAXWRD reset to ',I9)
+ 6100 FORMAT('*DEBUG:GETSIZ4',5X,'NF =',I5,', TOO MANY RECORDS IN SET,',
+     +        I5,'+',I5,'>',I5,', IGNORING ',A)
+ 6101 FORMAT('*DEBUG:GETSIZ4',5X,'NF =',I5,', NLEV <= 0, IGNORING ')
+ 6200 FORMAT('*DEBUG:GETSIZ4',5X,'NF =',I5,', MAXWRD reset to ',I9)
 
       END
 

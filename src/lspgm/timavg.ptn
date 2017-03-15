@@ -354,7 +354,7 @@
 
       CHARACTER*20 VARIAB(MAXLEV),VARIAB2(MAXLEV)
 
-      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
       REAL*8,     DIMENSION(:), ALLOCATABLE :: F,AVG,MF,MA
 
 #     include "machtype.cdk" 
@@ -747,9 +747,9 @@
       MEM = NWDS*SET(NSET)
 
       IF (NSETS.EQ.0)                                          THEN
-          ALLOCATE( IBUF(2*LEN), F(MEM),AVG(MEM),  STAT=IER )
+          ALLOCATE( IBUF(2*LEN),JBUF(2*LEN), F(MEM),AVG(MEM), STAT=IER )
       ELSE
-          ALLOCATE( IBUF(2*LEN), F(MEM),           STAT=IER )
+          ALLOCATE( IBUF(2*LEN),JBUF(2*LEN), F(MEM),          STAT=IER )
       END IF
 
       IF (MVALUE)                                              THEN
@@ -785,16 +785,16 @@
 
               CALL GETMSET4( 12, AVG,
      +                           SET,NSAMPA,RKINDA,HIVALA,LOVALA,NSET,
-     +                           LEV,VARIAB,STEP, IBUF,MAXW,ACCOK )
+     +                           LEV,VARIAB,STEP, JBUF,MAXW,ACCOK )
 
 ***            RETREIVE THE NUMBER OF SETS ACCUMULATED
 ***            (AND POSSIBLY, THE ORIGINAL DATE).
 
               IF (PKTYP.EQ.'SQ')                               THEN
 
-                  DATEAI = GETHIGH('DATEO',IBUF )
-                  DEETA  = GETHIGH('DEET' ,IBUF )
-                  NPASA  = GETHIGH('NPAS' ,IBUF )
+                  DATEAI = GETHIGH('DATEO',JBUF )
+                  DEETA  = GETHIGH('DEET' ,JBUF )
+                  NPASA  = GETHIGH('NPAS' ,JBUF )
 
                   HEURE = (NPASA*(DBLE( DEETA )/60.))/60.
                   CALL INCDATR( DATEAF,DATEAI,HEURE )
@@ -805,7 +805,7 @@
 
               CALL PRECEDE( 12,-1 )
 
-              IF (PKTYP.NE.'SQ') NSAMPA(1:NSET)  = IBUF(2)
+              IF (PKTYP.NE.'SQ') NSAMPA(1:NSET)  = JBUF(2)
 
               
               IF (MVALUE)                                      THEN
@@ -828,7 +828,7 @@
 
                   CALL GETMSET4( 13, MA,
      +                               SET,NMIS,RKM,HIM,LOM,NSET,
-     +                               LEV,VARIAB,STEP, IBUF,MAXW,OK2 )
+     +                               LEV,VARIAB,STEP, JBUF,MAXW,OK2 )
 
                   IF (.NOT.OK2)                                THEN
 
@@ -836,7 +836,7 @@
 
                   ELSE IF (PKTYP.EQ.'SQ')                      THEN
 
-                      MISTYP = GETHIC('TYPVAR',IBUF )
+                      MISTYP = GETHIC('TYPVAR',JBUF )
                       IF (MISTYP.NE.'MV') CALL     XIT( VERBE ,-10 )
 
                   END IF
@@ -1048,8 +1048,8 @@
           IPM = GETIPMODE( IBUF )
 
           IF (IPM /= IPMi)                                     THEN
-              ! Mixing new- and old-mode IP1/2/3 coding
-              WRITE(6,6013) 
+              ! Mixing new- and old-mode IP1/2/3 coding in input file
+              WRITE(6,6013) IPMi,IPM
               CALL                                 XIT( VERBE ,-13 )
           END IF
 
@@ -1060,7 +1060,7 @@
               CALL MISPAR( MVALUE,MISFLAG,EPSILON )
               IF (MVALUE)                                      THEN
                   WRITE(6,6011)
-                  CALL                         XIT( VERBE ,-11 )
+                  CALL                             XIT( VERBE ,-11 )
               END IF
           END IF
 
@@ -1244,17 +1244,12 @@
           CALL                                     XIT( VERBE ,-4 )
       END IF
        
+      NSAMP(1:NSET) = NSAMP(1:NSET)+NSAMPA(1:NSET)
+      NSETS         = NSAMP(1)
+
       IF (NSETS == 1)                                          THEN
 
-          ! Restore original data and exit !
-
-          IF (.NOT.(TIMIN .OR. TIMAX))                         THEN
-              DO  K=1,NSET
-                  M0 = NWDS*SET(K-1)+1
-                  M1 = NWDS*SET(K)
-                  AVG(M0:M1) = AVG(M0:M1)/NSAMP(K)
-              END DO
-          END IF
+          ! Nothing to do. Save data and exit !
 
           CALL PUTMSET4( 12, AVG, SET,NSAMP,RKIND,
      +                            HIVAL,LOVAL,NSET,
@@ -1264,9 +1259,6 @@
           CALL                                     XIT( VERBE , 0 )
 
       END IF
-
-      NSAMP(1:NSET) = NSAMP(1:NSET)+NSAMPA(1:NSET)
-      NSETS         = NSAMP(1)
 
       DO  K=1,NSET
           IF (ACCOK .AND. RKINDA(K) == KIND_HOURS)             THEN
@@ -1409,7 +1401,7 @@
      +       ' mode is not active.'/' Restart with the appropriate',
      +       ' -mvalue argument sequence and accessory files.')
  6012 FORMAT(' Mixing averages and samples in input data.')
- 6013 FORMAT(' Mixing new- and old-mode IP1/2/3 coding.')
+ 6013 FORMAT(' Mixing new- and old-mode IP1/2/3 coding. IPMi,IPM =',2I3)
 
  6000 FORMAT(/' ',A,' will not update the time descriptors.'/)
  6100 FORMAT('0..',A,' input file is empty. NSET/MAX VALUE=',2I6)
