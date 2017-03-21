@@ -131,31 +131,28 @@
 *------------------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
-      REAL        PTMIN
-      PARAMETER ( PTMIN = pression_au_toit )
-      REAL        P0
-      PARAMETER ( P0    = 101320. ) 
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      REAL,       PARAMETER :: PTMIN  = pression_au_toit
+      REAL,       PARAMETER :: P0     = 101320.
  
       CHARACTER   LIGNE*80
       LOGICAL     OK,SPEC,LEVOK
-      CHARACTER*4 KIND,LEVTYP,COORD
-      INTEGER     LEV(MAXLEV),LEVA(MAXLEV),JBUF(taille_entete),
+      CHARACTER*4 KIND,LEVTYP,COORD,PKTYP*2
+      INTEGER     LEV(MAXLEV),LEVA(MAXLEV),JBUF(HEAD),
      +            IER,MAXW,JPAK,LEN,NWDS,ILEV,ILEVA,VKIND,
      +            I,L,IL,NFIL,IO,LAY,NSETS,LOW,HIGH,KEEP
-      REAL        ETA(MAXLEV),ETAB(MAXLEV),E(2),
-     +            CONST,SIGTOP,PTOIT
+      REAL        ETA(MAXLEV),ETAB(MAXLEV),E(2),CONST,
+     +            SIGTOP,PTOIT,HIVAL,LOVAL
 
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       REAL,       DIMENSION(:), ALLOCATABLE :: GG,ACC
 
-      LOGICAL     RPBLOC
-      INTEGER     GETSIZ2
-      CHARACTER   GETYP*4,PKTYP*2
-      EXTERNAL    JCLPNT,GETLIGN,BURNF,GETSIZ2,CMPLBL,GETSET2,
-     +            PUTFLD2,CONVPR,WRITLEV2,BASCAL,XIT,LEADBLK,
-     +            RPBLOC,GETYP
+      INTEGER,    EXTERNAL :: GETSIZ2
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER*4,EXTERNAL :: GETYP
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,CMPLBL,GETSET2,
+     +            PUTFLD2,CONVPR,WRITLEV2,BASCAL,XIT,LEADBLK
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -280,10 +277,9 @@
               ACC(I) = 0.
           END DO
 
-          HIGH    = 1
-          LOW     = 2
-          E(HIGH) = PTOIT/P0
-      
+          HIGH    = 1        ; LOW   = 2
+          E(HIGH) = PTOIT/P0 ; HIVAL = E(HIGH)
+
 ***        PROCESS ALL LEVELS AND ACCUMULATE ETA VERTICAL INTEGRAL.
 
   150     CALL GETSET2( 1, GG, LEVA,ILEVA, IBUF,MAXW,OK )
@@ -339,11 +335,17 @@
 
   300     CONTINUE
 
+          LOVAL = ETAB(ILEV)
+
 ***        PUT THE RESULT ONTO FILE XOUT.
 
-          IF (KIND.EQ.'ZONL')
-     +    IBUF(6) = 1
-          IBUF(4) = 1
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
+          ELSE
+              IBUF(4) = 1
+          END IF
+
+          IF (KIND.EQ.'ZONL') IBUF(6) = 1
 
           CALL PUTFLD2( 2, ACC, IBUF,MAXW )
 

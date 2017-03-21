@@ -153,31 +153,27 @@
 *-----------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: HEAD = taille_entete
  
       LOGICAL     OK,ALTB
       CHARACTER*4 SIGTYP,NAME,TYPE
       CHARACTER   LIGNE*80,MESSAG*10
-      CHARACTER   CONST4*10,CONST8*20
+      CHARACTER   CONST4*10,CONST8*20,PKTYP*2
       REAL        C,SH(MAXLEV),DS(MAXLEV),
-     +            SF(MAXLEV),ZERO,CONST
-      INTEGER     HEAD,JBUF(taille_entete),JPAK,LEV(MAXLEV),
-     +            IO,I,L,MAXW,LEN,NWDS,NLEV,NLEVG,IER,
+     +            HIVAL,LOVAL,SF(MAXLEV),CONST
+      INTEGER     JBUF(HEAD),JPAK,LEV(MAXLEV),IO,
+     +            I,L,MAXW,LEN,NWDS,NLEV,NLEVG,IER,
      +            NLEVM,NSETS,NFF,DEBUT,VKIND,LEVS
 
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       REAL,       DIMENSION(:), ALLOCATABLE :: GG,ACC
 
-      INTEGER     GETSIZ2
-      EXTERNAL    GETSIZ2
-
-      LOGICAL     RPBLOC
-      EXTERNAL    RPBLOC
-      CHARACTER   GETYP*4,PKTYP*2
-      EXTERNAL    MACSPE,XIT,GETSET2,GETYP,
-     +            PUTFLD2,CMPLBL,GETLIGN,BURNF,
-     +            CONVPR,WRITLEV
+      INTEGER,    EXTERNAL :: GETSIZ2
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER*4,EXTERNAL :: GETYP
+      EXTERNAL    MACSPE,XIT,GETSET2,CONVPR,WRITLEV,
+     +            PUTFLD2,CMPLBL,GETLIGN,BURNF
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -189,9 +185,6 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vsint.ptn,v $'
 
 *---------------------------------------------------------------------
-***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
-
-      CALL MACSPE( HEAD,ZERO )
       CALL SETRABT( '&NON' )
 
 ***    ACCEDER LES FICHIERS D'E/S.
@@ -318,20 +311,24 @@
               END DO
 
               IF (ALTB)                                        THEN
-                  DS(1)    = SF(2)-SH(1)
+                  HIVAL    = SH(1)
               ELSE
-                  DS(1)    = SF(2)-SF(1)
+                  HIVAL    = SF(1) 
               END IF
+
+              DS(1)        = SF(2)-HIVAL
 
               DO  L=2,NLEVM
                   DS(L)    = SF(L+1)-SF(L)
               END DO
 
               IF (ALTB)                                        THEN
-                  DS(NLEV) = SH(NLEV)-SF(NLEV)
+                  LOVAL    = SH(NLEV)
               ELSE
-                  DS(NLEV) = 1.-SF(NLEV)
+                  LOVAL    = 1.0
               END IF
+
+              DS(NLEV)     = LOVAL-SF(NLEV)
 
           ELSE
 
@@ -342,20 +339,24 @@
               END DO
 
               IF (ALTB)                                        THEN
-                  DS(1)    = SH(1)-SF(1)
+                  HIVAL    = SF(1)
               ELSE
-                  DS(1)    = SH(1)
+                  HIVAL    = 0.0
               END IF
+
+              DS(1)        = SH(1)-HIVAL
 
               DO  L=2,NLEVM
                   DS(L)    = SH(L)-SH(L-1)
               END DO
 
               IF (ALTB)                                        THEN
-                  DS(NLEV) = SF(NLEV)-SH(NLEVM)
+                  LOVAL    = SF(NLEV)
               ELSE
-                  DS(NLEV) = 1.-SH(NLEVM)
+                  LOVAL    = 1.0
               END IF
+              
+              DS(NLEV)     = LOVAL-SH(NLEVM)
 
           END IF
       END IF
@@ -425,7 +426,12 @@
  
 ***        SAVE ACC ON FILE XOUT.
 
-                              IBUF(4) = LEVS
+          IF (PKTYP.EQ.'SQ')                                   THEN
+              CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
+          ELSE
+              IBUF(4) = LEVS
+          END IF
+
           IF (TYPE.EQ.'ZONL') IBUF(6) = 1
 
           IF (NSETS.EQ.0) CALL PRTLAB( IBUF )

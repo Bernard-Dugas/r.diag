@@ -593,12 +593,13 @@ c
 
 ***    Interval vertical ou de temps (avec combinaisob des IP1/2/3) ?
 
-!!!   if (stat == CONVERT_OK .or. stat == CONVERT_GOOD_GUESS)  then
-!!!     Cette ligne est en commentaire parce que CONVERT_GOOD_GUESS
+!!!   if (RP3%kind == -1 .and.
+!!!  +   (stat == CONVERT_OK .or. stat == CONVERT_GOOD_GUESS)) then
+!!!     Ces lignes sont en commentaire parce que CONVERT_GOOD_GUESS
 !!!     peut entrer en conflit avec le codage precedent des IP2/IP3.
 !!!     C'est pourquoi le traitement doit etre fait dans GETSAMPLSZ.
 
-      if (stat == CONVERT_OK)                                  then
+      if (stat == CONVERT_OK .and. RP3%kind == -1)             then
           if (RP1%hi /= RP1%lo) then ! Interval vertical
               HIVAL = RP1%hi ; LOVAL = RP1%lo ; RANGE_KIND = k1
           else if (RP2%hi /= RP2%lo) then ! Interval de temps

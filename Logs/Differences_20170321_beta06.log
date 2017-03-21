@@ -1,0 +1,40 @@
+Description of the changes that have been made to r.diag since March 02 2017
+
+* DEVELOPMENT *
+
+README.md :
+ - Correction for ECCC (rather than EC) and add more
+   details as to the dependance on the NetCDF versions.
+
+* DEVELOPMENT/SRC/LSPGM *
+
+FSTMDIAG :
+ - Use the RP3%kind return value and the CORRECT_OK status
+   value from the call to diag_decode_ip to decide wether
+   the new IP1/2/3 coding has been detected. This coding
+   allows for vertical or time intervals. A time interval
+   will in turn be recognized as a strong indication
+   of a previous time mean operation.
+TIMAVG :
+ - Insure that the accumulator Input stream uses a different
+   I/O buffer (JBUF) than the Input samples (IBUF). This corrects
+   an incorrect IPM definition and an thus an error -13 exit.
+VEINT, VPINT, VPINTL and VSINT :
+ - Output actual vertical range in IP1/IP3.
+ - Some F90 cleanup.
+
+* DEVELOPMENT/SRC/LSSUB *
+
+CONVSUB :
+ - Same correction as for FSTMDIAG above but in IBUFILL.
+   This change only has an incidence in TIMAVG at this time.
+DIAG_CONVERT_IP123 :
+ - A IP1=0 instance will generate a CONVERT_OK status in decode_ip.
+DIAG_CONVIP_PLUS :
+ - Check for CONVERT_OK in DECODE_RANGE.
+GET :
+ - Trim a few GETMSET4 DEBUG messages.
+ - Correct a few GETSIZ4 DEBUG messages.
+PUT :
+ - Do not treat IP1 in PUTSAMPLZ as
+   it it irrelevant at this point.

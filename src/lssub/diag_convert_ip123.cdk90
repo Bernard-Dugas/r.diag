@@ -359,7 +359,7 @@ function decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,name='Di
 
   call diag_convip_plus(IP1,P(1),kind(1),-2,dummy,.false.)  ! kind of ip1 should be a level
   if(.not. is_level(kind(1))) goto 777                   ! ip1 is not a level
-  if(IP1 < 32768) status = ior(status , CONVERT_GOOD_GUESS)  ! reasonable guess if old style level
+  if(0 < ip1 .and. IP1 < 32768) status = ior(status , CONVERT_GOOD_GUESS)  ! reasonable guess if old style level
   RP1%lo=P(1) ; RP1%hi=P(1) ; RP1%kind=kind(1)
   
   if(IP2 < 32768) then                          ! IP2 is old style, probably a time value
@@ -578,7 +578,7 @@ implicit none
     status = ior(status,CONVERT_WARNING)
   endif
   if(diag_is_invalid_kind(kind1)) goto 777  ! bad kind
-  if(IP1 < 32768) status = ior(status,CONVERT_GOOD_GUESS)
+  if(0 < ip1 .and. IP1 < 32768) status = ior(status,CONVERT_GOOD_GUESS)
   if( .not. is_level(kind1)) goto 777           ! ip1 must be a level
 
   if(IP2 < 32768) then                          ! IP2 is old style, probably a time value

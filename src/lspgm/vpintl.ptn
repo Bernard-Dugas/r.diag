@@ -142,26 +142,23 @@
 *-----------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
+      INTEGER,    PARAMETER :: MAXLEV = 999
+      INTEGER,    PARAMETER :: HEAD = taille_entete
  
       LOGICAL     OK,ALTB,INCREAS
-      REAL        PR(MAXLEV),ZERO,GINV,DP
-      CHARACTER   NAME*4,TYPE*4,VALEUR*10,MESSAG*10,ENCORE*16
-      INTEGER     HEAD,JBUF(taille_entete),JPAK,LEV(MAXLEV),
-     +            IL1,IL2,I,L,MAXW,LEN,NWDS,NLEV,IER,
-     +            NLEVG,NR,NSET,NF,TOP,BOT,INC,VKIND
+      REAL        PR(MAXLEV),GINV,DP,HIVAL,LOVAL(MAXLEV)
+      CHARACTER   NAME*4,TYPE*4,PKTYP*2,VALEUR*10,MESSAG*10,ENCORE*16
+      INTEGER     JBUF(HEAD),JPAK,LEV(MAXLEV),IL1,IL2,
+     +            I,L,MAXW,LEN,NWDS,NLEV,IER,NLEVG,
+     +            NR,NSET,NF,TOP,BOT,INC,VKIND
 
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       REAL,       DIMENSION(:), ALLOCATABLE :: GG,ACC
 
-      INTEGER     GETSIZ2
-      EXTERNAL    GETSIZ2
-
-      LOGICAL     RPBLOC
-      CHARACTER   GETYP*4,PKTYP*2
-      EXTERNAL    MACSPE,XIT,RPBLOC,GETYP,
-     +            CONVPR,GETSET2,PUTSET2,CMPLBL
+      INTEGER,    EXTERNAL :: GETSIZ2
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER*4,EXTERNAL :: GETYP
+      EXTERNAL    MACSPE,XIT,CONVPR,GETSET2,PUTSET2,CMPLBL
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -174,9 +171,6 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vpintl.ptn,v $'
 
 *---------------------------------------------------------------------
-***    ALLER CHERCHER QUELQUES CONSTANTES SPECIFIQUES.
-
-      CALL MACSPE( HEAD,ZERO )
       CALL SETRABT( '&NON' )
 
 ***    ACCEDER LES FICHIERS D'E/S.
@@ -313,9 +307,19 @@
 
 ***        CONVERT MB TO PASCALS (DIVIDE BY G ONCE AND FOR ALL).
 
-          DO 150 L=1,NLEVG
+          IF (ALTB)                                            THEN
+              HIVAL = PR(TOP)
+          ELSE
+              HIVAL = 0. 
+          END IF
+
+          DO  L=TOP,BOT,INC
+              LOVAL(L) = PR(L)
+          END DO
+
+          DO  L=1,NLEVG
               PR(L) = GINV*PR(L)*100.
-  150     CONTINUE
+          END DO
  
 ***        INTEGRATE THE GRIDS IN THE VERTICAL USING THE TRAPEZOIDAL 
 ***        RULE. FIRST INTEGRAL FROM (0 OR PR(1)) TO LEV(1).
@@ -323,7 +327,7 @@
           IF (ALTB)                                            THEN
               DP = 0.
           ELSE
-              DP = PR(TOP)/2
+              DP = PR(TOP)/2.
           END IF
 
           IL1 = (TOP-1)*NWDS
@@ -332,23 +336,35 @@
               ACC(I) = GG(IL1+I)*DP
   200     CONTINUE
 
-          DO 300 L=TOP+INC,BOT,INC
+          IF (PKTYP == 'SQ')                                   THEN
+              IF (HIVAL == 0.0)
+     +        CALL ENCODE_RANGE( HIVAL,LOVAL(TOP),VKIND, IBUF )
+              CALL PUTFLD2( 2, ACC, IBUF,MAXW )
+          END IF
+
+          DO  L=TOP+INC,BOT,INC
 
               IL2 = IL1
               IL1 = IL1+INC*NWDS
 
               DP  = 0.5 * (PR(L)-PR(L-INC))
 
-              DO 250 I=1,NWDS
+              DO  I=1,NWDS
                   ACC(IL1+I) = ACC(IL2+I)+(GG(IL1+I)+GG(IL2+I))*DP
-  250         CONTINUE
+              END DO
 
-  300     CONTINUE
+              IF (PKTYP == 'SQ')                               THEN
+                  CALL ENCODE_RANGE( HIVAL,LOVAL(L),VKIND, IBUF )
+                  CALL PUTFLD2( 2, ACC, IBUF,MAXW )
+              END IF
+
+          END DO
 
 ***        PUT THE RESULT ONTO FILE 2.
  
           IF (NR.EQ.0) CALL PRTLAB( IBUF )
-          CALL PUTSET2( 2, ACC, LEV,NLEVG, IBUF,MAXW )
+          IF (PKTYP /= 'SQ') 
+     +    CALL PUTSET2( 2, ACC, LEV,NLEVG, IBUF,MAXW )
 
       NSET = NSET+1
       NR   = NR+NLEVG

@@ -4,12 +4,12 @@
 
  An extensive toolkit available to users wanting to manipulate 2D
  and 3D meteorological data, as produced either by the Environment
- Canada (EC) GEM forecast model or the EC CCCma General Circulation
- Model (GCM). The CMC/RPN GEM file formats and two flavors of the
- GCM's binary sequential format are supported. This toolkit was
- originally derived from an early 1990's unix port of the then
- CRAY version of the CCCma diagnostic toolkit. Additional code
- produced at UQAM for diagnostics of regional climate data in
+ and Climate Change Canada (ECCC) GEM forecast model or the ECCC
+ CCCma General Circulation Model (GCM). The CMC/RPN GEM file formats
+ and two flavors of the GCM's binary sequential format are supported.
+ This toolkit was originally derived from an early 1990's unix port
+ of the then CRAY version of the CCCma diagnostic toolkit. Additional
+ code produced at UQAM for diagnostics of regional climate data in
  the late 1990's is also included in the toolbox.
 
  The GEM toolkit is built in the R.DIAG executable binary. The
@@ -39,7 +39,7 @@
  Input NetCDF files should closely conform to the CF v1.4 Metadata
  convention. The converter will otherwise (at best) choke on them.
  Depending on this executable's name, which should be either cdf2ccc
- or cdf2rpn, the default EC file format read/written by the executable
+ or cdf2rpn, the default ECCC file format read/written by the executable
  will be either the CCCma or CMC/RPN formats. These two executable
  are in general automatically generated as hard-links. The first
  version of the converter was created by the Ouranos Consortium
@@ -58,8 +58,10 @@
  has to be installed and active (see mfvalin/rmnlib on github.com). As
  well, the Vgrid Descriptors package used in the GEM v4+ model also has
  to be available. Furthermore, to generate the two cdf2xxx executables,
- the NetCDF v4 and UdUnits v2 library packages also have to available.
- These in turn require the hdf5, dl, z and expat libraries.
+ the NetCDF (v3 or v4) and UdUnits v2 library packages also have to
+ available. These in turn require the hdf5, dl and z libraries (if
+ NetCDF v4 is used) and the expat library (for UdUnits v2). The
+ current configuration assumes that NetCDF v4 is used.
 
  Most of the code available here is written in FORTRAN. As a
  consequnce of this, the conversion tool now uses a FORTRAN to
@@ -84,5 +86,5 @@
  Software Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : February 2017
+ Last revision : March 2017
 

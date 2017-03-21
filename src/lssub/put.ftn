@@ -1839,7 +1839,6 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 !------------------------------------------------------------------------------
       IF (NSAMPZ <= 1) RETURN ! Not a time-mean average. Do nothing !
 
-      IP1    = ibuf(4) ! au lieu de GETHIGH(  'IP1',IBUF )
       IP2    = GETHIGH(  'IP2',IBUF )
       IP3    = GETHIGH(  'IP3',IBUF )
 
@@ -1858,14 +1857,12 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
       IF (COMPLET .and. HIVAL > LOVAL .and.
      +   (RANGE_KIND == -1 .or. RANGE_KIND == KIND_HOURS))                         THEN
           ! Coder (ou re-coder) (HIVAL,LOVAL) dans (IP2,IP3)
-          CALL Diag_CONVIP_plus( IP1,vip1,kind ,-2,NULS,.FALSE. )
-          RP1%hi = vip1  ; RP1%lo = vip1  ; RP1%kind = kind
+          RP1%hi = 0.0   ; RP1%lo = 0.0   ; RP1%kind = KIND_PRESSURE
           RP2%hi = HIVAL ; RP2%lo = LOVAL ; RP2%kind = KIND_HOURS
           stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 ) 
           IF (stat == CONVERT_ERROR)                                               THEN
               IF (INFO) \
-                  WRITE(6,6001) stat,RP1%hi,RP1%lo,RP1%kind,
-     +                               RP2%hi,RP2%lo,RP2%kind
+                  WRITE(6,6001) stat,RP2%hi,RP2%lo,RP2%kind
               CALL                                 XIT('PutSamplZ',-1 )
           END IF
           CALL PUTHIGH( IP2       ,'IP2'  ,IBUF )
@@ -1884,7 +1881,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
           !  le nombre d'echantillons code en mode KIND_SAMPLES
           !  dans IP3 et IP2=NSAMPZ*DEET ou on suppose que DEET
           !  contient l'interval entre les echantillons
-          deet = GETHIGH('DEET',IBUF ) ; HOLD = NSAMPZ*DBLE( DEET )/3600.
+          HOLD = NSAMPZ*DBLE( DEET )/3600.
           IF (HOLD <= 1000000.)
      +    CALL Diag_CONVIP_plus( IP2,HOLD,kIND_HOURS,+2,NULS,.FALSE. )
           CALL Diag_CONVIP_plus( IP3,FLOAT( NSAMPZ ),
@@ -1904,8 +1901,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 
       RETURN
 !------------------------------------------------------------------------------
- 6001 format(/'   Erreur=',I3,' dans ENCODE_ip, RP1=',2p4e14.6,I3/
-     +                                      31x,'RP2=',2p4e14.6,I3/)
+ 6001 format(/'   Erreur=',I3,' dans ENCODE_ip, RP2=',2p4e14.6,I3/)
  6002 format(/'   Too many samples, NSAMPZ = ',I11/)
 
       END SUBROUTINE PUTSAMPLZ

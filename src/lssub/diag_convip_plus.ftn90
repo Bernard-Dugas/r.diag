@@ -744,12 +744,16 @@ SUBROUTINE DECODE_RANGE( IBUF, HIVAL,LOVAL,KIND )
 
    k1 = RP1%kind ; k2 = RP2%kind
 
-   ! Time or level range ?
-   if (RP1%hi /= RP1%lo) then ! level range found
-      HIVAL = RP1%hi ; LOVAL = RP1%lo ; KIND = k1
-   else if (RP2%hi /= RP2%lo) then ! time range found
-      HIVAL = RP2%hi ; LOVAL = RP2%lo ; KIND = k2
-   else ! No range found
+   if (stat == CONVERT_OK) then
+      ! Time or level range ?
+      if (RP1%hi /= RP1%lo) then ! level range found
+         HIVAL = RP1%hi ; LOVAL = RP1%lo ; KIND = k1
+      else if (RP2%hi /= RP2%lo) then ! time range found
+         HIVAL = RP2%hi ; LOVAL = RP2%lo ; KIND = k2
+      else ! No range found
+         KIND = -1
+      end if
+   else
       KIND = -1
    end if
 
