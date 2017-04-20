@@ -1276,7 +1276,8 @@ C
      +    kind.eq.5001.or.
      +    kind.eq.5002.or.
      +    kind.eq.5003.or.
-     +    kind.eq.5004)                                        Then
+     +    kind.eq.5004.or.
+     +    kind.eq.5005)                                        Then
           getkindc  = hybrid
       Else
      +If (kind.eq.06)                                          Then
@@ -1330,6 +1331,7 @@ C
      +.or.kind.eq.04
      +.or.kind.eq.05 .or. kind.eq.5001 .or. kind.eq.5002
      +               .or. kind.eq.5003 .or. kind.eq.5004
+     +               .or. kind.eq.5005
      +.or.kind.eq.06
      +.or.kind.eq.10
      +.or.kind.eq.15

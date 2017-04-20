@@ -126,17 +126,24 @@
 *                Given the above, correctly using the AABB option with a
 *                GEM4 file requires specifying the "COORDI=GEM4" argument.
 *                                      *************
-*            10) When COORD='GEM4', the levels read on input will first be
-*                used to generate the two sets of dynamic and thermodynamic
-*                GEM4 staggered coordinate levels. Which set will be later
-*                used is determined by the value of the G4LEV ('-l')
-*                parametre (see above). The input data will then be
+*            10) When COORD='GEM4' *AND* AABB has not been specified, the
+*                levels read on input will first be used to generate the
+*                two sets of dynamic and thermodynamic GEM4 staggered
+*                coordinate levels. Which set will be later used is
+*                determined by the value of the G4LEV ('-l') parametre
 *                interpolated to the (chosen) set of GEM4 levels.
-*            11) Alternatively, specifying "-def APPEND" when COORD='GEM4'
-*                indicates that the program should attempt to find a !! GEM4
-*                vertical level descriptor record on the output file and use
-*                it, instead of creating one. The newly interpolated data
-*                that will result will then be appended to the file.
+*                (see above). The input data will then be interpolated to
+*                the (chosen) set of GEM4 levels.
+*            11) Note that at this time, only VKIND=5002 or 5003 (if
+*                lastTatU=T) are supported when actually building a new
+*                !! GEM4 vertical level descriptor record.
+*            12) Alternatively, specifying "-def APPEND" when COORD='GEM4'
+*                indicates that the program should instead attempt to find
+*                a !! GEM4 vertical level descriptor record on the output
+*                file and use it, instead of creating one. The newly
+*                interpolated data that will result will then be appended
+*                to the file. All of the VKIND=500x (x=2,3,4,5) are
+*                then supported.
 *
 *
 *      READ( 5,5010 ) NSL,COORD,PTOIT,              RLUP,RLDN (gpasg)

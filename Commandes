@@ -11,14 +11,12 @@ UQAM sans libgraph.a
 
     et ensuite
 
-. s.ssmuse.dot vgriddesc
+. s.ssmuse.dot vgriddesc-5.6
 FIXES="$PWD/lib/$EC_ARCH/stubs.o $PWD/lib/$EC_ARCH/moduledate.o $PWD/lib/$EC_ARCH/crc32.o"
 make allbin FIXES="${FIXES}"
 
 CMC sans libgraph.a et sans la derniere correction a moduledate
 
-. s.ssmuse.dot SI/ifortdev15 ; . s.ssmuse.dot GEM/4.6.0 ; make allbin
-s.use gmake as make ; \
-. s.ssmuse.dot SI/ifortdev15 ; . s.ssmuse.dot GEM/4.6.0 ; make allbin
+. s.ssmuse.dot SI/ifortdev15 ; . s.ssmuse.dot GEM/x/4.8.3 ; make allbin
 
 Pour generer avec libgraph.a ==> Ajouter "NOPLOT='' GRAFLIB=graph" a une des commandes "make" precedentes.

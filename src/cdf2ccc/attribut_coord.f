@@ -37,6 +37,8 @@
 *     
 *REVISIONS
 *
+*  Bernard Dugas, avril 2017 :
+*  - Ajouter le support de VKIND=5003,5004,5005
 *  Bernard Dugas, septembre 2014 :
 *  - Remplacer le '0.0' a la fin des unites temporelles par un '00'
 *  Bernard Dugas, aout 2012 :
@@ -291,12 +293,18 @@ CCC                                year,month,day,hour,minute,0.0
             attr(nbr)%cvalue='K'
 
          else if (level_desc.eq.'Hybrid Levels') then
-            if (vkind /= 5002) then
+            if (vkind /= 5002 .and.
+     .          vkind /= 5003 .and.
+     .          vkind /= 5004 .and.
+     .          vkind /= 5005) then
                attr(nbr)%cvalue='hybrid_sigma_pressure'
             endif
 
          else if (level_desc.eq.'Log Pressure Hybrid Levels') then
-            if (vkind == 5002) then
+            if (vkind == 5002 .or.
+     .          vkind == 5003 .or.
+     .          vkind == 5004 .or.
+     .          vkind == 5005) then
                attr(nbr)%cvalue='hybrid_sigma_log_pressure'
             endif
 
@@ -380,12 +388,18 @@ CCC                                year,month,day,hour,minute,0.0
             attr(nbr)%cvalue='atmosphere_theta_coordinate'
 
          else if (level_desc.eq.'Hybrid Levels'  ) then
-            if (vkind /= 5002)
+            if (vkind /= 5002 .and.
+     .          vkind /= 5003 .and.
+     .          vkind /= 5004 .and.
+     .          vkind /= 5005)
      .        attr(nbr)%cvalue=
      .       'atmosphere_hybrid_sigma_pressure_coordinate'
                
          else if (level_desc == 'Log Pressure Hybrid Levels') then
-            if (vkind == 5002) 
+            if (vkind == 5002 .or.
+     .          vkind == 5003 .or.
+     .          vkind == 5004 .or.
+     .          vkind == 5005)
      .        attr(nbr)%cvalue=
      .       'atmosphere_hybrid_sigma_log_pressure_coordinate'
 
@@ -446,7 +460,10 @@ CCC            call def_name(attr(nbr)%cvalue,ni,'',dummy,attr(nbr)%len)
 
          else if (level_desc == 'Log Pressure Hybrid Levels') then
 
-            if (vkind == 5002) then
+            if (vkind == 5002 .or.
+     .          vkind == 5003 .or.
+     .          vkind == 5004 .or.
+     .          vkind == 5005 ) then
 
                nbr=nbr+1
                attr(nbr)%type=nf_char ! character

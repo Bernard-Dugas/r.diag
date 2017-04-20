@@ -403,8 +403,7 @@
       REAL,         DIMENSION(:), POINTER            :: LNPH,  PS
       REAL,         DIMENSION(:), ALLOCATABLE,TARGET :: PRESLN,LNSP
 
-      ! local_pressure is used in LoPTOC and has to be initialized
-      real,         dimension(:,:,:), pointer :: log_pressure=>null()
+      REAL,         DIMENSION(:,:,:), ALLOCATABLE    :: LOG_PRESSURE
 
       DATA          DEF   / .FALSE. /
       DATA          MODETA/ .FALSE. /
@@ -954,16 +953,16 @@
  
 ***            DO INTERPOLATION FROM GEM4 TO PRESSURE.
 
+              IF (.not.ALLOCATED( log_pressure ))              THEN
+                  allocate( log_pressure( NI,NJ,NSL ), STAT=ERR )
+                  IF (ERR /= 0) GOTO 924
+              END IF
+
               IF (AABB)                                        THEN
 
                   ! Do NOT recalculate local pressure in GEM4APL
                   ! as it is calculated immediately, PS=LN(PASCAL)
                   OK = .FALSE. ! And this option is passed to GEM4APL
-
-                  IF (.not.ASSOCIATED( log_pressure ))         THEN
-                      allocate( log_pressure( NI,NJ,NSL ), STAT=ERR )
-                      IF (ERR /= 0) GOTO 924
-                  END IF
 
                   PS = LNSP+CORR1 ! PS IN LN(PASCAL).
 

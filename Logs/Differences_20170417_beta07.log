@@ -1,0 +1,52 @@
+Description of the changes that have been made to r.diag since March 21 2017
+
+* DEVELOPMENT *
+
+Commandes :
+ - Use the vgriddesc-5.6 library while generating
+   the executables. At this time, this is the latest
+   version and it includes support for VKIND=5005.
+README.md :
+ - More explicit wording as to the actual Vgrid Descriptor
+   package to be used, as well as more comments concerning
+   the FORTRAN code.
+
+
+* DEVELOPMENT/INCLUDE *
+
+TOC_GEST_1, TOC_GEST_2 :
+ - Add support for VKIND=5005.
+
+* DEVELOPMENT/SRC/CDF2CCC *
+
+ATTRIBUT_COORD, INQ_FILE :
+ - Add support for VKIND=5003,5004,5005.
+ - Add an error exit in INQ_FILE if a Ying/Yang GEM4
+   'U' grid is detected (XIT -13). This is not yet
+   supported.
+
+* DEVELOPMENT/SRC/LSPGM *
+
+GSAPL :
+ - Change the declaration of the LOG_PRESSURE argument
+   to GEM4APL. It is no longer a FORTRAN pointer.
+GPASG :
+ - Expand the documentation section that describes what
+   are the actual supported GEM4 VKIND values, depending
+   on the program's various operating modes.
+
+* DEVELOPMENT/SRC/LSSUB *
+
+COORD, DIAG_CONVIP_PLUS :
+ - Add support for VKIND=5005.
+DIAG_TOC :
+ - Add support for VKIND=5005, including the option to
+   retreive the DHT and DHM diagnostic heights.
+ - Modify all calls to VGD_GET to fix a problem (that
+   occured under PGI) with character constants.
+GEMDIAG :
+ - Correct both the SIG declarations and the
+   calls to LOPTOC in GEM4APL and PLAGEM4.
+ - Change the LOG_PRESSURE argument declaration.
+   The LOPTOC corresponding argument is now a
+   local pointer variable.

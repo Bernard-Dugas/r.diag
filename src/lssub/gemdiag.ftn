@@ -226,6 +226,8 @@
 
 ***    IG1,IG2    = GEM4 Grid_Desctriptors unique ID pair
 
+***    CALCLP     = Calulate 3D log-pressures or use the input values.
+
       use DIAG_TOC, only: LoPTOC
 
       IMPLICIT none
@@ -234,7 +236,7 @@
       INTEGER, intent(IN)    :: NI,NJ,NPL,NSL, ETA(NSL),IG1,IG2 
       REAL,    intent(IN)    :: RLUP,RLDN, PR(NPL), PS(NI,NJ)
       REAL,    intent(INOUT) :: F(NI,NJ,*)
-      real,    dimension(:,:,:), pointer :: log_pressure
+      real,    intent(INOUT) :: log_pressure(NI,NJ,NSL)
 
 ***    LOCAL WORK SPACE. 
   
@@ -243,10 +245,12 @@
       INTEGER  I,J,K,L,N, INTVL, VKIND
       INTEGER  TOPS,BOTS,INCS, TOPP,BOTP,INCP
       REAL(8)  FSC(NSL),DFDLNS(0:NSL+1),DLNS(NSL)
-      REAL(8)  prlog(NPL),sig(NSL),siglog(NSL),X
+      REAL(8)  prlog(NPL),siglog(NSL),X
       REAL(8)  COLF(NPL),HOLD
+      REAL     sig(NSL)
 
-      real(8), dimension(:,:),   pointer :: pslog
+      real,    dimension(:,:,:), save, pointer :: my_log_pressure 
+      real(8), dimension(:,:),   save, pointer :: pslog
 
 ***    EXTERNAL DECLARATIONS.
 
@@ -259,6 +263,11 @@
       IF (.not.ASSOCIATED( pslog ))                            THEN
           nullify( pslog )
           ALLOCATE( pslog(NI,NJ) )
+      END IF
+
+      IF (calclp .and. .not.ASSOCIATED( my_log_pressure ))     THEN
+          nullify( my_log_pressure )
+          ALLOCATE( my_log_pressure(NI,NJ,NSL) )
       END IF
 
       pslog(:,:) = LOG( PS(:,:) )
@@ -310,7 +319,10 @@
 
 ***    COMPUTE LN(LOCAL PRESSURE) OF GEM4 LEVELS ?
 
-      if (calclp) CALL LoPTOC( log_pressure, ETA, PS, IG1,IG2 )
+      IF (calclp)                                              THEN
+          CALL LoPTOC( my_log_pressure, ETA, PS, IG1,IG2 )
+          log_pressure = my_log_pressure
+      END IF
 
 ***    LOOP OVER ALL HORIZONTAL POINTS.
   
@@ -609,11 +621,12 @@
       INTEGER  I,J,K,L,N, INTVL, VKIND, IER
       INTEGER  TOPS,BOTS,INCS, TOPP,BOTP,INCP
       REAL(8)  FPC(NPL),DFDLNS(0:NPL+1),DLNS(NPL)
-      REAL(8)  prlog(NPL),sig(NSL),siglog(NSL),X
+      REAL(8)  prlog(NPL),siglog(NSL),X
       REAL(8)  COLF(NSL),HOLD
+      REAL     sig(NSL)
 
-      real,    dimension(:,:,:), pointer :: log_pressure
-      real(8), dimension(:,:),   pointer :: pslog
+      real,    dimension(:,:,:), save, pointer :: log_pressure
+      real(8), dimension(:,:),   save, pointer :: pslog
 
 ***    EXTERNAL DECLARATIONS.
 
@@ -623,7 +636,15 @@
       EXTERNAL MONVERT,XIT,CONVPR
 
 *---------------------------------------------------------------------
-      nullify( log_pressure,pslog )
+      IF (.not.ASSOCIATED( log_pressure ))                     THEN
+          nullify( log_pressure )
+          ALLOCATE( log_pressure(NI,NJ,NSL) )
+      END IF
+
+      IF (.not.ASSOCIATED( pslog ))                            THEN
+          nullify( pslog )
+          ALLOCATE( pslog(NI,NJ) )
+      END IF      
 
 ***    CHECK THAT PR IS MONOTONIC.
 
@@ -670,10 +691,10 @@
           TOPP = L
       END IF
 
-***    ALLOCATE surface pressure WORK FIELD. THE log pressure
-***    field will be allocated by gd_levels (called by LoPTOC).
-
-      ALLOCATE( pslog(NI,NJ) )
+!**    ALLOCATE surface pressure WORK FIELD. THE log pressure
+!**    field will be allocated by gd_levels (called by LoPTOC).
+!
+!     ALLOCATE( pslog(NI,NJ) )
 
 ***    COMPUTE LN(LOCAL PRESSURE) OF GEM4 LEVELS.
 

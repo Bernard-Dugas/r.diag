@@ -23,10 +23,9 @@
 
               CALL GETTOC( IN1, 'VER',VKIND, IG1,IG2 )
 
-              IF (VKIND == 5001  .OR.
-     +            VKIND == 5002  .OR.
-     +            VKIND == 5003  .OR.
-     +            VKIND == 5004)                               THEN
+              IF (VKIND == 5001 .OR. VKIND == 5002 .OR.
+     +            VKIND == 5003 .OR. VKIND == 5004 .OR.
+     +            VKIND == 5005)                               THEN
                   CALL GETTOC( IN1, 'PTOP' ,PTOIT8, IG1,IG2 )
                   CALL GETTOC( IN1, 'PREF' ,PREF8 , IG1,IG2 )
                   CALL GETTOC( IN1, 'RC_1' ,R8    , IG1,IG2 )

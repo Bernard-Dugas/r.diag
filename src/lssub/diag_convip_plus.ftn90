@@ -61,6 +61,7 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !                             - Quitter apres l'appel a conv_kind_15 lorsque mode < 0 (c'etait un oubli)
 !                             - Mofifier usage de KINDP. Ajouter kind=1003,2001,5003,5004 ==> 1,2,5,5
 !                             - Ajouter les routines ENCODE_RANGE/DECODE_RANGE
+!     Revision 016  B, Dugas  - Modifier la documentation pour tenir compte de kind=5005
 !
 !     Input:    MODE = -2, de IP -->  P (sans definir zzvkind)
 !               MODE = -1, de IP -->  P
@@ -93,7 +94,7 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !               Notez de plus que ...
 !               IKIND =1001, 1002 et 1003       en input, deviennent IKIND=1 a l'interne
 !               IKIND =2001                     en input, devient    IKIND=2 a l'interne
-!               IKIND =5001, 5002, 5003 et 5004 en input, deviennent IKIND=5 a l'interne
+!               IKIND =5001,5002,5003,5004,5005 en input, deviennent IKIND=5 a l'interne
 !
 !*********************************************************************
   real *8 TEN

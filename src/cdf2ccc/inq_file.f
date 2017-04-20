@@ -39,6 +39,10 @@
 *         
 *REVISIONS
 *
+*  B. Dugas avril 2017 :
+*  - Ajouter support explicite de VKIND=5003,5004,5005
+*  - Ajouter une sortie d'erreur -13 si une grille GEM4
+*    de type 'U' (Ying/Yang) est detectee
 *  B. Dugas janvier 2017 :
 *  - Utiliser GETSAMPLZ pour definir IP3, i.e. le nombre 
 *    d'echantillons correspondant a une moyenne temporelles
@@ -474,8 +478,11 @@
                if (hyb_pt0 == -1.0) then ! LITPT/GETPT did not WORK.
                   call LirToc( funit, TOC_NBR )
                   if (toc_nbr > 0) then
-                     if (grtyp /= 'Z') then
+                     if (.NOT.(grtyp == 'Z' .OR. grtyp == 'U')) then
                         ig1 = -1 ; ig2 = -1
+                     else if (grtyp == 'U') then
+                      write(6,'(/A/)') 'grille Ying/Yang non supportee.'
+                      call                         xit('inq_file2', -13)
                      else
                         ig1 = gethigh('IG1',ibuf )
                         ig2 = gethigh('IG2',ibuf )
@@ -510,7 +517,8 @@
                   HYB_PT = ptop8 ; HYB_PREF = pref8 ; HYB_R = r1
 
                endif
-               if (vkind == 5002) then
+               if(vkind == 5002 .or. vkind == 5003
+     .        .or.vkind == 5004 .or. vkind == 5005) then
 
                   level_desc = 'Log Pressure Hybrid Levels'
 
@@ -532,6 +540,7 @@
 
                   HYB_PT = ptop8 ; HYB_PREF = pref8
                   HYB_R  = r1    ; HYB_R2   = r2
+
                endif
             endif
 
@@ -567,7 +576,8 @@
                call                                xit('lire_arg', -8 )
             endif
 
-            if(vkind == 5002) then
+            if(vkind == 5002 .or. vkind == 5003
+     .     .or.vkind == 5004 .or. vkind == 5005) then
 
                jm = 0
                jt = 0
@@ -995,5 +1005,3 @@ CCC   invj = .true.
 
       return
       end
-
-
