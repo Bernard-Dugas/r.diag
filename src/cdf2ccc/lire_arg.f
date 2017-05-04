@@ -40,6 +40,10 @@
 *
 *REVISIONS
 *
+*  B. Dugas avril '17 :
+*   - Utiliser get_environment_variable pour verifier la valeur de
+*     la variables d'environnement UDUNITS2_XML_PATH. Celle-ci a
+*     pre-seance sur udunits2_def
 *  B. Dugas fevrier '17 :
 *   - Remplacer UDUNITS_PATH par UDUNITS2_XML_PATH
 *   - Remplacer udunits.dat par udunits2.xml
@@ -215,7 +219,7 @@
      .  cles(26)/'miss_ccc'/, def1(26)/'?'       /,  def2(26)/'ERR'   /,
      .  cles(27)/'fill_ccc'/, def1(27)/'?'       /,  def2(27)/'ERR'   /,
      .  cles(28)/'cle_nhem'/, def1(28)/'?'       /,  def2(28)/'?'     /,
-     .  cles(29)/'udunits'/,  def1(29)/udunit_def/,  def2(29)/'?'     /,
+     .  cles(29)/'udunits'/,  def1(29)/'default' /,  def2(29)/'?'     /,
      .  cles(30)/'rlonoff'/,  def1(30)/'?'       /,  def2(30)/'?'     /,
      .  cles(31)/'hyb_pt' /,  def1(31)/'?'       /,  def2(31)/'?'     /,
      .  cles(32)/'hyb_pref'/, def1(32)/'?'       /,  def2(32)/'?'     /,
@@ -293,9 +297,11 @@
       CHARACTER(16),  DIMENSION(:), ALLOCATABLE :: ACLES
       CHARACTER(512), DIMENSION(:), ALLOCATABLE :: ADEF,ADEF1,ADEF2
 
+      CHARACTER(512)  :: UDUNITS2_DEF
+
       INTEGER         NBRCLE,NDATE,NHELP,PART1,PART2
 
-      INTEGER         NEWDATE,datchek
+      INTEGER         NEWDATE,datchek,L_argenv
       EXTERNAL        NEWDATE
 
       COMMON         /ZZDEFPK/ DEF_PKTYP
@@ -304,6 +310,10 @@
       EXTERNAL        IS_ON,IS_OFF
 
 *-----------------------------------------------------------------------
+      udunits2_def = trim( udunits2_def1 ) //
+     .               trim( udunits2_def2 ) //
+     .               trim( udunits2_def3 )
+
 ***    Allocate LES_ARG work fields.
 
       NBRCLE = NBRGEN + NCLE
@@ -787,18 +797,20 @@ CCC     endif
 ***    print * , 'dans lire_arg.f CLE 28 def1(28)=======',def1(28) !debug
 ***    print * , 'dans lire_arg.f CLE 28 cle_nhem=======',cle_nhem !debug
 
-      CALL GETENVC( 'UDUNITS2_XML_PATH',EVALUE )
+      call get_environment_variable('UDUNITS2_XML_PATH',evalue,L_argenv)
 
-      if (evalue.eq.' ') then
+      if (L_argenv > 0) then
+         udunits_dat = evalue
+      else
          if(def1(29).eq.'?') then
             write(6,6001) ' Fichier udunits2.xml ?'
             call                                   xit('lire_arg',  -29)
+         else if(def1(29).eq.'default') then
+            udunits_dat = udunits2_def
          else
             udunits_dat = def1(29)
          endif
-      else
-         udunits_dat = EVALUE
-      endif
+      end if
 
       if(cdf2_mode.eq.'cdf2rpn') then
          rlonoff=-1000.0
@@ -877,10 +889,12 @@ CCC     endif
             read(def1(42),9004,err=300) dtsize
             goto 400
   300       dtsize = -1.0
-  400       if (dtsize < -0.00001) then
+  400       if (dtsize < 0) then
                write(6,6001)' -dtsize "delta accumul" '//trim( def1(42))
                call                                xit('lire_arg',  -42)
-            else if (dtsize < 0.00001) then
+            else if (nint( dtsize*3600. ) < 1) then
+               if (dtsize > 0.0_8)
+     .            write(6,6007) 'Warning: dtsize reset to 0.0'
                dtsize = 0.0
             endif
          else

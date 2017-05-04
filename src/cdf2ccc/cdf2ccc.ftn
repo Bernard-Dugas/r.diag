@@ -19,23 +19,32 @@
 *
 * http://web-mrb.cmc.ec.gc.ca/mrb/si/eng/si/howto-si/doku.php?id=netcdf
 *
-* In Dorval, the different AIX, IRIX64 (now deprecated) and
-* Linux binaries can be found under
+* At UQAM, the scripts that call the actual Linux binaries
+* can be found under
+*
+* $diag-tools-dir/r.diag_x.y.z_linux26-x86-64/bin
+* where $diag-tools-dir is the directory made available
+* by the local diag-tools SSM bundle.
+
+* In Dorval, the different AIX (now deprecated) and
+* Linux binaries used to be found under
 *
 * $ARMNLIB/modeles/diag/bin/$BASE_ARCH
 *
-* You will need to define a UDUNITS2 environment variable.
+* You will also need to define a UDUNITS2 environment variable.
 *
 * For example:
 *
 * export UDUNITS2_XML_PATH=/opt/udunits2/share/udunits/udunits2.xml
 *
 * You will also have to provide a CMC-RPN/NetCDF or CCCMA/NetCDF
-* dictionary that defines name and unit conversions.
+* dictionary that defines all of your name and unit conversions.
 *
 * An example of this is
 *
-* /home/dormrb02/modeles/diag_shared/rdiag/cdf2ccc/attribut_netcdf.dat
+* $DIAG/man/pdoc/attribut_netcdf.dat   ** OR **
+* $DIAG/development/src/cdf2ccc/attribut_netcdf.dat
+* where $DIAG is the actual location of the RDIAG/CDF package
 *
 * Please note that the previous file itself actually holds
 * some documentation as to its configuration/usage.
@@ -68,20 +77,24 @@
 * FSTMDIAG and ACCUMUL r.diag commands. The '-dtsize' argument should
 * not be used with such a variable.
 *
+* However, when converting from a NetCDF file, the '-dtsize' argument
+* should be specified in order to reproduce the full CMC-RPN time-mean
+* file information.
 *
 * Current limitations of the converter:
 *
 * - Only one set of multiple vertical levels is supported per file.
 *   And all of these must be of the same type. However, any number
-*   of single level variables are supported in same file.
+*   of single level variables are supported in the same file.
 * - Again, only one set of timesteps is supported for time-varying
 *   variables.
 *
 * These constraints are mainly due to the use of NetCDF 3.x and its
-* limited coordinate definitions; the more recent NetCDF version 4.x
-* removes these limitations, but at this time is still not as widely
-* supported. A NetCDF4-compliant version of the converter is
-* nevertheless planned.
+* limited coordinate definitions; NetCDF version 4.x somewhat removes 
+* these limitations. But at this time this converter is still based
+* on the NetCDF3 API, even though it is now generated using a 4.x
+* library version. A NetCDF4-API-compliant version of the converter
+* is nevertheless planned.
 *
 *
 * The full list of arguments and their description follows in the
@@ -266,7 +279,7 @@
 *  cles(15) = 'bisect' ,def1(15) = 'oui' ,def2(15) = 'non'
 *
 * This last set of arguments are documented at the end of
-* the following web page: 
+* the following web page (if you know the 'science' password): 
 *
 * http://collaboration.cmc.ec.gc.ca/science/si/eng/si/utilities/r.diag/Diag_Config.html
 *
@@ -274,7 +287,7 @@
 * Good luck.
 *
 * Maintained by: B.Dugas, ESCER/UQAM (Dugas.Bernard@uqam.ca)
-* Last revision: October 2013
+* Last revision: May 2017
 *
 *
 #     endif

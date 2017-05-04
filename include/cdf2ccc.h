@@ -128,11 +128,14 @@
 !
 !UDUNITS2 :
 
+      character(512) udunits_dat
       common /booting/ udunits_dat
-      character(512) udunit_def,udunits_dat  ! fichier d''initialisation UDUNITS2
 
-      parameter (udunit_def="/opt/udunits2/share/udunits/udunits2.xml")
-
+      character(512) udunits2_def1,udunits2_def2,udunits2_def3
+      
+      parameter (udunits2_def1="/unique/armnssm/ECssm/ssm-domains-ba")
+      parameter (udunits2_def2="se/libs/librmn-dev/netcdf-fortran_4")
+      parameter (udunits2_def3=".2_multi/share/udunits/udunits2.xml")
 
 !
 !netCDF Nombres :

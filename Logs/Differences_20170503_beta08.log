@@ -1,0 +1,39 @@
+Description of the changes that have been made to r.diag since April 17 2017
+
+* DEVELOPMENT *
+
+Commandes :
+ - Add the explicit requirement of the netcdff package.
+ - Remove comments relating to AIX.
+README.md :
+ - Add more details as to how the netcdff library is acquired.
+Makefile :
+ - Acquire the netcdff SSM package in the 'initial' target.
+ - Remove the EXTRAS directory and libraries for the recipies.
+ - The NetCDF converter dependencies are also simplified.
+
+* DEVELOPMENT/INCLUDE *
+
+cdf2ccc :
+ - Re-define the default 'udunit_def' fully
+   qualified initialisation path.
+
+* DEVELOPMENT/SRC/CDF2CCC *
+
+Makefile :
+ - Same issues as for the DEVELOPMENT Makefile.
+ - Use s.ftn in the final link step. This permits the 
+   definition of an appropriate rpath variable as
+   retreived via a 'nf-config --runpath' command.
+ - Remove the AIX target.
+lire_arg :
+ - Build udunits2_def from three udunits2_def1/2/3 substrings.
+ - Enforce stricter limits to the '-dtsize' parameter.
+ - Use the get_environment_variable intrinsic command to
+   determine the UDUNITS2_XML_PATH environment variable
+   value. If defined, its value overides that of the
+   default udunits2_def variable.
+rdlatlon2 :
+ - Use the '-dtsize' argument instead of '-dt' when 
+   attempting to restore the descriptors associated
+   with time-mean variables in CMC-RPN files.

@@ -22,14 +22,15 @@ DIAGNOSTIQUE  = $(CURDIR)/../..
 IGNORE_ERRORS = set -e
 MAKE     = $(IGNORE_ERRORS) ; make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
-EXTRAS   = $(DIAGNOSTIQUE)/../extras/NetcdfUdunits/$(EC_ARCH)
+#EXTRAS   = $(DIAGNOSTIQUE)/../extras/NetcdfUdunits/$(EC_ARCH)
 
 DIAGS    = $(DIAGNOSTIQUE)
 BINDIR   = $(DIAGS)/bin/$(BASE_ARCH)
 INCLUDES = $(DIAGS)/include
 LIBDIR   = $(DIAGS)/lib/$(EC_ARCH)
 MANDIR   = $(DIAGS)/man/pdoc
-MODDIR   = $(INCLUDES) $(INCLUDES)/$(EC_ARCH) $(EXTRAS)/include
+#MODDIR   = $(INCLUDES) $(INCLUDES)/$(EC_ARCH) $(EXTRAS)/include
+MODDIR   = $(INCLUDES) $(INCLUDES)/$(EC_ARCH)
 
 CONV_VERSION = 2.2.1
 
@@ -53,12 +54,15 @@ LIBP     = $(LIBDIR)/lib$(MALIB).a
 
 DDFUN90  = ddfun90
 DIAGLIB  = diag_sq$(STD)_g
-lNetCDF  = netcdff netcdf hdf5_hl hdf5 dl z
+lNetCDF  = netcdff
+#lNetCDF  = netcdff netcdf hdf5_hl hdf5 dl z
 RMNLIB   = rmn_015.2
-UDUNITS  = udunits2 expat
+#UDUNITS  = udunits2 expat
+UDUNITS  = udunits2f udunits2
 VGDLIB   = descrip
 
-LIBPATH  = $(LIBDIR) $(EXTRAS)/lib
+#LIBPATH  = $(LIBDIR) $(EXTRAS)/lib
+LIBPATH  = $(LIBDIR)
 
 # les programatheques externes
 
@@ -225,26 +229,27 @@ $(LIBP)(wrlalo.o):			wrlalo.f		$(INCLUDES)/cdf2ccc.h	$(INCLUDES)/dimmem.h	$(INCL
 #LISTE DES CIBLES DU FICHIER recettes
 
 obj: $(OBJECTS)
-#Produire les fichiers objets (.o) pour tous les fichiers
+#	Produire les fichiers objets (.o) pour tous les fichiers
 
 sortirtout:
 	extrait_tout
 
 genlib: $(OBJECTS)
-#Creer une programmatheque ayant pour nom $LIBP et incluant TOUS les fichiers objets
+#	Creer une programmatheque ayant pour nom $LIBP et incluant TOUS les fichiers objets
 	$(AR) rv $(LIBP) $(OBJECTS)
 
 libexp: sortirtout objexp
-#Mettre tous les objets de l experience en cours dans la programmatheque $LIBP
+#	Mettre tous les objets de l experience en cours dans la programmatheque $LIBP
 	$(AR) rv $(LIBP) *.o
 
 #Descriptions des recettes personnelles
 
 initial:
-# Setup des repertoires dependants de $(EC_ARCH)
+#	Setup des repertoires dependants de $(EC_ARCH)
 	/bin/mkdir -p $(LIBDIR) $(MANDIR) $(MODDIR) $(BINDIR)
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
-	if [[ ! -f $(EXTRAS)/lib/libnetcdf.a ]]; then cd $(EXTRAS)/../../.. ; make all ; cd $(DIAGNOSTIQUE)/src ; fi
+	s.locate --lib $(lNetCDF) 1> /dev/null || { echo -e PLS execute \". s.ssmuse.dot netcdff\" \n ; false ; }
+#	if [[ ! -f $(EXTRAS)/lib/libnetcdf.a ]]; then cd $(EXTRAS)/../../.. ; make all ; cd $(DIAGNOSTIQUE)/src ; fi
 
 # Voir "Managing project with make" de O'Reilly & Associates, 1989,
 # pages 51-53, pour les details de ce qui se passe dans ce qui suit
@@ -311,25 +316,17 @@ $(LIBP):	initial	$(FDECKS)	$(HDECKS)	\
 	 $(LIBP)(wrlalo.o)
 
 cdf2ccc: initial cdf2ccc.ftn
-# Creation de l'executable cdf2ccc ailleurs que ailleurs que sous AIX
+#	Creation de l'executable cdf2ccc ailleurs que ailleurs que sous AIX
 	$(AR) xv $(LIBP) lire_arg.o
-	$(FC) $@.ftn -o $@ -libpath "$(LIBPATH)" \
-	-libappl "$(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB)" \
-	-librmn $(RMNLIB) -obj "lire_arg.o $(OBJ)" $(CODEBETA) -libsys $(DDFUN90)
+	s.ftn -Wl,-rpath,$$(nf-config --runpath) -src $@.ftn \
+	-o $@ $$(s.prefix -L $(LIBPATH)) $$(s.prefix -I $(MODDIR)) \
+	$$(s.prefix -l $(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB) \
+	$(RMNLIB) $(DDFUN90)) lire_arg.o $(OBJ) $(CODEBETA)
 	/bin/rm -f lire_arg.o $@.o $@.f ; /bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION) ;\
 	cd $(BINDIR)  ; /bin/ln -f $@_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
 
 cdf2rpn: cdf2ccc
 
-AIX: initial cdf2ccc.ftn
-# Creation de l'executable cdf2ccc pour architecture AIX
-	$(AR) xv $(LIBP) lire_arg.o
-	$(FC) $@.ftn -o $@ -libpath "$(LIBPATH)" \
-	-libappl "$(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB)" \
-	-librmn $(RMNLIB) -obj "lire_arg.o $(OBJ)" $(CODEBETA)
-	/bin/rm -f lire_arg.o $@.o $@.f ; /bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION) ;\
-	cd $(BINDIR)  ; /bin/ln -f $@_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
-
 clean:
-# Faire un petit menage. On enleve tous les .o et les fichiers .f superflus
+#	Faire un petit menage. On enleve tous les .o et les fichiers .f superflus
 	/bin/rm -f *.o $(EXTRAF)

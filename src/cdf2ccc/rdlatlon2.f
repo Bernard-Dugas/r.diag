@@ -39,7 +39,10 @@
 *
 *REVISIONS
 *
-* B.Dugas janvier '23 :
+* B.Dugas mai '17 :
+* - Utiliser l'argument -dtsize au lieu de -dt lors de la
+*   conversion de variables moyennee dans le temps
+* B.Dugas janvier '17 :
 * - Utiliser PUTSAMPLZ pour sauver le nombre d'echantillons
 *   svsm dans IBUF apres avoir place HIVAL et LOVAL dans la
 *   section haute de IBUF lorsque leur taille est specifie 
@@ -1029,14 +1032,15 @@
                      if (do_time_bnds) then
                         tim1 = time_bnds(1,itime)
                         tim2 = time_bnds(2,itime)
-                        if (ladate /= -1 .and. nint( dt ) >= 1) then
+                        if (ladate /= -1 .and.
+     .                  (nint( dt ) >= 1 .or. dtsize > 0.0_8)) then
                            dateo = ladate
                         else
                            call decodate( ncid,tim1, dateo )
                         endif
                         call decodate( ncid,tim2, ccctime )
                         call difdatr( ccctime,dateo, tdelta )
-                        if (nint( dt ) <  1) then
+                        if (nint( dt ) <  1 .and. dtsize <= 0.0_8) then
                            npas = nint( tdelta ) ; deet = 3600
                            if (tim2-tim1 <= 1000000._8)         then
                                hold = tim2-tim1 
@@ -1049,19 +1053,31 @@
                            svsm = 1 ; call puthigh( svsm,'IP3',ibuf )
                         else
                            loval = tim1
-                           svsm = nint( tdelta / (dt/3600.0_8) )
-                           npas = svsm-1 ; deet = nint( dt )
-                           tdelta = dt / 3600.0_8 ; hival = tim2-tdelta
+                           if (dtsize > 0.0_8) then
+                              svsm = nint( tdelta / dtsize )
+                              npas = svsm-1 ; deet = nint( dtsize*3600 )
+                              tdelta = dtsize ; hival = tim2-tdelta
+                           else
+                              svsm = nint( ( tdelta * 3600. ) / dt )
+                              npas = svsm-1 ; deet = nint( dt )
+                              tdelta = dt / 3600.0_8
+                              hival = tim2-tdelta
+                           end if
                            call incdatr( datei,dateo,tim1+tdelta )
                            dateo = datei
                         endif
                         call puthigh( dateo,'DATEO',ibuf )
-                        call puthigh( npas, 'NPAS', ibuf )
                         call puthigh( deet, 'DEET', ibuf )
-                        call puthigh( rkind,'RKIND',ibuf )
-                        call puthir( hival, 'HIVAL',ibuf )
-                        call puthir( loval, 'LOVAL',ibuf )
-                        call putsamplz( svsm, ibuf )
+                        if (svsm > 1) then
+                           call puthigh( npas, 'NPAS', ibuf )
+                           call puthigh( rkind,'RKIND',ibuf )
+                           call puthir( hival, 'HIVAL',ibuf )
+                           call puthir( loval, 'LOVAL',ibuf )
+                           call putsamplz( svsm, ibuf )
+                        else
+                           npas = svsm
+                           call puthigh( npas, 'NPAS', ibuf )
+                        end if
                      else
                         call decodate( ncid,tim1,ccctime )
                         if (nint( dt ) >=  1) then
