@@ -1,4 +1,4 @@
-*netCDF Dimensions:
+!netCDF Dimensions:
 
       integer xdid          ! id de la dimension x
       integer ydid          ! id de la dimension y
@@ -9,8 +9,8 @@
       integer level2did
       integer unlimdimid    ! id de la dimension unlimited
 
-      common /did_com/ xdid,ydid,zdid,timedid,numdid,level2did,
-     .                   unlimdimid,bndsdid
+      common /did_com/ xdid,ydid,zdid,timedid,numdid
+      common /did_com/ level2did,unlimdimid,bndsdid
 
       TYPE dimension
         sequence

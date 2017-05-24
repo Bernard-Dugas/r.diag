@@ -1,3 +1,6 @@
+#     if !defined (taille_entete)
+#         define   taille_entete 32
+#     endif
 !
 !---------------------------------- LICENCE BEGIN -------------------------------
 ! R.DIAG - Diagnostic tool kit for the GEM numerical atmospheric model
@@ -27,27 +30,32 @@
       integer  varid
 
 
-******
-*
-* AUTEUR Guy Bergeron   juin 2003
-*
-*     Extraire le champ de topographie h0 du fichier CCC/RPN phis_unit.
-*
-* REVISIONS
-*
-*  Bernard Dugas fevrier 2008 :
-*  - La lecture du champs de montagne se fait
-*    maintenant sur l'unite I/O PHIS_UNIT plutot que FUNIT
-*  - Le nom de variable de recherche est 'PHIS' ou 'ZS'
-*
-******
+!*****
+!
+! AUTEUR Guy Bergeron   juin 2003
+!
+!     Extraire le champ de topographie h0 du fichier CCC/RPN phis_unit.
+!
+! REVISIONS
+!
+!  Bernard Dugas mai 2017 : 
+!  - Convertir en fichier .F90 pour traiter
+!    le macro taille_entete avec s.f90
+!  Bernard Dugas fevrier 2008 :
+!  - La lecture du champs de montagne se fait
+!    maintenant sur l'unite I/O PHIS_UNIT plutot que FUNIT
+!  - Le nom de variable de recherche est 'PHIS' ou 'ZS'
+!
+!*****
+
+      integer, parameter :: head = taille_entete
 
       character(len=4) phis_name
       integer  i,j,k,ij,ni,nj, jbuf(head)
       real    grav,rgas
       logical OK
 
-*-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
       jbuf(1:head) = ibuf(1:head)
 
   100 call recget( phis_unit, ' ',-1,' ',-1, ibuf,maxpk,OK )
@@ -56,10 +64,10 @@
       write(phis_name,'(A4)') ibuf(3)
       call cmplbl( 0,ibuf, 0,jbuf, OK )
 
-*     On a trouve un champs topo avec la bonne taille ?
+!     On a trouve un champs topo avec la bonne taille ?
 
-      if (.not.OK  .or.
-     .   (phis_name.ne.'PHIS' .and. phis_name.ne.'ZS')) goto 100
+      if (.not.OK  .or. &
+         (phis_name.ne.'PHIS' .and. phis_name.ne.'ZS')) goto 100
 
       call recup2(dval,ibuf) 
 
@@ -77,5 +85,5 @@
          enddo
       enddo
 
-*-----------------------------------------------------------------------
-      end
+!-----------------------------------------------------------------------
+      end subroutine get_topo

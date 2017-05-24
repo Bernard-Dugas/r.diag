@@ -42,6 +42,7 @@
 * B.Dugas mai '17 :
 * - Utiliser l'argument -dtsize au lieu de -dt lors de la
 *   conversion de variables moyennee dans le temps
+* - Initialiser grille_Y et grille_Z a .FALSE.
 * B.Dugas janvier '17 :
 * - Utiliser PUTSAMPLZ pour sauver le nombre d'echantillons
 *   svsm dans IBUF apres avoir place HIVAL et LOVAL dans la
@@ -244,10 +245,11 @@
          goto 100
       endif
 
+      ! Initialisations de variables locales
       xglb = -1 ; yglb = -1 ; ii = 0 ; iig2 = 0
-      xincr = .false. ; yincr  = .false.
-      xbgrd = .false. ; ybgrd  = .false.
-      dxcons = .true. ; dycons = .false. ; ygauss = .false.
+      xincr = .false. ; yincr  = .false. ; grille_Y = .false.
+      xbgrd = .false. ; ybgrd  = .false. ; grille_Z = .false.
+      dxcons = .true. ; dycons = .false. ; ygauss   = .false.
 
       cloche=char(7)
 

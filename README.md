@@ -63,8 +63,7 @@
  and z libraries (if NetCDF v4 is used) and the expat library (for
  UdUnits v2). The current configuration assumes that the the NetCDF
  v4 package is used and that the netcdff library is provided as a SSM
- bundle that also points to the UdUnits2 necessary components. And
- that all of the other libraries are 'system' shared object items.
+ bundle that also points to the UdUnits2 necessary components.
 
  Most of the code available here is written in FORTRAN (and a lot
  of it is still in F77). As a consequnce of this, the conversion tool
@@ -89,5 +88,5 @@
  Software Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : April 2017
+ Last revision : May 2017
 

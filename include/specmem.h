@@ -1,5 +1,5 @@
-*
-*netCDF spectral :
+!
+!netCDF spectral :
 
       real*8, dimension(:), pointer :: mean          ! premier coefficient sepctral
       real*8, dimension(:), pointer :: add_offset    ! fact. add. de compression du coef. spec.

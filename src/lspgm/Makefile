@@ -58,6 +58,9 @@ ZIPFILE = $(LIBDIR)/lspgm_STD$(STD).f.zip
 
 DIAG_VERSION = 6.3.1
 
+HOSTWEB =
+DIAGWEB =
+
 NOPLOT  = -DNOPLOT
 DINTERP = -DNEW_INTERP
 DEFINE  = $(NOPLOT) -Dnombre_de_taches=$(NP) -DVERY_NICE=oui -Dtaille_entete=$(ENTETE) $(DINTERP)
@@ -110,11 +113,13 @@ default:  $(LIBP)
 
 .ptn.txt:
 	$(FTNT) $< | sed s/'^[*]'/' '/ > $(MANDIR)/$@ ;\
+	command-origin-document.sh $< $(MANDIR)/$@ ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 .ptn90.txt:
 	$(FTNT) $< | sed s/'^[!]'/' '/ > $(MANDIR)/$@ ;\
+	command-origin-document.sh $< $(MANDIR)/$@ ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 

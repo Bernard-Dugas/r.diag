@@ -1,0 +1,58 @@
+Description of the changes that have been made to r.diag since May 03 2017
+
+* DEVELOPMENT *
+
+Commandes, README.md :
+ - Replace the .so SSM netcdff package by the static netcdff-4.4 package.
+Makefile :
+ - Document the previous modification.
+ - Add the 'web_documentation' target and re-activate the
+   HOSTWEB/DIAGWEB macros giving them the 'pascal' and
+  'public_html' values (i.e. people.sca.uqam.ca/~dugas).
+ - Split the 'initial' target into the 'initial_base'
+   and 'initial_cdf' targets.
+
+* DEVELOPMENT/BIN *
+
+command-origin-document.sh :
+ - Add this script to modify the old RCS $HEADER character
+   string that is found in the LSPGM modules to something
+   more appropriate. Something that can actually be
+   inferred from the current state of the git archive.
+   The .txt documention files in the man/pdoc directory
+   are modified by this procedure rather than the
+   source files themselves.
+
+* DEVELOPMENT/INCLUDE *
+
+CDF2CCC, DIMMEM, SPECMEM, VARMEM, WORKMEM, ZTYPMEM :
+ - Code changes for F77and F90 compatibility.
+
+* DEVELOPMENT/MAN/PDOC *
+
+Makefile :
+ - Account the replacement ofcdf2ccc.ftn by cdf2ccc.F90.
+ - Re-activate the HOSTWEB/DIAGWEB macros.
+
+* DEVELOPMENT/SRC/CDF2CCC *
+
+To account for the explicit treatment of the
+ 'taille_entete' pre-processor macro by FORTRAN 90:
+  CDF2CCC.FTN is replaced by CDF2CCC.F90 and
+  DEF_DIM_COORD.F is replaced by DEF_DIM_COORD.F90 and
+  GET_TOPO.F is replaced by GET_TOPO.F90 and
+  INQ_FILE.F is replaced by INQ_FILE.F90 and
+  VERS_CCCMA.F is replaced by VERS_CCCMA.F90 and
+  VERS_NETCDF.F is replaced by VERS_NETCDF.F90.
+RDLATLON2 :
+ - Inititialize the GRILLE_Z and GRILLE_Y variables (BUGFIX).
+
+* DEVELOPMENT/SRC/LSPGM *
+
+FSTTRI :
+ - Better document the 'PARJOUR'/'BYDAY' -split options.
+Makefile :
+ - The documentation .txt targets now call the new
+   command-origin-document.sh script to modify the old
+   RCS $HEADER to something more appropriate.
+

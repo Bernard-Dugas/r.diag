@@ -19,9 +19,12 @@ MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 DESTINATION = $(DIAGNOSTIQUE)/..
 
 # NetCDF v_3.6 and Udunits v_1.2 libraries used to be found 
-# in the EXTRAS directory. The package now uses the netcdff
-# SSM package to locate all the necessary libraries including
-# MFV's udunits2f FORTRAN wrapper as well as udunits2 itself.
+# in the EXTRAS directory. The package now can either 1) use
+# the netcdff SSM package to locate all the necessary shared
+# libraries including MFV's udunits2f FORTRAN wrapper as well
+# as udunits2 itself or 2) use the static versions of these
+# same libraries as provided by the netcdff-4.4 SSM package.
+# As of May 2017, the second option is used.
 #EXTRAS  = $(DESTINATION)/extras
 #EXTLIB  = $(EXTRAS)/NetcdfUdunits/$(EC_ARCH)/lib
 
@@ -45,8 +48,8 @@ FIXES   = $(PWD)/lib/$(EC_ARCH)/stubs.o
 
 # (obsolete) WEB Host Server for the documentation
 
-#HOSTWEB = notos
-#DIAGWEB = /data/armnraid1/www/mrb/externe/si/eng/si/utilities/r.diag
+HOSTWEB = pascal
+DIAGWEB = public_html
 
 # RMN and Vgrid_Descriptor library names
 
@@ -56,20 +59,25 @@ VGDLIB  = descrip
 # DDFUN90, NetCDF4 and UdUnits2 library names
 
 DDFUN90  = ddfun90
-lNetCDF  = netcdff
-#lNetCDF  = netcdff netcdf curl hdf5_hl hdf5 dl sz
-#lNetCDF  = netcdff netcdf hdf5 dl z
-#UDUNITS  = udunits2 expat
-UDUNITS  = udunits2f udunits2
+
+# Shared load via the netcdff SSM package
+#lNetCDF  = netcdff
+#UDUNITS  = udunits2f udunits2
+
+# Static (_s) load via symlinks in the netcdff-4.4 SSM package
+lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
+UDUNITS  = udunits2f_s udunits2_s expat
+
 
 DIAG_VERSION = 6.3.1
 CONV_VERSION = 2.2.1
 
+ENTETE  = 32
 STD     = 98
 
 default: allbin
 
-allbin: initial rdiag cdf2conv 
+allbin: initial_base initial_cdf rdiag cdf2conv 
 
 all: allbin document
 
@@ -82,10 +90,11 @@ export:
 
 # Ensure initial setup is done
 
-initial:
+initial_base:
 	/bin/mkdir -p $(BINDIR) $(LIBDIR) $(MANDIR) $(MODDIR) $(SUBDIR)
-	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
-	s.locate --lib $(lNetCDF) 1> /dev/null || { echo -e PLS execute \". s.ssmuse.dot netcdff\" \n ; false ; }
+	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot vgriddesc\"\n" ; false ; }
+	s.locate --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
+#	s.locate --lib $(lNetCDF) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff\"\n" ; false ; }
 #	if [[ ! -f $(EXTLIB)/libnetcdf.a ]]; then cd $(EXTRAS) ; make all ; fi
 	if [[ ! -f $(LIBDIR)/libddfun90.a || -z "$(DDFUN90)" ]]; then \
 	cd $(DIAGNOSTIQUE)/src/extras/ddfun90 ; $(MAKE) RMNLIB=$(RMNLIB) ; fi
@@ -95,21 +104,26 @@ initial:
 	if [[ ! -f $(LIBDIR)/crc32.o ]]; then cd $(LIBDIR) ;\
 	s.cc -g -c ../../crc32.c ; fi
 
+initial_cdf:
+#	if [[ ! -f $(EXTLIB)/libnetcdf.a ]]; then cd $(EXTRAS) ; make all ; fi
+#	s.locate --lib $(lNetCDF) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff\"\n" ; false ; }
+	s.locate --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
+
 # RDIAG Diagnostic toolkit recipe
 
-rdiag:
+rdiag: initial_base
 	echo "*** Making libdiag_sq98.a and libdiag_sq98_g.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB)
+	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB) ENTETE=$(ENTETE)
 	echo "Making libprog_sq98.a" ;\
 	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE)
 	echo "*** Making executable r.diag ***" ;\
 	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) $(BASE_ARCH) OBJ="$(FIXES)" \
 	NOPLOT=$(NOPLOT) GRAFLIB=$(GRAFLIB) DDFUN90=$(DDFUN90) VGDLIB=$(VGDLIB) \
-	DIAG_VERSION=$(DIAG_VERSION) RMNLIB=$(RMNLIB)
+	DIAG_VERSION=$(DIAG_VERSION) RMNLIB=$(RMNLIB) ENTETE=$(ENTETE)
 
 # NetCDF to/from ( CCCma or CMC/RPN) file format converter recipe
 
-cdf2conv:
+cdf2conv: initial_base initial_cdf
 	echo "*** Making libcdf2ccc.a ***" ;\
 	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE)
 	echo "*** Making executable cdf2ccc ***" ;\
@@ -117,12 +131,12 @@ cdf2conv:
 	$(MAKE) cdf2rpn CONV_VERSION=$(CONV_VERSION) \
 	RMNLIB=$(RMNLIB) VGDLIB=$(VGDLIB) OBJ="$(FIXES)" \
 	lNetCDF="$(lNetCDF)" UDUNITS="$(UDUNITS)" \
-	DDFUN90=$(DDFUN90)
+	DDFUN90=$(DDFUN90) ENTETE=$(ENTETE)
 #	EXTRAS=$(EXTRAS)/NetcdfUdunits/$(EC_ARCH) DDFUN90=$(DDFUN90)
 
 # Only generate the LSSUB, LSPM and CDF2CCC libraries
 
-libs:
+libs: initial_base initial_cdf
 	echo "*** Making libdiag_sq98.a and libdiag_sq98_g.a ***" ;\
 	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB)
 	echo "Making libprog_sq98.a" ;\
@@ -134,6 +148,10 @@ libs:
 
 document:
 	cd $(DIAGNOSTIQUE)/man/pdoc ; $(MAKE) $@
+
+web_document:
+	cd $(DIAGNOSTIQUE)/man/pdoc ; $(MAKE) $@ \
+	HOSTWEB=$(HOSTWEB) DIAGWEB=$(DIAGWEB)
 
 # Clean
 

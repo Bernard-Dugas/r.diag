@@ -5,6 +5,9 @@
 !
 ! REVISIONS
 !
+! B. Dugas mai 2017 :
+! - Enlever le parametre HEAD. Il est declare via un macro
+!   dans les routines qui en ont besoin, comme dans r.diag
 ! B. Dugas octobre 2016 :
 ! - Le parametre HEAD passe de 28 a 32.
 ! B. Dugas juin 2013 :
@@ -122,8 +125,8 @@
       character(8)   direction     ! vers 'netcdf', 'cccma' ou bien 'rpncmc'
       character(4)   ccc_pktyp     ! type du fichier CCCma ou RPN/CMC
 
-      common /file_comm/ attr_file,cccma_file,netcdf_file,
-     .                   meta_title,direction,attunit,ccc_pktyp
+      common /file_comm/ attr_file,cccma_file,netcdf_file
+      common /file_comm/ meta_title,direction,attunit,ccc_pktyp
 
 !
 !UDUNITS2 :
@@ -258,13 +261,13 @@
       character(128) tcoord       ! nom de la coordonnee t dans le fichier netcdf
       character(128) cell_method  ! methode utilisee avec les time_bnds
 
-      common /card/ fill_ccc,fill_toler,miss_ccc,dtsize,fill_ccc_def,
-     .              miss_ccc_def,fill_ccc_oui,miss_ccc_oui,invj,cccvx,
-     .              leap,noUD,lalo,tlbl,ladate,npack,dt,tmoyen,
-     .              grid_desc,level_desc,cle_nhem,gribcode,
-     .              time_desc,tcoord,non_geographique,
-     .              time_bnds_L,xcoord,ycoord,zcoord,
-     .              cell_method
+      common /card/ fill_ccc,fill_toler,miss_ccc,dtsize,fill_ccc_def
+      common /card/ miss_ccc_def,fill_ccc_oui,miss_ccc_oui,invj,cccvx
+      common /card/ leap,noUD,lalo,tlbl,ladate,npack,dt,tmoyen
+      common /card/ grid_desc,level_desc,cle_nhem,gribcode
+      common /card/ time_desc,tcoord,non_geographique
+      common /card/ time_bnds_L,xcoord,ycoord,zcoord
+      common /card/ cell_method
 
       logical(4)    gem3,gem2      ! Identifie les versions normalisees ou pas de la
       ! coordonnee GEM ETA codee en mode sigma (avec enregistrement de support 'HY')
@@ -276,11 +279,8 @@
       real(8)       cap (max_levs) ! dans les fichiers CMC/RPN
       real(8)       cb  (max_levs) ! /
 
-      common /vcard/ cap,cb,gem2,gem3,htoit,vkind,nkm,nkt,
-     .               hyb_pt,hyb_pref,hyb_r,hyb_r2
-
-! Entete I/O :
-      integer, parameter :: head = 32 ! taille de l''entete de ibuf
+      common /vcard/ cap,cb,gem2,gem3,htoit,vkind,nkm,nkt
+      common /vcard/ hyb_pt,hyb_pref,hyb_r,hyb_r2
 
 ! Projection :
 

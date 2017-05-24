@@ -1,8 +1,7 @@
       real*8           rrot(3,3)
       common /D_RMAT/  rrot
 
-      real, dimension (:), pointer ::
-     .                 alon,alat,lonr,latr
+      real, dimension (:), pointer :: alon,alat,lonr,latr
       real             gnplon,gnplat,longpol,rlonoff
       integer          zip1,zip2,zip3
 
