@@ -564,10 +564,16 @@
               WRITE(6,'(/" Append mode active..."/" Will search for",
      +        " grid descriptors coresponding to NI,NJ = ",2I5/)') NI,NJ
               NI0 = NI ; NJ0 = NJ
+          ELSE IF (NI <= 0 .NEQV. NJ <= 0)                     THEN
+              ! Either -I or -J is not defined
+              WRITE(6,'(/" Append mode active..."/" Either define both",
+     +        " of the -I and -J arguments, or neither. Aborting."/)')
+              CALL                                 XIT( VERBE,-4 )
           ELSE ! NI and/or NJ have not been specified.
+              NI0 = -1 ; NJ0 = -1
               WRITE(6,'(/" Append mode active..."/" First grid",
      +          " descriptors will be used. NI,NJ will be defined",
-     +          " accordingly.")')
+     +          " accordingly."/)')
           END IF
 
           IF (YY)                                              THEN

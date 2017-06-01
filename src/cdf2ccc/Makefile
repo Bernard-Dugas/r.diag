@@ -325,8 +325,12 @@ cdf2ccc: initial cdf2ccc.F90
 	-o $@ $$(s.prefix -L $(LIBPATH)) $$(s.prefix -I $(MODDIR)) \
 	$$(s.prefix -l $(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB) \
 	$(RMNLIB) $(DDFUN90)) $(DEFINE) lire_arg.o $(OBJ) $(CODEBETA)
-	/bin/rm -f lire_arg.o $@.o $@.f ; /bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION) ;\
-	cd $(BINDIR)  ; /bin/ln -f $@_$(CONV_VERSION) cdf2rpn_$(CONV_VERSION)
+	if [ -x $@ ] ; then \
+		/bin/rm -f lire_arg.o $@.o ; \
+		/bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) ;cd $(BINDIR) ; \
+		ssh localhost ldd $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) ; \
+		/bin/ln -f $@_$(CONV_VERSION)_$(COMP_ARCH) cdf2rpn_$(CONV_VERSION)_$(COMP_ARCH) ; \
+	fi
 
 cdf2rpn: cdf2ccc
 

@@ -2699,7 +2699,10 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
      +                      rdate,rdelt,rpas
 
           if (check_dimensions)                                THEN
-              if (refdimx /= dimx .or. refdimy /= dimy)        THEN
+              if (refdimx == -1  .and. refdimy == -1)          THEN
+                  refdimx =  dimx  ;   refdimy =  dimy
+              else
+     +        if (refdimx /= dimx .or. refdimy /= dimy)        THEN
                   ! Tenter de lire le suivant.
                   i = i+1
                   read( io,rec=i,err=999,iostat=errno ) dummy

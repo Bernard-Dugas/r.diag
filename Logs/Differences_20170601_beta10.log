@@ -1,0 +1,26 @@
+Description of the changes that have been made to r.diag since May 23 2017
+
+* DEVELOPMENT/SRC/CDF2CCC *
+
+Makefile :
+ - Check via a "ssh localhost ldd" command that
+   the converter executables will be able to satisfy
+   all external references when executing under
+   a default/basic environment.
+
+* DEVELOPMENT/SRC/LSPGM *
+
+Makefile :
+ - Check via a "ssh localhost ldd" command that
+   the r.diag executable will be able to satisfy
+   all external references when executing under
+   a default/basic environment.
+MAKEZG :
+ - Correction to always initialize NI0 and NJ0
+   in append-mode.
+
+* DEVELOPMENT/SRC/LSSUB *
+
+CONVSUB :
+ - Correct the handling of the REFDIMX and REFDIMY
+   arguments in the GETZDES routine.

@@ -443,7 +443,8 @@ driver: driver.ptn $(LIBP) $(LIBS)
 	-librmn $(RMNLIB) $(CODEBETA) -obj "$(OBJ)" \
 	-libsys "$(DDFUN90) $(LAPACK) $(BLAS)"
 	if [ -x $@ ] ; then \
-		/bin/mv driver $(BINDIR)/r.diag_$(DIAG_VERSION) ; \
+		/bin/mv driver $(BINDIR)/r.diag_$(DIAG_VERSION)_$(COMP_ARCH) ; \
+		ssh localhost ldd $(BINDIR)/r.diag_$(DIAG_VERSION)_$(COMP_ARCH) ; \
 		touch -t 199001010000 driver && chmod 755 driver ; \
 		/bin/rm $@.f $@.o ; \
 	fi
