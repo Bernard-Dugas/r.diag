@@ -11,8 +11,10 @@ UQAM sans libgraph.a
 
     et ensuite
 
-. s.ssmuse.dot netcdff-4.4 vgriddesc-5.6
-FIXES="$PWD/lib/$EC_ARCH/stubs.o $PWD/lib/$EC_ARCH/moduledate.o $PWD/lib/$EC_ARCH/crc32.o"
+. s.ssmuse.dot dev/rmn_016 netcdff-4.4 vgriddesc-5.6
+# FIXES="$PWD/lib/$EC_ARCH/stubs.o $PWD/lib/$EC_ARCH/moduledate.o $PWD/lib/$EC_ARCH/crc32.o"
+FIXES=""
+
 make allbin FIXES="${FIXES}"
 
 CMC sans libgraph.a et sans la derniere correction a moduledate
