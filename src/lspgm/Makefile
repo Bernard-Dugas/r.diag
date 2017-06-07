@@ -444,9 +444,9 @@ driver: driver.ptn $(LIBP) $(LIBS)
 	-libsys "$(DDFUN90) $(LAPACK) $(BLAS)"
 	if [ -x $@ ] ; then \
 		/bin/mv driver $(BINDIR)/r.diag_$(DIAG_VERSION)_$(COMP_ARCH) ; \
-		ssh localhost ldd $(BINDIR)/r.diag_$(DIAG_VERSION)_$(COMP_ARCH) ; \
+		ssh localhost ldd $(BINDIR)/r.diag_$(DIAG_VERSION)_$(COMP_ARCH) | \
+		grep -i "not found" && exit 1 ; /bin/rm $@.f $@.o ; \
 		touch -t 199001010000 driver && chmod 755 driver ; \
-		/bin/rm $@.f $@.o ; \
 	fi
 
 info.lspgm: driver.ptn

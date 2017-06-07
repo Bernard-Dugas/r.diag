@@ -101,8 +101,8 @@ initial_base:
 	if [[ ! -x $(BINDIR)/r.echo ]]; then cd $(DIAGNOSTIQUE)/src/extras/tools ; $(MAKE) ; fi
 	if [[ ! -f $(LIBDIR)/program_version.o ]]; then cd $(LIBDIR) ;\
 	s.f77 -g -c ../../program_version.f ; fi
-	if [[ ! -f $(LIBDIR)/crc32.o ]]; then cd $(LIBDIR) ;\
-	s.cc -g -c ../../crc32.c ; fi
+#	if [[ ! -f $(LIBDIR)/crc32.o ]]; then cd $(LIBDIR) ;\
+#	s.cc -g -c ../../crc32.c ; fi
 
 initial_cdf:
 #	if [[ ! -f $(EXTLIB)/libnetcdf.a ]]; then cd $(EXTRAS) ; make all ; fi
