@@ -322,6 +322,10 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas 7 juin 2017 : 
+!  - Passer a la version 2.3.1 (development)
+!  Bernard Dugas 6 juin 2017 : 
+!  - Passer a la version 2.3.0 (Release)
 !  Bernard Dugas mai 2017 : 
 !  - Convertir en fichier .F90 pour utiliser
 !    le preprocesseur FORTRAN90
@@ -483,8 +487,8 @@
 
 !     Identification de la version
 
-      version = 'v2.2.1'
-      vdate   = 'Avril 14, 2015'
+      version = 'v2.3.1'
+      vdate   = 'June 07, 2017'
 
       AMODE = mode
       CALL LOW2UP( AMODE,AMODE )

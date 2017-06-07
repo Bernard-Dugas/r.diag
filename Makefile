@@ -44,7 +44,7 @@ GRAFLIB =
 
 # Binaires pre-compiles
 
-FIXES   = $(PWD)/lib/$(EC_ARCH)/stubs.o
+#FIXES   = $(PWD)/lib/$(EC_ARCH)/stubs.o
 
 # (obsolete) WEB Host Server for the documentation
 
@@ -53,7 +53,7 @@ DIAGWEB = public_html
 
 # RMN and Vgrid_Descriptor library names
 
-RMNLIB  = rmn_015.2
+RMNLIB  = rmn_016.3
 VGDLIB  = descrip
 
 # DDFUN90, NetCDF4 and UdUnits2 library names
@@ -69,8 +69,8 @@ lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
 UDUNITS  = udunits2f_s udunits2_s expat
 
 
-DIAG_VERSION = 6.3.1
-CONV_VERSION = 2.2.1
+DIAG_VERSION = 6.4.1
+CONV_VERSION = 2.3.1
 
 ENTETE  = 32
 STD     = 98
@@ -101,8 +101,8 @@ initial_base:
 	if [[ ! -x $(BINDIR)/r.echo ]]; then cd $(DIAGNOSTIQUE)/src/extras/tools ; $(MAKE) ; fi
 	if [[ ! -f $(LIBDIR)/program_version.o ]]; then cd $(LIBDIR) ;\
 	s.f77 -g -c ../../program_version.f ; fi
-	if [[ ! -f $(LIBDIR)/crc32.o ]]; then cd $(LIBDIR) ;\
-	s.cc -g -c ../../crc32.c ; fi
+#	if [[ ! -f $(LIBDIR)/crc32.o ]]; then cd $(LIBDIR) ;\
+#	s.cc -g -c ../../crc32.c ; fi
 
 initial_cdf:
 #	if [[ ! -f $(EXTLIB)/libnetcdf.a ]]; then cd $(EXTRAS) ; make all ; fi

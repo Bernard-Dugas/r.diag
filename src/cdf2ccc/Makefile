@@ -32,7 +32,7 @@ MANDIR   = $(DIAGS)/man/pdoc
 #MODDIR   = $(INCLUDES) $(INCLUDES)/$(EC_ARCH) $(EXTRAS)/include
 MODDIR   = $(INCLUDES) $(INCLUDES)/$(EC_ARCH)
 
-CONV_VERSION = 2.2.1
+CONV_VERSION = 2.3.1
 
 HOSTWEB =
 DIAGWEB =
@@ -59,7 +59,7 @@ LIBP     = $(LIBDIR)/lib$(MALIB).a
 
 DDFUN90  = ddfun90
 DIAGLIB  = diag_sq$(STD)_g
-RMNLIB   = rmn_015.2
+RMNLIB   = rmn_016.3
 VGDLIB   = descrip
 
 # Static (_s) load via symlinks in the netcdff-4.4 SSM package
@@ -328,7 +328,7 @@ cdf2ccc: initial cdf2ccc.F90
 	if [ -x $@ ] ; then \
 		/bin/rm -f lire_arg.o $@.o ; \
 		/bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) ;cd $(BINDIR) ; \
-		ssh localhost ldd $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) ; \
+		ssh localhost ldd $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) | grep -i "not found" && exit 1 ; \
 		/bin/ln -f $@_$(CONV_VERSION)_$(COMP_ARCH) cdf2rpn_$(CONV_VERSION)_$(COMP_ARCH) ; \
 	fi
 

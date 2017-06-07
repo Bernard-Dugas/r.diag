@@ -9,7 +9,7 @@
 # - Ajouter des dependances a toc_gest_1.cdk, toc_gest_2.cdk et set_a_b_from_AABB.cdk
 #   pour DXDP, GPASG, GPDPD, GPHUM, GSAPL, GSAPZL, GSATHL, GSMSLPH, PGEN et VSINTH
 
-ifeq "$(BAtail -f ../../Resultats.make.pgi13xx.ST1SE_ARCH)" "$(EC_ARCH)"
+ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
 endif
 
@@ -49,14 +49,14 @@ DIAGLIB = diag_sq$(STD)
 GRAFLIB =
 LAPACK  = lapack
 PROGLIB = prog_sq$(STD)
-RMNLIB  = rmn_015
+RMNLIB  = rmn_016.3
 VGDLIB  = descrip
 
 LIBP    = $(LIBDIR)/lib$(PROGLIB).a
 LIBS    = $(LIBDIR)/lib$(DIAGLIB).a
 ZIPFILE = $(LIBDIR)/lspgm_STD$(STD).f.zip
 
-DIAG_VERSION = 6.3.1
+DIAG_VERSION = 6.4.1
 
 HOSTWEB =
 DIAGWEB =
@@ -444,9 +444,9 @@ driver: driver.ptn $(LIBP) $(LIBS)
 	-libsys "$(DDFUN90) $(LAPACK) $(BLAS)"
 	if [ -x $@ ] ; then \
 		/bin/mv driver $(BINDIR)/r.diag_$(DIAG_VERSION)_$(COMP_ARCH) ; \
-		ssh localhost ldd $(BINDIR)/r.diag_$(DIAG_VERSION)_$(COMP_ARCH) ; \
+		ssh localhost ldd $(BINDIR)/r.diag_$(DIAG_VERSION)_$(COMP_ARCH) | \
+		grep -i "not found" && exit 1 ; /bin/rm $@.f $@.o ; \
 		touch -t 199001010000 driver && chmod 755 driver ; \
-		/bin/rm $@.f $@.o ; \
 	fi
 
 info.lspgm: driver.ptn
