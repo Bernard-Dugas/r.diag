@@ -94,7 +94,8 @@
 #         endif
           ELSE IF (VKIND == 5    .OR. VKIND == 5001)         THEN
               IF (COORD == 'DEF') COORD = 'GEM2'
-              IF (COORD /= 'GEM2') CALL           XIT( VERBEX ,-17)
+              IF (COORD /= 'GEM2' .AND.
+     +            COORD /= 'GEM3') CALL           XIT( VERBEX ,-17)
 #             if defined(SET_VKINDC)
               VKINDC = 'HYBRIDE'
 #             endif
