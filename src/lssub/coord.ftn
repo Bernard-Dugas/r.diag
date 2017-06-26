@@ -1641,6 +1641,42 @@ C
 *------------------------------------------------------------------------------
 
       end
+      subroutine GEM23_SANITY_CHECK( coord, etatop,pref,ptoit )
+
+      IMPLICIT NONE
+
+      CHARACTER(LEN=4) coord
+      REAL etatop,pref,ptoit
+
+      real ll
+*------------------------------------------------------------------------------
+
+      IF (PTOIT > 0. .and.
+     +   (COORD == 'GEM2' .OR. COORD == 'GEM3'))               THEN
+
+***        GEM2/GEM3 COORDINATE SANITY CHECKS.
+ 
+          ll = (ETATOP*PREF - PTOIT) / PTOIT
+
+          ! Check for ETATOP = PTOIT/PREF
+          IF (COORD == 'GEM3' .AND. ABS( ll ) < 0.001)         THEN
+              COORD = 'GEM2' ! Found actual denormalized top value
+              WRITE(6,'(/A/)') " *** Correcting: GEM3 ==> GEM2 ...***"
+          END IF
+
+          ! Check for ETATOP < PTOIT/PREF
+          IF (COORD == 'GEM2' .AND. ll < -0.001)               THEN
+              COORD = 'GEM3' ! Found value smaller than denormalized top
+              WRITE(6,'(/A/)') " *** Correcting: GEM2 ==> GEM3 ... ***"
+          END IF
+
+      END IF
+
+      RETURN
+
+*------------------------------------------------------------------------------
+      END
+
       BLOCK DATA DATA_COORD
 
 *     Initialise variables of COORD's COMMONs that need to be.

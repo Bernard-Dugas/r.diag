@@ -2922,65 +2922,65 @@ CCC           END IF
       LOGICAL                INFO
       COMMON       /ZZVERBO/ INFO
 
-C$    CHARACTER     EVAL*8
-C$    INTEGER       Mp_My_ThreadNum
-C$    EXTERNAL      Mp_My_ThreadNum, Mp_Set_NumThreads,
-C$   +              Mp_Block,        Mp_UnBlock,
-C$   +              Mp_Destroy,      Mp_Create,
-C$   +              Mp_BlockTime,    GETENVC
+!!    CHARACTER     EVAL*8
+!!    INTEGER       Mp_My_ThreadNum
+!!    EXTERNAL      Mp_My_ThreadNum, Mp_Set_NumThreads,
+!!   +              Mp_Block,        Mp_UnBlock,
+!!   +              Mp_Destroy,      Mp_Create,
+!!   +              Mp_BlockTime,    GETENVC
 C
 *------------------------------------------------------------------
-C$    IF (SERVICE.EQ.'THREADS')                                THEN
+!!    IF (SERVICE.EQ.'THREADS')                                THEN
 C
-C$        IF (Check.NE.'Mp_Check')                             THEN
-C$            CALL GETENVC('MP_SET_NUMTHREADS',EVAL )
-C$            READ(EVAL,'(BN,I4)') NPs
-C$            NPs =  MIN( NUMBER, MAX( 1, NPs ) )
-C$            IF (NPs.GT.1) CALL Mp_Set_NumThreads( NPs )
-C$            Check   = 'Mp_Check'
-C$        ELSE IF (NUMBER.GT.1)                                THEN
-C$            NPs     =  MIN( NUMBER, NPs )
-C$        END IF
-C$        mpserv      =  NPs
+!!        IF (Check.NE.'Mp_Check')                             THEN
+!!            CALL GETENVC('MP_SET_NUMTHREADS',EVAL )
+!!            READ(EVAL,'(BN,I4)') NPs
+!!            NPs =  MIN( NUMBER, MAX( 1, NPs ) )
+!!            IF (NPs.GT.1) CALL Mp_Set_NumThreads( NPs )
+!!            Check   = 'Mp_Check'
+!!        ELSE IF (NUMBER.GT.1)                                THEN
+!!            NPs     =  MIN( NUMBER, NPs )
+!!        END IF
+!!        mpserv      =  NPs
 C
-C$    ELSE IF (SERVICE.EQ.'BLOCK')                             THEN
+!!    ELSE IF (SERVICE.EQ.'BLOCK')                             THEN
 C
-C$        IF (NPs.GT.1) CALL Mp_Block()
-C$        mpserv = -1
+!!        IF (NPs.GT.1) CALL Mp_Block()
+!!        mpserv = -1
 C
-C$    ELSE IF (SERVICE.EQ.'UNBLOCK')                           THEN
+!!    ELSE IF (SERVICE.EQ.'UNBLOCK')                           THEN
 C
-C$        IF (NPs.GT.1) CALL Mp_UnBlock()
-C$        mpserv = -2
+!!        IF (NPs.GT.1) CALL Mp_UnBlock()
+!!        mpserv = -2
 C
-C$    ELSE IF (SERVICE.EQ.'DESTROY')                           THEN
+!!    ELSE IF (SERVICE.EQ.'DESTROY')                           THEN
 C
-C$        IF (NPs.GT.1) CALL Mp_Destroy()
-C$        mpserv = -3
+!!        IF (NPs.GT.1) CALL Mp_Destroy()
+!!        mpserv = -3
 C
-C$    ELSE IF (SERVICE.EQ.'CREATE')                            THEN
+!!    ELSE IF (SERVICE.EQ.'CREATE')                            THEN
 C
-C$        IF (NPs.GT.1) CALL Mp_Create( NUMBER )
-C$        mpserv = -4
+!!        IF (NPs.GT.1) CALL Mp_Create( NUMBER )
+!!        mpserv = -4
 C
-C$    ELSE IF (SERVICE.EQ.'BLOCKTIME')                         THEN
+!!    ELSE IF (SERVICE.EQ.'BLOCKTIME')                         THEN
 C
-C$        IF (NPs.GT.1) CALL Mp_BlockTime( NUMBER )
-C$        mpserv = -5
+!!        IF (NPs.GT.1) CALL Mp_BlockTime( NUMBER )
+!!        mpserv = -5
 C
-C$    ELSE IF (SERVICE.EQ.'THREADNUM')                         THEN
+!!    ELSE IF (SERVICE.EQ.'THREADNUM')                         THEN
 C
-C$        NUMBER = Mp_My_ThreadNum()
-C$        mpserv = -6
+!!        NUMBER = Mp_My_ThreadNum()
+!!        mpserv = -6
 C
-C$    ELSE
+!!    ELSE
 C
-C$        IF (INFO) WRITE(6,6000) SERVICE
-C$        mpserv =  0
+!!        IF (INFO) WRITE(6,6000) SERVICE
+!!        mpserv =  0
 C
-C$    END IF
+!!    END IF
 C
-C$    RETURN
+!!    RETURN
 C
 *------------------------------------------------------------------
       IF (SERVICE.EQ.'THREADS')                                THEN

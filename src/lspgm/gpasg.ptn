@@ -360,8 +360,9 @@
      +            VERBE*8,VERBEX*8
       CHARACTER(4) TYPE,COORD,COORDI,CLNSP,STATUS
       REAL(8)     PREF8,PTOIT8,R8,R28,PREFI8,CORR1
-      LOGICAL     MODETA,MODETAI,DOIT,BIGF,AABB,lastTatU,
-     +            OK,DEF,MONOTON,LAPSE,FTOPP,RLV,APPEND,BAD_RL
+      LOGICAL     OK,MODETA,MODETAI,DOIT,BIGF,AABB,
+     +            SetPTo,DEF,MONOTON,MONOTONE,LAPSE,
+     +            FTOPP,RLV,APPEND,BAD_RL,lastTatU
       REAL        FDCOL(MAXLEV),FCOL(MAXLEV),SD(MAXLEV),
      +            PTOIT,PTOITI,PREF,PREFI,R,R2,R0,R20,RI,
      +            RLUP,RLDN,TOPASCL,LNPT,LNPTI,PTOIT0,PREF0,
@@ -371,8 +372,8 @@
      +            I,J,K,L,M,NAME,MAXL,MAXW,MAXW1,MAXW2,MAXW4,LEN,
      +            LEN1,LEN2,LEN4,NWDS,KPAK,LPAK,MPAK,NPT,NPACK,
      +            NSETS,IO,IER,LIM1,LIM2,TOP,BOT,INC,IUN,HOLD,
-     +            TOC_NBR,NFOUT,NI,NJ,LNAME,NPL1,LL,
-     +            IN1,IG10,IG20, NLEVD,NLEVT
+     +            TOC_NBR,NFOUT,NI,NJ,LNAME,NPL1,LL,TOPE,BOTE,
+     +            INCE,IN1,IG10,IG20, NLEVD,NLEVT
 
       INTEGER     LEV(MAXLEV)
       REAL        AI (MAXLEV+1),BI   (MAXLEV+1),
@@ -405,7 +406,8 @@
       DATA        DEF   / .FALSE. /,
      +            LAPSE / .TRUE.  /,
      +            FTOPP / .TRUE.  /,
-     +            DOIT  / .TRUE.  /
+     +            DOIT  / .TRUE.  /,
+     +            SetPTo/ .TRUE.  /
 
       DATA        CHECK / ' '     /
       DATA        MODETA/ .FALSE. /,
@@ -485,8 +487,8 @@
           OK = RPBLOC('C',LIGNE)
           IF (OK) READ(LIGNE,0011,END=914,ERR=914,IOSTAT=IO) RLDN
 
-          OK = RPBLOC('I',LIGNE)
-          IF (OK) READ(LIGNE,0011,END=914,ERR=914,IOSTAT=IO) PTOIT
+          SetPTo = RPBLOC('I',LIGNE)
+          IF (SetPTo) READ(LIGNE,0011,END=914,ERR=914,IOSTAT=IO) PTOIT
 
           OK = RPBLOC('J',LIGNE)
           IF (OK) READ(LIGNE,0011,END=914,ERR=914,IOSTAT=IO) PREF8
@@ -769,12 +771,12 @@
                   IF (K.EQ.NSL .AND. LEVS(K).EQ.1) ETA(K) = 1.0
               END IF
           ELSE
-             READ( CLEVS(K),11, ERR=915,END=915,IOSTAT=IO ) ETA(K)
-             IF (PKTYP.EQ.'SQ')                                THEN
-                 CALL CONVPR( LEVS(K), ETA(K), VKIND, +2 )
-             ELSE
-                 CALL LVCODE( LEVS(K), ETA(K), 1 ) 
-             END IF
+              READ( CLEVS(K),11, ERR=915,END=915,IOSTAT=IO ) ETA(K)
+              IF (PKTYP.EQ.'SQ')                                THEN
+                  CALL CONVPR( LEVS(K), ETA(K), VKIND, +2 )
+              ELSE
+                  CALL LVCODE( LEVS(K), ETA(K), 1 ) 
+              END IF
           END IF
 
           END DO
@@ -912,13 +914,35 @@
           END IF
       END IF
  
+***    CHECK THAT PR and ETA ARE MONOTONIC AND (SLIGHTLY) CONSISTENT.
+
+      DO  L=1,NPL
+          CALL CONVPR( LEV(L),PR(L), VKINDI, -2 )
+          ! Account for the CCCma file conventions
+          IF (VERBE == 'GSASG' .AND. VKINDI == 2) PR(L) = PR(L) * 0.001
+      END DO
+
+      CALL MONVERT( ETA,NSL, TOPE,BOTE,INCE, MONOTONE )
+      CALL MONVERT( PR, NPL, TOP, BOT, INC,  MONOTON )
+
+      IF (.NOT.SetPTo)                                         THEN
+          ! PTOIT not set. Use value from input file ?
+          IF (VERBE == 'GPASG' .OR. .NOT.APPEND)               THEN
+              IF (VERBE == 'GPASG')                            THEN
+                  PTOIT = PR(TOP)
+              ELSE IF (.NOT.APPEND)                            THEN
+                  PTOIT = PTOITi
+              END IF
+              WRITE(6,'(A)')
+     +        'Specifying output PTOIT from value found in input file'
+          END IF
+      END IF
+
+      CALL GEM23_SANITY_CHECK( COORD, ETA(TOPE),PREF,PTOIT )
+
       CALL WRITLEV( ETA,NSL,'Output ' // COORD )
 
-***     CHECK THAT ETA IS MONOTONIC.
-
-      CALL MONVERT( ETA,NSL, TOP,BOT,INC, MONOTON )
-
-      IF (.NOT.MONOTON) CALL                       XIT( VERBEX ,-2 )
+      IF (.NOT.MONOTONE) CALL                      XIT( VERBEX ,-2 )
 
 ***    EVALUATE THE PARAMETRES OF THE OUTPUT
 ***    ETA VERTICAL DISCRETIZATION.
@@ -978,20 +1002,13 @@
 
       END IF
 
-      DO  L=1,NPL
-          CALL CONVPR( LEV(L),PR(L), VKINDI, -2 )
-          IF (VERBE == 'GSASG' .AND. VKINDI == 2) PR(L) = PR(L) * 0.001
-      END DO
+      CALL GEM23_SANITY_CHECK( COORDI, PR(TOP),PREFI,PTOITI )
 
       IF (VERBE.EQ.'GPASG')                                    THEN
           CALL WRITLEV( PR,NPL,'Input PRES' )
       ELSE IF (VERBE.EQ.'GSASG')                               THEN
           CALL WRITLEV( PR,NPL, 'Input '// COORDI )
       END IF
-
-***     CHECK THAT PR IS MONOTONIC.
-
-      CALL MONVERT( PR,NPL, TOP,BOT,INC, MONOTON )
 
       IF (.NOT.MONOTON) CALL                       XIT( VERBEX ,-2 )
 
