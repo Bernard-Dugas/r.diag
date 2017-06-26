@@ -525,7 +525,7 @@
 
               OK = RPBLOC('L',LIGNE)
               IF (OK .AND.
-     +            .NOT.(LIGNE /= '****' .AND. LIGNE /= ' '))   THEN
+     +            .NOT.(LIGNE == '****' .OR. LIGNE == ' '))    THEN
                   GEM4LEV = LIGNE
                   CALL LOW2UP( GEM4LEV,GEM4LEV )
               END IF
@@ -828,10 +828,12 @@
                  CALL GetTOC( NFOUT,'VIPM',LEVS,IP1,IP2 )
                  CALL GETTOC( NFOUT,'CA_M', A4, IP1,IP2 )
                  CALL GETTOC( NFOUT,'CB_M', B4, IP1,IP2 )
+                 WRITE(6,6350) 'momentum'
               ELSE IF (GEM4LEV == 'THERMODYN')                 THEN
                  CALL GetTOC( NFOUT,'VIPT',LEVS,IP1,IP2 )
                  CALL GETTOC( NFOUT,'CA_T', A4, IP1,IP2 )
                  CALL GETTOC( NFOUT,'CB_T', B4, IP1,IP2 )
+                 WRITE(6,6350) 'thermodynamic'
               ELSE
                   WRITE(6,6023) GEM4LEV
                   CALL                             XIT( VERBEX ,-23 )
@@ -1385,6 +1387,7 @@
  6252 FORMAT(' p.ref (pa)=',F10.3,', r(exponents)=',2F10.3)
 
  6300 FORMAT('0',A6,' produced ',I5,' sets of ',A4)
+ 6350 FORMAT(' Output on ',A,' GEM4 levels.')
 
       END
 #     endif
