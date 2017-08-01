@@ -39,6 +39,10 @@
 *
 *REVISIONS
 *
+* B.Dugas juillet '17 :
+* - Initialiser certaines variables locales qui ne
+*   le sont pas pour des grilles de type inconnu
+* - Correction de (hival,loval) en mode time_bnds
 * B.Dugas mai '17 :
 * - Utiliser l'argument -dtsize au lieu de -dt lors de la
 *   conversion de variables moyennee dans le temps
@@ -232,7 +236,15 @@
       logical ::   xincr,yincr,miss_val_cdf,fill_val_cdf
       character(1) cloche
 
-*-----------------------------------------------------------------------
+*----------------------------------------------------------------------- 
+      ! Initialisations de variables locales
+      nn=0 ; nhem = -1 ; xglb = -1 ; yglb = -1
+      ii=0 ; iig2 =  0 ; cloche=char(7)
+
+      if (tid > 0 .and. ladate == -1) call decodate( ncid,zero8,ladate )
+
+      fill_message = .true.
+
       if (ccc_pktyp(1:2) /= 'SQ' .or. ! => Fichier destination en format CCCma
      .    project%name == "unknown" .or. ! => Grille de type non supporte/inconnu
      .   (xdid == 0 .and. coord(xid)%nattr == -1)  .or. ! => Coordonnees horizontales non
@@ -245,20 +257,10 @@
          goto 100
       endif
 
-      ! Initialisations de variables locales
-      xglb = -1 ; yglb = -1 ; ii = 0 ; iig2 = 0
+      ! Initialisations de variables locales logique
       xincr = .false. ; yincr  = .false. ; grille_Y = .false.
       xbgrd = .false. ; ybgrd  = .false. ; grille_Z = .false.
       dxcons = .true. ; dycons = .false. ; ygauss   = .false.
-
-      cloche=char(7)
-
-      if (tid > 0 .and. ladate == -1) call decodate( ncid,zero8,ladate )
-                  
-      fill_message = .true.
-
-      nn=0
-      nhem=-1
 
       do i=1,project%len
          if(project%nampar(i).eq.'nhem')nhem=nint(project%value(i))
@@ -1054,16 +1056,19 @@
                            call            puthigh( IP2, 'IP2',ibuf )
                            svsm = 1 ; call puthigh( svsm,'IP3',ibuf )
                         else
-                           loval = tim1
+                           ! loval = tim1
+                           hival = tim2
                            if (dtsize > 0.0_8) then
                               svsm = nint( tdelta / dtsize )
                               npas = svsm-1 ; deet = nint( dtsize*3600 )
-                              tdelta = dtsize ; hival = tim2-tdelta
+                              tdelta = dtsize ; loval = tim1+tdelta
+                              ! hival = tim2-tdelta
                            else
                               svsm = nint( ( tdelta * 3600. ) / dt )
                               npas = svsm-1 ; deet = nint( dt )
                               tdelta = dt / 3600.0_8
-                              hival = tim2-tdelta
+                              loval = tim1+tdelta
+                              ! hival = tim2-tdelta
                            end if
                            call incdatr( datei,dateo,tim1+tdelta )
                            dateo = datei

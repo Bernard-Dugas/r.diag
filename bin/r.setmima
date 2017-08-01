@@ -1,0 +1,123 @@
+#! /bin/bash
+
+if [ $# = 0 ]; then
+  echo "
+
+  Description...
+  Forcer les valeurs des variables contenues
+  dans un fichier CMC/RPN a etre bornees.
+
+  Appel...
+  r.setmima infile outfile -var nom_de_la_variable \ 
+          -min valeur_minimale -max valeur_maximale
+
+  Arguments...
+  Au moins un des arguments -min ou -max devrait
+  etre specifie (1) et ce avec des valeurs numeriques
+  appropriees (2). Sinon infile sera simplement copie
+  vers outfile (cas 1) ou bien plantera dans la
+  commande FMASK de r.diag (cas 2).
+
+  Les fichiers infile et outfile doivent aussi
+  etre differents. Leurs noms par defauts sont
+  justement infile et outfile.
+
+  L'argument -var est optionel.
+
+  Auteur: B.Dugas, UQAM/juillet 2017.
+
+  "
+  exit
+fi
+
+infile=${1:-infile}
+if [ ! -e ${infile} ]; then
+    echo "${infile} n'existe pas ..."
+    exit 1
+fi
+
+infilet=`true_path ${infile}`
+
+outfile=${2:-outfile}
+if [ ! -e ${outfile} ]; then touch ${outfile} ; fi
+if [ "${outfile}" = "${outfile%/*}" ]; then ici=`true_path .`
+else
+    ici=${outfile%/*}
+fi
+
+outfilet=${ici}/${outfile}
+
+if [ "${infilet}" = "${outfilet}" ]; then
+    echo "Fichier d'entree = fichier de sortie ..."
+    exit 2
+fi
+
+eval `cclargs   $0               "[Definir les valeurs min et/ou max dans un fichier CMC/RPN]"\
+      -var      "NONNON" ",,,,"  "[nom de la variable]"\
+      -min      "NON"    ",,,,"  "[valeur minimale]"\
+      -max      "NON"    ",,,,"  "[valeur maximale]"\
+      ++ $*`
+
+if [ "${min}" = "NON" -a "${max}" = "NON" ]; then
+   echo -r "Rien a faire. On copie ${infile} vers ${outfile}."
+   /bin/cp ${infile} ${outfile}
+   exit 0
+elif [ "${min}" != "NON" -a "${max}" != "NON" ]; then
+   if [ `echo "${min} < ${max}" | bc -l` = 0 ]; then
+       echo "Valeur minimale >= valeur maximale ..."
+       exit 3
+   fi
+fi
+
+# Definir certaines variables d'environnement de R.DIAG
+
+. Climat_functions
+
+cd ${BIG_TMPDIR}
+
+if [ "${var}" = "NONNON" ]; then
+    r.accessf -dn tmp1 -pdn ${infile} -own ${ici}
+else
+    ${RDIAG} select ${infilet} tmp1 -name ${var}
+fi
+
+if [ "${min}" != "NON" ]; then
+
+    # Keep above ${min}
+
+    ${RDIAG} fmask  tmp1     mask               -kind GE -a ${min}
+    ${RDIAG} fmask  mask     mask_inv           -kind LT -a 0.5
+    ${RDIAG} mltf   tmp1     mask     tmp2      -name 1
+    ${RDIAG} xlin   mask_inv mask_min           -a ${min}
+
+    if [ "${max}" = "NON" ]; then
+        ${RDIAG} addf tmp2 mask_min ${outfilet} -name 1
+    else
+        ${RDIAG} addf tmp2 mask_min minfile     -name 1
+    fi
+
+    r.delf -dn mask mask_inv mask_min tmp2
+
+else
+
+    r.accessf -dn minfile -pdn tmp1 -own .
+
+fi
+
+if [ "${max}" != "NON" ]; then
+
+    # Keep below ${max}
+
+    ${RDIAG} fmask  minfile   mask           -kind LE -a ${max}
+    ${RDIAG} fmask  mask      mask_inv       -kind LT -a 0.5
+    ${RDIAG} mltf   minfile   mask  tmp2     -name 1
+    ${RDIAG} xlin   mask_inv  mask_max       -a ${max}
+
+    
+    ${RDIAG} addf   tmp2 mask_max ${outfilet} -name 1
+
+    r.delf -dn minfile mask mask_inv mask_max tmp1 tmp2
+
+fi
+
+exit 0
