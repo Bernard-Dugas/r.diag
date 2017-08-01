@@ -4317,6 +4317,13 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
       ! Auteur: B. Dugas (UQAM/RPN)
 
       ! Revision: version original, septembre 2016. 
+      ! Revision 1 2017/07/28 17:17  dugas
+      ! - Supporter l'implementation des sorties GEM 4.8+ codees avec
+      !   les nouvelles options de codages des IP1/2/3. Celles-ci sont
+      !   maintenant correctement identifiees comme des echantillons.
+      ! - Correction aux codages des (HIVAL,LOVAL) de moyennes de
+      !   fichiers OLD-STYLE pour les rendre identiques aux autres
+      !   codages: Ajouter un offset de DEET aux deux variables.
 
       use          diag_convert_ip123, only : KIND_HOURS, KIND_SAMPLES
 
@@ -4406,6 +4413,13 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
               NSAMPZ = (NPAS/3600)+1
           END IF
 
+          IF (NSAMPZ == 1)                                     THEN
+              ! On a probablement trouve un
+              ! echantillon d'accumulateur
+              IPMODE = -1  ; RKIND = -1
+              HIVAL  = -1. ; LOVAL = -1.
+          END IF
+
       ELSE IF (RKIND /= -1)                                    THEN
 
           ! Interval de coordonee verticale.
@@ -4467,13 +4481,15 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
                   NSAMPZ = NINT( VIP3 ) ; IPMODE = 1
               ELSE
                   ! Mode compatibilite arriere (partie 1)
-                  NSAMPZ = IP3 ; LOVAL = 0. ; HIVAL = HEURES ; IPMODE = 0
+                  NSAMPZ = IP3 ; IPMODE = 0
+                  LOVAL = DEET ; HIVAL = HEURES+DEET
               END IF
 
           ELSE IF (IP3 > 1)                                    THEN
 
               ! Mode compatibilite arriere (partie 2)
-              NSAMPZ = IP3 ; LOVAL = 0. ; HIVAL = HEURES ; IPMODE = 0
+              NSAMPZ = IP3 ; IPMODE = 0
+              LOVAL = DEET ; HIVAL = HEURES+DEET
 
           END IF
 

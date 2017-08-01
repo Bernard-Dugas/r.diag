@@ -30,16 +30,16 @@
 *  d         Fichier destination. Celui-ci ne doit pas exister
 *            a l'entree, sauf si la cle f est egalement specifiee.
 *
-*  split     Separer le resultat du tri, une date-time-stamp unuique
+*  split     Separer le resultat du tri, une date-time-stamp unique
 *            par fichier. Valeurs optionnelles: "PARJOUR" ou "BYDAY".
 *
-*  dateo \ 
-*  typvar \  Cles selon laquelle le tri est effectue. Specifier
-*  etiket  > la cle sans valeur (ou avec la valeur "*") desactive
-*  nomvar /  le parametre correspondant de la liste.
-*  npas  / 
-*  ip1  /
-*  ip3 / 
+*  ip3  \ 
+*  dateo \   Cles selon laquelle le tri sera effectue (et ce, dans
+*  npas   \  cet ordre). Specifier une de ces cles sans valeur (ou
+*  typvar  > avec la valeur "*") pour desactiver le tri du
+*  etiket /  parametre correspondant de la liste.
+*  nomvar/ 
+*  ip1  / 
 *  info      Niveau des messages retournes (ERRORS/INFORM/DEBUG).
 *  rnd       Le type du fichier de sortie est RND (def STD2000).
 *  sqi       Le type du fichier de sortie est SQI (def STD1989).
@@ -93,6 +93,11 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.42 2017/08/01 17:17:17  dugas
+*      - Utiliser des structures "do while" dans la section de tris.
+*      - Re-organiser la documentation en specifiant l'ordre
+*        dans lequel les cles seront considerees.
+*
 *      Revision 4.41  2014/09/25 20:20:47  dugas
 *      Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -739,106 +744,117 @@ C    +              valnum,kind
 
       call csorte( fset1,sindex,infon )
 
-  050 valnum = fset1(sindex(ind01))
+      do while (ind01 < infon)
 
-***    Passer au niveau suivant ...
+         valnum = fset1(sindex(ind01))
 
-          do  i0=ind02,infon
-             if (fset1(sindex(i0)).ne.valnum) goto 051
-          end do
+***       Passer au niveau suivant ...
 
-***        I0 contient le debut du prochain groupe IP3.
-***        Trier la section courante, ... selon DATEO.
+         do  i0=ind02,infon
+            if (fset1(sindex(i0)) /= valnum) exit
+         end do
 
-  051     if (i0-ind02.gt.0)                                   then
+***       I0 contient le debut du prochain groupe IP3.
+***       Trier la section courante, ... selon DATEO.
 
-             call csorte( date1,sindex(ind01),i0-ind01 )
+         if (i0-ind02 > 0)                                     then
 
-***           Passer au niveau suivant ... 
+            call csorte( date1,sindex(ind01),i0-ind01 )
 
-             ind11  = ind01
-             ind12  = ind11+1
-  100        valnum = date1(sindex(ind11))
+***          Passer au niveau suivant ... 
 
-             do  i1=ind12,i0-1
-                if (date1(sindex(i1)).ne.valnum) goto 101
-             end do
+            ind11  = ind01
+            ind12  = ind11+1
 
-***           I1 contient le debut du prochain groupe DATEO.
-***           Trier la section courante, ... selon NPAS.
+            do while (ind11 < i0)
 
-  101        if (i1-ind12.gt.0)                                   then
+               valnum = date1(sindex(ind11))
 
-                call csorte( pas1,sindex(ind11),i1-ind11 )
+               do  i1=ind12,i0-1
+                  if (date1(sindex(i1)) /= valnum) exit
+               end do
 
-***              Passer au niveau suivant ...
+***             I1 contient le debut du prochain groupe DATEO.
+***             Trier la section courante, ... selon NPAS.
 
-                ind21  = ind11
-                ind22  = ind21+1
-  200           valnum = pas1(sindex(ind21))
+               if (i1-ind12 > 0)                               then
 
-                do  i2=ind22,i1-1
-                   if (pas1(sindex(i2)).ne.valnum) goto 201
-                end do
+                  call csorte( pas1,sindex(ind11),i1-ind11 )
 
-***              I2 contient le debut du prochain groupe NPAS.
-***              Trier la section courante ... selon chaine
-***              (i.e. selon TYPVAR/ETIKET/NOMVAR).
+***                Passer au niveau suivant ...
 
-  201           if (i2-ind22.gt.0)                               then
+                  ind21  = ind11
+                  ind22  = ind21+1
+
+                  do while (ind21 < i1)
+
+                     valnum = pas1(sindex(ind21))
+
+                     do  i2=ind22,i1-1
+                        if (pas1(sindex(i2)) /= valnum) exit
+                     end do
+
+***                   I2 contient le debut du prochain groupe NPAS.
+***                   Trier la section courante ... selon chaine
+***                   (i.e. selon TYPVAR/ETIKET/NOMVAR).
+
+                     if (i2-ind22 > 0)                         then
  
-                   call csortc( chaine1,sindex(ind21),i2-ind21 )
+                        call csortc( chaine1,sindex(ind21),i2-ind21 )
 
-***                 Passer au niveau suivant ...
+***                      Passer au niveau suivant ...
 
-                   ind31  = ind21
-                   ind32  = ind31+1
-  300              exempl = chaine1(sindex(ind31))
+                        ind31  = ind21
+                        ind32  = ind31+1
 
-                   do  i3=ind32,i2-1
-                      if (chaine1(sindex(i3)).ne.exempl) goto 301
-                   end do
+                        do while ( ind31 < i2 )
 
-***                 I3 contient le debut du prochain groupe
-***                 TYPVAR/ETIKET/NOMVAR. Trier la section
-***                 courante, ... selon la pression/sigma.
+                           exempl = chaine1(sindex(ind31))
 
-  301              if (i3-ind32.gt.0)
-     +                call csortr( niveau1,sindex(ind31),i3-ind31 )
+                           do  i3=ind32,i2-1
+                              if (chaine1(sindex(i3)) /= exempl) exit
+                           end do
 
-                   ind31 = i3
-                   ind32 = ind31+1
+***                         I3 contient le debut du prochain groupe
+***                         TYPVAR/ETIKET/NOMVAR. Trier la section
+***                         courante, ... selon la pression/sigma.
 
-***                 Passer au prochain bloc de (TYPVAR/ETIKET/NOMVAR).
+                           if (i3-ind32 > 0)
+     +                     call csortr( niveau1,sindex(ind31),i3-ind31 )
 
-                   if (ind31.lt.i2) goto 300
+***                         Passer au prochain bloc de (TYPVAR/ETIKET/NOMVAR).
 
-                end if
+                           ind31 = i3
+                           ind32 = ind31+1
 
-                ind21 = i2
-                ind22 = ind21+1
+                        end do
 
-***              Passer au prochain bloc de NPAS.
+                     end if
 
-                if (ind21.lt.i1) goto 200
+***                   Passer au prochain bloc de NPAS.
 
-             end if
+                     ind21 = i2
+                     ind22 = ind21+1
 
-             ind11 = i1
-             ind12 = ind11+1
+                  end do
 
-***           Passer au prochain bloc de DATEO.
+               end if
 
-             if (ind11.lt.i0) goto 100
+***             Passer au prochain bloc de DATEO.
 
-          endif
+               ind11 = i1
+               ind12 = ind11+1
 
-          ind01 = i0
-          ind02 = ind01+1
+            end do
 
-***        Passer au prochain bloc de IP3.
+         endif
 
-          if (ind01.lt.infon) goto 050
+***       Passer au prochain bloc de IP3.
+
+         ind01 = i0
+         ind02 = ind01+1
+
+      end do
 
       if (message)                                             then
 

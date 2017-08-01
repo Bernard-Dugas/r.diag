@@ -34,9 +34,10 @@
 *     a chaque coordonnee.
 *
 * REVISIONS
-*
+*  B.Dugas juillet '17 :
+*  - Reconnaitre long_name="generic" pour la coordonnee verticale
 *  B.Dugas fevrier '16 :
-*  - Reconnaitre long_name="model level number" pour la coordonnee levelist
+*  - Reconnaitre long_name="model level number" pour la coordonnee verticale
 *  B.Dugas mars '15 :
 *  - Introduire la variante 'ht' de la coordonnee de hauteur en km.
 *  B.Dugas aout '13 :
@@ -309,6 +310,7 @@
                   level_desc = 'Gal-Chen Levels'
 
                elseif (cfield == 'layers'             .or.
+     .                 cfield == 'generic'            .or.
      .                 cfield == 'arbitrary levels'   .or.
      .                 cfield == 'top of atmosphere'  .or.
      .                 cfield == 'model level number' .or.

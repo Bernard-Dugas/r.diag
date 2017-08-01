@@ -147,6 +147,13 @@
 *     ------------------------------------------------
 
 *     $Log: timavg.ptn,v $
+*     Revision 4.41 2017/07/28 17:17  dugas
+*     - Correction aux codages des (HIVAL,LOVAL) de moyennes de
+*       fichiers OLD-STYLE pour les rendre identiques aux autres
+*       codages: Ajouter un offset de DEET/3600 a ces variables.
+*     - Modifications pour supporter des intervals
+*       de sauvetages plus petits qu'une heure
+*
 *     Revision 4.40  2016/10/28 17:46  dugas
 *     Tenir compte des nouvelles options de codages des IP1/2/3.
 *     Ceci a de tres grandes incidences sur la facon dont les
@@ -331,7 +338,7 @@
       LOGICAL     MODTIM,MVALUE,MISSOUT,SQUARE,AVGDATA,
      +            OK,OK2,ACCUM,TIMAX,TIMIN,SAMPLES,ACCOK,
      +            OLDIP3
-      REAL(8)     FNI,HEURE,MISFLAG,EPSILON,EPS,tdiff
+      REAL(8)     FNI,HEURE,MISFLAG,EPSILON,EPS,tdiff,H0
       REAL        ZERO, HIVALi,LOVALi,
      +            HIVALA(MAXLEV),LOVALA(MAXLEV),
      +            HIVALB(MAXLEV),LOVALB(MAXLEV),
@@ -1319,10 +1326,6 @@
 
           CALL DIFDATR( DATEAF,DATEAI,HEURE )
 
-          IF (OLDIP3 .AND. AVGDATA)                            THEN
-              HIVAL = HEURE ; LOVAL = 0.
-          END IF
-
           IF (DEET.NE.0)                                       THEN
 
 ***            PUT VALIDITY DATE OF FIRST SET IN DATEO. THE
@@ -1334,6 +1337,7 @@
 
               NPAS = NSETS-1
               DEET = NINT( (HEURE*3600._8)/NPAS )
+              H0   =        DEET /3600._8
 
           ELSE
 
@@ -1342,7 +1346,12 @@
 
               NPAS = HEURE
               DEET = 3600
+              H0   = 0
 
+          END IF
+
+          IF (OLDIP3 .AND. AVGDATA)                            THEN
+              HIVAL = HEURE+H0 ; LOVAL = H0
           END IF
 
           CALL PUTHIGH( DATEAI,'DATEO',IBUF )

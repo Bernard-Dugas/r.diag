@@ -87,6 +87,18 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.06  2017/07/28 17:17  dugas
+  ! - Tenir compte d'intervals de sauvetages < 1.0 H
+  ! - Supporter l'implementation des sorties GEM 4.8+ codees avec
+  !   les nouvelles options de codages des IP1/2/3. Celles-ci sont
+  !   maintenant correctement identifiees comme des echantillons.
+  ! - Correction pour le cas d'une moyenne de 2 echantillons
+  ! - Correction aux codages des (HIVAL,LOVAL) de moyennes de
+  !   fichiers OLD-STYLE pour les rendre identiques aux autres
+  !   codages: Ajouter un offset de DELTAT aux deux variables.
+  ! - Modifications pour supporter des intervals
+  !   de sauvetages plus petits qu'une heure
+  !
   ! Revision 1.05  2016/10/28 16:20  dugas
   ! - Tenir compte des nouvelles options de codages des IP1/2/3.
   !   Ceci a de tres grandes incidences sur la facon dont les
@@ -924,7 +936,9 @@
              (k3set(ii)        == KIND_SAMPLES  .and. &
               vip3s(ii)        >  0.)                 &
          .or.                                         &
-             (.not.noIP3 .and.fset(ii) >  0) )             then
+             (.not.noIP3                        .and. &
+              fset(ii)         >  0             .and. &
+              rkind(ii)        <  0))                      then
 
               ! On suppose que c'est une moyenne
               if (ii == start)                             then
@@ -952,6 +966,7 @@
               Sample = Faux
 
           else
+
               ! On suppose que c'est un echantillon
               if (ii == start)                             then
                   tdiff = npas*DBLE( deet )/3600
@@ -967,119 +982,125 @@
                       call difdatr( datev,datevf  ,tdiff ) ; if (tdiff > 0._8) datevf = datev
                   end if
               end if
+
               Sample = Vrai
+
           end if
 
-          if (rkind(ii)  == KIND_HOURS)                    then
+          if (.not.Sample)                                 then
+
+              if (rkind(ii)  == KIND_HOURS)                then
               ! Interval de temps.
               !  On suppose que c'est le debut d'un interval deja
               !  moyenne lorsque (HIVAL-LOVAL) corresponds a
               !  (NPAS+1)*DEET a 5 secondes pres. On doit aussi
               !  tenir compte de la limite de 2**24-1 de DEET et
               !  des ajustements qui auraient pu etre appliques.
-              if (npas_deet == time_range_5)             then
-                  kcode = 1
-              else &
-              if (mod( pas(ii),60 ) == 0 .and. &
-                  npas_deet60 == time_range_5)           then
-                  pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60 ; kcode = 1
-              else &
-              if (mod( pas(ii),3600 ) == 0 .and. &
-                  npas_deet3600 == time_range_5)         then
-                  pas(ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*3600 ; kcode = 1
-              end if
-              if (kcode == 1)                              then
-                  mdiag   = pas(ii)+1
-                  hival  = max( hival, hiset(ii) ) ; heures = hiset(ii)-loset(ii)
-                  loval  = min( loval, loset(ii) ) ; deltat = nint( time_range/(mdiag-1) )
-              end if
-          else if (rkind(ii)  /= -1)                       then
+                  if (npas_deet == time_range_5)           then
+                      kcode = 1
+                  else &
+                  if (mod( pas(ii),60 ) == 0 .and. &
+                      npas_deet60 == time_range_5)         then
+                      pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60 ; kcode = 1
+                  else &
+                  if (mod( pas(ii),3600 ) == 0 .and. &
+                      npas_deet3600 == time_range_5)       then
+                      pas(ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*3600 ; kcode = 1
+                  end if
+                  if (kcode == 1)                          then
+                      mdiag   = pas(ii)+1 ; deltat = nint( dble( time_range_5 )/(mdiag-1) ) / 720.0
+                      hival  = max( hival, hiset(ii) ) ; heures = hiset(ii)-loset(ii)
+                      loval  = min( loval, loset(ii) )
+                  end if
+              else if (rkind(ii)  /= -1)                   then
               ! Interval de coordonee verticale. IP3 indisponible.
               !  Est-ce que IP2 est deja code en heures
               !  ou bien en un nombre d'echantillons ?
               ! Verifier en premier pour un codage NEW-STYLE ...
-              call diag_convip_plus( heure(ii),vip2,ikind,-2,nuls,.false. ) 
-              if (ikind == KIND_HOURS)                     then 
-                  vip2_5 = nint( vip2 * 720.0_8, 8 )
-                  if (npasp1_deet == vip2_5)               then
+                  call diag_convip_plus( heure(ii),vip2,ikind,-2,nuls,.false. ) 
+                  if (ikind == KIND_HOURS)                 then 
+                      vip2_5 = nint( vip2 * 720.0_8, 8 )
+                      if (npasp1_deet == vip2_5)           then
                       ! IP2 est encode en heures et cette derniere
                       !  valeur est egale a (NPAS+1)*DEET/3600 ...
-                      mdiag = pas(ii)+1 ; kcode = 2
-                  else &
-                  if (npasp1_deet60 == vip2_5)             then
+                          mdiag = pas(ii)+1 ; kcode = 2
+                      else &
+                      if (npasp1_deet60 == vip2_5)         then
                       ! ou bien a ((NPAS/60)+1)*(DEET*60)/3600 ...
-                      pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60
-                      mdiag = pas(ii)+1 ; kcode = 2
-                  else &
-                  if (npasp1_deet3600 == vip2_5)           then
+                          pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60
+                          mdiag = pas(ii)+1 ; kcode = 2
+                      else &
+                      if (npasp1_deet3600 == vip2_5)       then
                       ! ou bien a ((NPAS/3600)+1)*(DEET*3600)/3600.
-                      pas(ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*3600
-                      mdiag = pas(ii)+1 ; kcode = 2
-                  end if
-                  if (kcode == 2)                          then
-                       mdiag  = heure(ii) ; heures = vip2 ; deltat = delt(ii)/3600._8
-                  end if
-              else &
-              if (ikind == KIND_SAMPLES)                   then
+                          pas(ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*3600
+                          mdiag = pas(ii)+1 ; kcode = 2
+                      end if
+                      if (kcode == 2)                      then
+                          mdiag  = heure(ii) ; heures = vip2 ; deltat = delt(ii)/3600._8
+                      end if
+                  else &
+                  if (ikind == KIND_SAMPLES)               then
                   ! IP2 est deja code en nombre d'echantillons
-                  mdiag = nint( vip2 ) ; kcode = 3
-                  heures = pas(ii)*dble( delt(ii) )/3600.
-                  deltat = nint( heures/(vip2-1) )
-              else
-                  if (heure(ii) == pas(ii)+1)              then
+                      mdiag = nint( vip2 ) ; kcode = 3
+                      heures = pas(ii)*dble( delt(ii) )/3600.
+                      deltat = nint( (heures*720.)/(vip2-1) ) / 720.0_8
+                  else
+                      if (heure(ii) == pas(ii)+1)          then
                       ! Codage de type OLD-STYLE. Notons que ceci
                       ! n'est pas le codage "standard" de IP2. On suppose
                       ! alors qu'on a mis le nombre d'echantillon dans IP2
                       ! lorsque IP2 = NPAS+1 ...
-                      heures = dble( npasp1_deet )/720._8 ; kcode = 4
-                  else &
-                  if (mod( pas(ii),60 ) == 0 .and. &
-                      heure(ii) == (pas(ii)/60)+1)         then
+                          heures = dble( npasp1_deet )/720._8 ; kcode = 4
+                      else &
+                      if (mod( pas(ii),60 ) == 0 .and. &
+                          heure(ii) == (pas(ii)/60)+1)     then
                       ! ... ou bien lorsque IP2 = NPAS/60 + 1 ...
-                      heures = dble( npasp1_deet60 )/720._8 ; kcode = 4
-                      pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60
-                  else &
-                  if (mod( pas(ii),3600 ) == 0 .and. &
-                      heure(ii) == (pas(ii)/3600)+1)       then
+                          heures = dble( npasp1_deet60 )/720._8 ; kcode = 4
+                          pas(ii) = pas(ii)/60 ; delt(ii) = delt(ii)*60
+                      else &
+                      if (mod( pas(ii),3600 ) == 0 .and. &
+                          heure(ii) == (pas(ii)/3600)+1)   then
                       ! ... ou bien lorsque IP2 = NPAS/3600 + 1.
-                      heures = dble( npasp1_deet3600 )/720._8 ; kcode = 4
-                      pas(ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*60
+                          heures = dble( npasp1_deet3600 )/720._8 ; kcode = 4
+                          pas( ii) = pas(ii)/3600 ; delt(ii) = delt(ii)*3600
+                      end if
                   end if
-              end if
-              if (kcode == 4) deltat = delt(ii)/3600._8
-          else &
-          if (.not.NoIP3)                                  then
+                  if (kcode == 4) deltat = delt(ii)/3600._8
+              else &
+              if (.not.NoIP3)                              then
               ! IP3 est "libre". On suppose qu'il contient alors
               !  un nombre d'echantillons, possiblement code en
               !  mode KIND_SAMPLES. Sinon, on ignore tout codage
-              if (fset(ii) > 32767)                        then
+                  if (fset(ii) > 32767)                    then
                   ! call diag_convip_plus( fset(ii),vip3,ikind,-2,nuls,.false. )
-                  if (k3set(ii) == KIND_SAMPLES)           then
-                      kcode = 5 ; mdiag = nint( vip3s(ii) )
-                      if (k2set(ii) == KIND_HOURS)         then
-                          heures = vip2s(ii) ; deltat = nint( heures/mdiag )
+                      if (k3set(ii) == KIND_SAMPLES)       then
+                          kcode = 5 ; mdiag = nint( vip3s(ii) )
+                          if (k2set(ii) == KIND_HOURS)     then
+                              heures = vip2s(ii) ; deltat = heures/mdiag
+                          end if
+                      else  ! Premier mode de compatibilite arriere
+                          kcode = 6 ; mdiag = fset(ii) ; OldIP3 = .true.
                       end if
-                  else  ! Premier mode de compatibilite arriere
-                      kcode = 6 ; mdiag = fset(ii) ; OldIP3 = .true.
+                  else if (fset(ii) > 0)                   then
+                  ! Pas de codage, mais IP3 est non nul. On prends IP3 tel
+                  ! quel. Ceci est un second mode de compatibilite arriere
+                      kcode = 7 ; mdiag = fset(ii) ; OldIP3 = .true.
                   end if
-              else if (fset(ii) > 0)                       then
-                 ! Pas de codage, mais IP3 est non nul. On prends IP3 tel
-                 ! quel. Ceci est un second mode de compatibilite arriere
-                  kcode = 7 ; mdiag = fset(ii) ; OldIP3 = .true.
+                  if ((kcode == 5 .and. k2set(ii) /= KIND_HOURS) &
+                 .or.  kcode == 6 &
+                 .or.  kcode == 7)                         then
+                      heures = nint( pas(ii)*dble( delt(ii) )/5., 8 )/720._8 
+                      deltat = heures/(mdiag-1)
+                  end if
               end if
-              if ((kcode == 5 .and. k2set(ii) /= KIND_HOURS) &
-             .or.  kcode == 6 &
-             .or.  kcode == 7)                             then
-                  heures = nint( pas(ii)*dble( delt(ii) )/5., 8 )/720._8 
-                  deltat = nint( heures/(mdiag-1) )
-              end if
-          end if
 
-          if (OldIP3 .and. rkind (i) >=0)                  then
-              write(6,6016) start,i,trim( chaine(i) )
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
-              if (box) nil = exfin( 'Fstmdiag','Erreur 16','NON' )
-              call quit( ' Fstmdiag ',16 )
+              if (OldIP3 .and. rkind (i) >=0)              then
+                  write(6,6016) start,i,trim( chaine(i) )
+                  ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+                  if (box) nil = exfin( 'Fstmdiag','Erreur 16','NON' )
+                  call quit( ' Fstmdiag ',16 )
+              end if
+
           end if
 
           mdiag = max( 1, mdiag )
@@ -1091,7 +1112,7 @@
               
               if (mdiag > 1)                               then
                   ip2tot = ip2tot + mdiag
-              else if (nr > 1)                             then
+              else if (nr >= 1)                            then
                   if (nr == ns)                            then
                       deltat = nint( pas(ii)*dble( delt(ii) )/5., 8 )/720._8 - heures
                   else
@@ -1102,7 +1123,7 @@
               heures = pas(ii)*DBLE( delt(ii) )/3600
 
               if (ii == start)                             then
-                  if (HIVAL >= 0.0)                        then
+                  if (HIVAL >= 0.0 .and. .not.Sample)      then
                       heuremax = HIVAL
                       heuremin = LOVAL 
                   else
@@ -1114,7 +1135,7 @@
                       end if
                   end if
               else 
-                  if (hiset(ii) >= 0.0)                    then
+                  if (hiset(ii) >= 0.0 .and. .not.Sample)  then
                       heuremax = max( DBLE( hiset(ii) ), heuremax )
                       heuremin = min( DBLE( loset(ii) ), heuremin )
                   else if (datev /= datev0)                then
@@ -1176,9 +1197,9 @@
               call difdatr( datevf,datevi,heures )
               
               if (ii == start)                             then
-                  heuremin = 0 ; heuremax = heures
+                  heuremin = deltat ; heuremax = heures+deltat
               else 
-                  heuremax = max( heures, heuremax )
+                  heuremax = max( heures+deltat, heuremax )
               end if
 
           else
@@ -1234,7 +1255,7 @@
 
       if (ns > 1)                                          then
           if (deltat > 0.0_8 .and. &
-              heures*720 == deltat*(ns-1)*720)             then
+              nint( heures*720, 8 ) == nint( deltat*(ns-1)*720, 8 )) then
               deet = nint( deltat*3600. )
               npas = ns-1 ; Complet = Vrai
           else if (datevi == datevf)                       then
@@ -1283,8 +1304,9 @@
           end if
           npas = ns-1 ; deet = nint( 3600*(HIVAL-LOVAL)/npas )
       else &
-      if (Complet2 .and. .not.NoIP3 .and. &
-          heuremax > heuremin .and. &
+      if (Complet2                  .and. &
+         (Sample   .or. .not.NoIP3) .and. &
+         (heuremax  >     heuremin) .and. &
          (RANGE_KIND == -1 .or. RANGE_KIND == KIND_HOURS)) then
           ! Coder (heuremax,heuremin) dans (IP2,IP3)
           RP1%hi = vip1     ; RP1%lo = vip1    ; RP1%kind = k1
