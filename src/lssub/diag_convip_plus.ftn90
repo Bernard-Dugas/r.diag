@@ -62,6 +62,8 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !                             - Mofifier usage de KINDP. Ajouter kind=1003,2001,5003,5004 ==> 1,2,5,5
 !                             - Ajouter les routines ENCODE_RANGE/DECODE_RANGE
 !     Revision 016  B, Dugas  - Modifier la documentation pour tenir compte de kind=5005
+!     Revision 017  B, Dugas  - Corriger la declaration de la limite superieure du mode dans
+!                               la routine interne conv_kind_15 (idem dans convip_plus)
 !
 !     Input:    MODE = -2, de IP -->  P (sans definir zzvkind)
 !               MODE = -1, de IP -->  P
@@ -459,7 +461,7 @@ function conv_kind_15(p,mykind,ip,mode) result(status) ! convert kind = 15 and s
   implicit none
   integer :: status
   integer, intent(INOUT) :: mykind,ip
-  integer, intent(IN) :: mode ! -1, 1, 2, 3 (see convip code for meaning of mode)
+  integer, intent(IN) :: mode ! -1, 1, 2, 3 (see Diag_convip_plus code for meaning of modes)
   real, intent(INOUT) :: p
 !
   type e15
@@ -469,7 +471,7 @@ function conv_kind_15(p,mykind,ip,mode) result(status) ! convert kind = 15 and s
   end type
   type(e15), dimension(2), save :: t15 = & 
          (/ &
-         e15(       0, 20000000,      0), &     ! values between 0 and 1 999 999    (kind 15)
+         e15(       0,  2000000,      0), &     ! values between 0 and 1 999 999    (kind 15)
          e15(16000000, 15000001,  -1000)  &     ! values between -1000 and 998 999 (kind 31) ! entries swapped to deactivate
          /)
   integer :: i, subt, ipv
