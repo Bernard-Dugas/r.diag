@@ -147,6 +147,12 @@
 *     ------------------------------------------------
 
 *     $Log: timavg.ptn,v $
+*     Revision 4.42 2017/08/10 10:10  dugas
+*     Ajouter le traitement d'echantillons d'analyses pour
+*      lesquelles DEET=0. Le resultat est similaire a ceux
+*      obtenus avec les autres type de donnees... IP2/IP3
+*      contient alors l'interval des heures d'analyses, etc.
+*
 *     Revision 4.41 2017/07/28 17:17  dugas
 *     - Correction aux codages des (HIVAL,LOVAL) de moyennes de
 *       fichiers OLD-STYLE pour les rendre identiques aux autres
@@ -943,6 +949,13 @@
                               LOVAL(K) = HEURE ; HIVAL(K) = LOVAL(K)
                           END IF
                       END DO
+                  ELSE
+                      ! Initialize the active (HIVAL,LOVAL).
+                      DO  K=1,NSET
+                          IF (RKIND(K) == -1)                  THEN
+                              LOVAL(K) = 0.0 ; HIVAL(K) = LOVAL(K)
+                          END IF
+                      END DO
                   END IF
               END IF
 
@@ -1090,26 +1103,42 @@
                           LOVALB(K) = HEURE ; HIVALB(K) = LOVALB(K)
                       END IF
                   END DO
-              END IF
-              IF (AVGDATA)                                 THEN
+              ELSE
                   ! Possibly redefine DATEAI and/or DATEAF.
-                  IF (DATEO /= DATEAI)                     THEN
+                  IF (DATEO /= DATEI)                          THEN
+                      CALL DIFDATR( DATEO,DATEI,tdiff )
+                      IF (TDIFF < 0._8) DATEI = DATEO
+                  END IF
+                  IF (DATEO /= DATEF)                          THEN
+                      CALL DIFDATR( DATEO,DATEF,tdiff )
+                      IF (TDIFF > 0._8) DATEF = DATEO
+                  END IF
+                  CALL DIFDATR( DATEF,DATEI,tdiff )
+                  ! Set HIVALB-LOVALB = DATEF-DATEI
+                  DO  K=1,NSET
+                      IF (RKIND(K) == -1) LOVALB(K) = 0
+                      IF (RKIND(K) == -1) HIVALB(K) = tdiff
+                  END DO
+              END IF
+              IF (AVGDATA)                                     THEN
+                  ! Possibly redefine DATEAI and/or DATEAF.
+                  IF (DATEO /= DATEAI)                         THEN
                       CALL DIFDATR( DATEO,DATEAI,tdiff )
                       IF (TDIFF < 0._8) DATEAI = DATEO
                   END IF
                   IF (HEURE > 0.0_8) CALL INCDATR(DATEV,DATEO,HEURE )
-                  IF (DATEV /= DATEAF)                     THEN
+                  IF (DATEV /= DATEAF)                         THEN
                       CALL DIFDATR( DATEV,DATEAF,tdiff )
                       IF (TDIFF > 0._8) DATEAF = DATEV
                   END IF
-              ELSE
+              ELSE IF (DEETB /= 0)                             THEN
                   ! Possibly redefine DATEI and/or DATEF.
                   IF (HEURE > 0.0_8) CALL INCDATR( DATEV,DATEO,HEURE )
-                  IF (DATEV /= DATEI)                     THEN
+                  IF (DATEV /= DATEI)                          THEN
                       CALL DIFDATR( DATEV,DATEI,tdiff )
                       IF (TDIFF < 0._8) DATEI = DATEV
                   END IF
-                  IF (DATEV /= DATEF)                     THEN
+                  IF (DATEV /= DATEF)                          THEN
                       CALL DIFDATR( DATEV,DATEF,tdiff )
                       IF (TDIFF > 0._8) DATEF = DATEV
                   END IF
@@ -1210,7 +1239,7 @@
 
       NSAMP(1:NSET) = NSAMP(1:NSET)+NSAMPB(1:NSET)
 
-      IF (DEETB /= 0)                                          THEN
+    ! IF (DEETB /= 0)                                          THEN
           IF (NSETS == 0)                                      THEN
               HIVAL(1:NSET) = HIVALB(1:NSET)
               LOVAL(1:NSET) = LOVALB(1:NSET)
@@ -1218,7 +1247,7 @@
               HIVAL(1:NSET) = MAX( HIVAL(1:NSET),HIVALB(1:NSET) )
               LOVAL(1:NSET) = MIN( LOVAL(1:NSET),LOVALB(1:NSET) )
           END IF
-      END IF
+    ! END IF
 !     DO  K=1,NSET
 !         IF (DEETB /= 0)                                      THEN
 !             HIVAL(K) = MAX( HIVAL(K),HIVALB(K) )
@@ -1326,7 +1355,8 @@
 
           CALL DIFDATR( DATEAF,DATEAI,HEURE )
 
-          IF (DEET.NE.0)                                       THEN
+        ! IF (DEET.NE.0)                                       THEN
+          IF (HEURE /= 0.0_8)                                  THEN
 
 ***            PUT VALIDITY DATE OF FIRST SET IN DATEO. THE
 ***            SAMPLE SIZE SAVED NPAS+1 AND THE NUMBER OF

@@ -99,6 +99,9 @@
 *     -------------------------------------------------------------
 
 *     $Log: ggtrig.ptn,v $
+*     Revision 4.16  2017/08/14 14:14:14  dugas
+*     Ajouter le support des grilles Z de support N et S.
+*
 *     Revision 4.15  2015/01/22 21:44:36  dugas
 *     Ajouter le support des grilles de type N et S.
 *
@@ -398,31 +401,53 @@
 
                   CALL GETZDES( ZTYP, ZIG1,ZIG2,ZIG3,ZIG4, DIMX,DIMY )
 
-                  IF (DIMX.NE.NLON .OR.
-     +                DIMY.NE.NLAT) CALL           XIT(' Ggtrig ',-6 )
+                  IF (ZTYP == 'E')                             THEN
 
-                  IF (LGEO)                                    THEN
-                      CALL CIGAXG( ZTYP, DLAT1,DLON1,DLAT2,DLON2,
-     +                                   ZIG1,ZIG2,ZIG3,ZIG4 )
-                      CALL D_ROTA( LONR,LATR, VALX,VALY, 
-     +                             DLON1,DLAT1,DLON2,DLAT2,
-     +                             XLON0,XLAT0, NLON,NLAT )
-                  ELSE
-                      IJ = 0
+                      IF (DIMX.NE.NLON .OR.
+     +                    DIMY.NE.NLAT) CALL       XIT(' Ggtrig ',-6 )
+
+                      IF (LGEO)                                    THEN
+                          CALL CIGAXG( ZTYP, DLAT1,DLON1,DLAT2,DLON2,
+     +                                       ZIG1,ZIG2,ZIG3,ZIG4 )
+                          CALL D_ROTA( LONR,LATR, VALX,VALY, 
+     +                                 DLON1,DLAT1,DLON2,DLAT2,
+     +                                 XLON0,XLAT0, NLON,NLAT )
+                      ELSE
+                          IJ = 0
+                          DO  J=1,NLAT
+                              DO  I=1,NLON
+                                  IJ = IJ+1
+                                  LATR(IJ) = VALY(J)
+                              END DO
+                          END DO
+                          IJ = 0
+                          DO  J=1,NLAT
+                              DO  I=1,NLON
+                                  IJ = IJ+1
+                                  LONR(IJ) = VALX(I)
+                              END DO
+                          END DO
+                      END IF
+
+                  ELSE IF (ZTYP == 'N' .OR. ZTYP == 'S')       THEN
+
+                     ! Grille Z a support PS.
+
+                       CALL CIGAXG( ZTYP, xip, xjp, d60, dgrw ,
+     +                                    ZIG1,ZIG2,ZIG3,ZIG4  )
+
                       DO  J=1,NLAT
+                          Y  = VALY(J)-XJP
+                          JR = (J-1)*NLON
                           DO  I=1,NLON
-                              IJ = IJ+1
-                              LATR(IJ) = VALY(J)
+                              X = VALX(I)-XIP 
+                              K = JR+I
+                              CALL LLFXY( LATR(K),LONR(K),
+     +                                    X,Y,D60,DGRW,NHEM ) 
                           END DO
                       END DO
-                      IJ = 0
-                      DO  J=1,NLAT
-                          DO  I=1,NLON
-                              IJ = IJ+1
-                              LONR(IJ) = VALX(I)
-                          END DO
-                      END DO
-                  ENDIF
+ 
+                  END IF
 
               ELSE IF ((GRTYP == 'N'  .OR. GRTYP == 'S')
      +       .AND.     (NEW           .OR. NHEM /= NHEM0

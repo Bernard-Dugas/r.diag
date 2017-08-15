@@ -23,6 +23,12 @@
 C
 C     $Log: put.ftn,v $
 C     Revision 3.51  2016/10/25 14:44  dugas
+C     - Modifications a PUTSAMPLZ pour possiblement sauver l'interval
+C       des echeances dans IP2 pour des ensembles tous valides au
+C       meme moment (i.e. DEET=0). Le nombre d'echantillons
+C       etait deja sauve dans ip3 dans cette situation.
+C
+C     Revision 3.51  2016/10/25 14:44  dugas
 C     - La variable HEAD passe de 28 a 32
 C     - Modifications syntaxiques de type F77 --> F90
 C     - Ajouter les arguments RKIND,HIVAL et LOVAL a PUTMSET3 qui utilise
@@ -1813,7 +1819,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
       
       ! Auteur: B. Dugas (UQAM/RPN)
 
-      ! Revision: version original, septembre 2016. 
+      ! Revision: septembre 2016, version originale
 
       use          diag_convert_ip123
 
@@ -1855,12 +1861,12 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
      +            NINT( dble( HIVAL-LOVAL )*720., 8) )
 
       IF (COMPLET .and. HIVAL > LOVAL .and.
-     +   (RANGE_KIND == -1 .or. RANGE_KIND == KIND_HOURS))                         THEN
+     +   (RANGE_KIND == -1 .or. RANGE_KIND == KIND_HOURS))     THEN
           ! Coder (ou re-coder) (HIVAL,LOVAL) dans (IP2,IP3)
           RP1%hi = 0.0   ; RP1%lo = 0.0   ; RP1%kind = KIND_PRESSURE
           RP2%hi = HIVAL ; RP2%lo = LOVAL ; RP2%kind = KIND_HOURS
           stat = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 ) 
-          IF (stat == CONVERT_ERROR)                                               THEN
+          IF (stat == CONVERT_ERROR)                           THEN
               IF (INFO) \
                   WRITE(6,6001) stat,RP2%hi,RP2%lo,RP2%kind
               CALL                                 XIT('PutSamplZ',-1 )
@@ -1869,19 +1875,26 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
           CALL PUTHIGH( IP3       ,'IP3'  ,IBUF )
           CALL PUTHIGH( KIND_HOURS,'RKIND',IBUF )
       ELSE
-     +IF (RANGE_KIND >= 0 .AND. RANGE_KIND /= KIND_HOURS)                          THEN
+     +IF (RANGE_KIND >= 0 .AND. RANGE_KIND /= KIND_HOURS)      THEN
           ! Interval de coordonee verticale dans IP1 et IP3.
           ! On a mets le nombre d'echantillon dans IP2.
           CALL Diag_CONVIP_plus( IP2,FLOAT( NSAMPZ ),
      +                           kIND_SAMPLES,+2,NULS,.FALSE. )
           CALL PUTHIGH( IP2,'IP2',IBUF )
       ELSE
-     +IF (NSAMPZ < 2 000 000)                                                     THEN 
-          ! HIVAL = LOVAL et IP2 et IP3 sont "libres". On place
-          !  le nombre d'echantillons code en mode KIND_SAMPLES
-          !  dans IP3 et IP2=NSAMPZ*DEET ou on suppose que DEET
-          !  contient l'interval entre les echantillons
-          HOLD = NSAMPZ*DBLE( DEET )/3600.
+     +IF (NSAMPZ < 2 000 000)                                  THEN 
+          ! IP2 et IP3 sont "libres". On place le nombre d'echantillons
+          !  codes en mode KIND_SAMPLES dans IP3 et IP2=(HIVAL-LOVAL)
+          !  ou bien (NSAMPZ*DEET), lorsque HIVAL=LOVAL. Dans ce
+          !  dernier cas, on suppose que DEET contient
+          !  l'interval entre les echantillons.
+          IF (HIVAL >= 0.0  .AND.
+     +        LOVAL >= 0.0  .AND.
+     +        HIVAL /= LOVAL)                                  THEN
+              HOLD   = HIVAL - LOVAL
+          ELSE
+              HOLD   = NSAMPZ * DBLE( DEET ) / 3600.
+          END IF
           IF (HOLD <= 1000000.)
      +    CALL Diag_CONVIP_plus( IP2,HOLD,kIND_HOURS,+2,NULS,.FALSE. )
           CALL Diag_CONVIP_plus( IP3,FLOAT( NSAMPZ ),
@@ -1889,7 +1902,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
           CALL PUTHIGH( IP2,'IP2',IBUF )
           CALL PUTHIGH( IP3,'IP3',IBUF )
       ELSE
-     +IF (2 000 000 <= NSAMPZ .AND. NSAMPZ < 254903968)                           THEN
+     +IF (2 000 000 <= NSAMPZ .AND. NSAMPZ < 254903968)        THEN
           ! Ecrire NSAMPZ en format non-code dans IP3. IP2 = 0
           IP3 = NSAMPZ ; IP2 = 0
           CALL PUTHIGH( IP2,'IP2',IBUF )
