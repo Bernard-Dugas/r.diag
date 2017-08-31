@@ -10,7 +10,7 @@
  This toolkit was originally derived from an early 1990's unix port
  of the then CRAY version of the CCCma diagnostic toolkit. Additional
  code produced at UQAM for diagnostics of regional climate data in
- the late 1990's is also included in the toolbox.
+ the late 1990's is also included in the toolkit.
 
  The GEM toolkit is built in the R.DIAG executable binary. The
  toolkit commands can be grouped under several themes or section.
@@ -49,17 +49,20 @@
  The default Makefile target ("allbin") attempts to generate the
  libraries and executables, after checking that the initial setup
  has been done. The "all" target includes the "allbin" and "document"
- targets. The "export" target copies the final products to the parent
- directory. The working directory that holds the package is assumed
- to be just that, somewhere users may not be too confortable.
- The package implicitely assumes that make=gmake.
+ targets. The "document" target extracts the documentation headers
+ from the different sources files to the man/pdoc sub-directory.
+ The "export" target copies the final products to the parent directory.
+ The "web-document" target pushes the documentation to $HOSTWEB:$DIAGWEB.
+ The git working directory that holds the package is assumed to be just
+ that, somewhere users may not be too confortable. The package
+ implicitely assumes that make=gmake.
 
  To generate the toolkit executable, the RPN/CMC development environment
  has to be installed and active (see mfvalin/rmnlib on github.com). As
  well, a VgridDescriptors package compatible with the current GEM v4+
  model version has to be available. Furthermore, to generate the two
  cdf2xxx executables, the NetCDF (v3 or v4) and UdUnits v2 library
- packages also have to available. These in turn require the hdf5, dl,
+ packages also have to be available. These in turn require the hdf5, dl,
  and z libraries (if NetCDF v4 is used) and the expat library (for
  UdUnits v2). The current configuration assumes that the the NetCDF
  v4 package is used and that the netcdff library is provided as a SSM
@@ -88,5 +91,5 @@
  Software Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : May 2017
+ Last revision : August 2017
 

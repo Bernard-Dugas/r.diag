@@ -46,7 +46,7 @@ GRAFLIB =
 
 #FIXES   = $(PWD)/lib/$(EC_ARCH)/stubs.o
 
-# (obsolete) WEB Host Server for the documentation
+# WEB Host Server for the documentation
 
 HOSTWEB = pascal
 DIAGWEB = public_html
