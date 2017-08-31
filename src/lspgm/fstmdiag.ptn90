@@ -87,6 +87,9 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.08  2017/08/31 08:08  dugas
+  ! - Correction a la re-definition de name2 lorsque dest=src(1)
+  !
   ! Revision 1.07  2017/08/10 10:10  dugas
   ! - Ajouter le traitement d'echantillons d'analyses
   !   pour lesquelles DEET=0. Le resultat est similaire
@@ -452,9 +455,9 @@
               call quit( ' Fstmdiag ',3 )
           end if
 
-          if (nbr == 1 .and. def1(1) == def1(NBRARGS+1)) name2 = name1(nbr) ! Re-Definir name2
-
       end if
+
+      if (nbr == 1 .and. def1(1) == def1(NBRARGS+1)) name2 = name1(nbr) ! Re-Definir name2
 
       if (ftyp1 /= 1 .and. ftyp1 /= 33)                    then
 
