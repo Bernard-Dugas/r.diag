@@ -64,6 +64,8 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !     Revision 016  B, Dugas  - Modifier la documentation pour tenir compte de kind=5005
 !     Revision 017  B, Dugas  - Corriger la declaration de la limite superieure du mode dans
 !                               la routine interne conv_kind_15 (idem dans convip_plus)
+!     Revision 018  B, Dugas  - Renommer conv_kind_15 et value_to_string a
+!                               diag_conv_kind_15 et diag_value_to_string
 !
 !     Input:    MODE = -2, de IP -->  P (sans definir zzvkind)
 !               MODE = -1, de IP -->  P
@@ -184,7 +186,7 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !
       if(NEWENCODING)then    ! new style encoding
           if(iand(kind,15) == 15) then  ! kind 15 and subkinds done elsewhere (pure integers)
-            status = conv_kind_15(p,kind,ip,mode)
+            status = diag_conv_kind_15(p,kind,ip,mode)
             return
           endif
           if (p .lt. low_val(kind) .or. p .gt. hi_val(kind)) then
@@ -285,7 +287,7 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
           p = 0.0
           kind = iand(15,ishft(ip,-24))
           if(kind == 15) then  ! type 15 et associes traite a part
-             if(conv_kind_15(p,kind,ip,mode) /= 0) goto 777  ! il y a une erreur de decodage pour ip
+             if(diag_conv_kind_15(p,kind,ip,mode) /= 0) goto 777  ! il y a une erreur de decodage pour ip
           else
              if ( .not. validkind(kind) ) goto 777
              !
@@ -314,7 +316,7 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
           endif
           if (flag) then  ! convert P into a formatted string with appropriate units for kind
              string2=""
-             status=value_to_string(p , string2 , min(len(string2),len(string)-3) )
+             status=diag_value_to_string(p , string2 , min(len(string2),len(string)-3) )
              string=trim(string2)//' '//kinds(kind)
           endif
       elseif (  12000 .lt. ip .and. ip .le. 32000) then  !  ...  hauteur old style ...
@@ -457,7 +459,7 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !=========================== start of private function =========================================
 contains
 !===============================================================================================
-function conv_kind_15(p,mykind,ip,mode) result(status) ! convert kind = 15 and subkinds
+function diag_conv_kind_15(p,mykind,ip,mode) result(status) ! convert kind = 15 and subkinds
   implicit none
   integer :: status
   integer, intent(INOUT) :: mykind,ip
@@ -506,12 +508,12 @@ function conv_kind_15(p,mykind,ip,mode) result(status) ! convert kind = 15 and s
   endif
 ! total failure if we get here
   return
-end function conv_kind_15
+end function diag_conv_kind_15
 !===============================================================================================
 ! SUMMARY
 ! write value val into string using at most maxlen characters
 ! SYNOPSIS
-integer function value_to_string(val,string,maxlen)
+integer function diag_value_to_string(val,string,maxlen)
 ! AUTHOR
 !  M.Valin 2013
 !  Revision 001 :  M.Valin  Oct 2013 alignement a droite corrige pour valeurs entieres > 0
@@ -541,7 +543,7 @@ integer function value_to_string(val,string,maxlen)
   value=abs(val)
   after=min(7,maxc-6)
   before=maxc
-  value_to_string=-(100*before+after*10)
+  diag_value_to_string=-(100*before+after*10)
   write(fstring,11)maxc,after    ! default G format
 
   if(value /= 0.0) then
@@ -558,7 +560,7 @@ integer function value_to_string(val,string,maxlen)
     if(value >= grosint) goto 444   ! try something else
     if(val>0) intdig = intdig - 1   ! one less character if number is positive
     write(fstring,12)'(I',min(maxc,intdig),')'    ! use I format
-    value_to_string=min(maxc,intdig)
+    diag_value_to_string=min(maxc,intdig)
     goto 777
   endif
 
@@ -587,7 +589,7 @@ integer function value_to_string(val,string,maxlen)
   if(before+after+2 > maxc) goto 666  ! use G format
 
   before=before+after+2
-  value_to_string=100*before+after*10
+  diag_value_to_string=100*before+after*10
 
   write(fstring,10)before,after       ! use F format
   !print *,'=',trim(fstring)
@@ -623,13 +625,13 @@ integer function value_to_string(val,string,maxlen)
   return
 
   888 continue
-  value_to_string=0
+  diag_value_to_string=0
   return
 
 10 format(2H(F,I2,1H.,I1,1H))
 11 format(2H(G,I2,1H.,I1,1H))
 12 format(A,I2,A)
-end function value_to_string
+end function diag_value_to_string
 
 !===============================================================================================
 !============================= end of private function =========================================

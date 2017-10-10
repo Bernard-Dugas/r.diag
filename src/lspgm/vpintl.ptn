@@ -65,6 +65,9 @@
 *    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
  
 *     $Log: vpintl.ptn,v $
+*     Revision 4.14  2017/10/05 20:20:20  dugas
+*     Correction des sorties en mode ZONL pour fichiers CMC/RPN.
+*
 *     Revision 4.13  2014/09/25 20:20:55  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -336,7 +339,7 @@
               ACC(I) = GG(IL1+I)*DP
   200     CONTINUE
 
-          IF (PKTYP == 'SQ')                                   THEN
+          IF (PKTYP == 'SQ' .AND. TYPE /= 'ZONL')              THEN
               IF (HIVAL == 0.0)
      +        CALL ENCODE_RANGE( HIVAL,LOVAL(TOP),VKIND, IBUF )
               CALL PUTFLD2( 2, ACC, IBUF,MAXW )
@@ -353,7 +356,7 @@
                   ACC(IL1+I) = ACC(IL2+I)+(GG(IL1+I)+GG(IL2+I))*DP
               END DO
 
-              IF (PKTYP == 'SQ')                               THEN
+              IF (PKTYP == 'SQ' .AND. TYPE /= 'ZONL')          THEN
                   CALL ENCODE_RANGE( HIVAL,LOVAL(L),VKIND, IBUF )
                   CALL PUTFLD2( 2, ACC, IBUF,MAXW )
               END IF
@@ -363,8 +366,11 @@
 ***        PUT THE RESULT ONTO FILE 2.
  
           IF (NR.EQ.0) CALL PRTLAB( IBUF )
-          IF (PKTYP /= 'SQ') 
-     +    CALL PUTSET2( 2, ACC, LEV,NLEVG, IBUF,MAXW )
+          IF (PKTYP /= 'SQ' .OR. TYPE == 'ZONL')               THEN
+              IF (PKTYP == 'SQ')
+     +            CALL ENCODE_RANGE( HIVAL,LOVAL(BOT),VKIND, IBUF )
+              CALL PUTSET2( 2, ACC, LEV,NLEVG, IBUF,MAXW )
+          END IF
 
       NSET = NSET+1
       NR   = NR+NLEVG

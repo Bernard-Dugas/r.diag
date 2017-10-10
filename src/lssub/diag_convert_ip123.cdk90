@@ -39,7 +39,11 @@ implicit none
 ! MODIFICATIONS
 !  B.Dugas, October 2016 : Stand-alone (more limited) version for use in
 !                          R.DIAG based on the latest RMNLIB version
-!                
+!  M.Valin, September 2017 : Patches for climate-mode IP2 values and 
+!                          ensure that different "valid" configurations
+!                          of IP1&3=0 can still generate a GOOD_GUESS
+!  B.Dugas, October 2017 : Rename all of the internal routines to diag_...
+!
 ! EXAMPLES
 !   use ISO_C_BINDING
 !   implicit none
@@ -53,15 +57,15 @@ implicit none
 !   type(FLOAT_IP) :: RP1,RP2,RP3
 !   type(FLOAT_IP), dimension(3) :: VRP123
 !
-!   stat = diag_encode_ip(ip1,ip2,ip3,RP1,RP2,RP3)        ! ip <- multiple FLOAT_IP (encode_ip_0)
-!   stat = diag_encode_ip(vip123,VRP123)                  ! vector version of above (encode_ip_1)
-!   stat = diag_encode_ip(ip1,ip2,ip3,v1,k1,v2,k2,v3,k3)  ! everything explicit     (encode_ip_2)
-!   stat = diag_encode_ip(vip123,v123,vk123)              ! vector version of above (encode_ip_3)
+!   stat = diag_encode_ip(ip1,ip2,ip3,RP1,RP2,RP3)        ! ip <- multiple FLOAT_IP (diag_encode_ip_0)
+!   stat = diag_encode_ip(vip123,VRP123)                  ! vector version of above (diag_encode_ip_1)
+!   stat = diag_encode_ip(ip1,ip2,ip3,v1,k1,v2,k2,v3,k3)  ! everything explicit     (diag_encode_ip_2)
+!   stat = diag_encode_ip(vip123,v123,vk123)              ! vector version of above (diag_encode_ip_3)
 !
-!   stat = diag_decode_ip(RP1,RP2,RP3,ip1,ip2,ip3)        ! ip -> multiple FLOAT_IP (decode_ip_0)
-!   stat = diag_decode_ip(VRP123,vip123)                  ! vector version of above (decode_ip_1)
-!   stat = diag_decode_ip(v1,k1,v2,k2,v3,k3,ip1,ip2,ip3)  ! everything explicit     (decode_ip_2)
-!   stat = diag_decode_ip(v123,vk123,vip123)              ! vector version of above (decode_ip_3)
+!   stat = diag_decode_ip(RP1,RP2,RP3,ip1,ip2,ip3)        ! ip -> multiple FLOAT_IP (diag_decode_ip_0)
+!   stat = diag_decode_ip(VRP123,vip123)                  ! vector version of above (diag_decode_ip_1)
+!   stat = diag_decode_ip(v1,k1,v2,k2,v3,k3,ip1,ip2,ip3)  ! everything explicit     (diag_decode_ip_2)
+!   stat = diag_decode_ip(v123,vk123,vip123)              ! vector version of above (diag_decode_ip_3)
 !
 ! NOTES
 !  the FORTRAN user must include
@@ -75,16 +79,17 @@ implicit none
 
 public  :: diag_encode_ip, diag_decode_ip
 
-private :: encode_ip_0, encode_ip_1, decode_ip_0, decode_ip_1
-private :: encode_ip_2, encode_ip_3, decode_ip_2, decode_ip_3
+private :: diag_encode_ip_0, diag_encode_ip_1, diag_decode_ip_0, diag_decode_ip_1
+private :: diag_encode_ip_2, diag_encode_ip_3, diag_decode_ip_2, diag_decode_ip_3
 
-!****T* rmnlib/FLOAT_IP
 ! SYNOPSIS
-type, BIND(C)  :: FLOAT_IP
-real(C_FLOAT)  :: lo         ! low bound
-real(C_FLOAT)  :: hi         ! high bound
-integer(C_INT) :: kind       ! type code (see table below)
-end type
+! Also defined in "convert_ip123.inc"
+!  as provided by rmnlib
+  type, BIND(C)  :: FLOAT_IP
+   real(C_FLOAT)  :: lo         ! low bound
+   real(C_FLOAT)  :: hi         ! high bound
+   integer(C_INT) :: kind       ! type code (see table below)
+  end type
 ! TABLES
 ! kind     name              description                  range of values
 !
@@ -96,20 +101,23 @@ end type
 !   5  KIND_HYBRID      hybrid coordinates              (0.0 -> 1.0)
 !   6  KIND_THETA       theta coordinates               (1 -> 200,000)
 !  10  KIND_HOURS       time (hours)                    (0.0 -> 1.0e10)
-!  15  KIND_SAMPLES     reserved (integer value)        (0 -> 1 999 999)
+!  15  KIND_SAMPLES     samples (integer value)         (0 -> 1 999 999)
 !  17  KIND_MTX_IND     conversion matrix x subscript)  (1.0 -> 1.0e10)
 !                       (shared with kind=1 
 !  21  KIND_M_PRES      pressure-meters                 (0 -> 1,000,000) fact=1E+4
 !                       (shared with kind=5)
 !
+!   1  TO_IP
+!  -1  TO_RP
+!
 ! return FLAGS for encode/decode functions (more than one flag may be set)
-!  CONVERT_OK     ( 0 = no FLAG set)
-!  CONVERT_GUESS  (= CONVERT_GOOD_GUESS || CONVERT_BAD_GUESS || CONVERT_TERRIBLE_GUESS)
-!  CONVERT_GOOD_GUESS
-!  CONVERT_BAD_GUESS
-!  CONVERT_TERRIBLE_GUESS
-!  CONVERT_WARNING
-!  CONVERT_ERROR
+!   0 CONVERT_OK     (no FLAG set)
+!  14 CONVERT_GUESS  (= CONVERT_GOOD_GUESS || CONVERT_BAD_GUESS || CONVERT_TERRIBLE_GUESS)
+!   2 CONVERT_GOOD_GUESS
+!   4 CONVERT_BAD_GUESS
+!   8 CONVERT_TERRIBLE_GUESS
+!  32 CONVERT_WARNING
+!  64 CONVERT_ERROR
 
 ! NOTES
 !  the FORTRAN user must include
@@ -141,17 +149,17 @@ integer, public, parameter :: KIND_MTX_IND=17
 integer, public, parameter :: KIND_M_PRES=21
 
 interface diag_encode_ip
-module procedure encode_ip_0
-module procedure encode_ip_1
-module procedure encode_ip_2
-module procedure encode_ip_3
+module procedure diag_encode_ip_0
+module procedure diag_encode_ip_1
+module procedure diag_encode_ip_2
+module procedure diag_encode_ip_3
 end interface
 
 interface diag_decode_ip
-module procedure decode_ip_0
-module procedure decode_ip_1
-module procedure decode_ip_2
-module procedure decode_ip_3
+module procedure diag_decode_ip_0
+module procedure diag_decode_ip_1
+module procedure diag_decode_ip_2
+module procedure diag_decode_ip_3
 end interface
 
 integer, private, parameter :: Max_Kind=31
@@ -231,7 +239,7 @@ end subroutine swap
 ! SUMMARY
 ! produce a valid (ip1,ip2,ip3) triplet from (real value,kind) pairs
 ! SYNOPSIS
- FUNCTION encode_ip_0(IP1,IP2,IP3,RP1,RP2,RP3) RESULT(status) BIND (C,name='DiagEncodeIp')
+ FUNCTION diag_encode_ip_0(IP1,IP2,IP3,RP1,RP2,RP3) RESULT(status) BIND (C,name='DiagEncodeIp')
 ! INPUTS
 ! RP1 must contain a level (or a pair of levels) in the atmosphere
 ! RP2 must contain  a time (or a pair of times)
@@ -305,7 +313,7 @@ end subroutine swap
   status=CONVERT_OK
 
   return
-end function encode_ip_0
+end function diag_encode_ip_0
 !===============================================================================================
 !****f* rmnlib/decode_ip_0
 ! SUMMARY
@@ -313,7 +321,7 @@ end function encode_ip_0
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,name='DiagDecodeIp')
+function diag_decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,name='DiagDecodeIp')
 !
 ! INPUTS
 !  ip1/2/3 should be encoded "new style" but old style encoding is accepted
@@ -358,11 +366,11 @@ function decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,name='Di
   if(ip1 < 0 .or. ip2 < 0 .or. ip3 < 0 ) goto 777
 
   call diag_convip_plus(IP1,P(1),kind(1),-2,dummy,.false.)  ! kind of ip1 should be a level
-  if(.not. is_level(kind(1))) goto 777                   ! ip1 is not a level
-  if(0 < ip1 .and. IP1 < 32768) status = ior(status , CONVERT_GOOD_GUESS)  ! reasonable guess if old style level
+  if(.not. is_level(kind(1))) goto 777                      ! ip1 is not a level
+  if(0 < IP1 .and. IP1 < 32768) status = ior(status , CONVERT_GOOD_GUESS)  ! reasonable guess if old style level > 0 (0 is considered NOT_A_GUESS)
   RP1%lo=P(1) ; RP1%hi=P(1) ; RP1%kind=kind(1)
   
-  if(IP2 < 32768) then                          ! IP2 is old style, probably a time value
+  if(IP2 < 32768 .or. (ip3 == 0 .and. IP2 < 999999)) then   ! IP2 is old style, probably a time value
     RP2%lo = IP2 ; RP2%hi = IP2 ; 
     RP2%kind = KIND_HOURS                        ! time in hours ?
     status = ior(status , CONVERT_GOOD_GUESS)    ! reasonable guess
@@ -372,7 +380,7 @@ function decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,name='Di
     RP2%lo=P(2) ; RP2%hi=P(2) ; RP2%kind=kind(2)
   endif
 
-  if(IP3 < 32768) then                          ! IP3 is old style,
+  if(IP3 < 32768 .and. IP3 > 0) then            ! IP3 is old style (0 is considered "new style")
     RP3%lo = IP3 ; RP3%hi = IP3
     if(IP3 <= 240) then                         ! time in hours ?
       RP3%kind = KIND_HOURS 
@@ -391,7 +399,7 @@ function decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,name='Di
     RP2%hi=P(3)
     RP3%lo=0.0 ; RP3%hi=0.0 ; RP3%kind=-1
     if(RP2%hi < RP2%lo) call swap(RP2%lo,RP2%hi)
-  elseif(kind(3)<=6 .and. kind(1)==kind(3)) then ! same level type as ip1
+  elseif(kind(3)<=6 .and. kind(1)==kind(3) .and. IP1 > 0 .and. IP3 > 0) then ! same level type as ip1 (but not both zero)
     RP1%hi=P(3)
     RP3%lo=0.0 ; RP3%hi=0.0 ; RP3%kind=-1
     if(RP1%hi < RP1%lo .and. ascending(kind(3))) call swap(RP1%lo,RP1%hi)
@@ -406,38 +414,38 @@ return
 
 777 status=ior(status,CONVERT_ERROR)
   return
-end function decode_ip_0
+end function diag_decode_ip_0
 !===============================================================================================
 !****f* rmnlib/encode_ip_1
 ! SUMMARY
-! vector version of encode_ip_0
+! vector version of diag_encode_ip_0
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function encode_ip_1(IP,RP) result(status) BIND (C,name='DiagEncodeIp_v')
+function diag_encode_ip_1(IP,RP) result(status) BIND (C,name='DiagEncodeIp_v')
 ! NOTES
-! (see encode_ip_0) 
+! (see diag_encode_ip_0) 
   implicit none  ! coupled (rp1,rp2,rp3) to (ip1,ip2,ip3) conversion with type enforcement
 ! ARGUMENTS
   integer(C_INT) :: status
   integer(C_INT), dimension(3), intent(OUT) :: IP
   type(FLOAT_IP), dimension(3), intent(IN)  :: RP
 ! RESULT
-! same as encode_ip_0
+! same as diag_encode_ip_0
 !******
 
-  status=encode_ip_0(IP(1),IP(2),IP(3),RP(1),RP(2),RP(3))
+  status=diag_encode_ip_0(IP(1),IP(2),IP(3),RP(1),RP(2),RP(3))
 
   return
-end function encode_ip_1
+end function diag_encode_ip_1
 !===============================================================================================
 !****f* rmnlib/decode_ip_1
 ! SUMMARY
-! vector version of decode_ip_0
+! vector version of diag_decode_ip_0
 ! SYNOPSIS
-function decode_ip_1(RP,IP) result(status) BIND (C,name='DiagDecodeIp_v')
+function diag_decode_ip_1(RP,IP) result(status) BIND (C,name='DiagDecodeIp_v')
 ! NOTES
-! (see decode_ip_0) 
+! (see diag_decode_ip_0) 
   implicit none ! coupled (ip1,ip2,ip3) to (rp1,rp2,rp3) conversion with type enforcement
 
 ! ARGUMENTS
@@ -445,13 +453,13 @@ function decode_ip_1(RP,IP) result(status) BIND (C,name='DiagDecodeIp_v')
   integer(C_INT), dimension(3), intent(IN)  :: IP
   type(FLOAT_IP), dimension(3), intent(OUT) :: RP
 ! RESULT
-! same as decode_ip_0
+! same as diag_decode_ip_0
 !******
 
-  status=decode_ip_0(RP(1),RP(2),RP(3),IP(1),IP(2),IP(3))
+  status=diag_decode_ip_0(RP(1),RP(2),RP(3),IP(1),IP(2),IP(3))
 
 return
-end function decode_ip_1
+end function diag_decode_ip_1
 !===============================================================================================
 !****f* rmnlib/encode_ip_2
 ! SUMMARY
@@ -459,7 +467,7 @@ end function decode_ip_1
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function encode_ip_2(IP1,IP2,IP3,P1,kkind1,P2,kkind2,P3,kkind3) result(status) BIND(C,name='DiagConvertPKtoIP')
+function diag_encode_ip_2(IP1,IP2,IP3,P1,kkind1,P2,kkind2,P3,kkind3) result(status) BIND(C,name='DiagConvertPKtoIP')
 ! INPUTS
 !  P1,kkind1 must be a level
 !  P2,kkind2 should be a time but a level is accepted (and flagged as a WARNING)
@@ -525,7 +533,7 @@ implicit none  ! explicit, almost independent (rp,kind) to (ip) conversion
 
 777 status=ior(status,CONVERT_ERROR)
   return
-end function encode_ip_2
+end function diag_encode_ip_2
 !===============================================================================================
 !****f* rmnlib/decode_ip_2
 ! SUMMARY
@@ -534,7 +542,7 @@ end function encode_ip_2
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function decode_ip_2(RP1,kind1,RP2,kind2,RP3,kind3,IP1V,IP2V,IP3V) result(status) BIND(C,name='DiagConvertIPtoPK')
+function diag_decode_ip_2(RP1,kind1,RP2,kind2,RP3,kind3,IP1V,IP2V,IP3V) result(status) BIND(C,name='DiagConvertIPtoPK')
 implicit none 
 
 ! ARGUMENTS
@@ -578,10 +586,10 @@ implicit none
     status = ior(status,CONVERT_WARNING)
   endif
   if(diag_is_invalid_kind(kind1)) goto 777  ! bad kind
-  if(0 < ip1 .and. IP1 < 32768) status = ior(status,CONVERT_GOOD_GUESS)
+  if(0 < IP1 .and. IP1 < 32768) status = ior(status,CONVERT_GOOD_GUESS)
   if( .not. is_level(kind1)) goto 777           ! ip1 must be a level
 
-  if(IP2 < 32768) then                          ! IP2 is old style, probably a time value
+  if(IP2 < 32768 .or. (ip3 == 0 .and. IP2 < 999999)) then    ! IP2 is old style, probably a time value
     RP2 = IP2
     kind2 = 10                                  ! time in hours ?
     status = ior(status,CONVERT_GOOD_GUESS)     ! reasonable guess
@@ -596,7 +604,7 @@ implicit none
       endif
     endif
   endif
-  if(IP3 < 32768) then                          ! IP3 is old style,
+  if(IP3 < 32768 .and. IP3 > 0) then            ! IP3 is old style, (0 considered "new style")
     RP3 = IP3
     if(IP3 <= 240) then                         ! time in hours ?
       kind3 = 10 
@@ -613,7 +621,7 @@ implicit none
     call swap(RP2,RP3)       ! level/time/level
     call swapi(kind2,kind3)
   endif
-  if(kind1 == kind3) then   ! level range
+  if(kind1 == kind3 .and. IP1 > 0 .and. IP3 > 0) then   ! level range
     if(ascending(kind1)  .and. RP1>RP3) call swap(RP1,RP3)   ! force increasing values
     if(descending(kind1) .and. RP1<RP3) call swap(RP1,RP3)   ! force decreasing values
   endif
@@ -625,19 +633,19 @@ implicit none
 
 777 status=ior(status,CONVERT_ERROR)
   return
-end function decode_ip_2
+end function diag_decode_ip_2
 !===============================================================================================
 !****f* rmnlib/encode_ip_3
 ! SUMMARY
-! vector version of encode_ip_2 (Diag_ConvertPKtoIP)
+! vector version of diag_encode_ip_2 (Diag_ConvertPKtoIP)
 ! AUTHOR
 !  M.Valin 2013
 ! SYNOPSIS
-function encode_ip_3(IP,RP,kind) result(status) BIND(C,name='DiagConvertPKtoIP_v')
+function diag_encode_ip_3(IP,RP,kind) result(status) BIND(C,name='DiagConvertPKtoIP_v')
 ! RESULT
-! same as encode_ip_2
+! same as diag_encode_ip_2
 ! NOTES
-! see encode_ip_2
+! see diag_encode_ip_2
 implicit none  ! explicit, independent (rp,kind) to (ip) conversion
 
 ! ARGUMENTS
@@ -647,20 +655,20 @@ implicit none  ! explicit, independent (rp,kind) to (ip) conversion
   integer(C_INT), dimension(3), intent(IN)  :: kind
 !******
 
-  status=encode_ip_2(IP(1),IP(2),IP(3),RP(1),kind(1),RP(2),kind(2),RP(3),kind(3))
+  status=diag_encode_ip_2(IP(1),IP(2),IP(3),RP(1),kind(1),RP(2),kind(2),RP(3),kind(3))
 
 return
-end function encode_ip_3
+end function diag_encode_ip_3
 !===============================================================================================
 !****f* rmnlib/decode_ip_3
 ! SUMMARY
-!vector version of decode_ip_2
+!vector version of diag_decode_ip_2
 ! SYNOPSIS
-function decode_ip_3(RP,kind,IP) result(status) BIND(C,name='DiagConvertIPtoPK_v')
+function diag_decode_ip_3(RP,kind,IP) result(status) BIND(C,name='DiagConvertIPtoPK_v')
 ! RESULT
-! same as decode_ip_2
+! same as diag_decode_ip_2
 ! NOTES
-! see decode_ip_2
+! see diag_decode_ip_2
 implicit none ! explicit, independent (ip) to (rp,kind) conversion
 ! ARGUMENTS
   integer(C_INT) :: status
@@ -668,9 +676,9 @@ implicit none ! explicit, independent (ip) to (rp,kind) conversion
   integer(C_INT), dimension(3), intent(OUT) :: kind
   integer(C_INT), dimension(3), intent(IN)  :: IP
 !******
-  status=decode_ip_2(RP(1),kind(1),RP(2),kind(2),RP(3),kind(3),IP(1),IP(2),IP(3))
+  status=diag_decode_ip_2(RP(1),kind(1),RP(2),kind(2),RP(3),kind(3),IP(1),IP(2),IP(3))
 
 return
-end function decode_ip_3
+end function diag_decode_ip_3
 
 end module diag_convert_ip123

@@ -98,6 +98,17 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.44 2017/09/28 16:16:16  dugas
+*      - Ajouter l'argument -REWIT (re: argument de FSTECR).
+*      - Tenir compte des minutes et des secondes dans le tri
+*        des dates. Ces dates etendues sont maintenant placees
+*        dans un INTEGER(8) avant l'appel a CSORTL.
+*      - Sauver IP2 en KIND_HOURS si on detecte la presence
+*        d'echantillons valides a l'interieur d'une heure.
+*      - Ajouter un tri prealable selon le type de donnees
+*        verticales (i.e. KIND) lorsqu'on decide d'effectuer
+*        in tri selon IP1 (i.e. separer les M et les Hy).
+*
 *      Revision 4.43 2017/08/31 08:08:08  dugas
 *      - Le nombre de fichier d'entree passe de 1 a 128
 *        et ajouter les messages d'erreurs 13 et 14.
@@ -199,26 +210,31 @@
 ***    ... Le 18 mars 1992, B. Dugas, RPN (V1.10)  -  On ajoute la cle
 ***        HELP (appellant) la routine QQQDOC et le bloc AUTO_DOC.
 
+      use           diag_convert_ip123, only: KIND_HOURS
+
       implicit      none
 
 ***   *****
 
       integer,      parameter :: NBRFICH = nombre_maximal_de_fichiers
-      integer,      parameter :: NBRARGS = 18, NBRCLE = NBRFICH+NBRARGS+1
+      integer,      parameter :: NBRARGS = 19, NBRCLE = NBRFICH+NBRARGS+1
 
       integer    :: NMAX = 20000
 
       real*8        heur8
-      integer       anne,mois,jour,heur
+!**   integer       anne,mois,jour,heur
 
-      real          press
-      integer       YYYYMMDD,YYYYMMDD0,HHMMSSHH,valnum, kind,bidon
+      real          press,heures
+      integer       YYYYMMDD,YYYYMMDD0,HHMMSShh,valnum, kind,bidon
       real,         allocatable,dimension(:) :: niveau1
-      integer,      allocatable,dimension(:) :: niveau2,
-     +              liste,  date1, date2, delt, listerenv,
-     +              sindex, fset1, fset2,
-     +              heure,  pas1,  pas2
+      integer,      allocatable,dimension(:) :: niveau2, 
+     +              sindex, liste, heure, delt, listerenv,
+     +              fset1, fset2, kind1, pas1, pas2, date2
+      integer(8),   allocatable,dimension(:) :: date18 
 
+      integer(8) :: dateo8 ,valnum8
+
+      character(len=4)   nuls
       character(len=24)  exempl
       character(len=24), allocatable, dimension(:) :: chaine1,chaine2
 
@@ -238,14 +254,14 @@ C    +              valnum,kind
       character*512 name1(NBRFICH),name2,nomrenv
       integer       iu1(NBRFICH),iu2,iu3, ipos,icle, i,ier,io,j,
      +              nil,exfin,   idatm, exdb,
-     +              ind01,ind11,ind21,ind31, i0,i1,i2,i3,
-     +              ind02,ind12,ind22,ind32,
+     +              ind01,ind11,ind21,ind31,ind41, i0,i1,i2,i3,i4,
+     +              ind02,ind12,ind22,ind32,ind42,
      +              nwds ,nwds0,cmpl
 
       logical       Vrai,  Faux,
      +              box,   message, sqi,   Force, Desc,  Elim,
      +              noDAT, noTYP,   noETI, noNOM, noPAS, noIP1,
-     +              noIP3, SplitD,  ByDay
+     +              noIP3, SplitD,  ByDay, Message_Heures
 
       integer    :: elimin, nw, nbr, nbrrenv, infonbr,nbro=0
 
@@ -267,7 +283,7 @@ C    +              valnum,kind
 
       integer   datev0,datevm3h
 
-      logical   rewrit,rewrit0
+      logical   rewrit,rewrit0,minutes
 
 ***    Variable utilisee par le mode Elim.
 
@@ -287,8 +303,8 @@ C    +              valnum,kind
      +          fstluk, fstinl, fstouv, fstlnk,
      +          fnom,   fclos,  wkoffit,newdate
       external  csortc, csorte, exfin,  exdb,
-     +          csortd, csortr, ccard,  quit,  
-     +          getenvc,convpr, incdatr
+     +          csortd, csortr, csortl, ccard,
+     +          getenvc,convpr, incdatr,quit
 
       integer :: ifrm,  iecr,  iprm,  iopt,  ilnk,
      +           inf,   infl,  inbr3, inbr2, inbr, inbr1=0,
@@ -302,7 +318,7 @@ C    +              valnum,kind
 ***    Parametres d'appel:
 ***    ------------------
 
-     ! NBRARGS=(2:19), i.e. 18 Arguments generaux
+     ! NBRARGS=(2:20), i.e. 19 Arguments generaux
       data cles(02)/ 'D.'     /,def1(02)/' '      /,def2(02)/'TAPE2'  /,
      +     cles(03)/ 'DATEO'  /,def1(03)/'DATEO'  /,def2(03)/'*'      /,
      +     cles(04)/ 'TYPVAR' /,def1(04)/'TYPVAR' /,def2(04)/'*'      /,
@@ -320,7 +336,8 @@ C    +              valnum,kind
      +     cles(16)/ 'E'      /,def1(16)/'NON'    /,def2(16)/'OUI'    /,
      +     cles(17)/ 'SQI'    /,def1(17)/'NON'    /,def2(17)/'OUI'    /,
      +     cles(18)/ 'IP3'    /,def1(18)/'IP3'    /,def2(18)/'*'      /,
-     +     cles(19)/ 'SPLIT'  /,def1(19)/'NON'    /,def2(19)/'OUI'    /
+     +     cles(19)/ 'SPLIT'  /,def1(19)/'NON'    /,def2(19)/'OUI'    /,
+     +     cles(20)/ 'REWRIT' /,def1(20)/'OUI'    /,def2(20)/'NON'    /
 
       ! +1 Argument positionel (nom du module r.diag)
       data cles(NBRCLE+1) / '-.' /,
@@ -328,12 +345,13 @@ C    +              valnum,kind
      +     def2(NBRCLE+1) / ' ' /
       data blanc / ' ' / 
 
-      data message, box        /    2*.false.   /,
-     +     Force, Desc, Elim   /    3*.false.   /
+      data message,box,Minutes /    3*.false.   /,
+     +     Force, Desc, Elim   /    3*.false.   /,
+     +     Message_Heures      /      .true.    /
       data noDAT, noTYP, noETI,
      +     noNOM, noPAS, noIP1,
      +     SplitD,ByDay, noIP3 /    9*.false.   /
-      data Vrai, rewrit0, Faux  /2*.true.,.false./
+      data Vrai,Rewrit0,Faux   / 2*.true.,.false. /
       data sqi / .false. /
 
 ***    Numeros d'E/S, etc...
@@ -458,6 +476,9 @@ C    +              valnum,kind
 
       if (Elim)                     elimin  = 0
       if (SplitD)                   Desc    = Vrai 
+
+      if (is_on ( def1(20) ))       Rewrit0 = Vrai
+      if (is_off( def1(20) ))       Rewrit0 = Faux
 
       if (def1((NBRARGS+1)+1) == blanc .or.
      +   (def1(2)             == blanc .and. .not.Splitd))     then
@@ -647,7 +668,7 @@ C    +              valnum,kind
 
 ***    Allocate the other basic work fields.
 
-      allocate( date1  (infon+1),   date2  (infon+1),
+      allocate( date18 (infon+1),   date2  (infon+1),   kind1 (infon+1),
      +          niveau1(infon+1),   niveau2(infon+1),   delt  (infon+1), 
      +          pas1   (infon+1),   pas2   (infon+1),   heure (infon+1),
      +          fset1  (infon+1),   fset2  (infon+1),   sindex(infon+1),
@@ -768,7 +789,7 @@ C    +              valnum,kind
               if (press > 0. .and. (kind == 0 .or. kind == 4))
      +            press = 1./press
           else
-              press = ip1
+              press = ip1 ; kind = -1
           end if
 
           niveau2(i)  = ip1
@@ -780,14 +801,14 @@ C    +              valnum,kind
 
           if (noDAT)                                           then
 
-              dateo = -1
+              dateo8 = -1
 
           else if (dateo /= 0)                                 then
 
 ***            Extraire l'annee, le mois, le
 ***            jour et l'heure correspondante.
 
-              ier = newdate( dateo, YYYYMMDD,HHMMSSHH, -3 )
+              ier = newdate( dateo, YYYYMMDD,HHMMSShh, -3 )
 
               if (ier /= 0)                                    then
 
@@ -797,17 +818,15 @@ C    +              valnum,kind
                   
               end if
 
-              heur = HHMMSSHH/1000000
-              anne = YYYYMMDD/10000
-              jour = mod(YYYYMMDD,100)
-              mois = mod(YYYYMMDD/100,100)
+              if (mod( HHMMSShh/100,10000 ) /= 0) Minutes = Vrai
 
-              dateo = ((anne*100+mois)*100+jour)*100+heur
+              dateo8 = (YYYYMMDD*1000000_8)+(HHMMSShh/100)
 
           end if
 
           if (noPAS) npas   = -1
           if (noIP1) press  = -1.
+          if (noIP1) kind   = -1.
           if (noIP3) ip3    = -1
 
           if (noTYP) typvar = ' '
@@ -816,9 +835,14 @@ C    +              valnum,kind
 
           write(chaine1(i),0001) typvar,etiket,nomvar
           niveau1(i) = press
-          pas1(i)    = npas
-          date1(i)   = dateo
-          fset1(i)   = ip3
+          kind1  (i) = kind
+          pas1   (i) = npas
+          date18 (i) = dateo8
+          fset1  (i) = ip3
+
+          if (.not.Minutes)                                    then
+              Minutes = ( mod( npas*(deet*1_8),3600_8 ) /= 0_8 )
+          end if
 
       end do
 
@@ -841,7 +865,7 @@ C    +              valnum,kind
 
          if (i0-ind02 > 0)                                     then
 
-            call csorte( date1,sindex(ind01),i0-ind01 )
+            call csortl( date18,sindex(ind01),i0-ind01 )
 
 ***          Passer au niveau suivant ... 
 
@@ -850,10 +874,10 @@ C    +              valnum,kind
 
             do while (ind11 < i0)
 
-               valnum = date1(sindex(ind11))
+               valnum8 = date18(sindex(ind11))
 
                do  i1=ind12,i0-1
-                  if (date1(sindex(i1)) /= valnum) exit
+                  if (date18(sindex(i1)) /= valnum8) exit
                end do
 
 ***             I1 contient le debut du prochain groupe DATEO.
@@ -863,7 +887,7 @@ C    +              valnum,kind
 
                   call csorte( pas1,sindex(ind11),i1-ind11 )
 
-***                Passer au niveau suivant ...
+***                Passer au pas de temps suivant ...
 
                   ind21  = ind11
                   ind22  = ind21+1
@@ -884,7 +908,7 @@ C    +              valnum,kind
  
                         call csortc( chaine1,sindex(ind21),i2-ind21 )
 
-***                      Passer au niveau suivant ...
+***                      Passer au TYPVAR/ETIKET/NOMVAR suivant ...
 
                         ind31  = ind21
                         ind32  = ind31+1
@@ -899,10 +923,41 @@ C    +              valnum,kind
 
 ***                         I3 contient le debut du prochain groupe
 ***                         TYPVAR/ETIKET/NOMVAR. Trier la section
-***                         courante, ... selon la pression/sigma.
+***                         courante, ... selon le type de niveau
+***                         vertical (pression/sigma/etc).
 
-                           if (i3-ind32 > 0)
-     +                     call csortr( niveau1,sindex(ind31),i3-ind31 )
+                           if (i3-ind32 > 0)                   then
+
+                              call csorte( kind1,sindex(ind31),i3-ind31 )
+
+***                            Passer au niveau vertical suivant ...
+
+                              ind41  = ind31
+                              ind42  = ind41+1
+
+                              do while (ind41 < i3 )
+
+                                 valnum = kind1(sindex(ind41))
+
+                                 do  i4=ind42,i3-1
+                                    if (kind1(sindex(i4)) /= valnum) exit
+                                 end do
+
+***                               I4 contient le debut du prochain groupe
+***                               KIND. Trier la section courante,
+***                               ... selon la pression/sigma.
+
+                                 if (i4-ind42 > 0)
+     +                           call csortr( niveau1,sindex(ind41),i4-ind41 )
+
+***                               Passer au prochain bloc de KIND.
+
+                                 ind41 = i4
+                                 ind42 = ind41+1
+
+                              end do
+
+                           end if
 
 ***                         Passer au prochain bloc de (TYPVAR/ETIKET/NOMVAR).
 
@@ -1036,14 +1091,14 @@ C    +              valnum,kind
               datev = dateo
           end if
 
-          ier = newdate( datev, YYYYMMDD,HHMMSSHH, -3 )
+          ier = newdate( datev, YYYYMMDD,HHMMSShh, -3 )
 
           if (ByDay)                                           then
               ! Notons que 00Z est plutot traite
               ! comme 24Z, i.e. dans le jour precedent
-              if (HHMMSSHH == 0)                               then
+              if (HHMMSShh == 0)                               then
                   heur8 = -3.; call incdatr( datevm3h,datev,heur8 )
-                  ier = newdate( datevm3h, YYYYMMDD,HHMMSSHH, -3 )
+                  ier = newdate( datevm3h, YYYYMMDD,HHMMSShh, -3 )
               end if
               datev0 = datev
           else
@@ -1090,10 +1145,10 @@ C    +              valnum,kind
                   else
                       if (def1(2) == blanc)                    then
                           write(nomfich,6666) trim( name1(1) ),
-     +                                        YYYYMMDD,HHMMSSHH
+     +                                        YYYYMMDD,HHMMSShh
                       else
                           write(nomfich,6666) trim( name2 ),
-     +                                        YYYYMMDD,HHMMSSHH
+     +                                        YYYYMMDD,HHMMSShh
                       end if
                   end if
 
@@ -1200,6 +1255,20 @@ C    +              valnum,kind
               ip1 = 0
           end if
 
+!**        A-t'on detecte des intervals aux minutes ?
+
+          if (Minutes)                                         then
+              heures = npas*(dble( deet )/3600.)
+              if (heures <= 1000000.)                          then
+                  if (Message_Heures)                          then
+                      write(6,6250) KIND_HOURS
+                      Message_Heures = Faux
+                  end if
+                  CALL Diag_CONVIP_plus( ip2,heures,KIND_HOURS,
+     +                                   +2,nulS,.FALSE. )
+              end if
+          end if
+
 ***        Ecrire les donnees.
 
           iecr = fstecr( buff,ibuf,
@@ -1300,6 +1369,7 @@ CCC   if (ier.ne.0) print *,'erreur dans hpcheck=',ier
  6204 format(/3x,I3,' Fichiers Sources... ',A/27x,'...'/27x,A/:,
      +        6x,   ' Destination... ',5x,A/)
  6205 format( 6x,   ' Destination... ',I3,2x,A/)
+ 6250 format(/'   Codage des IP2 en heures (IP type ',I2,')'/)
 
  6001 format(/'   Deux noms de fichiers sont requis a l''entree...'/)
  6002 format(/"   Impossible d'associer un nom a une unite d'E/S"/:3x,A/)

@@ -87,6 +87,12 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.09  2017/09/28 09:09  dugas
+  ! - Verifier que les valeurs HIVAL,LOVAL sont
+  !   biens associees a des intervalles temporels.
+  ! - Initialiser HEURES a -1.0, DATEV0 a DATEVF et
+  !   corriger la definition de MDIAG lorsque KCODE=2
+  !
   ! Revision 1.08  2017/08/31 08:08  dugas
   ! - Correction a la re-definition de name2 lorsque dest=src(1)
   !
@@ -938,7 +944,7 @@
 
           done(i) = .true. ! On ne le lira plus cet enregistrement.
 
-          mdiag = 1 ; kcode = 0
+          mdiag = 1 ; kcode = 0 ; heures = -1.0
 
           npasp1_deet = 0 ; npasp1_deet60 = 0 ; npasp1_deet3600 = 0
           npas_deet   = 0 ; npas_deet60   = 0 ; npas_deet3600   = 0
@@ -998,6 +1004,7 @@
                   else
                       datevf = datevi
                   end if
+                  datev0 = datevf
               else
                   datev = date(ii)
                   if (datev /= datevi)                     then
@@ -1085,7 +1092,8 @@
                           mdiag = pas(ii)+1 ; kcode = 2
                       end if
                       if (kcode == 2)                      then
-                          mdiag  = heure(ii) ; heures = vip2 ; deltat = delt(ii)/3600._8
+                                                 heures = vip2 ; deltat = delt(ii)/3600._8
+                          ! mdiag  = heure(ii) ; heures = vip2 ; deltat = delt(ii)/3600._8
                       end if
                   else &
                   if (ikind == KIND_SAMPLES)               then
@@ -1169,10 +1177,12 @@
                   end if
               end if
 
-              heures = pas(ii)*DBLE( delt(ii) )/3600
+              if (heures < 0.0) heures = pas(ii)*DBLE( delt(ii) )/3600
 
               if (ii == start)                             then
-                  if (HIVAL >= 0.0 .and. .not.Sample)      then
+                  if (.not.Sample              .and. &
+                      RANGE_KIND == KIND_HOURS .and. &
+                      HIVAL      >= 0.0)                   then
                       heuremax = HIVAL
                       heuremin = LOVAL 
                   else
@@ -1184,7 +1194,9 @@
                       end if
                   end if
               else 
-                  if (hiset(ii) >= 0.0 .and. .not.Sample)  then
+                  if (.not.Sample              .and. &
+                      RANGE_KIND == KIND_HOURS .and. &
+                      hiset(ii)  >= 0.0)                   then
                       heuremax = max( DBLE( hiset(ii) ), heuremax )
                       heuremin = min( DBLE( loset(ii) ), heuremin )
                   else if (datev /= datev0)                then
