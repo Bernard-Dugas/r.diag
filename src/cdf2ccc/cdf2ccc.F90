@@ -322,6 +322,8 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas 21 novembre 2017 : 
+!  - Passer a la version 2.3.2 (development)
 !  Bernard Dugas 7 juin 2017 : 
 !  - Passer a la version 2.3.1 (development)
 !  Bernard Dugas 6 juin 2017 : 
@@ -487,8 +489,8 @@
 
 !     Identification de la version
 
-      version = 'v2.3.1'
-      vdate   = 'June 07, 2017'
+      version = '2.3.2'
+      vdate   = 'November 21, 2017'
 
       AMODE = mode
       CALL LOW2UP( AMODE,AMODE )

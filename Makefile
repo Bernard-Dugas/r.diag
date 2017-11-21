@@ -1,5 +1,5 @@
 
-# RDIAG Toolkit Makefile principal
+# RDIAG Toolkit main Makefile
 
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
@@ -24,7 +24,7 @@ DESTINATION = $(DIAGNOSTIQUE)/..
 # libraries including MFV's udunits2f FORTRAN wrapper as well
 # as udunits2 itself or 2) use the static versions of these
 # same libraries as provided by the netcdff-4.4 SSM package.
-# As of May 2017, the second option is used.
+# As of May 2017, the second option is always used.
 #EXTRAS  = $(DESTINATION)/extras
 #EXTLIB  = $(EXTRAS)/NetcdfUdunits/$(EC_ARCH)/lib
 
@@ -69,8 +69,8 @@ lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
 UDUNITS  = udunits2f_s udunits2_s expat
 
 
-DIAG_VERSION = 6.4.1
-CONV_VERSION = 2.3.1
+DIAG_VERSION = 6.4.2
+CONV_VERSION = 2.3.2
 
 ENTETE  = 32
 STD     = 98
@@ -92,6 +92,8 @@ export:
 
 initial_base:
 	/bin/mkdir -p $(BINDIR) $(LIBDIR) $(MANDIR) $(MODDIR) $(SUBDIR)
+	if [[ `/bin/ls -L $(MODDIR)/Makefile ; echo $?` != 0 ]]; then \
+	/bin/ln -sf $(INCLUDE)/Makefile_mods $(MODDIR)/Makefile ; fi
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot vgriddesc\"\n" ; false ; }
 	s.locate --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
 #	s.locate --lib $(lNetCDF) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff\"\n" ; false ; }
@@ -112,6 +114,7 @@ initial_cdf:
 # RDIAG Diagnostic toolkit recipe
 
 rdiag: initial_base
+	echo "*** Making the RDIAG modules ***" ; cd $(MODDIR) ; $(MAKE)
 	echo "*** Making libdiag_sq98.a and libdiag_sq98_g.a ***" ;\
 	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB) ENTETE=$(ENTETE)
 	echo "Making libprog_sq98.a" ;\

@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.151 2017/11/02 15:15  dugas
+# - Modifier/Completer les dependances aux modules de r.diag
+#
 # revision 4.150 2016/10/27 15:49  dugas
 # - Le macro ENTETE passe de 28 a 32
 # - Corriger la syntaxe de la liste de dependances des .o
@@ -33,9 +36,9 @@ ARCH    = $(BASE_ARCH)
 
 DIAGS   = $(DIAGNOSTIQUE)
 BINDIR  = $(DIAGS)/bin/$(BASE_ARCH)
-INCLUDE = $(DIAGS)/include
 LIBDIR  = $(DIAGS)/lib/$(EC_ARCH)
 MANDIR  = $(DIAGS)/man/pdoc
+INCLUDE = $(DIAGS)/include
 MODDIR  = $(INCLUDE)/$(EC_ARCH)
 
 CODEBETA=
@@ -56,7 +59,7 @@ LIBP    = $(LIBDIR)/lib$(PROGLIB).a
 LIBS    = $(LIBDIR)/lib$(DIAGLIB).a
 ZIPFILE = $(LIBDIR)/lspgm_STD$(STD).f.zip
 
-DIAG_VERSION = 6.4.1
+DIAG_VERSION = 6.4.2
 
 HOSTWEB =
 DIAGWEB =
@@ -242,123 +245,145 @@ TXTDECKS = \
 #LISTE DES MODULES AYANT DES DEPENDANCES
 
 $(LIBP)(addf.o)    : addf.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(adjust.o)  : adjust.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(binach.o)  : binach.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(chabin.o)  : chabin.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(convert.o) : convert.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(cosf.o)    : cosf.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(crvplot.o) : crvplot.ptn \
-	 $(INCLUDE)/char2int.cdk
+	$(INCLUDE)/char2int.cdk
 $(LIBP)(dertim.o)  : dertim.ptn \
-	 $(INCLUDE)/diagmacros.cdk  $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk  $(INCLUDE)/machtype.cdk 
 $(LIBP)(diftim.o)  : diftim.ptn \
-	 $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/zlabel.cdk
 $(LIBP)(dxdp.o)    : dxdp.ptn \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
+	$(INCLUDE)/set_a_b_from_AABB.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(expone.o)  : expone.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(fcats.o)   : fcats.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
+$(LIBP)(fstmdiag.o) : fstmdiag.ptn90 \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/stats_signatures.mod
+$(LIBP)(fsttri.o) : fsttri.ptn \
+	$(MODDIR)/diag_convert_ip123.mod
 $(LIBP)(gadd.o)    : gadd.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(ggatim.o)  : ggatim.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(ggplot.o)  : ggplot.ptn \
-	 $(INCLUDE)/char2int.cdk
+	$(INCLUDE)/char2int.cdk
 $(LIBP)(gpasg.o) : gpasg.ptn \
-	 $(INCLUDE)/toc_gest_1.cdk
+	$(INCLUDE)/toc_gest_1.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(gpdpd.o)   : gpdpd.ptn \
-	 $(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk $(INCLUDE)/fintern.cdk \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/consdia.cdk	$(INCLUDE)/dintern.cdk \
+	$(INCLUDE)/fintern.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk \
+	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
+	$(MODDIR)/diag_toc.mod
 $(LIBP)(gphum.o)   : gphum.ptn \
-	 $(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk $(INCLUDE)/fintern.cdk \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk \
+	$(INCLUDE)/fintern.cdk	$(INCLUDE)/toc_gest_1.cdk \
+	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk \
+	$(MODDIR)/diag_toc.mod
 $(LIBP)(gpvtat.o)  : gpvtat.ptn \
-	 $(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk $(INCLUDE)/fintern.cdk
-$(LIBP)(gsmslph.o) : gsmslph.ptn \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk \
+	$(INCLUDE)/fintern.cdk
 $(LIBP)(gsapl.o) : gsapl.ptn \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
+	$(INCLUDE)/set_a_b_from_AABB.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(gsapzl.o) : gsapzl.ptn \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
+	$(INCLUDE)/set_a_b_from_AABB.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(gsathl.o) : gsathl.ptn \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
+	$(INCLUDE)/set_a_b_from_AABB.cdk	$(MODDIR)/diag_toc.mod
+$(LIBP)(gsmslph.o) : gsmslph.ptn \
+	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
+	$(INCLUDE)/set_a_b_from_AABB.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(hovplot.o) : hovplot.ptn \
-	 $(INCLUDE)/char2int.cdk
+	$(INCLUDE)/char2int.cdk
 $(LIBP)(inttim.o)  : inttim.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(invntry.o) : invntry.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(joiner.o)  : joiner.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(meofvec.o) : meofvec.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(minvers.o) : minvers.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(mmult.o)   : mmult.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(mtrace.o)  : mtrace.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(pgen.o) : pgen.ptn \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
+	$(INCLUDE)/set_a_b_from_AABB.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(psdiv.o)   : psdiv.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(psmlt.o)   : psmlt.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(select.o)  : select.ptn \
-	 $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/zlabel.cdk \
+	$(MODDIR)/diag_toc.mod
 $(LIBP)(select2.o) : select2.ptn \
-	 $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/zlabel.cdk \
+	$(MODDIR)/diag_toc.mod
 $(LIBP)(shiftf.o)  : shiftf.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(sinf.o)    : sinf.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(sortf.o)   : sortf.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(spplot.o) : spplot.ptn \
-	 $(INCLUDE)/char2int.cdk
+	$(INCLUDE)/char2int.cdk
 $(LIBP)(spvdgx.o)  : spvdgx.ptn \
-	 $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/machtype.cdk 
 $(LIBP)(tfilter.o) : tfilter.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(timavg.o)  : timavg.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/stats_signatures.mod
 $(LIBP)(timcov.o)  : timcov.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk \
+	$(MODDIR)/stats_signatures.mod
 $(LIBP)(timdev.o)  : timdev.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(timegen.o) : timegen.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(tsafc.o)   : tsafc.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(tscheck.o) : tscheck.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(tstep.o)   : tstep.ptn \
-	 $(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
+	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(ttesta.o)  : ttesta.ptn \
-	 $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/zlabel.cdk
 $(LIBP)(tteste.o)  : tteste.ptn \
-	 $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/zlabel.cdk
 $(LIBP)(txtplot.o) : txtplot.ptn \
-	 $(INCLUDE)/char2int.cdk
+	$(INCLUDE)/char2int.cdk
 $(LIBP)(vsinth.o) : vsinth.ptn \
-	 $(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk
+	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
+	$(INCLUDE)/set_a_b_from_AABB.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(xappend.o) : xappend.ptn \
-	 $(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk
 $(LIBP)(xfind.o)   : xfind.ptn \
-	 $(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 $(LIBP)(xsave.o)   : xsave.ptn \
-	 $(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 $(LIBP)(zoncov.o)  : zoncov.ptn \
-	 $(INCLUDE)/diagmacros.cdk
+	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(zxplot.o) : zxplot.ptn \
-	 $(INCLUDE)/char2int.cdk
+	$(INCLUDE)/char2int.cdk
 
 #LISTE DES CIBLES DU FICHIER recettes
 

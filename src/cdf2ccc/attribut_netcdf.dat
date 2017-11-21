@@ -274,6 +274,8 @@
 #
 # REVISIONS :
 #
+# B. Dugas, novembre 2017 :
+#  Corriger la declaration des unites de la variable mrros (TRAFF)
 # B. Dugas, juillet 2013 :
 #  - Enlever toutes references a l'attribut missing_value (desuet)
 #  - Corriger un commentaire sur les attributs utiles (_FillValue)
@@ -479,7 +481,7 @@ def_attribut[ mrro; RFAC; 1.0;
               standard_name = runoff_flux; ]
 
 def_attribut[ mrros; TRAF; 1.0;
-              units = kg m-2 s-1
+              units = kg m-2 s-1;
               _FillValue = 1.e+20; 5;
               long_name = Surface Runoff;
               standard_name = surface_runoff_flux; ]

@@ -3,6 +3,11 @@
 
 # Description: Makefile principal de LSSUB
 
+# revision 3.66 2017/11/02 16:16  dugas
+# - Modifier les recettes associees aux modules
+# - Ajouter un segment "make module" dans la cible "initial"
+# - Modifier/Completer les dependances aux modules de r.diag
+#
 # Revision 3.65  2016/10/27 13:24  dugas
 # - Le macro ENTETE passe de 28 a 32
 # - Modifier la recette .cdk.o ("rm" plutot que "mv" le .f90)
@@ -21,7 +26,8 @@ AR      = s.ar
 CPPT    = r.gppf -chop_bang -gpp -F
 ZIP     = `which zip`
 
-DIAGNOSTIQUE = $(CURDIR)/../..
+LSSDIR  = $(CURDIR)
+DIAGNOSTIQUE = $(LSSDIR)/../..
 MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
 CFLAGS  =
@@ -36,9 +42,9 @@ OPTIL   = 2
 STD     = 98
 
 DIAGS   = $(DIAGNOSTIQUE)
-INCLUDE = $(DIAGS)/include
 LIBDIR  = $(DIAGS)/lib/$(EC_ARCH)
 MANDIR  = $(DIAGS)/man/pdoc
+INCLUDE = $(DIAGS)/include
 MODDIR  = $(INCLUDE)/$(EC_ARCH)
 SOURCES = $(DIAGS)/src/lssub/sources$(STD)/$(EC_ARCH)
 
@@ -108,12 +114,14 @@ default: $(ARCH)
 	$(CC) $<
 
 .cdk90.mod:
-	$(FCOMP) $<
+	$(COMPILE) -src $<
 	rsync -a $@ $(MODDIR)
+	/bin/rm -f $@ $*.f90 $*.o
 
 .f90.mod:
 	$(FCOMP) $<
 	rsync -a $@ $(MODDIR)
+	/bin/rm -f $@ $*.o
 
 .ftn.f:
 	$(FTNC) $<
@@ -209,10 +217,12 @@ FTN90DECKS = \
 	filter.ftn90	diag_convip_plus.ftn90
 
 CDK90DECKS = \
-	diag_convert_ip123.cdk90	diag_toc.cdk90
+	diag_convert_ip123.cdk90	diag_toc.cdk90 \
+	stats_signatures.cdk90
 
 MODDECKS= \
-	diag_convert_ip123.mod 	diag_toc.mod
+	$(MODDIR)/diag_convert_ip123.mod 	$(MODDIR)/diag_toc.mod \
+	$(MODDIR)/stats_signatures.mod
 
 # Dependances
 
@@ -220,17 +230,22 @@ alp.f	: alp.ftn \
 	$(INCLUDE)/calpi.cdk
 convsub.f : convsub.ftn \
 	$(INCLUDE)/fstparm.cdk $(INCLUDE)/highbuf.cdk \
-	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/diag_toc.mod
 coord.f   : coord.ftn \
 	$(INCLUDE)/highbuf.cdk
 fastaf2.f : fastaf2.ftn \
 	$(INCLUDE)/diagmacros.cdk
 get.f     : get.ftn \
-	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk \
+	$(MODDIR)/stats_signatures.mod
 inctdia.f : inctdia.ftn \
 	$(INCLUDE)/consdia.cdk
 label.f   : label.ftn \
-	$(INCLUDE)/machtype.cdk
+	$(INCLUDE)/machtype.cdk \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/stats_signatures.mod
 lgtst.f	: lgtxt.ftn \
 	$(INCLUDE)/calpi.cdk
 lowio92.f : lowio92.ftn \
@@ -240,16 +255,35 @@ pacc92.f  : pacc92.ftn \
 paccrn.f  : paccrn.ftn \
 	$(INCLUDE)/machtype.cdk
 put.f     : put.ftn \
-	$(INCLUDE)/machtype.cdk $(INCLUDE)/highbuf.cdk
+	$(INCLUDE)/machtype.cdk $(INCLUDE)/highbuf.cdk \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/stats_signatures.mod
 rec.f     : rec.ftn \
 	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 util.f    : util.ftn \
 	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 
+diag_convip_plus.f90 : diag_convip_plus.ftn90 \
+	$(MODDIR)/diag_convert_ip123.mod
+
 $(LIBS)(convsub.o)  : convsub.ftn \
 	$(INCLUDE)/fstparm.cdk	$(INCLUDE)/highbuf.cdk \
-	$(INCLUDE)/machtype.cdk	$(INCLUDE)/zlabel.cdk
-$(LIBS)(get.o)      : $(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
+	$(INCLUDE)/machtype.cdk	$(INCLUDE)/zlabel.cdk \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/diag_toc.mod
+$(LIBS)(diag_convip_plus.o) : diag_convip_plus.ftn90 \
+	$(MODDIR)/diag_convert_ip123.mod
+$(LIBS)(get.o)      : get.ftn \
+	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/stats_signatures.mod
+$(LIBS)(label.o)    : label.ftn \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/stats_signatures.mod
+$(LIBS)(put.o)      : put.ftn \
+	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk \
+	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/stats_signatures.mod
 $(LIBS)(util.o)     : util.ftn \
 	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 
@@ -261,6 +295,8 @@ initial:
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
 	if [[ `/bin/ls -L $(SOURCES)/Makefile ; echo $?` != 0 ]]; then \
 	/bin/ln -sf $(DIAGS)/src/lssub/Makefile_sources$(STD) $(SOURCES)/Makefile ; fi
+	if [[ `/bin/ls -L $(MODDIR)/Makefile ; echo $?` != 0 ]]; then \
+	/bin/ln -sf $(INCLUDE)/Makefile_mods $(MODDIR)/Makefile ; fi
 
 # Voir "Managing project with make" de O'Reilly & Associates, 1989,
 # pages 51-53, pour les details de ce qui se passe dans ce qui suit
@@ -317,6 +353,7 @@ $(LIBS):	initial	$(FTNDECKS)	$(FTN90DECKS) \
 	$(LIBS)(rec.o) 		\
 	$(LIBS)(sfft.o)		\
 	$(LIBS)(spectra.o)	\
+	$(LIBS)(stats_signatures.o)	\
 	$(LIBS)(temperton.o) 	\
 	$(LIBS)(trans1d.o) 	\
 	$(LIBS)(util.o)		\
@@ -328,8 +365,10 @@ clean:
 	/bin/rm -f *.o *.mod
 
 $(ARCH): initial
-# Make en deux etapes: Les deux premiers $(MAKE) mettent a jour les sources
-# dans $(SOURCES) tandis que les deux derniers generent les librairies 
-# (debug et ordinaire, respectivement)
-	$(MAKE) $(LIBS) ;	$(MAKE) clean ; cd $(SOURCES) ; $(MAKE) ; \
+# Make en trois etapes: 1) Le premier $(MAKE) mets a jour les modules.
+# 2) Les deux suivant $(MAKE) mettent a jour les sources dans $(SOURCES),
+# tandis que 3) les deux derniers generent les librairies (ver. debug et
+# et ver. ordinaire, respectivement)
+	cd $(MODDIR) ; $(MAKE) ; cd $(LSSDIR) ;\
+	$(MAKE) $(LIBS) ; $(MAKE) clean ; cd $(SOURCES) ; $(MAKE) ; \
 	$(MAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2' OPTIM90='-O 2'

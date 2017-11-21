@@ -1,0 +1,38 @@
+.SUFFIXES :
+.SUFFIXES : .cdk90 .mod 
+
+# Description: Makefile pour les modules de r.diag
+
+# Celui-ci se trouve physiquement dans $DIAGNOSTIQUE/include
+# et un lien "Makefile" sera ensuite automatiquement place
+# dans tous le sous-repertoire $(EC_ARCH) a l'execution
+# d'un "make" de LSSUB
+
+# Revision 1.0  2017/10/30 13:13  dugas (Version initiale)
+
+ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
+$(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
+endif
+
+SHELL = /bin/bash
+
+MODDIR  = $(CURDIR)
+DIAGNOSTIQUE = $(MODDIR)/../../..
+MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
+LSSDIR  = $(DIAGNOSTIQUE)/src/lssub
+
+FCOMP   = s.compile -src
+
+default: mods
+
+%.mod : $(LSSDIR)/%.cdk90
+	cd $(LSSDIR) ; $(MAKE) $@
+
+MODDECKS= \
+	diag_convert_ip123.mod 	diag_toc.mod	stats_signatures.mod
+
+#diag_convert_ip123.mod: $(LSSDIR)/diag_convert_ip123.cdk90
+#diag_toc.mod: $(LSSDIR)/diag_toc.cdk90
+#stats_signatures.mod:  $(LSSDIR)/stats_signatures.cdk90
+
+mods: $(MODDECKS)

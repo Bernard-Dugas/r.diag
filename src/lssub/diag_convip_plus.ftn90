@@ -18,7 +18,7 @@
 ! successeur de convip
 
 SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
-  use diag_convert_ip123, only : diag_is_invalid_kind
+  ! use diag_convert_ip123, only : diag_is_invalid_kind
   implicit none
   integer, intent(INOUT) :: ip, ikind
   integer, intent(IN) :: mode
@@ -66,6 +66,8 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !                               la routine interne conv_kind_15 (idem dans convip_plus)
 !     Revision 018  B, Dugas  - Renommer conv_kind_15 et value_to_string a
 !                               diag_conv_kind_15 et diag_value_to_string
+!     Revision 019  B. Dugas  - diag_is_invalid_kind est maintenant une reference externe
+!                               et non plus un element du module diag_convert_ip123
 !
 !     Input:    MODE = -2, de IP -->  P (sans definir zzvkind)
 !               MODE = -1, de IP -->  P
@@ -152,9 +154,11 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 
   data kinds                                                                  &
   &   / 'm ', 'sg', 'mb', 'ar', 'M ', 'hy', 'th', '??',                       &
-  &     '??', '??', 'H ', '??', '??', '??', '??', '  ',                       &
+  &     '??', '??', 'H ', '??', '??', '??', '??', '_0',                       &
   &     '??', '[]', '??', '??', '??', 'mp', '??', '??',                       &
-  &     '??', '??', '??', '??', '??', '??', '??', '  '/
+  &     '??', '??', '??', '??', '??', '??', '??', '_1'/
+
+  logical, external :: diag_is_invalid_kind
 
   if (mode .eq.0) then
       NEWSTYLE = .true.
