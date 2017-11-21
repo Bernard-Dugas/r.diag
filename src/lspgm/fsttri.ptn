@@ -98,6 +98,11 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.45 2017/10/25 12:12:12  dugas
+*      Verifier que IP2 ne contient pas un niveau avant de tenter
+*      un recodage de l'echeance de prevision lorsqu'on detecte
+*      une echeance sous la forme "heures.minutes".
+*
 *      Revision 4.44 2017/09/28 16:16:16  dugas
 *      - Ajouter l'argument -REWIT (re: argument de FSTECR).
 *      - Tenir compte des minutes et des secondes dans le tri
@@ -224,7 +229,7 @@
       real*8        heur8
 !**   integer       anne,mois,jour,heur
 
-      real          press,heures
+      real          press,heures,HOLD
       integer       YYYYMMDD,YYYYMMDD0,HHMMSShh,valnum, kind,bidon
       real,         allocatable,dimension(:) :: niveau1
       integer,      allocatable,dimension(:) :: niveau2, 
@@ -294,7 +299,7 @@ C    +              valnum,kind
      +          ig1b,ig2b,ig3b,ig4b,       deetb,npasb,
      +          ip1b,ip2b,ip3b
 
-      logical,  external ::     is_off, is_on
+      logical,  external ::     is_off, is_on, diag_is_a_level
 
 ***    Declarations pour les fonctions FST/RMN
 
@@ -1260,12 +1265,16 @@ C    +              valnum,kind
           if (Minutes)                                         then
               heures = npas*(dble( deet )/3600.)
               if (heures <= 1000000.)                          then
-                  if (Message_Heures)                          then
-                      write(6,6250) KIND_HOURS
-                      Message_Heures = Faux
+                  ! Verifier que IP2 ne contient pas un niveau.
+                  call Diag_CONVIP_plus( ip2,hold,kind,-2,nuls,Faux )
+                  if (.not.diag_is_a_level( kind ))            then
+                      if (Message_Heures)                      then
+                          write(6,6250) KIND_HOURS
+                          Message_Heures = Faux
+                      end if
+                      CALL Diag_CONVIP_plus( ip2,heures,KIND_HOURS,
+     +                                       +2,nulS,Faux )
                   end if
-                  CALL Diag_CONVIP_plus( ip2,heures,KIND_HOURS,
-     +                                   +2,nulS,.FALSE. )
               end if
           end if
 

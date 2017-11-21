@@ -15,6 +15,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: coord.ftn,v $
+*     Revision 3.45  2017/11/19 20:21  dugas
+*     - Renommer a routine GET_IP1_STRING a GET_IP_STRING (+ generique).
+*       GET_IP1_STRING est maintenant un point d'entree a GET_IP_STRING
+*
 *     Revision 3.44  2016/10/26 16:17  dugas
 *     - Ajouter la routine CONVHOUR (le pendant de CONVPR mais pour IP2)
 *     - Ajouter KIND=1001,1003,2001,5003,5004 dans CONVIP1 et SETKINDI 
@@ -1076,24 +1080,24 @@ C
  6004 FORMAT (6(1X,A))
 
       END
-      INTEGER function get_ip1_kind (ip1)
+      INTEGER function get_ip1_kind (ip)
 
       implicit  none
 
 ***    Arguments.
 
-      integer   ip1
+      integer   ip
 
 ***    Local variables.
 
       integer   kind, mode
-      character string1
+      character string
       real      pr
 
 *------------------------------------------------------------------
       mode = -2
 
-      call  CONVIP1( ip1, pr, kind, mode, string1,.false. )
+      call  CONVIP1( ip, pr, kind, mode, string,.false. )
 
       get_ip1_kind = kind
 
@@ -1101,13 +1105,13 @@ C
 *------------------------------------------------------------------
 
       end
-      subroutine get_ip1_string (ip1,string)
+      subroutine get_ip_string (ip,string)
 
       implicit none
 
 ***    Arguments.
 
-      integer ip1
+      integer ip
       character*(*) string
 
 ***    Local variables.
@@ -1116,9 +1120,11 @@ C
       real pr
 
 *------------------------------------------------------------------
+      entry get_ip1_string (ip,string)
+
       mode = -2
 
-      call CONVIP1( ip1, pr, kind, mode, string,.true. )
+      call CONVIP1( ip, pr, kind, mode, string,.true. )
 
       return
 *------------------------------------------------------------------

@@ -42,7 +42,10 @@ implicit none
 !  M.Valin, September 2017 : Patches for climate-mode IP2 values and 
 !                          ensure that different "valid" configurations
 !                          of IP1&3=0 can still generate a GOOD_GUESS
-!  B.Dugas, October 2017 : Rename all of the internal routines to diag_...
+!  B.Dugas, October 2017 :- Rename all of the internal routines to diag_...
+!                         - Account for the (legal) possibility that the
+!                           IP1/2 pair contains a level range when IP3
+!                           holds a coded sample
 !
 ! EXAMPLES
 !   use ISO_C_BINDING
@@ -162,7 +165,7 @@ module procedure diag_decode_ip_2
 module procedure diag_decode_ip_3
 end interface
 
-integer, private, parameter :: Max_Kind=31
+integer, public, parameter :: Max_Kind=31
 
 !  1 means coordinate of type kind is ascending ( larger value = higher in the atmosphere )
 ! -1 means coordinate of type kind is descending ( larger value = lower in the atmosphere )
@@ -180,18 +183,19 @@ integer, private, save, dimension(0:Max_Kind) :: islevel = &
   (/  1,  1,  1,  1,  1,  1,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0, &
       0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  /)
 
-private :: swap, swapi, is_level, ascending, descending
-public :: diag_is_invalid_kind
+private :: swap, swapi, ascending, descending
+public :: is_level_int, is_invalid_kind_int
+
 contains
 !=========================== start of private functions ========================================
 !===============================================================================================
-function is_level(kind) result(status)  ! is this kind a level ?
+function is_level_int(kind) result(status)  ! is this kind a level ?
   implicit none
   logical :: status
   integer, intent(IN) :: kind
   status = .false.
   if(kind < 31 .or. kind < 0) status = islevel(kind)==1
-end function is_level
+end function is_level_int
 !===============================================================================================
 function ascending(kind) result(status) ! is this kind "ascending" (larger value higher in atmosphere) ?
   implicit none
@@ -209,14 +213,14 @@ function descending(kind) result(status) ! is this kind "descending" (larger val
   if(kind < 31 .or. kind < 0) status = order(kind)==-1
 end function descending
 !===============================================================================================
-function diag_is_invalid_kind(kind) result(status) ! is this kind invalid ?
+function is_invalid_kind_int(kind) result(status) ! is this kind invalid ?
   implicit none
   logical :: status
   integer, intent(IN) :: kind
   status=.false.
   if(kind<0) status=.true.
   if(kind>Max_Kind .and. iand(kind,15)/=15) status=.true.
-end function diag_is_invalid_kind
+end function is_invalid_kind_int
 !===============================================================================================
 subroutine swapi(a,b)  ! swap a pair of integer values
   implicit none
@@ -277,9 +281,9 @@ end subroutine swap
   IP1=-1 ; IP2=-1 ; IP3=-1
   P = 0
   kind = -1
-  if(diag_is_invalid_kind(RP1%kind) .or. diag_is_invalid_kind(RP2%kind)) return   ! OOPS, invalid kind for RP1 or RP2
+  if(is_invalid_kind_int(RP1%kind) .or. is_invalid_kind_int(RP2%kind)) return   ! OOPS, invalid kind for RP1 or RP2
 
-  if( is_level(RP1%kind) ) then  !  RP1 is a valid level kind
+  if( is_level_int(RP1%kind) ) then  !  RP1 is a valid level kind
     P(1)=RP1%lo ; kind(1)=RP1%kind ; i=i+1
     if (RP1%hi /= RP1%lo) then       ! RP1 is a range
       P(3)=RP1%hi ; kind(3)=RP1%kind ; i=i+1
@@ -290,20 +294,26 @@ end subroutine swap
     return  ! ERROR, RP1 must be a level
   endif
   
-  if(RP2%kind == 10) then             !  RP2 is a valid time kind
+  if(i == 2 .and. RP2%kind == KIND_SAMPLES) then     ! SPECIAL case : 2 levels and number of samples
+    P(2)    = P(3)  ;  kind(2) = kind(3)             ! move p3/kind3 to p2/kind2
+    P(3)    = RP2%lo                                 ! nb of samples to p3
+    kind(3) = KIND_SAMPLES
+    i = 3
+  endif
+
+  if(RP2%kind == KIND_HOURS) then             !  RP2 is a valid time kind
     P(2)=RP2%lo ; kind(2)=RP2%kind ; i=i+1
     if (RP2%hi /= RP2%lo) then  ! time range
       P(3)=RP2%hi ; kind(3)=RP2%kind ; i=i+1
       if(RP2%hi > RP2%lo) call swap(P(2),P(3)) ! keep times in descending order p(2) > p(3) => ip2 > ip3
     endif
+    if(i>3) return  ! OOPS, we have 2 ranges
   else
-    return  ! ERROR, RP2 must be a time
+    if(RP2%kind /= KIND_SAMPLES) return  ! ERROR, RP2 must be a time (or a number of samples)
   endif
   
-  if(i>3) return  ! OOPS, we have 2 ranges
-  
-  if(i /= 3) then   !  no range was found, RP3 comes into play
-    if(diag_is_invalid_kind(RP3%kind)) return ! OOPS, invalid kind for RP3
+  if(i < 3) then   !  no range was found, RP3 comes into play
+    if(is_invalid_kind_int(RP3%kind)) return ! OOPS, invalid kind for RP3
     P(3)=RP3%lo ; kind(3)=RP3%kind ; i=i+1
   endif
   
@@ -366,48 +376,64 @@ function diag_decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,nam
   if(ip1 < 0 .or. ip2 < 0 .or. ip3 < 0 ) goto 777
 
   call diag_convip_plus(IP1,P(1),kind(1),-2,dummy,.false.)  ! kind of ip1 should be a level
-  if(.not. is_level(kind(1))) goto 777                      ! ip1 is not a level
+  if(.not. is_level_int(kind(1))) goto 777                   ! ip1 is not a level
   if(0 < IP1 .and. IP1 < 32768) status = ior(status , CONVERT_GOOD_GUESS)  ! reasonable guess if old style level > 0 (0 is considered NOT_A_GUESS)
   RP1%lo=P(1) ; RP1%hi=P(1) ; RP1%kind=kind(1)
   
-  if(IP2 < 32768 .or. (ip3 == 0 .and. IP2 < 999999)) then   ! IP2 is old style, probably a time value
-    RP2%lo = IP2 ; RP2%hi = IP2 ; 
-    RP2%kind = KIND_HOURS                        ! time in hours ?
-    status = ior(status , CONVERT_GOOD_GUESS)    ! reasonable guess
-  else
-    call diag_convip_plus(IP2,P(2),kind(2),-2,dummy,.false.)  ! kind of ip2 should be new style time
-    if(kind(2) /= KIND_HOURS) goto 777            ! ip2 not a time
-    RP2%lo=P(2) ; RP2%hi=P(2) ; RP2%kind=kind(2)
-  endif
-
-  if(IP3 < 32768 .and. IP3 > 0) then            ! IP3 is old style (0 is considered "new style")
+  if(0 < IP3 .and. IP3 < 32768) then            ! IP3 is old style (0 is considered "new style")
     RP3%lo = IP3 ; RP3%hi = IP3
     if(IP3 <= 240) then                         ! time in hours ?
-      RP3%kind = KIND_HOURS 
+      RP3%kind = KIND_HOURS
       status = ior(status,CONVERT_BAD_GUESS)      ! unreliable guess
     else                                        ! arbitraty value ?
       RP3%kind = KIND_ARBITRARY
       status = ior(status,CONVERT_TERRIBLE_GUESS)  ! highly unreliable guess
     endif
+    kind(3) = RP3%kind
   else
     call diag_convip_plus(IP3,P(3),kind(3),-2,dummy,.false.)  ! kind of ip3 may be anything new style
     if(kind(3)==-1) goto 777
     RP3%lo=P(3) ; RP3%hi=P(3) ; RP3%kind=kind(3)
   endif
   
-  if(kind(3)==KIND_HOURS .and. kind(2)==kind(3)) then   ! time, same kind as ip2
+  if(IP2 < 32768 .or. (IP3 == 0 .and. IP2 < 999999)) then   ! IP2 is old style, probably a time value
+    RP2%lo = IP2 ; RP2%hi = IP2
+    RP2%kind = KIND_HOURS                        ! time in hours ?
+    status = ior(status , CONVERT_GOOD_GUESS)    ! reasonable guess
+  else
+    call diag_convip_plus(IP2,P(2),kind(2),-2,dummy,.false.)  ! kind of ip2 should be new style time
+     if(kind(2) == KIND_HOURS) then
+      RP2%lo=P(2) ; RP2%hi=P(2) ; RP2%kind=kind(2)
+    else
+      if(is_level_int(kind(2)) .and. kind(2) == kind(1) .and. kind(3) == KIND_SAMPLES) then
+        RP1%hi=P(2)
+        RP2%lo=P(3) ; RP2%hi=P(3) ; RP2%kind=kind(3)
+        RP3%kind=-1
+      else
+        goto 777            ! ip2 not a time (or a level if ip3 is a nb of samples)
+      endif
+    endif 
+  endif
+
+  if(kind(3) == KIND_HOURS .and. kind(2) == kind(3)) then   ! time in ip2 and ip3
     RP2%hi=P(3)
     RP3%lo=0.0 ; RP3%hi=0.0 ; RP3%kind=-1
     if(RP2%hi < RP2%lo) call swap(RP2%lo,RP2%hi)
-  elseif(kind(3)<=6 .and. kind(1)==kind(3) .and. IP1 > 0 .and. IP3 > 0) then ! same level type as ip1 (but not both zero)
+  elseif(kind(1) == kind(3) .and. IP1 > 0 .and. IP3 > 0) then ! levels in ip1 and ip3 (but not both zero)
     RP1%hi=P(3)
     RP3%lo=0.0 ; RP3%hi=0.0 ; RP3%kind=-1
     if(RP1%hi < RP1%lo .and. ascending(kind(3))) call swap(RP1%lo,RP1%hi)
     if(RP1%hi > RP1%lo .and. descending(kind(3))) call swap(RP1%lo,RP1%hi)
+  elseif(kind(1) == kind(2) .and. IP1 > 0 .and. IP2 > 0) then ! levels in ip1 and ip2 (but not both zero)
+    if(RP1%hi < RP1%lo .and. ascending(kind(2))) call swap(RP1%lo,RP1%hi)
+    if(RP1%hi > RP1%lo .and. descending(kind(2))) call swap(RP1%lo,RP1%hi)
   endif
 
-  if(kind(1) >6 .or. kind(2)/=KIND_HOURS) then  ! ip1 must be a level, ip2 must be a time
-    status=ior(status,CONVERT_ERROR)       ! add bad coding flag
+  if( .not. is_level_int(kind(1)) ) status=ior(status,CONVERT_ERROR)  ! ip1 must always be a level
+  if( is_level_int(kind(2)) .and. kind(1) /= kind(2) .and. ip2 /= 0 ) status=ior(status,CONVERT_ERROR)  ! invalid level pair 
+  if( is_level_int(kind(3)) .and. kind(1) /= kind(3) .and. ip3 /= 0 ) status=ior(status,CONVERT_ERROR)  ! invalid level pai
+  if(kind(2) /= KIND_HOURS) then                        ! ip2 should be a time (ip2 level, ip3 nb of samples is also OK)
+    if(.not. (is_level_int(kind(2)) .and. kind(3) == KIND_SAMPLES)) status=ior(status,CONVERT_ERROR)
   endif
 
 return
@@ -470,7 +496,7 @@ end function diag_decode_ip_1
 function diag_encode_ip_2(IP1,IP2,IP3,P1,kkind1,P2,kkind2,P3,kkind3) result(status) BIND(C,name='DiagConvertPKtoIP')
 ! INPUTS
 !  P1,kkind1 must be a level
-!  P2,kkind2 should be a time but a level is accepted (and flagged as a WARNING)
+!  P2,kkind2 should be a time but a level is accepted (and flagged as a WARNING, unless kkind3 is KIND_SAMPLES)
 !  P3,kkind3 may be anything
 ! OUTPUTS
 !  IP1,IP2,IP3 will contain the encoded values in case of success, and are undefined otherwise
@@ -507,27 +533,31 @@ implicit none  ! explicit, almost independent (rp,kind) to (ip) conversion
   kind1 = kkind1 ; kind2 = kkind2 ; kind3 = kkind3
 
   status=CONVERT_OK
-  if(diag_is_invalid_kind(kind1) .or. diag_is_invalid_kind(kind2) .or. diag_is_invalid_kind(kind3)) goto 777
+  if(is_invalid_kind_int(kind1) .or. is_invalid_kind_int(kind2) .or. is_invalid_kind_int(kind3)) goto 777
 
-  if(.not.is_level(kind1)) goto 777 ! ip1 must be a level
+  if(.not. is_level_int(kind1)) goto 777 ! ip1 must be a level
 
-  if(is_level(kind2)) then          ! ip2 should be a time, but a level is tolerated
-    status=ior(status,CONVERT_WARNING)               ! warning if level
+  if(is_level_int(kind2)) then          ! ip2 should be a time, but a level is tolerated
+     if(kind1 /= kind2) goto 777    ! invalid level pair
+     if(kind3 /= KIND_SAMPLES) status=ior(status,CONVERT_WARNING) ! warning if ip2 is a level and ip3 not a nb of samples
   else
-    if(kind2/=10) goto 777          ! ip2 must be a time if not a level
+    if(kind2 /= KIND_HOURS) goto 777          ! ip2 must be a time if not a level
   endif
 
   call diag_convip_plus(IP1,RP1,kind1,+2,dummy,.false.)  ! NEW style encoding not negotiable
   call diag_convip_plus(IP2,RP2,kind2,+2,dummy,.false.)
   call diag_convip_plus(IP3,RP3,kind3,+2,dummy,.false.)
 
-  if(kind1==kind2 .and. is_level(kind1) .and. kind3==10) then  ! level/level/time
-    call swapi(ip2,ip3)  ! second level into ip3, time flag into ip2
+  if(kind1 == kind2 .and. kind3 == KIND_HOURS) then  ! level/level/time
+    call swapi(ip2,ip3)  ! second level goes into ip3 and time value into ip2
     call swap(rp2,rp3)
     if(rp1>rp3 .and.  ascending(kind1)) call swapi(ip1,ip3)  ! ip1, ip3 in atmospheric ascending order
     if(rp1<rp3 .and. descending(kind1)) call swapi(ip1,ip3)
+  elseif(kind1 == kind2 .and. kind3 == KIND_SAMPLES) then    ! level/level/samples
+    if(rp1>rp2 .and.  ascending(kind1)) call swapi(ip1,ip2)  ! ip1, ip2 in atmospheric ascending order
+    if(rp1<rp2 .and. descending(kind1)) call swapi(ip1,ip2)
   else
-    if(kind2==10 .and. kind3==10 .and. rp2<rp3) call swapi(ip2,ip3)  ! level/time/time, put times in descending order
+    if(kind2 == KIND_HOURS .and. kind3 == kind2 .and. rp2 < rp3) call swapi(ip2,ip3)  ! level/time/time, put times in descending order
   endif
   return
 
@@ -580,34 +610,19 @@ implicit none
   if(ip1 < 0 .or. ip2 < 0 .or. ip3 < 0 ) goto 777
 
   call diag_convip_plus(IP1,RP1,kind1,-2,dummy,.false.)   ! IP1 old style translation should be a safe bet
-  if(kind1 == KIND_HOURS) then ! try to swap with ip2 is ip1 is time
+  if(kind1 == KIND_HOURS) then ! try to swap with ip2 if ip1 is time
     call swapi(ip1,ip2)
     call diag_convip_plus(IP1,RP1,kind1,-2,dummy,.false.)
     status = ior(status,CONVERT_WARNING)
   endif
-  if(diag_is_invalid_kind(kind1)) goto 777  ! bad kind
+  if(is_invalid_kind_int(kind1)) goto 777  ! bad kind
   if(0 < IP1 .and. IP1 < 32768) status = ior(status,CONVERT_GOOD_GUESS)
-  if( .not. is_level(kind1)) goto 777           ! ip1 must be a level
+  if( .not. is_level_int(kind1)) goto 777      ! ip1 must be a level
 
-  if(IP2 < 32768 .or. (ip3 == 0 .and. IP2 < 999999)) then    ! IP2 is old style, probably a time value
-    RP2 = IP2
-    kind2 = 10                                  ! time in hours ?
-    status = ior(status,CONVERT_GOOD_GUESS)     ! reasonable guess
-  else
-    call diag_convip_plus(IP2,RP2,kind2,-2,dummy,.false.)
-    if(diag_is_invalid_kind(kind2)) goto 777  ! bad kind
-    if(kind2 /= 10) then
-      if(is_level(kind2)) then
-        status = ior(status,CONVERT_WARNING)  ! ip2 is supposed to be a TIME, a level is tolerated
-      else
-        goto 777  ! neither time nor level
-      endif
-    endif
-  endif
-  if(IP3 < 32768 .and. IP3 > 0) then            ! IP3 is old style, (0 considered "new style")
+  if(0 < IP3 .and. IP3 < 32768) then            ! IP3 is old style, (0 considered "new style")
     RP3 = IP3
     if(IP3 <= 240) then                         ! time in hours ?
-      kind3 = 10 
+      kind3 = KIND_HOURS 
       status = ior(status,CONVERT_BAD_GUESS)    ! unreliable guess
     else                                        ! arbitraty value ?
       kind3 = 3
@@ -615,9 +630,26 @@ implicit none
     endif
   else
     call diag_convip_plus(IP3,RP3,kind3,-2,dummy,.false.)
-    if(diag_is_invalid_kind(kind3)) goto 777  ! bad kind
+    if(is_invalid_kind_int(kind3)) goto 777  ! bad kind
   endif
-  if(kind1 == kind2 .and. kind3==KIND_HOURS) then   ! level/level/time range in ip1/ip2/ip3
+
+  if(IP2 < 32768 .or. (ip3 == 0 .and. IP2 < 999999)) then  ! IP2 is old style, probably a time value
+    RP2 = IP2
+    kind2 = KIND_HOURS                          ! time in hours ?
+    status = ior(status,CONVERT_GOOD_GUESS)     ! reasonable guess
+  else
+    call diag_convip_plus(IP2,RP2,kind2,-2,dummy,.false.)
+    if(is_invalid_kind_int(kind2)) goto 777  ! bad kind
+    if(kind2 /= KIND_HOURS) then
+      if(is_level_int(kind2)) then
+         if (kind3 /= KIND_SAMPLES) status = ior(status,CONVERT_WARNING)  ! ip2 is supposed to be a TIME, a level is tolerated
+      else
+        goto 777  ! neither time nor level
+      endif
+    endif
+  endif
+
+  if(kind1 == kind2 .and. kind3 == KIND_HOURS) then   ! level/level/time in ip1/ip2/ip3
     call swap(RP2,RP3)       ! level/time/level
     call swapi(kind2,kind3)
   endif
@@ -625,7 +657,7 @@ implicit none
     if(ascending(kind1)  .and. RP1>RP3) call swap(RP1,RP3)   ! force increasing values
     if(descending(kind1) .and. RP1<RP3) call swap(RP1,RP3)   ! force decreasing values
   endif
-  if(kind2 == kind3 .and. kind2==KIND_HOURS) then   ! time range
+  if(kind2 == kind3 .and. kind2 == KIND_HOURS) then   ! time range
     if(RP2 < RP3) call swap(RP2,RP3)    ! force decreasing time values
   endif
 
@@ -682,3 +714,19 @@ return
 end function diag_decode_ip_3
 
 end module diag_convert_ip123
+
+function diag_is_a_level (kind) result(status)  ! is this kind a level ?
+  use diag_convert_ip123, only : is_level_int, is_invalid_kind_int
+  implicit none
+  logical :: status
+  integer, intent(IN) :: kind
+  status=( (.not. is_invalid_kind_int(kind)) .and. is_level_int(kind) )
+end function diag_is_a_level
+
+function diag_is_invalid_kind (kind) result(status) ! is this kind invalid ?
+  use diag_convert_ip123, only : is_invalid_kind_int
+  implicit none
+  logical :: status
+  integer, intent(IN) :: kind
+  status=is_invalid_kind_int(kind)
+end function diag_is_invalid_kind

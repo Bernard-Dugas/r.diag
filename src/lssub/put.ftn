@@ -22,6 +22,12 @@
 #     endif
 C
 C     $Log: put.ftn,v $
+C     Revision 3.52  2017/11/02 21:21  dugas
+C     Tenir compte des differentes signatures d'operations temporelles
+C      qui pourraient se retrouver dans le deuxieme caracteres du TYPVAR
+C      lors du traitement de la routine PUTSAMPLZ. Ces signatures sont
+C      fournies via le nouveau module stats_signatures
+C
 C     Revision 3.51  2016/10/25 14:44  dugas
 C     - Modifications a PUTSAMPLZ pour possiblement sauver l'interval
 C       des echeances dans IP2 pour des ensembles tous valides au
@@ -751,9 +757,6 @@ C
           POSIT = SET(I-1)*NWDS+1
           NLEV  = SET(I)-SET(I-1)
 
-CCC       IF (LEV(DEBSET,2).NE.-1)
-CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
-
           HOLDN = VARIAB(DEBSET)
           IF (HOLDN(17:20).NE.' ')
      +        CALL PUTHIC( HOLDN(17:20),'ETIK4' ,IBUF )
@@ -837,9 +840,6 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
           POSIT = SET(I-1)*NWDS+1
           NLEV  = SET(I)-SET(I-1)
 
-CCC       IF (LEV(DEBSET,2).NE.-1)
-CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
-
           CALL PUTHIGH( NIP3(I),'IP3'  ,IBUF )
 
           HOLDN = VARIAB(DEBSET)
@@ -899,7 +899,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
       REAL        GR8
       LOGICAL     IO64B
       INTEGER     POSIT,I,NWDS,NLEV,DEBSET
-      CHARACTER*4 KIND, HOLDN*20
+      CHARACTER*4 KIND, HOLDN*20,TYPVAR*2
       REAL        HIVALI,LOVALI
 
       REAL*8          G8
@@ -911,7 +911,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 *-------------------------------------------------------------------
       WRITE(KIND,0004) IBUF(1)
 
-          IO64B     = GETIO64( IO64B )
+      IO64B     = GETIO64( IO64B )
 
       IF (IO64B) PG8 = LOC( G(1) )
 
@@ -932,10 +932,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
           POSIT = SET(I-1)*NWDS+1
           NLEV  = SET(I)-SET(I-1)
 
-CCC       IF (LEV(DEBSET,2).NE.-1)
-CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 !!!       CALL PUTHIGH( NIP3(I),'IP3'  ,IBUF )
-
           CALL PUTHIR ( HIVAL(I),'HIVAL',IBUF )
           CALL PUTHIR ( LOVAL(I),'LOVAL',IBUF )
           CALL PUTHIGH( RKIND(I),'RKIND',IBUF )
@@ -1819,16 +1816,22 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
       
       ! Auteur: B. Dugas (UQAM/RPN)
 
-      ! Revision: septembre 2016, version originale
+      ! Revision:  version originale, septembre 2016.
+      !
+      ! Revision 1 2017/11/07 21:21  dugas
+      !  Detecter la presence d'une signature de
+      !  differentes quantites temporelles dans
+      !  le deuxieme caractere du TYPVAR
 
       use          diag_convert_ip123
+      use          stats_signatures
 
       IMPLICIT     none
 
       INTEGER      IBUF(*),NSAMPZ
 
-      CHARACTER(4) NULS
-      LOGICAL      COMPLET
+      CHARACTER(4) NULS,typvar*2
+      LOGICAL      COMPLET,lMeanVar
       REAL(8)      HEURES
       REAL         HIVAL,LOVAL
       type(FLOAT_IP) :: RP1,RP2,RP3
@@ -1838,8 +1841,10 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
       LOGICAL                INFO
       COMMON       /ZZVERBO/ INFO
 
+      logical,     EXTERNAL :: diag_is_a_level
       REAL,        EXTERNAL :: GETHIR
       INTEGER,     EXTERNAL :: GETHIGH
+      CHARACTER*4, EXTERNAL :: GETHIC
       EXTERNAL     PUTHIGH, PUTHIR, Diag_CONVIP_plus
 
 !------------------------------------------------------------------------------
@@ -1854,13 +1859,74 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
       HIVAL  = GETHIR ('HIVAL',IBUF ) 
       LOVAL  = GETHIR ('LOVAL',IBUF ) 
 
+      typvar = GETHIC ('TYPVAR',IBUF )
+
+      ! Signature d'une operation temporelle ?
+      lMeanVar = .FALSE.
+      if (typvar(2:2) == time_mean_signature .OR.
+     +    typvar(2:2) == variance_signature .OR.
+     +    typvar(2:2) == median_signature .OR.
+     +    typvar(2:2) == stdev_signature .OR.
+     +    typvar(2:2) == timmax_signature .OR.
+     +    typvar(2:2) == timmin_signature ) lMeanVar = .true.
+
       RANGE_KIND = GETHIGH( 'RKIND',IBUF )
 
       ! Comparaison a 5 seconds pres
       COMPLET = ( NINT( NPAS*dble( deet )/5, 8) ==
      +            NINT( dble( HIVAL-LOVAL )*720., 8) )
 
-      IF (COMPLET .and. HIVAL > LOVAL .and.
+      IF (lMeanVar)                                            THEN
+
+          ! Signature de moyennes, de variances, de minimums
+          ! ou de maximums temporels detectees. IP3 devrait alors
+          ! contenir le nombre d'echantillons NSAMPZ (KIND_SAMPLES),
+          ! DATEO la date de validitee du premier echantillon et DATEV
+          ! celle du dernier. De plus, si NSAMPZ=NPAS+1, on a alors
+          ! un ensemble complet et IP2 pourrait alors contenir
+          ! l'heure absolue de prevision (KIND_HOURS).
+
+          if (diag_is_a_level( RANGE_KIND ))                   then
+              ! PLacer le nombre d'echantillons ns dans IP3
+              ! IP2 sera automatiquement utilise pour RP1%lo              
+              RP1%hi = HIVAL  ; RP1%lo = LOVAL ; RP3%kind = RANGE_KIND
+              RP2%hi = NSAMPZ ; RP2%lo = NSAMPZ; RP2%kind = KIND_SAMPLES
+              stat   = diag_encode_ip( ip1,ip2,ip3, RP1,RP2,RP3 ) 
+              if (stat == CONVERT_ERROR)                       then
+                  IF (INFO)
+     +            write(6,6003) stat,RP1%hi,RP1%lo,RP1%kind,
+     +                               RP2%hi,RP2%lo,RP2%kind
+                  CALL                             XIT('PutSamplZ',-3 )
+
+              end if
+          else
+              ! Placer HIVAL dans IP2 et le
+              ! nombre d'echantillons dans IP3.
+              if (HIVAL <= 1000000.)  ! Coder le nombre d'heures dans IP2
+     +            call diag_convip_plus( ip2,HIVAL,
+     +                                   KIND_HOURS,+2,nuls,.false. )
+              if (NSAMPZ < 2000000)                            then
+              ! 1 999 999 est la limite superieure des valeurs qui pourront
+              ! etre codees correctement en mode NEW-STYLE pour KIND_SAMPLES
+              ! Coder le nombre d'echantillons dans IP3 ...
+                  call diag_convip_plus( ip3,float(NSAMPZ),
+     +                                   KIND_SAMPLES,+2,nuls,.false. )
+              else
+     +        if (NSAMPZ < 254903968)                          then
+              ! Notez que les limites des valeurs codees pour KIND_SAMPLES
+              ! sont les suivantes: 254903968   <=  IPi <= 267486880
+                  IP3 = NSAMPZ ; IP2 = 0
+              ELSE ! Trop d'echantillons. Erreur !
+                  IF (INFO) WRITE(6,6002) NSAMPZ
+                  CALL                             XIT('PutSamplZ',-2 )
+              end if
+          end if
+          ! Sauver les nouvelles valeurs des IP2/3
+          call PUTHIGH( ip2,'IP2',IBUF )
+          call PUTHIGH( ip3,'IP3',IBUF )
+
+      ELSE
+     +IF (COMPLET .and. HIVAL > LOVAL .and.
      +   (RANGE_KIND == -1 .or. RANGE_KIND == KIND_HOURS))     THEN
           ! Coder (ou re-coder) (HIVAL,LOVAL) dans (IP2,IP3)
           RP1%hi = 0.0   ; RP1%lo = 0.0   ; RP1%kind = KIND_PRESSURE
@@ -1916,5 +1982,7 @@ CCC  +        CALL PUTHIGH( LEV(DEBSET,2),'IP1',IBUF )
 !------------------------------------------------------------------------------
  6001 format(/'   Erreur=',I3,' dans ENCODE_ip, RP2=',2p4e14.6,I3/)
  6002 format(/'   Too many samples, NSAMPZ = ',I11/)
+ 6003 format(/'   Erreur=',I3,' dans ENCODE_ip, RP1=',2p4e14.6,I3/
+     +                                     31x,'RP2=',2p4e14.6,I3/)
 
       END SUBROUTINE PUTSAMPLZ

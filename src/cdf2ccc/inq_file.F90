@@ -43,6 +43,9 @@
 !REVISIONS
 !
 !  B. Dugas mai 2017 : 
+!  - Correction de l'initialisation
+!    de la variable locale unique_L
+!  B. Dugas mai 2017 : 
 !  - Convertir en fichier .F90 pour traiter
 !    le macro taille_entete avec s.f90
 !  B. Dugas avril 2017 :
@@ -336,6 +339,8 @@
                exit
             endif
          enddo
+      else
+         unique_L=.false.
       endif
 
       if(.false.) write(6,6600)nvar,ndim,nlev,ntime ! Debug
@@ -666,6 +671,8 @@
       end subroutine inq_file2
       subroutine rpn_params( funit,phis_unit,ibuf )
 
+      use      stats_signatures
+
       implicit none
       
       include 'cdf2ccc.h'
@@ -683,6 +690,7 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas nov 2017 : Comparer TYPVAR(2:2) avec stats_signatures
 !  Bernard Dugas jan 2017 : utiliser getmsamplz pour definir IP3
 !  Bernard Dugas mai 2008 : ladate est maintenant en format date-time-stamp
 !  Bernard Dugas nov 2008 : invj = .not.invj pour les grilles de type Z
@@ -694,9 +702,10 @@
       CHARACTER(len=4), external :: GETHIC
       INTEGER,external :: GETHIGH,NEWDATE,GETSAMPLZ
 
+      
       real(8)      DELTAT
 
-      character    ZTYP,GRTYP
+      character    ZTYP,GRTYP,TYPVR*2,CELLM*25
 
       integer      DATEO, IP1, IP3, dtpr, tmpr, &
                    datchek, i, ni, nj, rk, ipm, &
@@ -746,6 +755,8 @@
 !     Fichier RPN/CMC...
 !     Lire certains parametres dans la section haute de ibuf(head)
 
+      TYPVR = GETHIC('TYPVAR', IBUF )
+
       DATEO = GETHIGH('DATEO', IBUF )
 !CCC  IP1   = GETHIGH( 'IP1' , IBUF )
       IP1   = IBUF(4)
@@ -781,6 +792,18 @@
       nhour  =  tmpr /  1000000
       DELTAT = (DBLE( DEET )/3600.)*NPAS
 
+      ! Verifier la presence d'une signature
+      ! d'operations temporelles dans TYPVAR ?
+
+      CELLM = ' '
+
+      if (TYPVR(2:2) == time_mean_signature) CELLM = 'time: mean'
+      if (TYPVR(2:2) == variance_signature ) CELLM = 'time: variance'
+      if (TYPVR(2:2) == median_signature   ) CELLM = 'time: median'
+      if (TYPVR(2:2) == stdev_signature    ) CELLM = 'time: standard_deviation'
+      if (TYPVR(2:2) == timmax_signature   ) CELLM = 'time: maximum'
+      if (TYPVR(2:2) == timmin_signature   ) CELLM = 'time: minimum'
+
       if (dtsize > 0.00001 .or. &
          (IP3 > 1 .and. DELTAT > 0.01_8)) then
 
@@ -808,6 +831,9 @@
          endif
 
          time_bnds_L = .true.
+
+         ! Possiblement sauver ce qui se trouvait dans TYPVAR(2:2)
+         if (cell_method == '?' .and. CELLM /= ' ') cell_method = CELLM
 
       endif
 

@@ -1,10 +1,10 @@
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
-*      accumul NEW  ACCUM [MISSACC] [MISSING] OUTPUT [ -mvalue VAL1 -kind VAL2 ]
-*      timavg  SERA AVGA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -kind VAL2 -def VAL3 -npg VAL4 ]
-*      timmax  SERA MAXA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -def  VAL2 -npg VAL3 ]
-*      timmin  SERA MINA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -def  VAL2 -npg VAL3 ]
+*      accumul NEW  ACCUM [MISSACC] [MISSING] OUTPUT [ -mvalue VAL1 -def [NOMODTYP] -kind VAL2 ]
+*      timavg  SERA AVGA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -def [NOMODTYP] [KEEPTIME] -kind VAL2 -npg VAL3 ]
+*      timmax  SERA MAXA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -def [NOMODTYP] [KEEPTIME] -npg  VAL2 ]
+*      timmin  SERA MINA  [MISSOUT] [MISSING] OUTPUT [ -mvalue VAL1 -def [NOMODTYP] [KEEPTIME] -npg  VAL2 ]
 *
 *
 *     DESCRIPTIONS...
@@ -85,20 +85,25 @@
 *               on output.
 *            2) The first file's sample size may also be used by ACCUMUL to
 *               correctly build the ensemble mean. This will always occurr
-*               with RPN Standard files, but will only occurr with CCRN
-*               files when the command-line parameter sequence "-kind SAMPLES"
+*               with RPN/CMC files, but will only occurr with CCRN files
+*               when the command-line parameter sequence "-kind SAMPLES"
 *               is specified. In the latter case, the number in IBUF(2) will
 *               be assumed to be a sample size and not a date/step number.
 *            3) Each record in a file can also be representative of several
 *               samples. Specifying the same "-kind SAMPLES" arguments with
 *               TIMAVG will correctly account for the sample sizes.
-*            4) When dealing with RPN Standard files, accumul and timavg modify
+*            4) When dealing with RPN/CMC files, accumul and timavg modify
 *               the file's time descriptors such that the earliest sample time
 *               is saved in DATEO, while the latest can be reconstructed from
 *               new values of DATEO, NPAS and DEET. In addition, IP3 will then
 *               contain the number of time samples used to construct the average.
 *               Other R.DIAG modules such as TIMGEN and the statistical testing
 *               modules (FTEST, ...) can then use this information directly.
+*            5) The NOMODTYP -def optional value, if set, disallows applying
+*               the TYPVAR-specific signatures for time averages, minimums and
+*               maximums that can be used in RPN/CMC files. Note that if the
+*               KEEPTIME option is activated, NOMODTYP will also be set.
+*               
 *
 *    ************************************************************************
 *   *** All of the above descriptor modifications can be avoided in timavg ***
@@ -147,6 +152,14 @@
 *     ------------------------------------------------
 
 *     $Log: timavg.ptn,v $
+*     Revision 4.43 2017/11/02 19:19  dugas
+*     Ajouter une signature de moyennes (time_mean_signature) ou
+*      de minimums (timmin_signature) ou de maximums (timmax_signature)
+*      dans le deuxieme caractere du TYPVAR. Cette fonctionalite peut
+*      etre desactivee a la  sortie via l'argument '-def NOMODTYP'.
+*      Ces signatures sont fournies via le nouveau module
+*      stats_signatures
+*
 *     Revision 4.42 2017/08/10 10:10  dugas
 *     Ajouter le traitement d'echantillons d'analyses pour
 *      lesquelles DEET=0. Le resultat est similaire a ceux
@@ -332,6 +345,7 @@
 
 *---------------------------------------------------------------------------
       use         diag_convert_ip123, only : KIND_HOURS, KIND_SAMPLES
+      use         stats_signatures
 
       IMPLICIT    none
  
@@ -343,7 +357,7 @@
       CHARACTER(4) TYPE,ACCSTAT,ACCMISS,PREMISS
       LOGICAL     MODTIM,MVALUE,MISSOUT,SQUARE,AVGDATA,
      +            OK,OK2,ACCUM,TIMAX,TIMIN,SAMPLES,ACCOK,
-     +            OLDIP3
+     +            OLDIP3,NoModT,Vrai,Faux
       REAL(8)     FNI,HEURE,MISFLAG,EPSILON,EPS,tdiff,H0
       REAL        ZERO, HIVALi,LOVALi,
      +            HIVALA(MAXLEV),LOVALA(MAXLEV),
@@ -382,8 +396,9 @@
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
 
-      DATA        NPG/ 999 /, MODTIM,OK,OK2/ 3*.TRUE. /
-      DATA        AVGDATA,MISSOUT,OLDIP3,SAMPLES,SQUARE/ 5*.FALSE. /
+      DATA        NPG/ 999 /, MODTIM,OK,OK2,Vrai/ 4*.TRUE. /
+      DATA        AVGDATA,Faux,MISSOUT,NoModT,OLDIP3,SAMPLES,SQUARE
+     +           /7*.FALSE. /
 *====================================================================
 
       NOMPRG =
@@ -422,48 +437,45 @@
 
 ***    SETUP FOR 64-BIT I/O.
 
-      OK = SETIO64(.TRUE.)
+      OK = SETIO64(Vrai)
 
 ***    WHAT OPERATING MODE: STANDARD, ACCUMULATOR OR MAX/MIN ?
 
-                              TIMAX = .FALSE.
-                              TIMIN = .FALSE.
-                              ACCUM = .FALSE.
-      IF (VERBE.EQ.'accumul') ACCUM = .TRUE.
-      IF (VERBE.EQ.'timmin' ) TIMIN = .TRUE.
-      IF (VERBE.EQ.'timmax' ) TIMAX = .TRUE.
+                              TIMAX = Faux
+                              TIMIN = Faux
+                              ACCUM = Faux
+      IF (VERBE.EQ.'accumul') ACCUM = Vrai
+      IF (VERBE.EQ.'timmin' ) TIMIN = Vrai
+      IF (VERBE.EQ.'timmax' ) TIMAX = Vrai
 
       IF (RPBLOC( ' ',VALEUR ))                                THEN
 
 ***        CHECK PARAMETRE BLOCK
 
-          IF (     (TIMIN .OR. TIMAX)
-     +        .AND.(PKTYP .EQ. 'SQ' ))                         THEN
+          IF (.NOT.ACCUM .AND.(PKTYP .EQ. 'SQ' ))              THEN
 
-***            (CASE 1: TIMMIN/TIMMAX modes with standard files).
-
-              OK = RPBLOC('NPG',VALEUR )
-              IF (OK) READ( VALEUR,0005,ERR=900,IOSTAT=IO ) NPG
-
-              OK = RPBLOC('DEFAUT',VALEUR )
-              CALL LOW2UP(  VALEUR,VALEUR )
-              IF (OK) MODTIM = (VALEUR.NE.'KEEPTIME')
-
-              IF (.NOT.MODTIM) WRITE(6,6000) trim( VERBE )
-
-          ELSE IF (.NOT.(ACCUM .OR. TIMIN .OR. TIMAX)
-     +             .AND.(PKTYP .EQ. 'SQ' ))                    THEN
-
-***            (CASE 2: TIMAVG mode with standard files).
+***            (CASE 1: TIMAVG/TIMMIN/TIMMAX/ modes with standard files).
 
               OK = RPBLOC('NPG',VALEUR )
               IF (OK) READ( VALEUR,0005,ERR=900,IOSTAT=IO ) NPG
 
               OK = RPBLOC('DEFAUT',VALEUR )
-              CALL LOW2UP(  VALEUR,VALEUR )
-              IF (OK) MODTIM = (VALEUR.NE.'KEEPTIME')
+              CALL LOW2UP( VALEUR ,VALEUR )
+              IF (OK)                                          THEN
+                  IF (VALEUR /= ' ') CALL LEADBLK( VALEUR )
+                  IF (VALEUR /= '-1' .AND. VALEUR /= ' ')      THEN
+                      IF (index( VALEUR,'KEEPTIME') <=0) MODTIM = Faux
+                      IF (index( VALEUR,'NOMODTYP') > 0) NoModT = Vrai
+                  END IF
+              END IF
 
-              IF (.NOT.MODTIM) WRITE(6,6000) trim( VERBE )
+              IF (.NOT.MODTIM)                                 THEN
+                  WRITE(6,6000) trim( VERBE )
+                  IF (.NOT.NoModT)                             THEN
+                      WRITE(6,6600)
+                      NoModT = Vrai
+                  END IF
+              END IF
 
               OK = RPBLOC('KIND',VALEUR )
               CALL LOW2UP(  VALEUR,VALEUR )
@@ -474,7 +486,16 @@
 
           ELSE IF (ACCUM)                                      THEN
 
-***            (CASE 3: ACCUMUL).
+***            (CASE 2: ACCUMUL).
+
+              OK = RPBLOC('DEFAUT',VALEUR )
+              CALL LOW2UP( VALEUR ,VALEUR )
+              IF (OK)                                          THEN
+                  IF (VALEUR /= ' ') CALL LEADBLK( VALEUR )
+                  IF (VALEUR /= '-1' .AND. VALEUR /= ' ')      THEN
+                      IF (index( VALEUR,'NoModTYP') > 0) NoModT = Vrai
+                  END IF
+              END IF
 
               OK = RPBLOC('KIND',VALEUR )
               CALL LOW2UP(  VALEUR,VALEUR )
@@ -492,7 +513,7 @@
                   SQUARE  = (VALEUR.EQ.'SQUARE')
 
                   IF (SQUARE .AND. MVALUE)                     THEN
-                      SQUARE = .FALSE.
+                      SQUARE = Faux
                       WRITE(6,6550)
                   END IF
 
@@ -513,7 +534,7 @@
 
 ***        CHECK FILES USED BY MISSING VALUE PROCESSING.
 
-          IF (NF.GT.2) MISSOUT = .TRUE.
+          IF (NF.GT.2) MISSOUT = Vrai
 
           IF (NF.GT.3)                                         THEN
 
@@ -551,7 +572,7 @@
           NPAS  = GETHIGH('NPAS' ,KBUF )
           DATEO = GETHIGH('DATEO',KBUF )
 
-***        SAVE ORIGINAL TYPVAR.
+***        SAVE ORIGINAL TYPVAR AND CHECK FOR TYPVAR MEAN/VARIANCE CODING.
 
           TYPVAR = GETHIC('TYPVAR',KBUF )
 
@@ -568,7 +589,7 @@
 
           IPMi = GETIPMODE( KBUF ) ! Check for IP1/2/3 coding
 
-          IF (IPMi == 0) OLDIP3 = .TRUE.
+          IF (IPMi == 0) OLDIP3 = Vrai
           
       ELSE IF (MAXW.LE.0)                                      THEN
 
@@ -786,7 +807,7 @@
 
 ***    DO THE WORK.
 
-      ACCOK = .TRUE.
+      ACCOK = Vrai
 
       IF (NSETS.EQ.0)                                          THEN
 
@@ -916,7 +937,7 @@
               NRECS  = NRECS+SET(NSET)
               NSETS  = 1
 
-              IF (MAXVAL( NSAMP(1:NSET) ) > 1) AVGDATA = .TRUE.
+              IF (MAXVAL( NSAMP(1:NSET) ) > 1) AVGDATA = Vrai
 
               IF (PKTYP.EQ.'SQ')                               THEN
 
@@ -1057,7 +1078,7 @@
           IF (.NOT.OK) GOTO 300
 
           IF (NSETS == 0)                                      THEN
-              IF (MAXVAL( NSAMPB(1:NSET) ) > 1) AVGDATA = .TRUE.
+              IF (MAXVAL( NSAMPB(1:NSET) ) > 1) AVGDATA = Vrai
           ELSE
      +    IF (AVGDATA .NEQV. MAXVAL( NSAMPB(1:NSET) ) > 1)     THEN
               ! Mixing averages and samples in input data
@@ -1396,9 +1417,22 @@
 
       END IF
 
-***    MAKE SURE TYPVAR HAS ITS ORIGINAL VALUE.
+***    MAKE SURE TYPVAR HAS ITS ORIGINAL VALUE (or not)...
 
-      IF (PKTYP.EQ.'SQ') CALL PUTHIC( TYPVAR,'TYPVAR',IBUF )
+      IF (PKTYP.EQ.'SQ')                                       THEN
+          IF (NoModT)                                          THEN
+              CALL PUTHIC( TYPVAR          ,'TYPVAR',IBUF )
+          ELSE
+              ! Apply the appropriate TYPVAR signatures
+              IF      (TIMAX)                                  THEN
+                  CALL PUTHIC( TYPVAR(1:1)//timmax_signature,'TYPVAR',IBUF )
+              ELSE IF (TIMIN)                                  THEN
+                  CALL PUTHIC( TYPVAR(1:1)//timmin_signature,'TYPVAR',IBUF )
+              ELSE
+                  CALL PUTHIC( TYPVAR(1:1)//time_mean_signature,'TYPVAR',IBUF )
+              END IF
+          END IF
+      END IF
 
 ***    SAVE AVERAGES.
 
@@ -1463,6 +1497,8 @@
  6502 FORMAT(/' Accumul assumes IBUF(2) contains sample sizes.'/)
  6550 FORMAT(/' Option SQUARE unavalable with missing values.'/)
  6551 FORMAT(/' Option SQUARE active...'/)
+ 6600 FORMAT( ' And option NOMODTYP activated (as it',
+     +        ' requires KEEPTIME=false)'/)
 
       END
 #     endif

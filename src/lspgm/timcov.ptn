@@ -1,8 +1,10 @@
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
-*      timcov  SERA SERB COV   [MISSOUT] OUTPUT [ -def ] [-mvalue VAL1 -npg VAL2 -name VAL3]
-*      stdev   FILEDEV STDDEVI [MISSOUT] OUTPUT [ -def ] [-mvalue VAL1 -npg VAL2 -kind VAL3]
+*      timcov  SERA SERB COV   [MISSOUT] OUTPUT [ -def [ZEROM][NOMODTYP]] \ 
+*                              [-mvalue VAL1 -npg VAL2 -name VAL3]
+*      stdev   FILEDEV STDDEVI [MISSOUT] OUTPUT [ -def [ZEROM][NOMODTYP]] \ 
+*                              [-mvalue VAL1 -npg VAL2 -kind VAL3]
 *
 *
 *     DESCRIPTIONS...
@@ -41,7 +43,7 @@
 *
 *
 *     Command-line arguments...
-*      def    = [STDEV ONLY] Remove mean from FILEDEV (see note 1)
+*      def    = Remove mean from FILEDEV (see note 1)
 *      kind   = [STDEV ONLY] 'STD' ==> Output standard deviations (Default)
 *               [STDEV ONLY] 'VAR' ==> Output variances rather than std devs
 *      mvalue = Real number used to identify missing values (DEF = none)
@@ -56,8 +58,9 @@
 *
 *     Notes: 1) The input file(s) may or may not already contain deviations
 *               from the time mean(s). The time means will removed from the
-*               file(s) when the "-def" command-line key is specified (i.e.
-*               TIMDEV need not be called previous to TIMCOV or STDEV)
+*               file(s) when the "-def" command-line key (either without any
+*               values or at least with value ZEROM)  is specified so that
+*               TIMDEV need not be called before calling TIMCOV or STDEV.
 *            2) Only the first full homogeneous sets are treated.
 *            3) By default, when SERA and SERB contain different
 *               variables, the output variable name is set to "COV".
@@ -112,6 +115,14 @@
 *     ------------------------------------------------
 
 *     $Log: timcov.ptn,v $
+*     Revision 4.31  2017/11/04 16:16:16  dugas
+*     - Codage par defaut de la signature des variances (variance_signature)
+*       ou des ecarts type (stdev_signature) dans le deuxieme caractere du
+*       parametre TYPVAR. Cette fonctionalite peut toujours etre desactivee
+*       a la sortie via l'argument '-def NOMODTYP'. Ces signatures sont
+*       fournies via le nouveau module stats_signatures
+*     - Appel a PUTSAMPLZ pour encoder le nombre d'echantillons
+*
 *     Revision 4.30  2014/09/25 20:20:54  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -249,7 +260,7 @@
 
       CHARACTER(4) TYPE,CCOV,KIND
       REAL(8)     HEURE,MISFLAG,EPSILON
-      LOGICAL     OK,ZEROM,MVALUE,MISSOUT
+      LOGICAL     OK,ZeroM,MVALUE,MISSOUT,NoModT
       CHARACTER   VALEUR*5,NAMEF*256,PKTYP*2,VERBE*8
       INTEGER     I,K,L,MAXW1,MAXW2,LEN1,LEN2,NS,IER,
      +            LEVA(MAXLEV,2),LEVB(MAXLEV,2),KBUF(HEAD),KPAK,
@@ -288,7 +299,8 @@
 
 *---------------------------------------------------------------------
       NOMPRG =  NMPRG
-      ZEROM  = .FALSE.
+      ZeroM  = .FALSE.
+      NoModT = .False.
 
 ***    ACCEDER LES FICHIERS D'E/S.
 
@@ -320,10 +332,23 @@
           OK = RPBLOC('NAME',VALEUR)
           IF (OK) CCOV = VALEUR
 
-          ZEROM = RPBLOC('DEFAUT',VALEUR)
+          OK = RPBLOC('DEFAUT',VALEUR)
 
-          IF (ZEROM) WRITE(6,6000)
-          IF (ZEROM) ALLR8 = 3
+          IF (OK)                                              THEN
+              IF (VALEUR /= ' ')                               THEN
+                  CALL LOW2UP( VALEUR ,VALEUR )
+                  CALL LEADBLK( VALEUR )
+              END IF
+              IF (VALEUR /= '-1' .AND. VALEUR /= ' ')          THEN
+                  IF (index( VALEUR,'ZEROM')    > 0) ZeroM  = .TRUE.
+                  IF (index( VALEUR,'NOMODTYP') > 0) NoModT = .TRUE.
+              ELSE
+                  ZeroM  = .TRUE.
+              END IF
+          END IF
+
+          IF (ZeroM) WRITE(6,6000)
+          IF (ZeroM) ALLR8 = 3
 
       END IF
 
@@ -401,7 +426,7 @@
       ALLOCATE( F(MEM*CMPL),G(MEM*CMPL),IBUF(LEN),   STAT=IER1 )
 
       IF (NS.EQ.0)                                             THEN
-          IF (ZEROM)                                           THEN
+          IF (ZeroM)                                           THEN
               ALLOCATE( COV(MEM*CMPL),
      +                  AVF(MEM*CMPL),AVG(MEM*CMPL), STAT=IER2 )
           ELSE
@@ -431,8 +456,8 @@
 
       CALL COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
      +              SETA,SETB,LEVA,LEVB,VARIA,VARIB,STEP,
-     +              MEM,HEAD, NSETA,NSETB,MAXW, OK,ZEROM,
-     +             .TRUE., PKTYP, NPG, MAXLEV,
+     +              MEM,HEAD, NSETA,NSETB,MAXW, OK,ZeroM,
+     +             .TRUE.,NoModT, PKTYP, NPG, MAXLEV,
      +              EPSILON,MISSOUT,MVALUE,MISFLAG,
      +              MA,MB,MC,KIND )
 
@@ -451,7 +476,7 @@
       ENTRY stdev
 
   150 NOMPRG =  NMPRG
-      ZEROM  = .FALSE.
+      ZeroM  = .FALSE.
 
 ***    ACCEDER LES FICHIERS D'E/S.
 
@@ -482,10 +507,23 @@
           CALL LOW2UP( KIND,KIND )
           IF (KIND /= 'VAR' .AND. KIND /= 'STD') KIND = 'STD'
 
-          ZEROM = RPBLOC('DEFAUT',VALEUR)
+          OK = RPBLOC('DEFAUT',VALEUR)
 
-          IF (ZEROM) WRITE(6,6001)
-          IF (ZEROM) ALLR8 = 3
+          IF (OK)                                              THEN
+              IF (VALEUR /= ' ')                               THEN
+                  CALL LOW2UP( VALEUR ,VALEUR )
+                  CALL LEADBLK( VALEUR )
+              END IF
+              IF (VALEUR /= '-1' .AND. VALEUR /= ' ')          THEN
+                  IF (index( VALEUR,'ZEROM')    > 0) ZeroM  = .TRUE.
+                  IF (index( VALEUR,'NOMODTYP') > 0) NoModT = .TRUE.
+              ELSE
+                  ZeroM  = .TRUE.
+              END IF
+          END IF
+
+          IF (ZeroM) WRITE(6,6001)
+          IF (ZeroM) ALLR8 = 3
 
       END IF
 
@@ -535,7 +573,7 @@
       ALLOCATE( F(MEM*CMPL),G(MEM*CMPL),IBUF(LEN),   STAT=IER1 )
 
       IF (NS.EQ.0)                                             THEN
-          IF (ZEROM)                                           THEN
+          IF (ZeroM)                                           THEN
               ALLOCATE( COV(MEM*CMPL),
      +                  AVF(MEM*CMPL),AVG(MEM*CMPL), STAT=IER2 )
           ELSE
@@ -566,8 +604,8 @@
 
       CALL COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
      +              SETA,SETA,LEVA,LEVA,VARIA,VARIA,STEP,
-     +              MEM,HEAD, NSETA,NSETA,MAXW, OK,ZEROM,
-     +             .FALSE., PKTYP, NPG, MAXLEV,
+     +              MEM,HEAD, NSETA,NSETA,MAXW, OK,ZeroM,
+     +             .FALSE.,NoModT, PKTYP, NPG, MAXLEV,
      +              EPSILON,MISSOUT,MVALUE,MISFLAG,
      +              MA,MB,MC, KIND )
 
@@ -587,9 +625,9 @@
     4 FORMAT(A4)
 
  6000 format(' Timcov will remove time means.')
- 6001 format(' Stdev will remove time means.')
+ 6001 format(/' Stdev will remove time means.')
  6006 FORMAT(' Unable to allocate enough working memory'/
-     +       ' Requesting ',I10,' characters.')
+     +       ' Requesting ',I10,' Bytes.')
  6007 FORMAT(' I/O error number ',I3,', while reading npg.')
 
  6100 FORMAT('0..Problems with input files...'/
@@ -604,17 +642,20 @@
       END
       SUBROUTINE COVWORK( COV,F,G,AVF,AVG, CMPL, IBUF,KBUF,CCOV,
      +                    SETA,SETB,LEVA,LEVB,VARIA,VARIB,STEP,
-     +                    MEM,HEAD, NSETA,NSETB,MAXW, OK,ZEROM,
-     +                    TIMCOV, PKTYP, NPG, MAXLEV,
+     +                    MEM,HEAD, NSETA,NSETB,MAXW, OK,ZeroM,
+     +                    TIMCOV,NoModT, PKTYP, NPG, MAXLEV,
      +                    EPSILON,MISSOUT,MVALUE,MISFLAG,
      +                    MA,MB,MC,KIND )
 *-------------------------------------------------------------------------
+      use         stats_signatures
       IMPLICIT    none
 
       CHARACTER*4 KIND
       COMPLEX*16  CWORD
-      LOGICAL     OK,ZEROM,TIMCOV,MVALUE,MISSOUT
-      CHARACTER*4 CCOV,CHOLD(MAXLEV),JOBN*8,PKTYP*2
+      CHARACTER*2 PKTYP,TYPVAR
+      LOGICAL     OK,ZeroM,TIMCOV,
+     +            MVALUE,MISSOUt,NoModT
+      CHARACTER*4 CCOV,CHOLD(MAXLEV),JOBN*8
       INTEGER     SETA(0:NSETA),SETB(0:NSETB),I,IK,K,M,
      +            LEVA(MAXLEV,2),LEVB(MAXLEV,2),STEP(*),
      +            KBUF(8),IBUF(8), MAXW,CMPL,DATEV,
@@ -631,6 +672,7 @@
 
       CHARACTER*20 VARIA(MAXLEV),VARIB(MAXLEV)
 
+      CHARACTER*4,EXTERNAL :: GETHIC
       INTEGER,    EXTERNAL :: GETHIGH
       EXTERNAL    XIT,GETMSET2,PUTMSET2,PRECEDE,INCDATR,
      +            DIFDATR,PUTHIC,PUTHIGH,PUTHIR,PUTSAMPLZ
@@ -651,7 +693,7 @@
               COV(IK,1) = 0.0
           END DO
 
-          IF (ZEROM)                                           THEN
+          IF (ZeroM)                                           THEN
               DO  IK=1,CMPL*MEM
                   AVF(IK,1) = 0.0
                   AVG(IK,1) = 0.0
@@ -705,6 +747,10 @@
                   CALL                             XIT( JOBN,-2 )
               END IF
           END IF
+
+***        SAVE CURRENT TYPVAR.
+
+          TYPVAR = GETHIC('TYPVAR',KBUF )
 
           IF (MVALUE)                                          THEN
 
@@ -776,7 +822,7 @@
 
           END IF
 
-          IF (ZEROM)                                           THEN 
+          IF (ZeroM)                                           THEN 
 
 ***            ACCUMULATE AVERAGES IN AVF AND AVG.
 
@@ -864,7 +910,7 @@
 
   300 OVNSET = 1.0/DBLE( NSETS )
 
-      IF (ZEROM)                                               THEN
+      IF (ZeroM)                                               THEN
 
 ***        FINALIZE AVF,AVG. 
 
@@ -1056,6 +1102,17 @@
           CALL PUTHIR ( HIVAL,'HIVAL',IBUF ) 
           CALL PUTHIR ( LOVAL,'LOVAL',IBUF ) 
 
+          IF (NoModT)                                          THEN
+              CALL PUTHIC( TYPVAR,'TYPVAR',IBUF )
+          ELSE
+              ! Possibly apply the appropriate TYPVAR signature
+              IF (TIMCOV)                                      THEN
+                  CALL PUTHIC( TYPVAR(1:1)//variance_signature,'TYPVAR',IBUF )
+              ELSE
+                  CALL PUTHIC( TYPVAR(1:1)//stdev_signature,'TYPVAR',IBUF )
+              END IF
+          END IF
+          
           CALL PUTSAMPLZ( NSETS,IBUF )
 
           IBUF(2) = NPAS

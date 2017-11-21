@@ -28,6 +28,12 @@
 !    Last revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lssub/diag_toc.cdk90,v 3.6 2015/03/30 22:18:18 dugas Exp $
 
 !    $Log: diag_toc.cdk90,v $
+!    Revision 3.8  2017/10/25 22:22  dugas
+!    Correction dans toutes les instances de GetToc, et
+!    dans SavToc et LoPToc d'un probleme d'initialisation
+!    par defaut de la variable locale LIP2. Ce probleme
+!    pouvait empecher le sauvetage des TocTocs.
+!
 !    Revision 3.7  2016/10/26 16:13  dugas
 !    - Ajouter la routine publique NOSTOC (pour ne pas sauver de TocToc)
 !    - Correction de commentaires dans GetTOC_rv
@@ -691,8 +697,9 @@
 !    and use default values.
 
       if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
-                          .and. TOC_IP(2,1,0) == 0 ) &
+                          .and. TOC_IP(2,1,0) == 0 ) THEN
          LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+      end if
 
 !    Now, try to find an existing grid descriptor
 !    set corresponding to these (IP1,IP2).
@@ -755,8 +762,9 @@
 !    and use default values.
 
       if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
-                          .and. TOC_IP(2,1,0) == 0 ) &
+                          .and. TOC_IP(2,1,0) == 0 ) THEN
          LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+      end if
 
 !    Now, try to find an existing grid descriptor
 !    set corresponding to these (IP1,IP2).
@@ -831,8 +839,9 @@
 !    and use default values.
 
       if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
-                          .and. TOC_IP(2,1,0) == 0 ) &
+                          .and. TOC_IP(2,1,0) == 0 ) THEN
          LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+      endif
 
 !    Now, try to find an existing grid descriptor
 !    set corresponding to these (IP1,IP2).
@@ -911,8 +920,9 @@
 !    and use default values.
 
       if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
-                          .and. TOC_IP(2,1,0) == 0 ) &
+                          .and. TOC_IP(2,1,0) == 0 ) THEN
          LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+      end if
 
 !    Now, try to find an existing grid descriptor
 !    set corresponding to these (IP1,IP2).
@@ -1015,8 +1025,9 @@
 !    and use default values.
 
       if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
-                          .and. TOC_IP(2,1,0) == 0 ) &
+                          .and. TOC_IP(2,1,0) == 0 ) THEN
          LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+      end if
 
 !    A record with hybrid vertical coordinate was written to
 !    I/O unit abs( NFOUT ), with (IG1,IG2) == (ip1,IP2).
@@ -1103,8 +1114,9 @@
 !    and use default values.
 
       if (TOC_NBR(0) == 1 .and. TOC_IP(1,1,0) == 0   &
-                          .and. TOC_IP(2,1,0) == 0 ) &
+                          .and. TOC_IP(2,1,0) == 0 ) THEN
          LIP1 = TOC_IP(1,1,0) ; LIP2 = TOC_IP(2,1,0)
+      end if
 
 !    Now, try to find an existing grid descriptor
 !    set corresponding to this (IP1,IP2) pair.

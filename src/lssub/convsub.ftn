@@ -23,421 +23,430 @@
 ! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
-C     $Log: convsub.ftn,v $
-C     Revision 3.127  2016/10/26 16:37  dugas
-C     - Remplacerle macro dimension_en_x=131072 par la paire de macros
-C       dimension_en_x=1000 et dimension_en_y=1000, ce qui permets le
-C       support des grilles de type Y (i.e. le parametre MAZDIM dans
-C       les routines GETZREF,OUVZREF2)
-C     - Ajouter dans IBUFILL et PARFILL la reconnaissance des
-C       intervals verticaux ou temporels codes dans les IP1/2/3
-C     - Utiliser (en option) le codage en heures des IP2 dans PARFILL
-C     - Dans SAVZREF, verifier les dimension en I et J lors de
-C       la recherche des TicTacs dans le fichier ZCROCHETS
-C     - Ajouter le point d'entree CLOZREF dans GETZREF
-C     - Ajouter le point d'entree RMZREF dans OUVZREF2
-C     - Appels a OUVZREF2 plutot que OUVZREF: nouvel argument logique
-C       REM qui indique de creer une nouveau fichier ZCROCHETS plutot
-C       que d'utiliser un fichier pre-existant.
-C     - Modifications syntaxiques F77 --> F90
-C
-C     Revision 3.126  2014/09/25 18:31:49  dugas
-C     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
-C
-C     Revision 3.125  2014/07/08 20:04:47  dugas
-C     Le macro dimension_en_x passe de 65536 a 131072 (mots).
-C
-C     Revision 3.124  2014/03/08 01:37:07  bernard
-C      - Introduire les points d'entree SAVZREF2, OUVZREF2 et MAKZREF2
-C        pour ajouter l'option de repartir avec un fichier ZCROCHETS
-C        frais, et au besoin effacer le precedent.
-C
-C     Revision 3.123  2014/02/05 19:56:32  dugas
-C      - Correction du format 6001 de WritUref.
-C      - Modifier les declaration des variables locales de PushU.
-C
-C     Revision 3.122  2014/01/28 18:23:19  dugas
-C     Ajouter le point d'entree getUdesc a la routine savUref.
-C
-C     Revision 3.121  2014/01/22 22:05:51  dugas
-C     Ajouter le point d'entree GETZTYP.
-C
-C     Revision 3.120  2013/11/28 22:15:03  dugas
-C      - Appel a UNSET_MISPAR lorsque IAND(datyp,64)=0 dans IBUFILL.
-C      - Tenir compte des enregistrements de renvois '^>' dans IBUFILL et READSTD.
-C      - Tenir compte des grilles de type 'U' dans IBUFILL, PARFILL, READSTD et WRITSTD.
-C      - Ne pas tenir compte de l'etiquette dans la recherche de TicTac dans Savzref.
-C      - Modifier le contenu du common OUICEST dans GETZREF (y ajouter SAUVU).
-C      - Ajouter les routines savUref (writUref) et pushU (findU).
-C
-C     Revision 3.119  2013/10/28 20:44:27  bernard
-C     Permettre l'ecriture de mots complexes (datyp=8) en 64 bits.
-C
-C     Revision 3.118  2013/07/17 21:54:06  bernard
-C     Modifier le traitement des DATYP. On ajoute aussi le support des valeurs manquantes pour fichier CMC/RPN dans IBUFILL et PARFILL.
-C
-C     Revision 3.117  2013/03/21 21:06:52  bernard
-C     - Ajouter le point d'entree GETZIPX a GETZREF.
-C     - Renommer GETZDES a GETZDES2 et changer son comportement lorsque
-C       les arguments REFDIMX et REFDIMY sont non-nuls. Dans ce cas, on
-C       cherche un jeux de TicTacs ayant ces dimensions. L'appel a GETZDES
-C       fonctionne encore comme auparavant mais devient un cas particulier.
-C     - Sauver et considerer les parametres TYPVAR et ETIKET des
-C       jeux de TicTacs, y compros dans les fichiers zcrochets.
-C
-C     Revision 3.116  2013/02/07 21:43:05  bernard
-C     - Initialiser la variable II dans SavZref.
-C     - Continuer a mieux documenter et structurer ce bout de code.
-C
-C     Revision 3.115  2012/11/29 23:18:59  dugas
-C     Ne plus supposer que les TicTacs sont ordonnes dans SavZref.
-C
-C     Revision 3.114  2012/09/07 20:14:42  dugas
-C     - Ajouter le point d'entree SET_TURBO_COMPRESS a PARFILL.
-C     - L'usage de la compression turbo est controle par la
-C       variable logique TURBO_COMPRESS (=V, par defaut).
-C
-C     Revision 3.113  2012/08/29 15:05:05  dugas
-C     - Traiter les TocToc (!!) comme les autres enregistrments de
-C       renvois au debut de IBUFILL: Appel a LirToc et retour.
-C
-C     Revision 3.112  2012/07/20 19:55:37  dugas
-C      - (Possiblement) Effectuer un appel a LirTOC
-C        dans READSTD lorsqu'on trouve un IP1 code Hybride
-C      - Re-organiser les declaratinos des routines READSTD et WRITSTD
-C      - (Possiblement) Permettre un deuxieme essai de lecture dans GETZREF
-C        avec un appel a MAKZREF pour chercher de nouveaux enregistrements
-C        TicTac. Ceci eliminera en grande partie les erreurs GETZREF -2.
-C      - Explicitement verifier que io=0 avant d'ouvrir zcrochets dans OUVZREF
-C
-C     Revision 3.111  2011/06/06 19:55:22  dugas
-C     - Toujours recalculer NPAS si DATEO < TIME dans PARFILL.
-C       Ceci force la coherence entre les differents parametres
-C       temporels.
-C     - Noms de fichiers a 512 caracteres max. dans OUVSTD/WRITSTD
-C     - Traitement des noms de fichiers tout en majuscules dans OUVSTD:
-C       Y ajouter le chemin d'acces pour tenter de prevenir la majusculisation
-C       forcee par FNOM.
-C
-C     Revision 3.110  2010/10/23 16:22:41  dugas
-C     Tenir compte des TocToc (\!\!) dans READSTD.
-C
-C     Revision 3.109  2010/06/10 21:24:03  dugas
-C     Enlever les routines hybref_to_ig/ig_to_hybref.
-C
-C     Revision 3.108  2010/05/10 16:34:41  dugas
-C     Menage dans les messages d'erreurs.
-C
-C     Revision 3.107  2010/03/19 18:25:24  dugas
-C     Compression turbo IEEE-754 32 bits non supportee pour donnees ZONL.
-C
-C     Revision 3.106  2010/03/05 22:35:40  dugas
-C     Activer la compression turbo pour les donnees IEEE-754 32 bits.
-C
-C     Revision 3.105  2010/02/12 22:49:34  dugas
-C     - Support de DATYP=4 (signed integer) dans PARFILL.
-C     - La routine WRITSTD supporte les enregistrements TocToc (!!).
-C     - On supprime le traitement de KEEPDATEV dans la mesure ou IBUF(2)=datev.
-C     - Les routines IBUFILL et PARFILL utilisent maintenant GET_DCF pour
-C       definit leur DATE_CONVERSION_FACTOR.
-C
-C     Revision 3.104  2009/09/08 19:33:24  dugas
-C     - Corriger la declaration de ZZZDATE dans IBUFILL (KEEPDATEV).
-C     - Corriger le code d'appel SYSTEM/RM dans OUVSTD.
-C
-C     Revision 3.103  2009/01/23 22:47:06  dugas
-C     - Corriger le code DEBUG dans READSTD/WRITSTD.
-C     - Corriger les message DEBUG 6101/6104 dans LIRPT.
-C
-C     Revision 3.102  2008/11/24 21:19:56  dugas
-C     - Implementer le mode "keep_datev" qui donne pre-seance dans
-C       PARFILL a la date de validite plutot qu'a ce qui se trouve
-C       dans IBUF(2).
-C     - Support de NEWDATE en mode -5 (i.e. "back to the future").
-C     - Traiter dans OUVSTD les fichiers "vides" au sens STDxx mais
-C       qui ne le sont pas au sens de l'OS (les effacer pour vrai!).
-C     - Verifier tous les TIC/TAC dans SAVZREF (nrc --> nrc+nre).
-C     - Quelques modifs de formats de sortie en mode DEBUG.
-C
-C     Revision 3.101  2008/07/24 19:35:19  dugas
-C     Initialiser IP1 a lev au debut de PARFILL.
-C
-C     Revision 3.100  2008/04/28 14:23:15  dugas
-C     Ne plus tenir compte du cas non-SQ98.
-C
-C     Revision 3.99  2008/04/25 20:39:19  dugas
-C     Corriger l'usage des macros pour r.gppf.
-C
-C     Revision 3.98  2007/12/19 19:32:09  dugas
-C     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
-C     - IBUFILL et PARFILL supportent LEV=IP1 pour les fichiers CMC/RPN.
-C       En particulier, IBUFILL force LEV=IP1 NewStyle et ne fait plus
-C       d'appel a PUTHIGH(IP1).
-C
-C     Revision 3.97  2007/08/29 20:56:15  dugas
-C     - Mode 64 bits non supporte avec donnees complexes (datyp=8) et entieres (datyp=2).
-C     - Ajouter le support de la compression TURBO pour IEEE-754 a 32 bits (datyp=133).
-C     - Correction de la conversion de donnees spectales selon leur datyp.
-C     - Definir PT_KIND=2 dans SETPT.
-C
-C     Revision 3.96  2006/09/19 18:19:28  dugas
-C     - Inserer du code preventif au cas ou DATEO=0 dans IBUFILL.
-C     - Tenir compte de ZTYPE lors de l'appel a FSTINFX dans READSTD."
-C
-C     Revision 3.95  2006/07/25 21:00:08  dugas
-C     Ignorer passivement IG3 dans PARFILL pour les grilles de type Z.
-C
-C     Revision 3.94  2006/07/04 17:07:54  dugas
-C     - Ajouter le supports des grilles de type #.
-C     - Completer le support des donnees de type CMPL dans IBUFILL/PARFILL.
-C     - Utiliser le nouveau format Z32 (DATYP=8) pour les donnees complexes
-C       (i.e. type SPEC/FOUR/CMPL).
-C     - Ne plus comparer IG3/IP3 dans GETZREF and co. Ceci libere IG3 pour
-C       le traitement des series temporelles des grilles Y et Z. Celles-ci
-C       sont maintenant definies comme les autres grilles supportees (avec
-C       IG3/IG4). Les series temporelles de grilles de type L ne sont
-C       toujours pas supportees.
-C
-C     Revision 3.93  2006/04/26 16:21:04  dugas
-C     Ne plus forcer le format de lignes a 128 caracteres
-C      pour les donnees de type CHAR dans les routines de
-C      conversions PARFILL et IBUFILL.
-C
-C     Revision 3.92  2006/02/09 18:23:59  dugas
-C     - Meilleur traitement des numeros d'unitees I/O.
-C     - Nouveau point d'entree GET_RNDSTAT dans OUVSTD.
-C
-C     Revision 3.91  2005/11/22 18:41:43  dugas
-C     Chercher le premier enregistrement crochet dans MAKZREF.
-C
-C     Revision 3.90  2005/07/28 17:40:02  dugas
-C     Corriger le format 6013 de SAVZREF.
-C
-C     Revision 3.89  2005/07/28 17:00:22  dugas
-C     - Ajouter "BLOCK DATA DATA_CONVSUB", pour des raisons de conformite avec F90.
-C     - S'assurer que le DATYP de l'enregistrement HY est conserve.
-C
-C     Revision 3.88  2005/04/14 16:41:10  dugas
-C     Proteger PT_NI,PT_NJ,PT_NK en cas d'echec de la lecture dans LIRPT.
-C
-C     Revision 3.87  2005/02/01 20:56:43  dugas
-C     Modifier le comportement de READSTD en mode DEBUG
-C
-C     Revision 3.86  2004/11/26 15:35:27  dugas
-C     Modifier les formats DEBUG 6110 et 6220 de GETZREF.
-C
-C     Revision 3.85  2004/11/08 20:41:04  dugas
-C     Completer le support des donnees de type CHAR/datyp=3 et
-C      tenir compte de noms purement numeriques dans la detection
-C      de noms de fichiers qui sont seulement en majuscules dans
-C      ouvSTD (probleme fonctionnel avec fnom).
-C
-C     Revision 3.84  2004/09/13 17:27:57  dugas
-C     1) Ajouter le support des donnees de type CHAR/datyp=3
-C        dans les routines PARFILL, IBUFILL et WRITSTD.
-C     2) Ajouter l'ouverture en mode APPEND dans OUVSTD.
-C
-C     Revision 3.83  2004/04/30 16:03:56  dugas
-C     Corriger le re-calcul d'un nouveau npas dans PARFILL.
-C     Converver le TYPVAR des enregistrements HY (LIRPT).
-C
-C     Revision 3.82  2003/08/25 18:47:33  dugas
-C     Pas de IP1=32767 lorsque nlev=1 dans PARFILL
-C
-C     Revision 3.81  2003/05/23 18:58:22  dugas
-C      Modifier le calcul de la variable "lev" dans
-C      la routine IBUFILL lorsque KIND=0,4,6 et 17.
-C
-C     Revision 3.80  2002/12/06 16:26:20  dugas
-C     Correction de certains formats I/O en mode DEBUG
-C
-C     Revision 3.79  2002/08/20 18:42:38  dugas
-C     Ajouter PUSHYZ/FINDYZ qui sont utilises dans WRITSTD
-C        et WRIZREF, respectivement.
-C     Corriger HYBREF_TO_IG et IG_TO_HYBREF selon V.Lee.
-C     Ajouter le traitement de l'option KEEPIP2 dans PARFILL.
-C     Ajouter IP2 dans le tampon HIGHBUF.
-C
-C     Revision 3.78  2002/04/22 15:47:21  dugas
-C     Corriger/Modifier le support des grilles de
-C     type Y et ajouter du code DEBUG un peu partout.
-C
-C     Revision 3.77  2002/01/14 13:53:42  dugas
-C     Ajouter le support des enregistrements 'HY' dans IBUFILL et PARFILL
-C     Ajouter la routine LIRPT et ses points d'entrees ECRPT, GETPT et SETPT.
-C     Ajouter les routines ig_to_hybref et hybref_to_ig (emprunt de GEM/DM)
-C     Ajouter un message informatif concernant les series temporelles pour
-C      les grilles de type 'L' (elles ne sont pas supportees a ce jour)
-C
-C     Revision 3.76  2001/11/20 21:21:06  armnrbd
-C     Corriger les conversions des IP1 dans le cas de niveaux
-C     arbitraires dans les routines IBUFILL et PARFILL.
-C
-C     Revision 3.75  2001/10/03 14:34:00  armnrbd
-C     Tenir compte des coordonnees de type hauteur (KIND=0) dans
-C      les routines de conversions IBUFILL et PARFILL.
-C
-C     Revision 3.74  2001/08/31 10:58:44  armnrbd
-C     IBUFILL va transferer la variable PKTYP dans HIGHBUFF.
-C     Enlever le common ZZPKTYP de WRITSTD.
-C
-C     Revision 3.73  2001/05/01 15:53:12  armnrbd
-C     Modifier le traitement des decripteurs IP1 de type
-C     arbitraire dans IBUFILL et PARFILL.
-C
-C     Revision 3.72  2001/02/27 00:11:34  armnrbd
-C     Remplacer les appels a PERROR par des appels a MESSYS.
-C
-C     Revision 3.71  2001/02/13 19:27:34  armnrbd
-C     Ajouter l'usage de OLDIP! dans OUVSTD et PARFILL.
-C     Verifier la presence d'enregistrements de renvois dans READSTD
-C
-C     Revision 3.70  2001/02/01 12:17:01  armnrbd
-C     Utiliser DIMSUP1 et DIMSUP2 pour supporter les grilles 3D.
-C     Corriger les formats des messages de type DEBUG.
-C
-C     Revision 3.69  2001/01/19 00:24:12  armnrbd
-C     Ajouter des messages "DEBUG" dans GETZREF.
-C
-C     Revision 3.68  2000/11/24 12:56:40  armnrbd
-C     Utiliser hignam dans IBUFILL et PARFILL.
-C
-C     Revision 3.67  2000/09/28 15:45:14  armnrbd
-C     Modifier les message DEBUG dans PARFILL.
-C     En ajouter dans READSTD et WRITSTD.
-C     Ajouter un arret d'erreur dans WRITSTD dans le cas
-C      de grille standard 1989 de plus de 500000 mots et
-C      utilisant le mode X64.
-C
-C     Revision 3.66  2000/09/12 15:07:55  armnrbd
-C     Corriger un effet de de bord de FIXNINJ,
-C      i.e. s'assurer que ILG=LA dans IBUFILL
-C      pour les champs de type spectraux.
-C
-C     Revision 3.65  2000/08/29 13:04:02  armnrbd
-C     Utiliser le IP1 qu'on a sauve dans HIGHBUF pour
-C     determiner le VKIND (lorsque c'est possible).
-C
-C     Revision 3.64  2000/07/24 20:49:52  armnrbd
-C     Modifier le traitement des series temporelles par IBUFILL
-C      et PARFILL dans le cas des fichiers standards 1998.
-C     Sauver et recupere IP3 dans HIGHBUF (IBUFILL et PARFILL).
-C
-C     Revision 3.64  2000/07/24 20:43:07  armnrbd
-C     Modifier le traitement des series temporelles par IBUFILL
-C      et PARFILL dans le cas des fichiers standards 1998.
-C
-C     Revision 3.63  2000/05/29 19:38:22  armnrbd
-C     Ajouter les IGx dans GETPARI.
-C
-C     Revision 3.62  2000/04/04 16:44:26  armnrbd
-C     Modifier la definition de ZZZDATE dans IBUFILL.
-C
-C     Revision 3.61  2000/01/24 19:37:36  armnrbd
-C     Ajouter du code DEBUG dans GETZREF et OUVZREF.
-C     Modifier la creation de ZCROCHETS dans GETZREF et SAVZREF.
-C
-C     Revision 3.60  1999/11/17 18:03:41  armnrbd
-C     Ajouter le point d'entree PUTZREF dans GETZREF.
-C
-C     Revision 3.59  1999/05/12 14:34:23  armnrbd
-C     Ajouter les variables BIG_TMPDIR et USE_BIG_TMPDIR.
-C
-C     Revision 3.58  1999/05/07 00:36:02  armnrbd
-C     Modifier la definition de ILG pour le cas spectral dans IBUFILL.
-C
-C     Revision 3.57  1999/04/27 18:19:39  armnrbd
-C     Modifier le format 6101 de IBUFILL pour IP1.
-C
-C     Revision 3.56  1999/04/26 20:48:30  armnrbd
-C     1) Ajouter deux arguments a GETZDES.
-C     2) Faire appel a GETZDES dans IBUFILL pour
-C        identifier les series temporelles SUBA.
-C
-C     Revision 3.55  1999/04/23 18:11:06  armnrbd
-C     Corriger un probleme de recurrence avec les routines
-C     de traitement des enregistrements crochets.
-C
-C     Revision 3.54  1999/04/08 20:19:25  armnrbd
-C     Enlever la declaration de PRIS dans OUVZREF.
-C
-C     Revision 3.53  1999/04/08 19:37:51  armnrbd
-C     Utiliser le comdeck MACHTYPE.CDK.
-C     Corriger deux appels a FSTPRM dans SAVZREF.
-C     Verification supp des variables lues dans SAVZREF.
-C     Utiliser FNOM pour ouvrir le fichier zcrochets.
-C
-C     Revision 3.52  1999/02/18 19:40:43  armnrbd
-C     Remplacer 01010100 par 1901010100 dans PARFILL.
-C
-c     Revision 3.51  1999/01/19  19:54:52  armnrbd
-c     Modifier le grtyp des grilles de type FOUR.
-c     Ajouter le support des champs de type COEF.
-c     Separer TYPVAR et GRTYP dans le bloc highbuff.
-c
-c     Revision 3.50  1999/01/12  21:02:41  armnrbd
-c     Re-assigner le GRTYP correspondant aux grilles FOUR.
-c     L'ancien GRTYP est utilise par les grilles GRIB-Lambert.
-c
-c     Revision 3.49  1998/12/28  19:11:49  armnrbd
-c     Definir IP2 dans PARFILL (ce n'etait pas toujours fait).
-c     Corriger le format de DEBUG dans PARFILL.
-c
-c     Revision 3.48  1998/10/27  15:05:30  armnrbd
-c     Corriger un bogue dans GETZREF concernant ^^.
-c
-c     Revision 3.47  1998/09/01  14:15:54  armnrbd
-c     Modifier les appels "blind" a FSTPRM.
-c
-c     Revision 3.46  1998/07/13  19:49:33  armnrbd
-c     S'assurer que le dernier jeux d'enregistrements de renvois
-c      est sauve dans le champs POINTXY a la sortie de SAVZREF.
-c
-c     Revision 3.45  1998/07/07  14:31:20  armnrbd
-c     Utiliser NEWDATE,DATMGP2 et IDATMG2 pour traiter le DATE-TIME STAMP.
-c
-c     Revision 3.44  1998/06/16  18:20:12  armnrbd
-c     S'assurer de la position des fichiers SQ89 a la sortie de MAKZREF.
-c
-c     Revision 3.43  1998/06/13  02:46:07  armnrbd
-c     Enlever tout le code de positionnement a la
-c      sortie des routines SAVZREF et MAKZREF.
-c
-c     Revision 3.42  1998/06/08  02:43:15  armnrbd
-c     Utiliser GETHIC et PUTHIC pour gerer les mots supplementaires
-c      de IBUF et ce notamment pour NEWL.
-c
-c     Revision 3.41  1998/05/28  19:37:49  armnrbd
-c     - Ajouter le comdeck HIGHBUF.
-c     - Utiliser CONVPR/LVCODE/LVDCODE pour les conversions de/vers IP1.
-c     - Ajouter le champs DATYP dans la section highbuf de IBUF.
-c     - Ajouter le support pour le cas DATYP=2 (i.e. donnees entieres).
-c     - La sequence d'appel de GETZREF a ete modifiee.
-c     - GETZREF fait maintenant un appel a MAKZREF.
-c     - Ajouter la routine MAKZREF qui force l'ecriture de ZCROCHETS.
-c     - Ajouter un appel a CONVPR (MODE=0) dans OUVSTD si SQ98 est defini.
-c     - Corriger l'ouverture de ZCROCHETS dans OUVZREF (probleme avec HPs).
-c     - Modifier le sens des parametres d'entree de SAVZREF. Si NF est
-c       negatif, ne pas repositionner le fichier d'entree avant de quitter.
-c     - SAVZREF verifie toujours s'il existe deja une copie des enregistrements
-c       de renvois dans le fichier ZCROCHETS dans le cas ou celui-ci etait non
-c       vide au demarrage.
-c
-c     Revision 3.40  1998/04/15  15:20:06  armnrbd
-c     Assurer l'initialisation de spec,data,four dans IBUFILL.
-c
-c     Revision 3.39  1998/04/15  02:23:00  armnrbd
-c     Augmenter la taille d'ETIKET de 8 a 16 caracteres.
-c     Le macro taille_entete passe de 20 a 22 mots.
-c
-c     Revision 3.38  1998/04/08  13:37:15  armnrbd
-c     Ouvrir les fichiers selon leur type dans OUVSTD (mode STD98).
-c     Ajouter de la protection et possiblement re-allouer le champ
-c      BLOCLE dans la routine PRECLE (et ses points d'entrees).
-c
-c     Revision 3.37  1998/02/23  19:49:17  armnrbd
-c     Ajouter un champs RCS pour afficher l'historiques des revisions.
-c
+!     $Log: convsub.ftn,v $
+!     Revision 3.128  2017/11/09 10:10  dugas
+!     - Tous les prefixes de commentaires passent de 'C' a '!'
+!     - Securiser les sorties debug 6101/2/3/4 dans IBUFILL
+!     - Corriger le traitement 'eqvnomt' dans IBUFILL pour
+!       laquelle la variable NOMA etait mal initialisee
+!     - Modifier le format de sortie 6101 de IBUFILL
+!       pour qu'on imprime la valeur decodee de IP3
+!
+!     Revision 3.127  2016/10/26 16:37  dugas
+!     - Remplacerle macro dimension_en_x=131072 par la paire de macros
+!       dimension_en_x=1000 et dimension_en_y=1000, ce qui permets le
+!       support des grilles de type Y (i.e. le parametre MAZDIM dans
+!       les routines GETZREF,OUVZREF2)
+!     - Ajouter dans IBUFILL et PARFILL la reconnaissance des
+!       intervals verticaux ou temporels codes dans les IP1/2/3
+!     - Utiliser (en option) le codage en heures des IP2 dans PARFILL
+!     - Dans SAVZREF, verifier les dimension en I et J lors de
+!       la recherche des TicTacs dans le fichier ZCROCHETS
+!     - Ajouter le point d'entree CLOZREF dans GETZREF
+!     - Ajouter le point d'entree RMZREF dans OUVZREF2
+!     - Ne pas faire appel a EQVNOMT si HIGHNAM est faux dans PARFILL
+!     - Appels a OUVZREF2 plutot que OUVZREF: nouvel argument logique
+!       REM qui indique de creer une nouveau fichier ZCROCHETS plutot
+!       que d'utiliser un fichier pre-existant
+!     - Modifications syntaxiques F77 --> F90
+!
+!     Revision 3.126  2014/09/25 18:31:49  dugas
+!     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
+!
+!     Revision 3.125  2014/07/08 20:04:47  dugas
+!     Le macro dimension_en_x passe de 65536 a 131072 (mots).
+!
+!     Revision 3.124  2014/03/08 01:37:07  bernard
+!      - Introduire les points d'entree SAVZREF2, OUVZREF2 et MAKZREF2
+!        pour ajouter l'option de repartir avec un fichier ZCROCHETS
+!        frais, et au besoin effacer le precedent.
+!
+!     Revision 3.123  2014/02/05 19:56:32  dugas
+!      - Correction du format 6001 de WritUref.
+!      - Modifier les declaration des variables locales de PushU.
+!
+!     Revision 3.122  2014/01/28 18:23:19  dugas
+!     Ajouter le point d'entree getUdesc a la routine savUref.
+!
+!     Revision 3.121  2014/01/22 22:05:51  dugas
+!     Ajouter le point d'entree GETZTYP.
+!
+!     Revision 3.120  2013/11/28 22:15:03  dugas
+!      - Appel a UNSET_MISPAR lorsque IAND(datyp,64)=0 dans IBUFILL.
+!      - Tenir compte des enregistrements de renvois '^>' dans IBUFILL et READSTD.
+!      - Tenir compte des grilles de type 'U' dans IBUFILL, PARFILL, READSTD et WRITSTD.
+!      - Ne pas tenir compte de l'etiquette dans la recherche de TicTac dans Savzref.
+!      - Modifier le contenu du common OUICEST dans GETZREF (y ajouter SAUVU).
+!      - Ajouter les routines savUref (writUref) et pushU (findU).
+!
+!     Revision 3.119  2013/10/28 20:44:27  bernard
+!     Permettre l'ecriture de mots complexes (datyp=8) en 64 bits.
+!
+!     Revision 3.118  2013/07/17 21:54:06  bernard
+!     Modifier le traitement des DATYP. On ajoute aussi le support des valeurs manquantes pour fichier CMC/RPN dans IBUFILL et PARFILL.
+!
+!     Revision 3.117  2013/03/21 21:06:52  bernard
+!     - Ajouter le point d'entree GETZIPX a GETZREF.
+!     - Renommer GETZDES a GETZDES2 et changer son comportement lorsque
+!       les arguments REFDIMX et REFDIMY sont non-nuls. Dans ce cas, on
+!       cherche un jeux de TicTacs ayant ces dimensions. L'appel a GETZDES
+!       fonctionne encore comme auparavant mais devient un cas particulier.
+!     - Sauver et considerer les parametres TYPVAR et ETIKET des
+!       jeux de TicTacs, y compros dans les fichiers zcrochets.
+!
+!     Revision 3.116  2013/02/07 21:43:05  bernard
+!     - Initialiser la variable II dans SavZref.
+!     - Continuer a mieux documenter et structurer ce bout de code.
+!
+!     Revision 3.115  2012/11/29 23:18:59  dugas
+!     Ne plus supposer que les TicTacs sont ordonnes dans SavZref.
+!
+!     Revision 3.114  2012/09/07 20:14:42  dugas
+!     - Ajouter le point d'entree SET_TURBO_COMPRESS a PARFILL.
+!     - L'usage de la compression turbo est controle par la
+!       variable logique TURBO_COMPRESS (=V, par defaut).
+!
+!     Revision 3.113  2012/08/29 15:05:05  dugas
+!     - Traiter les TocToc (!!) comme les autres enregistrments de
+!       renvois au debut de IBUFILL: Appel a LirToc et retour.
+!
+!     Revision 3.112  2012/07/20 19:55:37  dugas
+!      - (Possiblement) Effectuer un appel a LirTOC
+!        dans READSTD lorsqu'on trouve un IP1 code Hybride
+!      - Re-organiser les declaratinos des routines READSTD et WRITSTD
+!      - (Possiblement) Permettre un deuxieme essai de lecture dans GETZREF
+!        avec un appel a MAKZREF pour chercher de nouveaux enregistrements
+!        TicTac. Ceci eliminera en grande partie les erreurs GETZREF -2.
+!      - Explicitement verifier que io=0 avant d'ouvrir zcrochets dans OUVZREF
+!
+!     Revision 3.111  2011/06/06 19:55:22  dugas
+!     - Toujours recalculer NPAS si DATEO < TIME dans PARFILL.
+!       Ceci force la coherence entre les differents parametres
+!       temporels.
+!     - Noms de fichiers a 512 caracteres max. dans OUVSTD/WRITSTD
+!     - Traitement des noms de fichiers tout en majuscules dans OUVSTD:
+!       Y ajouter le chemin d'acces pour tenter de prevenir la majusculisation
+!       forcee par FNOM.
+!
+!     Revision 3.110  2010/10/23 16:22:41  dugas
+!     Tenir compte des TocToc (\!\!) dans READSTD.
+!
+!     Revision 3.109  2010/06/10 21:24:03  dugas
+!     Enlever les routines hybref_to_ig/ig_to_hybref.
+!
+!     Revision 3.108  2010/05/10 16:34:41  dugas
+!     Menage dans les messages d'erreurs.
+!
+!     Revision 3.107  2010/03/19 18:25:24  dugas
+!     Compression turbo IEEE-754 32 bits non supportee pour donnees ZONL.
+!
+!     Revision 3.106  2010/03/05 22:35:40  dugas
+!     Activer la compression turbo pour les donnees IEEE-754 32 bits.
+!
+!     Revision 3.105  2010/02/12 22:49:34  dugas
+!     - Support de DATYP=4 (signed integer) dans PARFILL.
+!     - La routine WRITSTD supporte les enregistrements TocToc (!!).
+!     - On supprime le traitement de KEEPDATEV dans la mesure ou IBUF(2)=datev.
+!     - Les routines IBUFILL et PARFILL utilisent maintenant GET_DCF pour
+!       definit leur DATE_CONVERSION_FACTOR.
+!
+!     Revision 3.104  2009/09/08 19:33:24  dugas
+!     - Corriger la declaration de ZZZDATE dans IBUFILL (KEEPDATEV).
+!     - Corriger le code d'appel SYSTEM/RM dans OUVSTD.
+!
+!     Revision 3.103  2009/01/23 22:47:06  dugas
+!     - Corriger le code DEBUG dans READSTD/WRITSTD.
+!     - Corriger les message DEBUG 6101/6104 dans LIRPT.
+!
+!     Revision 3.102  2008/11/24 21:19:56  dugas
+!     - Implementer le mode "keep_datev" qui donne pre-seance dans
+!       PARFILL a la date de validite plutot qu'a ce qui se trouve
+!       dans IBUF(2).
+!     - Support de NEWDATE en mode -5 (i.e. "back to the future").
+!     - Traiter dans OUVSTD les fichiers "vides" au sens STDxx mais
+!       qui ne le sont pas au sens de l'OS (les effacer pour vrai!).
+!     - Verifier tous les TIC/TAC dans SAVZREF (nrc --> nrc+nre).
+!     - Quelques modifs de formats de sortie en mode DEBUG.
+!
+!     Revision 3.101  2008/07/24 19:35:19  dugas
+!     Initialiser IP1 a lev au debut de PARFILL.
+!
+!     Revision 3.100  2008/04/28 14:23:15  dugas
+!     Ne plus tenir compte du cas non-SQ98.
+!
+!     Revision 3.99  2008/04/25 20:39:19  dugas
+!     Corriger l'usage des macros pour r.gppf.
+!
+!     Revision 3.98  2007/12/19 19:32:09  dugas
+!     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+!     - IBUFILL et PARFILL supportent LEV=IP1 pour les fichiers CMC/RPN.
+!       En particulier, IBUFILL force LEV=IP1 NewStyle et ne fait plus
+!       d'appel a PUTHIGH(IP1).
+!
+!     Revision 3.97  2007/08/29 20:56:15  dugas
+!     - Mode 64 bits non supporte avec donnees complexes (datyp=8) et entieres (datyp=2).
+!     - Ajouter le support de la compression TURBO pour IEEE-754 a 32 bits (datyp=133).
+!     - Correction de la conversion de donnees spectales selon leur datyp.
+!     - Definir PT_KIND=2 dans SETPT.
+!
+!     Revision 3.96  2006/09/19 18:19:28  dugas
+!     - Inserer du code preventif au cas ou DATEO=0 dans IBUFILL.
+!     - Tenir compte de ZTYPE lors de l'appel a FSTINFX dans READSTD."
+!
+!     Revision 3.95  2006/07/25 21:00:08  dugas
+!     Ignorer passivement IG3 dans PARFILL pour les grilles de type Z.
+!
+!     Revision 3.94  2006/07/04 17:07:54  dugas
+!     - Ajouter le supports des grilles de type #.
+!     - Completer le support des donnees de type CMPL dans IBUFILL/PARFILL.
+!     - Utiliser le nouveau format Z32 (DATYP=8) pour les donnees complexes
+!       (i.e. type SPEC/FOUR/CMPL).
+!     - Ne plus comparer IG3/IP3 dans GETZREF and co. Ceci libere IG3 pour
+!       le traitement des series temporelles des grilles Y et Z. Celles-ci
+!       sont maintenant definies comme les autres grilles supportees (avec
+!       IG3/IG4). Les series temporelles de grilles de type L ne sont
+!       toujours pas supportees.
+!
+!     Revision 3.93  2006/04/26 16:21:04  dugas
+!     Ne plus forcer le format de lignes a 128 caracteres
+!      pour les donnees de type CHAR dans les routines de
+!      conversions PARFILL et IBUFILL.
+!
+!     Revision 3.92  2006/02/09 18:23:59  dugas
+!     - Meilleur traitement des numeros d'unitees I/O.
+!     - Nouveau point d'entree GET_RNDSTAT dans OUVSTD.
+!
+!     Revision 3.91  2005/11/22 18:41:43  dugas
+!     Chercher le premier enregistrement crochet dans MAKZREF.
+!
+!     Revision 3.90  2005/07/28 17:40:02  dugas
+!     Corriger le format 6013 de SAVZREF.
+!
+!     Revision 3.89  2005/07/28 17:00:22  dugas
+!     - Ajouter "BLOCK DATA DATA_CONVSUB", pour des raisons de conformite avec F90.
+!     - S'assurer que le DATYP de l'enregistrement HY est conserve.
+!
+!     Revision 3.88  2005/04/14 16:41:10  dugas
+!     Proteger PT_NI,PT_NJ,PT_NK en cas d'echec de la lecture dans LIRPT.
+!
+!     Revision 3.87  2005/02/01 20:56:43  dugas
+!     Modifier le comportement de READSTD en mode DEBUG
+!
+!     Revision 3.86  2004/11/26 15:35:27  dugas
+!     Modifier les formats DEBUG 6110 et 6220 de GETZREF.
+!
+!     Revision 3.85  2004/11/08 20:41:04  dugas
+!     Completer le support des donnees de type CHAR/datyp=3 et
+!      tenir compte de noms purement numeriques dans la detection
+!      de noms de fichiers qui sont seulement en majuscules dans
+!      ouvSTD (probleme fonctionnel avec fnom).
+!
+!     Revision 3.84  2004/09/13 17:27:57  dugas
+!     1) Ajouter le support des donnees de type CHAR/datyp=3
+!        dans les routines PARFILL, IBUFILL et WRITSTD.
+!     2) Ajouter l'ouverture en mode APPEND dans OUVSTD.
+!
+!     Revision 3.83  2004/04/30 16:03:56  dugas
+!     Corriger le re-calcul d'un nouveau npas dans PARFILL.
+!     Converver le TYPVAR des enregistrements HY (LIRPT).
+!
+!     Revision 3.82  2003/08/25 18:47:33  dugas
+!     Pas de IP1=32767 lorsque nlev=1 dans PARFILL
+!
+!     Revision 3.81  2003/05/23 18:58:22  dugas
+!      Modifier le calcul de la variable "lev" dans
+!      la routine IBUFILL lorsque KIND=0,4,6 et 17.
+!
+!     Revision 3.80  2002/12/06 16:26:20  dugas
+!     Correction de certains formats I/O en mode DEBUG
+!
+!     Revision 3.79  2002/08/20 18:42:38  dugas
+!     Ajouter PUSHYZ/FINDYZ qui sont utilises dans WRITSTD
+!        et WRIZREF, respectivement.
+!     Corriger HYBREF_TO_IG et IG_TO_HYBREF selon V.Lee.
+!     Ajouter le traitement de l'option KEEPIP2 dans PARFILL.
+!     Ajouter IP2 dans le tampon HIGHBUF.
+!
+!     Revision 3.78  2002/04/22 15:47:21  dugas
+!     Corriger/Modifier le support des grilles de
+!     type Y et ajouter du code DEBUG un peu partout.
+!
+!     Revision 3.77  2002/01/14 13:53:42  dugas
+!     Ajouter le support des enregistrements 'HY' dans IBUFILL et PARFILL
+!     Ajouter la routine LIRPT et ses points d'entrees ECRPT, GETPT et SETPT.
+!     Ajouter les routines ig_to_hybref et hybref_to_ig (emprunt de GEM/DM)
+!     Ajouter un message informatif concernant les series temporelles pour
+!      les grilles de type 'L' (elles ne sont pas supportees a ce jour)
+!
+!     Revision 3.76  2001/11/20 21:21:06  armnrbd
+!     Corriger les conversions des IP1 dans le cas de niveaux
+!     arbitraires dans les routines IBUFILL et PARFILL.
+!
+!     Revision 3.75  2001/10/03 14:34:00  armnrbd
+!     Tenir compte des coordonnees de type hauteur (KIND=0) dans
+!      les routines de conversions IBUFILL et PARFILL.
+!
+!     Revision 3.74  2001/08/31 10:58:44  armnrbd
+!     IBUFILL va transferer la variable PKTYP dans HIGHBUFF.
+!     Enlever le common ZZPKTYP de WRITSTD.
+!
+!     Revision 3.73  2001/05/01 15:53:12  armnrbd
+!     Modifier le traitement des decripteurs IP1 de type
+!     arbitraire dans IBUFILL et PARFILL.
+!
+!     Revision 3.72  2001/02/27 00:11:34  armnrbd
+!     Remplacer les appels a PERROR par des appels a MESSYS.
+!
+!     Revision 3.71  2001/02/13 19:27:34  armnrbd
+!     Ajouter l'usage de OLDIP! dans OUVSTD et PARFILL.
+!     Verifier la presence d'enregistrements de renvois dans READSTD
+!
+!     Revision 3.70  2001/02/01 12:17:01  armnrbd
+!     Utiliser DIMSUP1 et DIMSUP2 pour supporter les grilles 3D.
+!     Corriger les formats des messages de type DEBUG.
+!
+!     Revision 3.69  2001/01/19 00:24:12  armnrbd
+!     Ajouter des messages "DEBUG" dans GETZREF.
+!
+!     Revision 3.68  2000/11/24 12:56:40  armnrbd
+!     Utiliser hignam dans IBUFILL et PARFILL.
+!
+!     Revision 3.67  2000/09/28 15:45:14  armnrbd
+!     Modifier les message DEBUG dans PARFILL.
+!     En ajouter dans READSTD et WRITSTD.
+!     Ajouter un arret d'erreur dans WRITSTD dans le cas
+!      de grille standard 1989 de plus de 500000 mots et
+!      utilisant le mode X64.
+!
+!     Revision 3.66  2000/09/12 15:07:55  armnrbd
+!     Corriger un effet de de bord de FIXNINJ,
+!      i.e. s'assurer que ILG=LA dans IBUFILL
+!      pour les champs de type spectraux.
+!
+!     Revision 3.65  2000/08/29 13:04:02  armnrbd
+!     Utiliser le IP1 qu'on a sauve dans HIGHBUF pour
+!     determiner le VKIND (lorsque c'est possible).
+!
+!     Revision 3.64  2000/07/24 20:49:52  armnrbd
+!     Modifier le traitement des series temporelles par IBUFILL
+!      et PARFILL dans le cas des fichiers standards 1998.
+!     Sauver et recupere IP3 dans HIGHBUF (IBUFILL et PARFILL).
+!
+!     Revision 3.64  2000/07/24 20:43:07  armnrbd
+!     Modifier le traitement des series temporelles par IBUFILL
+!      et PARFILL dans le cas des fichiers standards 1998.
+!
+!     Revision 3.63  2000/05/29 19:38:22  armnrbd
+!     Ajouter les IGx dans GETPARI.
+!
+!     Revision 3.62  2000/04/04 16:44:26  armnrbd
+!     Modifier la definition de ZZZDATE dans IBUFILL.
+!
+!     Revision 3.61  2000/01/24 19:37:36  armnrbd
+!     Ajouter du code DEBUG dans GETZREF et OUVZREF.
+!     Modifier la creation de ZCROCHETS dans GETZREF et SAVZREF.
+!
+!     Revision 3.60  1999/11/17 18:03:41  armnrbd
+!     Ajouter le point d'entree PUTZREF dans GETZREF.
+!
+!     Revision 3.59  1999/05/12 14:34:23  armnrbd
+!     Ajouter les variables BIG_TMPDIR et USE_BIG_TMPDIR.
+!
+!     Revision 3.58  1999/05/07 00:36:02  armnrbd
+!     Modifier la definition de ILG pour le cas spectral dans IBUFILL.
+!
+!     Revision 3.57  1999/04/27 18:19:39  armnrbd
+!     Modifier le format 6101 de IBUFILL pour IP1.
+!
+!     Revision 3.56  1999/04/26 20:48:30  armnrbd
+!     1) Ajouter deux arguments a GETZDES.
+!     2) Faire appel a GETZDES dans IBUFILL pour
+!        identifier les series temporelles SUBA.
+!
+!     Revision 3.55  1999/04/23 18:11:06  armnrbd
+!     Corriger un probleme de recurrence avec les routines
+!     de traitement des enregistrements crochets.
+!
+!     Revision 3.54  1999/04/08 20:19:25  armnrbd
+!     Enlever la declaration de PRIS dans OUVZREF.
+!
+!     Revision 3.53  1999/04/08 19:37:51  armnrbd
+!     Utiliser le comdeck MACHTYPE.CDK.
+!     Corriger deux appels a FSTPRM dans SAVZREF.
+!     Verification supp des variables lues dans SAVZREF.
+!     Utiliser FNOM pour ouvrir le fichier zcrochets.
+!
+!     Revision 3.52  1999/02/18 19:40:43  armnrbd
+!     Remplacer 01010100 par 1901010100 dans PARFILL.
+!
+!     Revision 3.51  1999/01/19  19:54:52  armnrbd
+!     Modifier le grtyp des grilles de type FOUR.
+!     Ajouter le support des champs de type COEF.
+!     Separer TYPVAR et GRTYP dans le bloc highbuff.
+!
+!     Revision 3.50  1999/01/12  21:02:41  armnrbd
+!     Re-assigner le GRTYP correspondant aux grilles FOUR.
+!     L'ancien GRTYP est utilise par les grilles GRIB-Lambert.
+!
+!     Revision 3.49  1998/12/28  19:11:49  armnrbd
+!     Definir IP2 dans PARFILL (ce n'etait pas toujours fait).
+!     Corriger le format de DEBUG dans PARFILL.
+!
+!     Revision 3.48  1998/10/27  15:05:30  armnrbd
+!     Corriger un bogue dans GETZREF concernant ^^.
+!
+!     Revision 3.47  1998/09/01  14:15:54  armnrbd
+!     Modifier les appels "blind" a FSTPRM.
+!
+!     Revision 3.46  1998/07/13  19:49:33  armnrbd
+!     S'assurer que le dernier jeux d'enregistrements de renvois
+!      est sauve dans le champs POINTXY a la sortie de SAVZREF.
+!
+!     Revision 3.45  1998/07/07  14:31:20  armnrbd
+!     Utiliser NEWDATE,DATMGP2 et IDATMG2 pour traiter le DATE-TIME STAMP.
+!
+!     Revision 3.44  1998/06/16  18:20:12  armnrbd
+!     S'assurer de la position des fichiers SQ89 a la sortie de MAKZREF.
+!
+!     Revision 3.43  1998/06/13  02:46:07  armnrbd
+!     Enlever tout le code de positionnement a la
+!      sortie des routines SAVZREF et MAKZREF.
+!
+!     Revision 3.42  1998/06/08  02:43:15  armnrbd
+!     Utiliser GETHIC et PUTHIC pour gerer les mots supplementaires
+!      de IBUF et ce notamment pour NEWL.
+!
+!     Revision 3.41  1998/05/28  19:37:49  armnrbd
+!     - Ajouter le comdeck HIGHBUF.
+!     - Utiliser CONVPR/LVCODE/LVDCODE pour les conversions de/vers IP1.
+!     - Ajouter le champs DATYP dans la section highbuf de IBUF.
+!     - Ajouter le support pour le cas DATYP=2 (i.e. donnees entieres).
+!     - La sequence d'appel de GETZREF a ete modifiee.
+!     - GETZREF fait maintenant un appel a MAKZREF.
+!     - Ajouter la routine MAKZREF qui force l'ecriture de ZCROCHETS.
+!     - Ajouter un appel a CONVPR (MODE=0) dans OUVSTD si SQ98 est defini.
+!     - Corriger l'ouverture de ZCROCHETS dans OUVZREF (probleme avec HPs).
+!     - Modifier le sens des parametres d'entree de SAVZREF. Si NF est
+!       negatif, ne pas repositionner le fichier d'entree avant de quitter.
+!     - SAVZREF verifie toujours s'il existe deja une copie des enregistrements
+!       de renvois dans le fichier ZCROCHETS dans le cas ou celui-ci etait non
+!       vide au demarrage.
+!
+!     Revision 3.40  1998/04/15  15:20:06  armnrbd
+!     Assurer l'initialisation de spec,data,four dans IBUFILL.
+!
+!     Revision 3.39  1998/04/15  02:23:00  armnrbd
+!     Augmenter la taille d'ETIKET de 8 a 16 caracteres.
+!     Le macro taille_entete passe de 20 a 22 mots.
+!
+!     Revision 3.38  1998/04/08  13:37:15  armnrbd
+!     Ouvrir les fichiers selon leur type dans OUVSTD (mode STD98).
+!     Ajouter de la protection et possiblement re-allouer le champ
+!      BLOCLE dans la routine PRECLE (et ses points d'entrees).
+!
+!     Revision 3.37  1998/02/23  19:49:17  armnrbd
+!     Ajouter un champs RCS pour afficher l'historiques des revisions.
+!
       SUBROUTINE ibufill( NF, IBUF,KEY, OK )
 
 ***    This routine fills IBUF with the result of FSTPRM
@@ -463,8 +472,8 @@ c
 #     endif
 
       REAL        pr
-      CHARACTER*12 alev,alev2
       CHARACTER*4 type,nom,newl
+      CHARACTER*12 alev,alev2,alev3
       LOGICAL     spec,four,data,coef,char,cmpl
       INTEGER     time,lev,ilg,ilat,ihem,pack,ktr,err
       INTEGER     lsr, la,lr,lm,lrlmt,kind, i,j,k
@@ -474,7 +483,7 @@ c
       integer     dummy,dummy0,dummy1,dummy2, NBR_TOC
 
       type(FLOAT_IP) :: RP1,RP2,RP3
-      integer     RANGE_KIND,k1,k2,stat
+      integer     RANGE_KIND,k1,k2,k3,stat
       real        HIVAL,LOVAL
 
       REAL*8      ecoule
@@ -589,7 +598,7 @@ c
          call                                      xit(' Ibufill',-2 )
       end if
 
-      k1 = RP1%kind ; k2 = RP2%kind
+      k1 = RP1%kind ; k2 = RP2%kind ; k3 = RP3%kind
 
 ***    Interval vertical ou de temps (avec combinaisob des IP1/2/3) ?
 
@@ -599,7 +608,7 @@ c
 !!!     peut entrer en conflit avec le codage precedent des IP2/IP3.
 !!!     C'est pourquoi le traitement doit etre fait dans GETSAMPLSZ.
 
-      if (stat == CONVERT_OK .and. RP3%kind == -1)             then
+      if (stat == CONVERT_OK .and. k3 == -1)                   then
           if (RP1%hi /= RP1%lo) then ! Interval vertical
               HIVAL = RP1%hi ; LOVAL = RP1%lo ; RANGE_KIND = k1
           else if (RP2%hi /= RP2%lo) then ! Interval de temps
@@ -612,8 +621,9 @@ c
       end if
 
       if (debug)                                               then
-          call  get_ip1_string( ip1,alev ) ;  call leadblk( alev )
-          call  get_ip1_string( ip2,alev2 ) ; call leadblk( alev2 )
+          call  get_ip_string( ip1,alev ) ;  call leadblk( alev )
+          call  get_ip_string( ip2,alev2 ) ; call leadblk( alev2 )
+          call  get_ip_string( ip3,alev3 ) ; call leadblk( alev3 )
           if (RANGE_KIND >= 0)                                 then
               if (RANGE_KIND == KIND_HOURS)                    then
                   write(6,6105) dateo,npas,deet, ni,nj,nk,nbits,ip1,
@@ -624,7 +634,7 @@ c
               end if
           else
               write(6,6101) dateo,npas,deet, ni,nj,nk,nbits,ip1,
-     +               trim(alev),ip2,trim(alev2),ip3,ig1,ig2,ig3,ig4
+     +        trim(alev),ip2,trim(alev2),ip3,trim(alev3),ig1,ig2,ig3,ig4
           end if
           write(6,6102) grtyp,typvar,nomvar,etiket,datyp
           if (RANGE_KIND >= 0) write(6,6103) RANGE_KIND,HIVAL,LOVAL
@@ -992,7 +1002,7 @@ c
 
  6101 FORMAT('*DEBUG:IBUFILL (1) DATEO=',I12,', NPAS=',I9,
      +       ', DEET=',I5,', NI,NJ,NK=',3I5,', NBITS=',I5/
-     +       '*DEBUG:IBUFILL (2) IP1,IP2,IP3=',2(I9,' ( ',A,' ) '),I9,
+     +       '*DEBUG:IBUFILL (2) IP1,IP2,IP3=',3(I9,' ( ',A,' ) '),
      +       ', IG1,IG2,IG3,IG4=',4I6)
  6102 FORMAT('*DEBUG:IBUFILL (3) GRTYP=',A,', TYPVAR=',A,
      +       ', NOMVAR=',A,', ETIKET=',A,', DATYP=',I6)
@@ -1078,10 +1088,10 @@ c
       if (debug)
      +    write(6,6100) (ibuf(jj),jj=1,8)
       if (debug .and. HEAD .ge. 9)                             then
-          write(6,6101) (ibuf(jj),jj=9,16)
-          write(6,6102) (ibuf(jj),jj=17,24)
-          write(6,6103) (ibuf(jj),jj=25,28)
-          write(6,6104) HEAD ,(ibuf(jj),jj=29,HEAD)
+          write(6,6101) (ibuf(jj),jj=9 ,MIN(16,HEAD))
+          write(6,6102) (ibuf(jj),jj=17,MIN(24,HEAD))
+          write(6,6103) (ibuf(jj),jj=25,MIN(28,HEAD))
+          write(6,6104) HEAD ,(ibuf(jj),jj= 29,HEAD)
       end if
 
       call GET_DCF( DATE_CONVERSION_FACTOR ) ! Different DATE format ?
@@ -1148,8 +1158,10 @@ c
 ***    Verifier si les nom passe dans ibuf(3) et
 ***    celui contenu dans HIGHBUF sont equivalent.
 
-      if (nom.ne.noma) call eqvnomt( nom,noma, ok )
-      if (ok) nom = noma
+      if (highnam .and. nom /= noma)                           then
+          call eqvnomt( nom,noma, ok )
+          if (ok) nom = noma
+      end if
 
       if (ZLABEL .ne.' ') etiket =  ZLABEL
 
@@ -1472,7 +1484,7 @@ c
 
           else if (grtyp.eq.'Y' .or. grtyp.eq.'Z')             then
 
-CCC           ig3 = 0 ! Pour des raisons de compatibilite arriere...
+!CC           ig3 = 0 ! Pour des raisons de compatibilite arriere...
               ig4 = 0
      
           end if
@@ -1502,9 +1514,9 @@ CCC           ig3 = 0 ! Pour des raisons de compatibilite arriere...
               ig4 =    ( ihem-( ihem/10000 )*10000 )/10
           end if
 
-c         if (type.eq.'ZONL' .and.
-c    +        newl.eq.'NEWL' .and.
-c    +        nlev.ne. 1   )  ig2 = nlev
+!         if (type.eq.'ZONL' .and.
+!    +        newl.eq.'NEWL' .and.
+!    +        nlev.ne. 1   )  ig2 = nlev
 
       end if
 
@@ -1952,10 +1964,10 @@ c    +        nlev.ne. 1   )  ig2 = nlev
 
 ***    Lire l'enregistrement courant
 
-CCC   If (Debug)                                               Then
-CCC       Print *,'*DEBUG:READSTD     Avant fstluk'
-CCC       Err = Memoirc( 0 )
-CCC   End If
+!CC   If (Debug)                                               Then
+!CC       Print *,'*DEBUG:READSTD     Avant fstluk'
+!CC       Err = Memoirc( 0 )
+!CC   End If
 
       Lir = fstluk( IBUF(debut), cle, ni,nj,nk )
 
@@ -1964,10 +1976,10 @@ CCC   End If
           Print *,'*DEBUG:READSTD     Apres fstluk'
       End If
 
-CCC   If (dtyp.eq.3) Then
-CCC       Call hpcheck( err )
-CCC       If (err.ne.0) stop
-CCC   End If
+!CC   If (dtyp.eq.3) Then
+!CC       Call hpcheck( err )
+!CC       If (err.ne.0) stop
+!CC   End If
 
       If (Lir .ge. 0) OK = .true.
 
@@ -1997,7 +2009,7 @@ CCC   End If
       RETURN
 *------------------------------------------------------------------------------
 
-C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
+!6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
 
  6100 FORMAT('*DEBUG:READSTD',5X,'Min,Max,Mean =',3(1PE15.6),
      +       ' nbits = ',I3)
@@ -3139,7 +3151,7 @@ C6001 FORMAT(' ReadSTD: Character data not supported with FST89 files.')
               chaine=' '
               
               if (ptypv.eq.rtypv .and.
-CCC  +            petik.eq.retik .and.
+!CC  +            petik.eq.retik .and.
      +            ptypg.eq.rtypg .and.
      +            pig1 .eq.rig1  .and.
      +            pig2 .eq.rig2  .and.
@@ -3786,7 +3798,7 @@ CCC  +            petik.eq.retik .and.
      +        NJ .eq. njloc(i) .and.
      +        IG1.eq.ig1loc(i) .and.
      +        IG2.eq.ig2loc(i)) return
-CCCC +        IG3.eq.ig3loc(i)) return
+!CCC +        IG3.eq.ig3loc(i)) return
       end do
 
       if (last.lt.maxn)                                        then
@@ -3817,7 +3829,7 @@ CCCC +        IG3.eq.ig3loc(i)) return
      +        NJ .eq. njloc(i) .and.
      +        IG1.eq.ig1loc(i) .and.
      +        IG2.eq.ig2loc(i) )                               then
-CCCC +        IG3.eq.ig3loc(i) )                               then
+!CCC +        IG3.eq.ig3loc(i) )                               then
 
               FOUND = .true.
 
@@ -4146,8 +4158,8 @@ CCCC +        IG3.eq.ig3loc(i) )                               then
      +                              PT_RCOEF(NF),PREFMB,RDUM,RDUM )
 
               PT_PREF (NF) = PREFMB*100.
-CCC           PT_PREF (NF) = PT_IG1*100.
-CCC           PT_RCOEF(NF) = PT_IG2/1000.0
+!CC           PT_PREF (NF) = PT_IG1*100.
+!CC           PT_RCOEF(NF) = PT_IG2/1000.0
 
               IF (PT_RCOEF(NF) .NE. PT_RCOEF(0) .OR.
      +            PT_PREF (NF) .NE. PT_PREF (0) )              THEN
@@ -4155,8 +4167,8 @@ CCC           PT_RCOEF(NF) = PT_IG2/1000.0
                   IF (INFO) WRITE(6,6100) 
                   IF (INFO) WRITE(6,6200) PT_RCOEF(NF),PT_PREF(NF)
 
-CCC               IF (.NOT.NA .AND. PT_PTOP(0).NE.-1.0)
-CCC  +                CALL                         XIT('  LirPT ',-2 )
+!CC               IF (.NOT.NA .AND. PT_PTOP(0).NE.-1.0)
+!CC  +                CALL                         XIT('  LirPT ',-2 )
               END IF
 
               PT_RCOEF(0) = PT_RCOEF(NF)
@@ -4170,8 +4182,8 @@ CCC  +                CALL                         XIT('  LirPT ',-2 )
 
           IF (PT_PTOP(NF) .NE. PT_PTOP(0))                     THEN
 
-CCC           IF (.NOT.NA .AND. PT_PTOP(0).NE.-1.0)
-CCC  +            CALL                             XIT('  LirPT ',-3 )
+!CC           IF (.NOT.NA .AND. PT_PTOP(0).NE.-1.0)
+!CC  +            CALL                             XIT('  LirPT ',-3 )
 
               IF (INFO) WRITE(6,6300) PT_PTOP(NF)
 
@@ -4272,10 +4284,10 @@ CCC  +            CALL                             XIT('  LirPT ',-3 )
       PT_ERR = hybref_to_ig( PT_IG1,PT_IG2,PT_IG3,PT_IG4,
      +                       RCOEF, PREFMB,RDUM,  RDUM )
 
-CCC   PT_IG1 = PREF/100.
-CCC   PT_IG2 = RCOEF*1000.
-CCC   PT_IG3 = RUM
-CCC   PT_IG4 = RDUM
+!CC   PT_IG1 = PREF/100.
+!CC   PT_IG2 = RCOEF*1000.
+!CC   PT_IG3 = RUM
+!CC   PT_IG4 = RDUM
 
       IF (INFO) WRITE(6,6600) PT_PTOP(0),PT_PREF(0),PT_RCOEF(0)
 
@@ -4397,7 +4409,7 @@ CCC   PT_IG4 = RDUM
      +           U_IG2   == descu(i)%ig2   .and.
      +           U_IG3   == descu(i)%ig3   .and.
      +           U_IG4   == descu(i)%ig4   .and.
-CCC  +           U_DATEO == descu(i)%dateo .and.
+!CC  +           U_DATEO == descu(i)%dateo .and.
      +           U_GTYP  == descu(i)%gtyp  .and.
      +           U_TYPV  == descu(i)%typv  .and.
      +           U_NOMV  == descu(i)%nomv)                     THEN

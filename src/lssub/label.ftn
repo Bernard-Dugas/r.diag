@@ -24,6 +24,12 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: label.ftn,v $
+C     Revision 3.31  2017/10/02 20:20  dugas
+C     Tenir compte des differentes signatures d'operations temporelles
+C      qui pourraient se retrouver dans le deuxieme caracteres du TYPVAR
+C      lors du traitement de la routine PRTLAB3. Ces signatures sont
+C      fournies via via le nouveau module stats_signatures
+C
 C     Revision 3.30  2016/10/26 15:30  dugas
 C     Modifications syntaxiques F77 --> F90
 C
@@ -885,7 +891,7 @@ CCC           call swapa4( ibuf(1) )
 ***      2) Use GET_IP1_STRING to decode IBUF(4) and print result
 ***      3) Add ENTRY PRTLAB for cases without prefix arguments
 
-      INTEGER   I,J,J2,NPAS,err,IP3,RKIND, HIV,LOV
+      INTEGER   I,J,J2,NPAS,err,IP3,RKIND, HIV,LOV, ikind
       CHARACTER(LEN=6)  :: HICA,LOCA
       CHARACTER(LEN=12) :: SLEV,SLEV2
       CHARACTER(LEN=36) :: SDAT
@@ -998,31 +1004,55 @@ CCC           call swapa4( ibuf(1) )
       END 
       SUBROUTINE prtlab3 (CHAINE,IBUF)
 
-      use           diag_convert_ip123, only : KIND_HOURS
+      use           diag_convert_ip123
+      use           stats_signatures
 
       IMPLICIT      none
 
 ***    THIS ROUTINE WRITES OUT THE 8-WORD LABEL IN IBUF TO CHAINE.
 
-      CHARACTER*(*) CHAINE
-      INTEGER       IBUF(8)
+      CHARACTER*(*) :: CHAINE
+      INTEGER       :: IBUF(8)
 
 ***   SEPT 10/2009 - B.Dugas
 
-      INTEGER   I,IP3,J,npas,RKIND,HIV,LOV
+      REAL    :: HIVAL,LOVAL
+      LOGICAL :: lMeanVar,is_a_level
+      INTEGER :: I,J, deet,npas, iKind, RKIND,HIV,LOV, status
+      CHARACTER(LEN=2)  :: typvr
       CHARACTER(LEN=6)  :: HICA,LOCA
       CHARACTER(LEN=15) :: SLEV1,SLEV2
-      CHARACTER(LEN=36) :: SDAT,SLEV
+      CHARACTER(LEN=36) :: SDAT,SLEV,nuls
       CHARACTER(LEN=100) :: ICHAINE
+
+      integer        :: ip1,ip2,ip3
+      type(FLOAT_IP) :: RP1,RP2,RP3
 
       real,    external :: GETHIR
       integer, external :: GETHIGH
+      logical, external :: diag_is_a_level 
+      character(len=4),external  :: GETHIC
+
+      LOGICAL              INFO
+      COMMON     /ZZVERBO/ INFO
 
 *-------------------------------------------------------------------- 
 ***    DECODE IBUF(2).
 
-      rkind = GETHIGH('RKIND',IBUF )
-      npas  = GETHIGH('NPAS' ,IBUF )
+      typvr = GETHIC ('TYPVAR',IBUF )
+      rkind = GETHIGH('RKIND' ,IBUF )
+
+      is_a_level = diag_is_a_level( rkind )
+
+      ! Signature d'une operation temporelle ?
+      lMeanVar = .false.
+      if (typvr(2:2) == time_mean_signature .OR.
+     +    typvr(2:2) == variance_signature .OR.
+     +    typvr(2:2) == median_signature .OR.
+     +    typvr(2:2) == stdev_signature .OR.
+     +    typvr(2:2) == timmax_signature .OR.
+     +    typvr(2:2) == timmin_signature ) lMeanVar = .true.
+
       CALL PDATE2( SDAT,IBUF(2),npas )
 
 ***    DECODE IBUF(4).
@@ -1030,10 +1060,42 @@ CCC           call swapa4( ibuf(1) )
       CALL GET_IP1_STRING( IBUF(4),SLEV1 )
 
       IF (rkind /= -1)                                         THEN
-          IF (rkind == KIND_HOURS)                             THEN
+
+          IF (is_a_level)                                      THEN
+              ! Vertical level pair
+              IP1  = IBUF(4)
+              IP2  = GETHIGH('IP2',IBUF )
+              IP3  = GETHIGH('IP3',IBUF )
+              status = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
+              if (status == CONVERT_ERROR)                     THEN
+                  if (info) write(6,6001) status,ip1,ip2,ip3
+                  call                                xit(' Prtlab3',-1 )
+              end if
+              if (RP3%kind == KIND_SAMPLES)                    THEN
+                  CALL GET_IP1_STRING( IP2,SLEV2 )
+              ELSE
+                  CALL GET_IP1_STRING( IP3,SLEV2 )
+              END IF
+              IF (SLEV2 /= ' ')                                THEN
+                  ! Remove leading blanks
+                  DO  J=1,LEN_TRIM( SLEV2 )
+                      IF (SLEV2(J:J) /= ' ') EXIT
+                  END DO
+                  SLEV2 = SLEV2(J:LEN_TRIM( SLEV2 ))
+              END IF
+              DO  J=LEN_TRIM( SLEV1 ),1,-1
+                  ! Remove trailing units
+                  IF (SLEV1(J:J) == ' ') EXIT
+              END DO
+              IF (J == 0) J = LEN_TRIM( SLEV1 )
+              SLEV = SLEV1(1:J) // '-> ' // TRIM( SLEV2 )
+          ELSE IF (rkind == KIND_HOURS .and. .not.lMeanVar)    THEN
+              ! Time pair
               HIV = NINT( GETHIR( 'HIVAL',IBUF ) )
               LOV = NINT( GETHIR( 'LOVAL',IBUF ) )
-              IF (LOV < 1000000. .AND. HIV < 1000000.)         THEN
+              IF (LOV /= HIV     .AND.
+     +            LOV < 1000000. .AND.
+     +            HIV < 1000000.)                              THEN
                   WRITE(LOCA,'(I6)') LOV
                   DO  J=1,LEN_TRIM( LOCA )
                       IF (LOCA(J:J) /= ' ') EXIT
@@ -1049,25 +1111,50 @@ CCC           call swapa4( ibuf(1) )
      +                                // ' H)'
               END IF
               SLEV = SLEV1
-          ELSE
-              IP3 = GETHIGH( 'IP3',IBUF )
-              CALL GET_IP1_STRING( IP3,SLEV2 )
-              IF (SLEV2 /= ' ')                                 THEN
-                  ! Remove leading blanks
-                  DO  J=1,LEN_TRIM( SLEV2 )
-                      IF (SLEV2(J:J) /= ' ') EXIT
-                  END DO
-                  SLEV2 = SLEV2(J:LEN_TRIM( SLEV2 ))
-              END IF
-              DO  J=LEN_TRIM( SLEV1 ),1,-1
-                  ! Remove trailing units
-                  IF (SLEV1(J:J) == ' ') EXIT
-              END DO
-              IF (J == 0) J = LEN_TRIM( SLEV1 )
-              SLEV = SLEV1(1:J) // '-> ' // TRIM( SLEV2 )
           END IF
       ELSE
           SLEV = SLEV1
+      END IF
+
+      IF (lMeanVar)                                            THEN
+
+          ! Time mean or variance. Check for validity interval.
+
+          npas = GETHIGH('NPAS',IBUF )
+          deet = GETHIGH('DEET',IBUF )
+
+          IF (.not.is_a_level)                                 THEN
+              IP2  = GETHIGH('IP2' ,IBUF )
+              call diag_convip_plus( ip2,HIVAL,iKind,-2,nuls,.false. )
+              IF (iKind == KIND_HOURS)                             THEN
+                  LOVAL = HIVAL - NINT( npas*DBLE( deet )/5 )/720.0_8
+              END IF
+          ELSE
+              HIVAL = NINT( npas*DBLE( deet )/5 )/720.0_8
+              LOVAL = 0
+          END IF
+
+          HIV = NINT( HIVAL )
+          LOV = NINT( LOVAL )
+
+          IF (LOV /= HIV     .AND.
+     +        LOV < 1000000. .AND.
+     +        HIV < 1000000.)                                  THEN
+              WRITE(LOCA,'(I6)') LOV
+              DO  J=1,LEN_TRIM( LOCA )
+                  IF (LOCA(J:J) /= ' ') EXIT
+              END DO
+              SDAT = TRIM( SDAT ) // ' ('
+     +                            // LOCA(J:LEN_TRIM( LOCA ))
+              WRITE(HICA,'(I6)') HIV
+              DO  J=1,LEN_TRIM( HICA )
+                  IF (HICA(J:J) /= ' ') EXIT
+              END DO
+              SDAT = TRIM( SDAT ) // ' -> '
+     +                            // HICA(J:LEN_TRIM( HICA ))
+     +                            // ' H)'
+          END IF
+
       END IF
 
 ***    PRINT TO ICHAINE WITH APPROPRIATE FORMAT.
@@ -1080,6 +1167,7 @@ CCC           call swapa4( ibuf(1) )
 *-------------------------------------------------------------------- 
 
  6000 FORMAT(2X,A4,A,1X,A4,1X,A,2I6,I10,I8)
+ 6001 format(/'   Erreur=',I3,' dans DECODE_ip, IP1,IP2,IP3=',3I11/) 
 
       END 
       SUBROUTINE PDATE2( CHAINE,STAMP,NPAS )
