@@ -1,5 +1,5 @@
 .SUFFIXES :
-.SUFFIXES : .ptn90 .ptn .ftn .txt
+.SUFFIXES : .F90 .ptn90 .ptn .ftn .txt
 
 # Description: Makefile de MAN/PDOC
 ifeq "$(BAtail -f ../../Resultats.make.pgi13xx.ST1SE_ARCH)" "$(EC_ARCH)"

@@ -80,6 +80,7 @@ eval `cclargs   $0              "[Genere un module pouvant etre utilise en mode 
 #    015  - avril    2015  - Ajouter l'argument -lapack (utilise sous AIX-powerpc7)
 #                          - Passer a rmn_015.2
 #    016  - juin     2017  - Passer a rmn_016.3
+#    017  - novembre 2017  Verifier que la variable EC_ARCH a ete definie
 #
 CODEBETA=""
 #
@@ -98,6 +99,17 @@ else
   STD=''
 fi
 #
+if [[ "${BASE_ARCH}" == "${EC_ARCH}" ]]; then
+  echo "
+  FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING...
+
+  To correct this (at UQAM/ESCER), please invoke a command such as the following one
+
+  . s.ssmuse.dot dev/intel-16 dev/rmn_016 vgriddesc-5.6
+  "
+  exit 99
+fi
+
 libsrc=lspgm_STD98.f.zip
 DIAGLIB=diag_sq98${std}
 #
