@@ -19,17 +19,18 @@
 !
 ! http://web-mrb.cmc.ec.gc.ca/mrb/si/eng/si/howto-si/doku.php?id=netcdf
 !
-! At UQAM, the scripts that call the actual Linux binaries
-! can be found under
+! At UQAM, the latest released version of the scripts that
+! call the actual Linux binaries can be found under
 !
-! $diag-tools-dir/r.diag_x.y.z_linux26-x86-64/bin
-! where $diag-tools-dir is the directory made available
-! by the local diag-tools SSM bundle.
+! ${diag-tool}/r.diag_6.4.1-2.3.1_linux26-x86-64/bin
+!
+! where diag-tools=/unique/armnssm/ECssm/ssm-domains-base/tools/diag-tools
+! and it is made available via the diagtools-6.4.1 SSM bundle.
 
 ! In Dorval, the different AIX (now deprecated) and
 ! Linux binaries used to be found under
 !
-! $ARMNLIB/modeles/diag/bin/$BASE_ARCH
+! ${ARMNLIB}/modeles/diag/bin/${BASE_ARCH}
 !
 ! You will also need to define a UDUNITS2 environment variable.
 !
@@ -42,9 +43,9 @@
 !
 ! An example of this is
 !
-! $DIAG/man/pdoc/attribut_netcdf.dat   ** OR **
-! $DIAG/development/src/cdf2ccc/attribut_netcdf.dat
-! where $DIAG is the actual location of the RDIAG/CDF package
+! ${DIAGNOSTIQUE}/man/pdoc/attribut_netcdf.dat   ** OR **
+! ${DIAGNOSTIQUE}/development/src/cdf2ccc/attribut_netcdf.dat
+! where ${DIAGNOSTIQUE} is the actual location of the RDIAG/CDF package
 !
 ! Please note that the previous file itself actually holds
 ! some documentation as to its configuration/usage.
@@ -287,7 +288,7 @@
 ! Good luck.
 !
 ! Maintained by: B.Dugas, ESCER/UQAM (Dugas.Bernard@uqam.ca)
-! Last revision: May 2017
+! Last revision: November 2017
 !
 !
 #     endif
@@ -322,6 +323,8 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas 28 novembre 2017 : 
+!  - Mettre a jour la documentation automatique
 !  Bernard Dugas 21 novembre 2017 : 
 !  - Passer a la version 2.3.2 (development)
 !  Bernard Dugas 7 juin 2017 : 

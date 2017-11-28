@@ -67,6 +67,8 @@
 *
 * REVISIONS
 *
+*  B.Dugas novembre '17 :
+*  - Ajouter 'time_counter' a la liste des coordonnees temporelles reconnues
 *  B.Dugas aout '12 :
 *  - Ajouter 'height' a la liste des coordonnees verticale reconnues
 *  B.Dugas juillet '12 :
@@ -110,6 +112,7 @@
             if (coord(tid)%dimid(1).eq.-1) then
 
                if((cfield   == 'time'         .or. 
+     .             cfield   == 'time_counter' .or.
      .             cfield   == 't'            .or.
      .             cfield   ==  tcoord)       .and.
      .             dimid    ==  unlimdimid)   then
