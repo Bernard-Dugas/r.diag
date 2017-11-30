@@ -1900,11 +1900,17 @@ C
 
               end if
           else
-              ! Placer HIVAL dans IP2 et le
-              ! nombre d'echantillons dans IP3.
-              if (HIVAL <= 1000000.)  ! Coder le nombre d'heures dans IP2
-     +            call diag_convip_plus( ip2,HIVAL,
+              ! Placer HIVAL (ou bien HIVAL-LOVAL) dans 
+              !IP2 et le nombre d'echantillons dans IP3.
+             if (HIVAL <= 1000000.)                            then
+                 ! Coder HIVAL dans IP2
+                  call diag_convip_plus( ip2,HIVAL,
      +                                   KIND_HOURS,+2,nuls,.false. )
+              else if (HIVAL-LOVAL <= 1000000.)                then
+                 ! Coder HIVAL-LOVAL dans IP2
+                  call diag_convip_plus( ip2,HIVAL-LOVAL,
+     +                                   KIND_HOURS,+2,nuls,.false. )
+              end if
               if (NSAMPZ < 2000000)                            then
               ! 1 999 999 est la limite superieure des valeurs qui pourront
               ! etre codees correctement en mode NEW-STYLE pour KIND_SAMPLES

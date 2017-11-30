@@ -4440,7 +4440,12 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
 
           IP2   = GETHIGH('IP2' ,IBUF )
 
-          CALL Diag_CONVIP_plus( IP2,VIP2,IKIND,-2,NULS,.FALSE. )
+          IF (IP2*720_8 == NPAS_DEET)                          THEN
+              ! ip2 = npas*deet a 5 secondes pres ==>
+              VIP2 = IP2 ; IKIND = KIND_HOURS
+          ELSE
+              CALL Diag_CONVIP_plus( IP2,VIP2,IKIND,-2,NULS,.FALSE. )
+          END IF
 
           IF (IKIND == KIND_HOURS)                             THEN
               HIVAL = VIP2
@@ -4484,7 +4489,14 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
           !  ou bien en un nombre d'echantillons ?
 
           IP2 = GETHIGH( 'IP2',IBUF )
-          CALL Diag_CONVIP_plus( IP2,VIP2,IKIND,-2,NULS,.FALSE. )
+
+          IF (IP2*720_8 == NPAS_DEET)                          THEN
+              ! ip2 = npas*deet a 5 secondes pres ==>
+              VIP2 = IP2 ; IKIND = KIND_HOURS
+          ELSE
+              CALL Diag_CONVIP_plus( IP2,VIP2,IKIND,-2,NULS,.FALSE. )
+          END IF
+
           VIP2_5 = NINT( VIP2*720._8, 8 )
 
           IF (IKIND == KIND_HOURS)                             THEN

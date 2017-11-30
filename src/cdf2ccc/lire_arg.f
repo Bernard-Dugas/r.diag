@@ -40,6 +40,10 @@
 *
 *REVISIONS
 *
+*  B. Dugas novembre '17 :
+*   - Utiliser ${DIAGNOSTIQUE}/man/pdoc/attribut_netcdf.dat
+*     lorsque l'argument -attr n'est pas specifie ou qu'il
+*     pointe a quelque chose qui n'existe pas
 *  B. Dugas avril '17 :
 *   - Utiliser get_environment_variable pour verifier la valeur de
 *     la variables d'environnement UDUNITS2_XML_PATH. Celle-ci a
@@ -172,6 +176,7 @@
 *
 *******
 
+      logical ex
       character(512) file_attr,local
       parameter(local='attribut_netcdf.dat')
       parameter(file_attr=
@@ -297,9 +302,10 @@
       CHARACTER(16),  DIMENSION(:), ALLOCATABLE :: ACLES
       CHARACTER(512), DIMENSION(:), ALLOCATABLE :: ADEF,ADEF1,ADEF2
 
-      CHARACTER(512)  :: UDUNITS2_DEF
+      CHARACTER(30)   :: DIAG_ATTRIBUT_NETCDF
+      CHARACTER(512)  :: UDUNITS2_DEF,DIAGNOSTIQUE
 
-      INTEGER         NBRCLE,NDATE,NHELP,PART1,PART2
+      INTEGER         NBRCLE,NDATE,NHELP,PART1,PART2,LL
 
       INTEGER         NEWDATE,datchek,L_argenv
       EXTERNAL        NEWDATE
@@ -313,6 +319,8 @@
       udunits2_def = trim( udunits2_def1 ) //
      .               trim( udunits2_def2 ) //
      .               trim( udunits2_def3 )
+
+      DIAG_ATTRIBUT_NETCDF = '/man/pdoc/attribut_netcdf.dat'
 
 ***    Allocate LES_ARG work fields.
 
@@ -736,14 +744,50 @@
 
       endif
 
-
-      if(def1(25).eq.'?') then
+      if(def1(25) == '?' .or. def1(25) == ' ') then
          write(6,6001) ' Fichier attribut_netcdf.dat ?'
          call                                      xit('lire_arg',  -25)
       else
+
+         ! Possiblement re-definir la valeur de l'argument -attr si
+         ! celui-ci pointe a un fichier qui n'existe pas tel que celui
+         ! qui se trouvait auparavant dans le repertoire LOGICIELS
+
+         inquire( file=def1(25),exist=ex )
+
+         if (.not.ex) then
+
+             call get_environment_variable('DIAGNOSTIQUE',
+     +                              DIAGNOSTIQUE,L_argenv)
+
+             if (DIAGNOSTIQUE /= ' ') then
+                 write(6,'(/A)') ' '// trim(def1(25))//" n'existe pas !"
+                 def1(25) = trim( DIAGNOSTIQUE ) //
+     +                      trim( DIAG_ATTRIBUT_NETCDF )
+                 inquire( file=def1(25),exist=ex )
+                 if (.not.ex) then
+                     write(6,'(A/)') ' attribut_netcdf indisponible,'
+     +                            // ' on cherchait ' // trim( def1(25))
+                     call                          xit('lire_arg',  -25)
+                 endif
+                 ll = len_trim( trim( def1(25) ) )
+                 if (ll < 100) then
+                     write(6,6100) trim( def1(25) )
+                 else
+                     write(6,6101) def1(25)( max(ll-99,1):ll )
+                 endif
+             else
+                 write(6,'(/A/)') ' attribut_netcdf indisponible,'
+     +                         // ' on cherchait ' // trim( def1(25) )
+                 call                              xit('lire_arg',  -25)
+             endif
+
+         endif
+
          attr_file = def1(25)
          IPOS=IPOS+1
          IONAM(IPOS) = def1(25)
+
       endif
 
 
@@ -1075,6 +1119,8 @@ c      write(6,*) "grid_desc :", grid_desc                               !debug
  6009 format(34x,a)
  6010 format(/'Mauvaise valeur pour -',a/a)
  6099 format(/"Probleme de lecture d'arguments..."/)
+ 6100 format( ' on utilise ',A/)
+ 6101 format( ' on utilise ... ',A/)
  9003 format(i10)
  9004 format(e20.0)
 *-----------------------------------------------------------------------

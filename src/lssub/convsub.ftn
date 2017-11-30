@@ -588,17 +588,35 @@
      +              grtyp,ig1,ig2,ig3,ig4, swa,lng,dltf,ubc,
      +              extra1,extra2,extra3 )
 
-***    Evaluer RANGE_KIND,HIVAL,LOVAL tout de suite.
-***    Ils seront saives dans les mots 29,30,31 de IBUF.
+      if (ip2*720_8 == nint( deet*dble( npas )/5,8 ))          then
 
-      stat = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
+          ! ip2 = npas*deet a 5 secondes pres ==>
+          ! Codage "Old-Style". On suppose alors
+          ! qu'on n'aura pas d'intervalles codes.
 
-      if (debug .and. stat == CONVERT_ERROR)                   then
-         write(6,6002) stat,ip1,ip2,ip3
-         call                                      xit(' Ibufill',-2 )
+          call diag_convip_plus( ip1,RP1%hi,k1,-2,blk,.false. )
+
+                         RP1%lo = RP1%hi
+          RP2%hi = ip2 ; RP2%lo = RP2%hi ; k2 = KIND_HOURS
+          RP2%hi = ip3 ; RP3%lo = RP3%hi ; k3 = KIND_SAMPLES
+
+          stat = CONVERT_OK
+
+      else
+
+***        Evaluer RANGE_KIND,HIVAL,LOVAL tout de suite.
+***        Ils seront saives dans les mots 29,30,31 de IBUF.
+
+          stat = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
+
+          if (debug .and. stat == CONVERT_ERROR)               then
+             write(6,6002) stat,ip1,ip2,ip3
+             call                                  xit(' Ibufill',-2 )
+          end if
+
+          k1 = RP1%kind ; k2 = RP2%kind ; k3 = RP3%kind
+
       end if
-
-      k1 = RP1%kind ; k2 = RP2%kind ; k3 = RP3%kind
 
 ***    Interval vertical ou de temps (avec combinaisob des IP1/2/3) ?
 

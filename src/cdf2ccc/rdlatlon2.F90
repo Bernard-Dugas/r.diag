@@ -1077,7 +1077,7 @@
                            if (tim2-tim1 <= 1000000._8)         then
                                hold = tim2-tim1 
                                CALL Diag_CONVIP_plus &
-                               ( IP2,hold,kIND_HOURS,+2,NULS,.FALSE. )
+                               ( IP2,hold,KIND_HOURS,+2,NULS,.FALSE. )
                            else
                                IP2 = nint( tim2-tim1 )
                            end if
