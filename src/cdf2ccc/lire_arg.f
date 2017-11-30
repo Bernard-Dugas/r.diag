@@ -178,7 +178,7 @@
 
       logical ex
       character(512) file_attr,local
-      parameter(local='attribut_netcdf.dat')
+      parameter(local='./attribut_netcdf.dat')
       parameter(file_attr=
      .'/LOGICIELS/cdf2ccc/etc/attribut_netcdf.dat')
 
@@ -220,7 +220,7 @@
      .  cles(22)/'invj'   /,  def1(22)/'yes'     /,  def2(22)/'no'    /
      .  cles(23)/'npack'  /,  def1(23)/'999'     /,  def2(23)/'?'     /,
      .  cles(24)/'lalo'   /,  def1(24)/'no'      /,  def2(24)/'yes'   /,
-     .  cles(25)/'attr'   /,  def1(25)/file_attr /,  def2(25)/local   /,
+     .  cles(25)/'attr'   /,  def1(25)/'def1at'  /,  def2(25)/'def2at'/,
      .  cles(26)/'miss_ccc'/, def1(26)/'?'       /,  def2(26)/'ERR'   /,
      .  cles(27)/'fill_ccc'/, def1(27)/'?'       /,  def2(27)/'ERR'   /,
      .  cles(28)/'cle_nhem'/, def1(28)/'?'       /,  def2(28)/'?'     /,
@@ -294,7 +294,7 @@
 ******
 
       integer i,nlen,nis,njs,idate
-      logical ok
+      logical ok,defatt
 
 ***    Champs de travail locaux pour les_arg
 
@@ -749,13 +749,22 @@
          call                                      xit('lire_arg',  -25)
       else
 
+         defatt = .false.
+
+         if (def1(25) == 'def1at' .or.
+     +       def1(25) == 'def2at') defatt = .true.
+
          ! Possiblement re-definir la valeur de l'argument -attr si
-         ! celui-ci pointe a un fichier qui n'existe pas tel que celui
-         ! qui se trouvait auparavant dans le repertoire LOGICIELS
+         ! celle-ci a ete definie par defaut (primaire ou secondaire)
+         ! et que le fichier correspondant n'existe pas.
+
+         if      (def1(25) == 'def1at') then ; def1(25) = file_attr
+         else if (def1(25) == 'def2at') then ; def1(25) = local
+         endif
 
          inquire( file=def1(25),exist=ex )
 
-         if (.not.ex) then
+         if (.not.ex .and. defatt) then
 
              call get_environment_variable('DIAGNOSTIQUE',
      +                              DIAGNOSTIQUE,L_argenv)
@@ -782,6 +791,10 @@
                  call                              xit('lire_arg',  -25)
              endif
 
+         else if (.not.ex) then
+             write(6,'(/A/)') ' attribut_netcdf indisponible,'
+     +                     // ' on cherchait ' // trim( def1(25) )
+             call                                  xit('lire_arg',  -25)
          endif
 
          attr_file = def1(25)

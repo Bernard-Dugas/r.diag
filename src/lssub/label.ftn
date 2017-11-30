@@ -1125,8 +1125,12 @@ CCC           call swapa4( ibuf(1) )
 
           IF (.not.is_a_level)                                 THEN
               IP2  = GETHIGH('IP2' ,IBUF )
-              call diag_convip_plus( ip2,HIVAL,iKind,-2,nuls,.false. )
-              IF (iKind == KIND_HOURS)                             THEN
+              IF (IP2*720_8 == NINT( DEET*DBLE( NPAS )/5,8 ))  THEN
+                  HIVAL  = IP2 ; iKind = KIND_HOURS
+              ELSE
+                  call diag_convip_plus(ip2,HIVAL,iKind,-2,nuls,.false.)
+              END IF
+              IF (iKind == KIND_HOURS)                         THEN
                   LOVAL = HIVAL - NINT( npas*DBLE( deet )/5 )/720.0_8
               END IF
           ELSE

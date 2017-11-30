@@ -73,10 +73,12 @@
 ! derived from the CMC-RPN internal file descriptors.
 !
 ! The converter will automatically generate time bounds information
-! from CMC-RPN files when IP3 is greater than 1 and DATEO < DATEV for
-! a variable. This applies in particular to the output of the TIMAVG,
-! FSTMDIAG and ACCUMUL r.diag commands. The '-dtsize' argument should
-! not be used with such a variable.
+! from CMC-RPN files when it detects the presence of multi-sample
+! representing data such as the resuluts of time averages, maximums,
+! minimums, variances and standard deviations operations on a variable.
+! This applies in particular to the output of the TIMAVG, TIMMAX,
+! TIMMIN, TIMCOV, STDEV, FSTMDIAG and ACCUMUL r.diag commands.
+! The '-dtsize' argument need not be used with such a variable.
 !
 ! However, when converting from a NetCDF file, the '-dtsize' argument
 ! should be specified in order to reproduce the full CMC-RPN time-mean
@@ -190,7 +192,10 @@
 !  description(22) = (C) Inverse l'ordre de l'indice 'j' dans la sortie
 !  description(23) = (I) Densite de compression 0,1,2,4,-64,-32,-16
 !  description(24) = (C) Ecrire les latitudes et longitudes ('no'/'yes')
-!  description(25) = (C) Nom du fichier dictionnaire (def: attribut_netcdf.dat)
+!  description(25) = (C) Nom du fichier dictionnaire. Les valeurs par
+!                        defaut primaire et secondaire, respectivement, sont
+!                        file_attr = /LOGICIELS/cdf2ccc/etc/attribut_netcdf.dat
+!                        local     = ./attribut_netcdf.dat
 !  description(27) = (R) Valeur de remplissage dans sortie
 !  description(28) = (I) 1=Hem Nord, 2=Hem Sud pour grille PS vers CCCma
 !  description(29) = (C) Chemin complet du fichier 'udunits2.xml'
@@ -241,7 +246,7 @@
 ! CMC/RPN file. Given a NetCDF vertical dimension name of "lev", and given
 ! that a file called "lev_remplacement.txt" exists in the current working
 ! directory, the converter will attempt to read this file with a (BN,I10)
-! FORTRAN I/O format (one 10 character integer "lev" value per ligne).
+! FORTRAN I/O format (one 10 character integer "lev" value per line).
 ! The values thus retreived will be assumed to be already coded and
 ! will be used "AS IS" when writing the CMC/RPN file. Any "lev" values
 ! in the NetCDF files will then be ignored.
@@ -288,7 +293,7 @@
 ! Good luck.
 !
 ! Maintained by: B.Dugas, ESCER/UQAM (Dugas.Bernard@uqam.ca)
-! Last revision: November 2017
+! Latest revision: November 2017
 !
 !
 #     endif

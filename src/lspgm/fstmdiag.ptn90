@@ -88,6 +88,9 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.11  2017/11/29 14:14  dugas
+  ! Tenir compte des cas ou IP2=DEET*NPAS/3600 > 32767 (old style)
+  !
   ! Revision 1.10  2017/11/02 22:22  dugas
   ! Ajouter une signature de moyennes (time_mean_signature) ou de
   !  variances (variance_signature) dans le deuxieme caracteres du
@@ -171,7 +174,8 @@
   character     cMeanVar
 
   logical, dimension(:), allocatable :: done
-  real,    dimension(:), allocatable :: hiset,loset,vip1s,vip2s,vip3s
+  real(8), dimension(:), allocatable :: vip2s
+  real,    dimension(:), allocatable :: hiset,loset,vip1s,vip3s
   character(len=24), dimension(:), allocatable :: chaine
   integer, dimension(:), allocatable :: listet, listev, date, delt, &
            niveau, heure, pas, lip3, sindex, niset, njset, nkset, bits, &
@@ -180,11 +184,12 @@
   ! Les variables suivantes sont utilisees pour
   ! identifier les intervals verticaux ou d'heures
   type(FLOAT_IP) :: RP1,RP2,RP3
-  integer     RANGE_KIND,k1,k2,k3,status,ikind,kcode
-  real        HIVAL,LOVAL,vip1,vip2,vip3,hold
+  real(8)     vip2
+  real        HIVAL,LOVAL,vip1,vip3,hold
   integer(8)  heures_5,time_range_5,vip2_5, &
               npas_deet,npas_deet60,npas_deet3600, &
               npasp1_deet,npasp1_deet60,npasp1_deet3600
+  integer     RANGE_KIND,k1,k2,k3,status,ikind,kcode
   real(8)  :: tdiff, time_range, SECH = 0.000277777_8 ! 1 seconds en unite d'heures
 
   character(20)  uzbigt,bigtmp,tmpdir
@@ -750,39 +755,57 @@
 
       end if
 
-      ! Evaluer RANGE_KIND,HIVAL,LOVAL
+      
+      if (ip2*720_8 == nint( deet*dble( npas )/5, 8 ))     then
 
-      status = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
+          ! ip2 = npas*deet a 5 secondes pres ==>
+          ! Codage "Old-Style". On suppose alors
+          ! qu'on n'aura pas d'intervalles codes.
 
-      if (status == CONVERT_ERROR)                         then
-          write(6,6014) status,ip1,ip2,ip3
-          ifrm = fstfrm (iu2) ; ifrm = fstfrm (iu3)
-          if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
-          call quit( ' Fstmdiag ',14 )
-      end if
+          HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
 
-      k1 = RP1%kind ; k2 = RP2%kind ; k3 = RP3%kind
+          call diag_convip_plus( ip1,vip1,k1,-2,nuls,.false. )
 
-      ! Interval vertical ou de temps ?
+          vip2 = ip2 ; k2 = KIND_HOURS   ! Aucun codage des
+          vip3 = ip3 ; k3 = KIND_SAMPLES ! IP2 et IP3
+          
+      else
 
-      if (status == CONVERT_OK .and. k3 == -1)             then
-          if (RP1%hi /= RP1%lo) then      ! Interval vertical
-              HIVAL = RP1%hi ; LOVAL = RP1%lo ; RANGE_KIND = k1
-          else if (RP2%hi /= RP2%lo) then ! Interval de temps
-              HIVAL = RP2%hi ; LOVAL = RP2%lo ; RANGE_KIND = k2
-          else                            ! Aucun interval
+          ! Evaluer RANGE_KIND,HIVAL,LOVAL
+
+          status = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
+
+          if (status == CONVERT_ERROR)                     then
+              write(6,6014) status,ip1,ip2,ip3
+              ifrm = fstfrm (iu2) ; ifrm = fstfrm (iu3)
+              if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
+              call quit( ' Fstmdiag ',14 )
+          end if
+
+          k1 = RP1%kind ; k2 = RP2%kind ; k3 = RP3%kind
+
+          ! Interval vertical ou de temps ?
+
+          if (status == CONVERT_OK .and. k3 == -1)         then
+              if (RP1%hi /= RP1%lo) then      ! Interval vertical
+                  HIVAL = RP1%hi ; LOVAL = RP1%lo ; RANGE_KIND = k1
+              else if (RP2%hi /= RP2%lo) then ! Interval de temps
+                  HIVAL = RP2%hi ; LOVAL = RP2%lo ; RANGE_KIND = k2
+              else                            ! Aucun interval
+                  HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
+              end if
+          else
               HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
           end if
-      else
-          HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
-      end if
 
-      if (k2 == KIND_SAMPLES)                              then
-          vip3 = RP2%hi ; k3 = k2 ; ip3 = ip2
-      else if (RANGE_KIND == -1)                           then
-          call diag_convip_plus( ip3,vip3,k3,-2,nuls,.false. )
-      else
-          vip3 = -1 ; k3 = -1
+          if (k2 == KIND_SAMPLES)                          then
+              vip3 = RP2%hi ; k3 = k2 ; ip3 = ip2
+          else if (RANGE_KIND == -1)                       then
+              call diag_convip_plus( ip3,vip3,k3,-2,nuls,.false. )
+          else
+              vip3 = -1 ; k3 = -1
+          end if
+
       end if
 
       write(chaine(i),0001) typvar,etiket,nomvar,grtyp
@@ -809,8 +832,15 @@
 
       vip1s(i)  = RP1%hi
       k1set(i)  = k1
-      vip2s(i)  = RP2%hi
+ 
+      if (ip2*720_8 == nint( deet*dble( npas )/5, 8 ))     then
+          ! Tenir compte du codage "Old-Style" 
+          vip2s(i) = vip2
+      else
+          vip2s(i) = RP2%hi
+      end if
       k2set(i)  = k2
+
       vip3s(i)  = vip3
       k3set(i)  = k3
 
@@ -1109,8 +1139,7 @@
               !  Est-ce que IP2 est deja code en heures
               !  ou bien en un nombre d'echantillons ?
               ! Verifier en premier pour un codage NEW-STYLE ...
-                  call diag_convip_plus( heure(ii),vip2,ikind,-2,nuls,.false. ) 
-                  if (ikind == KIND_HOURS)                 then 
+                  if (k2set(ii) == KIND_HOURS)             then 
                       vip2_5 = nint( vip2 * 720.0_8, 8 )
                       if (npasp1_deet == vip2_5)           then
                       ! IP2 est encode en heures et cette derniere
@@ -1132,7 +1161,7 @@
                                                  heures = vip2 ; deltat = delt(ii)/3600._8
                       end if
                   else &
-                  if (ikind == KIND_SAMPLES)               then
+                  if (k2set(ii) == KIND_SAMPLES)           then
                   ! IP2 est deja code en nombre d'echantillons
                       mdiag = nint( vip2 ) ; kcode = 3
                       heures = npas_deet/720.0_8
@@ -1165,7 +1194,6 @@
               !  un nombre d'echantillons, possiblement code en
               !  mode KIND_SAMPLES. Sinon, on ignore tout codage
                   if (lip3(ii) > 32767)                    then
-                  ! call diag_convip_plus( lip3(ii),vip3,ikind,-2,nuls,.false. )
                       if (k3set(ii) == KIND_SAMPLES)       then
                           kcode = 5 ; mdiag = nint( vip3s(ii) )
                           if (k2set(ii) == KIND_HOURS)     then
@@ -1255,8 +1283,8 @@
                   else if (lMeanVar)                       then
                       if (k2set(ii) == KIND_HOURS .and. &
                           pas  (ii) == mdiag-1)            then
-                          heuremax = max( heuremax, vip2s(ii) )
-                          heuremin = min( heuremin, vip2s(ii)-heures )
+                          heuremax = max( dble( heuremax ), vip2s(ii) )
+                          heuremin = min( dble( heuremin ), vip2s(ii)-heures )
                       else
                           heuremax = max( heuremax, heures )
                       end if
@@ -1432,16 +1460,20 @@
               if (Complet1)                                then
                   heuremax = HIVAL ; heuremin = LOVAL
               end if
-              ! Placer heuremax dans IP2 et le
-              ! nombre d'echantillons dans IP3.
-              vip2 = heuremax
-              if (vip2 <= 1000000.)  &  ! Coder le nombre d'heures dans IP2
-                   call diag_convip_plus( ip2,vip2,KIND_HOURS,+2,nuls,.false. )
+              ! Placer heuremax ou bien (heuremax-heuremin) dans
+              ! IP2 et le nombre d'echantillons dans IP3.
+              if (heuremax <= 1000000._8)                  then
+                  ! Coder le nombre maximal d'heures dans IP2
+                  call diag_convip_plus( ip2,sngl( heuremax ),KIND_HOURS,+2,nuls,.false. )
+              else if (heuremax-heuremin <= 1000000._8)    then
+                  ! Coder l'intervalle d'heures dans IP2
+                  call diag_convip_plus( ip2,sngl( heuremax-heuremin ),KIND_HOURS,+2,nuls,.false. )
+              end if
               if (ns < 2000000)                            then
               ! 1 999 999 est la limite superieure des valeurs qui pourront
               ! etre codees correctement en mode NEW-STYLE pour KIND_SAMPLES
               ! Coder le nombre d'echantillons dans IP3 ...
-                  call diag_convip_plus( ip3,float(ns),KIND_SAMPLES,+2,nuls,.false. )
+                  call diag_convip_plus( ip3,float( ns ),KIND_SAMPLES,+2,nuls,.false. )
               else &
               if (ns < 254903968)                          then
               ! Notez que les limites des valeurs codees pour KIND_SAMPLES
@@ -1508,14 +1540,14 @@
       if (NoIP3                     .or. &
          (RANGE_KIND /= KIND_HOURS .and. RANGE_KIND >= 0)) then
 
-          if (vip2 <= 1000000.)                            then
+          if (vip2 <= 1000000._8)                          then
               ! Coder le nombre d'heures dans IP2
-              call diag_convip_plus( ip2,vip2,KIND_HOURS,+2,nuls,.false. )
+              call diag_convip_plus( ip2,sngl( vip2 ),KIND_HOURS,+2,nuls,.false. )
           else if (ns < 2000000)                           then
               ! 1 999 999 est la limite superieure des valeurs qui pourront
               ! etre codees correctement en mode NEW-STYLE pour KIND_SAMPLES
               ! Coder le nombre d'echantillons dans IP3 ...
-              call diag_convip_plus( ip2,float(ns),KIND_SAMPLES,+2,nuls,.false. )
+              call diag_convip_plus( ip2,float( ns ),KIND_SAMPLES,+2,nuls,.false. )
           else
               write(6,'(/A/)') "   Incapable  de coder le nombre d'echantillons ..."
               ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
@@ -1526,14 +1558,14 @@
       else &
       if (RANGE_KIND == KIND_HOURS .or. RANGE_KIND < 0)    then
 
-          if (vip2 <= 1000000.)  &  ! Coder le nombre d'heures dans IP2
-              call diag_convip_plus( ip2,vip2,KIND_HOURS,+2,nuls,.false. )
+          if (vip2 <= 1000000._8)  &  ! Coder le nombre d'heures dans IP2
+              call diag_convip_plus( ip2,sngl( vip2 ),KIND_HOURS,+2,nuls,.false. )
 
           if (ns < 2000000)                                then
               ! 1 999 999 est la limite superieure des valeurs qui pourront
               ! etre codees correctement en mode NEW-STYLE pour KIND_SAMPLES
               ! Coder le nombre d'echantillons dans IP3 ...
-               call diag_convip_plus( ip3,float(ns),KIND_SAMPLES,+2,nuls,.false. )
+               call diag_convip_plus( ip3,float( ns ),KIND_SAMPLES,+2,nuls,.false. )
           else &
           if (ns < 254903968)                             then
               ! Notez que les limites des valeurs codees pour KIND_SAMPLES
