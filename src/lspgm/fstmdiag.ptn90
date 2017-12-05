@@ -88,6 +88,9 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.12  2017/12/05 15:15  dugas
+  ! Correction pour la longueur maximale des arguments (64 --> 512)
+  !
   ! Revision 1.11  2017/11/29 14:14  dugas
   ! Tenir compte des cas ou IP2=DEET*NPAS/3600 > 32767 (old style)
   !
@@ -200,7 +203,7 @@
   common       /dexit/ dexit,set_dexit,diagext
 
   character(16) :: cles(NBRCLE),nuls,blanc=' '
-  character(64) def1(NBRCLE),def2(NBRCLE)
+  character(512)   def1(NBRCLE),def2(NBRCLE)
 
   logical ::    info  ; common /zzverbo/ info
   logical ::    debug ; common /zzdebug/ debug
@@ -442,7 +445,7 @@
   end if
 
   ! Par defaut, def1(1) est egal a def1(NBRARGS+1).
-  ! Definissons name1 et name2.
+  ! Definissons tous les name1, ainsi que name2.
 
   name1(1:NBRFICH) = def1(NBRARGS+1:NBRARGS+NBRFICH)
 
