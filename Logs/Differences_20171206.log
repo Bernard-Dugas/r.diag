@@ -1,0 +1,36 @@
+
+ What follows is a summary list of the changes/commits that have been made to r.diag
+ since June 01 2017. Note that the full descriptions of these changes can be found
+ in the individual files that are referenced here.
+
+ June      7 2017 : Start working on r.diag_6.4.1 and cdf2rpn_2.3.1 in the 
+                    development (master) branch. Stop work on 6.4.0-2.3.0
+ June     26 2017 : Corrections for IFORT16 and GSASG bugfix
+ August    1 2017 : Account for the GEM 4.8 implementation of the new IP1/2/3 coding
+ August   15 2017 : Minor corrections to TIMAVG/FSTMDIAG and to GGTRIG
+ August   31 2017 : - Documentation modifications
+                    - Linked input files files support added to FSTTRI (128 files)
+                    - FSTMDIAG modifications
+ October  10 2017 : Corrections to FSTMDIAG/VPINTL and several
+                    rather major FSTTRI/LININT modifications
+ November 21 2017 : - Implement the R.DIAG V2 support of the IP1/2/3 coding using
+                      TYPVAR signatures as discussed with Y.Chartier and M.Valin
+                    - Add the stats_signatures module in LSSUB. This is used to define
+                      the supported statistical moments by different R.DIAG programs
+                      and by the NetCDF converter.
+                    - Create Makefile_mods in INCLUDE and change the module creation
+                      and dependence recipies in the LSSUB, LSPGM and CDF2CCC sections
+                    - Several other BugFixes
+                    - Create the 6.4.1-2.3.1 release branch holding all of the above
+                      modifications and start developping 6.4.2-2.3.2 in the
+                      master branch
+ November 23 2017 : Corrections to Diag_Debug and to the man/pdoc Makefile
+ November 28 2017 : Add support of the TIME_COUNTER coordinate to the NetCDF converter
+                    and change the treatment of the ATTRIBUT_NETCDF.DAT dictionary
+ November 30 2017 : - Corrections for some old-style IP2 instances, namely in GEM3
+                      output files after more that 10**6 simulated hours
+                    - Modifications to CDF2CCC.F90 and to LIRE_ARGS
+ December  5 2017 : - Extend the maximum argument lenghts in FSTMDIAG
+                      from 64 to 512 characters
+                    - Again, all of the above mods have been applied in
+                      both the master and 6.4.1-2.3.1 release branches
