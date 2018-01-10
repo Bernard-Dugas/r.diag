@@ -88,6 +88,10 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.13  2017/12/20 20:20  dugas
+  ! Sorties compressees en e32/e64 (datyp=133),
+  !  plutot qu'en E32/E64 (datyp=5)
+  !
   ! Revision 1.12  2017/12/05 15:15  dugas
   ! Correction pour la longueur maximale des arguments (64 --> 512)
   !
@@ -1609,7 +1613,7 @@
  200  if (.not.NoModT) typvar(2:2) = time_mean_signature ! Signature de moyennes
 
       if (nbits <= 32)                                     then
-          nbits = 32 ; datyp = 5 ; buff(1:nwds) = moyenne(1:nwds)
+          nbits = 32 ; datyp = 133 ; buff(1:nwds) = moyenne(1:nwds)
           iecr = fstecr( buff,ibuf,                             &
                         -nbits, iu2, dateo,deet,npas,           &
                          ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
@@ -1643,7 +1647,7 @@
 
           if (.not.NoModT) typvar(2:2) = variance_signature ! Signature de variances
 
-          nbits = 64 ; datyp = 5
+          nbits = 64 ; datyp = 133
           iecr = fstecr( variance,ibuf,                         &
                         -nbits, iu3, dateo,deet,npas,           &
                          ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &

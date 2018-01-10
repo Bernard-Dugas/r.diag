@@ -1,4 +1,5 @@
 
+
  R.DIAG - A GEM model and analysis Diagnostics Toolkit
  ======
 
@@ -85,11 +86,11 @@
  according to your environment's specifications.
  
  R.DIAG is copyrighted (C) 1990-2010 by the "Division de Recherche
- en Prevision Numerique" of Environment Canada. This code is free
- software; you can redistribute it and/or modify it under the terms
- of the GNU Lesser General Public License as published by the Free
- Software Foundation, version 2.1 of the License.
+ en Prevision Numerique" of ECCC. This code is free software; you can
+ redistribute it and/or modify it under the terms of the GNU Lesser
+ General Public License as published by the Free Software
+ Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : August 2017
+ Last revision : January 2018
 

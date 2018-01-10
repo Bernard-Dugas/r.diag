@@ -8,7 +8,8 @@
 *          -d destination   [-etiket [*]] [-nomvar [*]]  \ 
 *         [-info  [valeur]] [-npas   [*]] [-ip1    [*]]  \ 
 *         [-rnd]  [-help]   [-nobox]      [-ip3    [*]]  \ 
-*         [-split [valeur]] [-sqi]   [-desc]  [-e] [-f]    
+*         [-split [valeur]] [-sqi]   [-desc]       [-f]  \ 
+*         [-e     [valeur]]
 *
 *
 * Auteur: B.Dugas, RPN - avril 1991.
@@ -49,8 +50,9 @@
 *  nobox     Ne pas imprimer de boites d'informations.
 *  help      Afficher ce texte sur stdout et quitter.
 *  desc      Ne pas faire le tri sur les enregistrements de renvois.
-*  e         Enlever les enregistrements redondants (identiques).
 *  f         Forcer la re-ecriture du fichier de sortie.
+*  e         Re-ecrire (i.e. etamper) ou non les enregistrements
+*            ayant des descripteurs identiques (DEF = NON)
 *
 *
 * Codes de sortie:
@@ -98,6 +100,16 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.46 2017/12/12 12:12:12  dugas
+*      Desallouer l'argument -rewrit (qui avait ete introduit pour
+*      traiter les variables de renvois) et plutot utiliser le code
+*      associe a la valeur logique Elim pour eliminer les doublons pour
+*      les  variables regulieres. L'utilisation de rewrit=Vrai semble ne
+*      pas fonctionner correctement (par exemple, ne tenant pas compte
+*      de differentes valeurs de dateo). Par contre, pour les variables
+*      de renvois, on definit maintenant rewrit=Elim lors de l'appel
+*      a FSTECR.
+*
 *      Revision 4.45 2017/10/25 12:12:12  dugas
 *      Verifier que IP2 ne contient pas un niveau avant de tenter
 *      un recodage de l'echeance de prevision lorsqu'on detecte
@@ -288,7 +300,7 @@ C    +              valnum,kind
 
       integer   datev0,datevm3h
 
-      logical   rewrit,rewrit0,minutes
+      logical   rewrit,minutes
 
 ***    Variable utilisee par le mode Elim.
 
@@ -342,7 +354,7 @@ C    +              valnum,kind
      +     cles(17)/ 'SQI'    /,def1(17)/'NON'    /,def2(17)/'OUI'    /,
      +     cles(18)/ 'IP3'    /,def1(18)/'IP3'    /,def2(18)/'*'      /,
      +     cles(19)/ 'SPLIT'  /,def1(19)/'NON'    /,def2(19)/'OUI'    /,
-     +     cles(20)/ 'REWRIT' /,def1(20)/'OUI'    /,def2(20)/'NON'    /
+     +     cles(20)/ 'REWRIT' /,def1(20)/'EXUQ0W0QUXE' /,def2(20)/'*' /
 
       ! +1 Argument positionel (nom du module r.diag)
       data cles(NBRCLE+1) / '-.' /,
@@ -356,8 +368,7 @@ C    +              valnum,kind
       data noDAT, noTYP, noETI,
      +     noNOM, noPAS, noIP1,
      +     SplitD,ByDay, noIP3 /    9*.false.   /
-      data Vrai,Rewrit0,Faux   / 2*.true.,.false. /
-      data sqi / .false. /
+      data Vrai, Faux, sqi   / .true.,2*.false. /
 
 ***    Numeros d'E/S, etc...
 
@@ -482,8 +493,11 @@ C    +              valnum,kind
       if (Elim)                     elimin  = 0
       if (SplitD)                   Desc    = Vrai 
 
-      if (is_on ( def1(20) ))       Rewrit0 = Vrai
-      if (is_off( def1(20) ))       Rewrit0 = Faux
+      if (def1(20) /= 'EXUQ0W0QUXE')                           then
+          write(6,6300) ! L'argument -rewrit a ete retire
+          if (box) nil = exfin( 'FstTRI', 'Erreur 99', 'NON' )
+          call quit( ' FstTri ',99 )
+      end if
 
       if (def1((NBRARGS+1)+1) == blanc .or.
      +   (def1(2)             == blanc .and. .not.Splitd))     then
@@ -738,7 +752,7 @@ C    +              valnum,kind
                   end if
                   rewrit = Vrai
               else
-                  rewrit = rewrit0
+                  rewrit = Elim
               end if
 
 ***            Les enregistrements de renvois sont sauves immediatement.
@@ -1062,7 +1076,7 @@ C    +              valnum,kind
 
       end if
 
-      rewrit = rewrit0 ; YYYYMMDD0 = -1 ; datev0 = -1 ; nomfich = blanc
+      rewrit = Elim ; YYYYMMDD0 = -1 ; datev0 = -1 ; nomfich = blanc
 
       do i=1,infon
 
@@ -1278,13 +1292,15 @@ C    +              valnum,kind
               end if
           end if
 
-***        Ecrire les donnees.
+***        Ecrire les donnees. Notons qu'ici, rewrit=Faux,
+***        puisqu'on s'est explicitement occupe des doublons
+***        avec le "if (Elim)" precedent.
 
           iecr = fstecr( buff,ibuf,
      +                  -nbits, iu2, dateo,deet,npas,
      +                   ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,
      +                   etiket,grtyp, ig1,ig2,ig3,ig4,
-     +                   datyp, rewrit )
+     +                   datyp, Faux )
 
 ***        Verifier que l'operation s'est bien deroulee.
 
@@ -1311,7 +1327,7 @@ C    +              valnum,kind
      +                      -nbits, iu2, dateo,deet,npas,
      +                       ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,
      +                       etiket,grtyp, ig1,ig2,ig3,ig4,
-     +                       datyp, rewrit )
+     +                       datyp, Faux )
 
 ***            On ne fait ceci qu'une seule fois.
 
@@ -1368,7 +1384,7 @@ CCC   if (ier.ne.0) print *,'erreur dans hpcheck=',ier
  6100 format(/14x,'Typ Nom',8x,'Ip1',3x,'IP3',3x,'Npas',
      +        3x,'Etiket',10x,'Dateo'/)
  6101 format( 5x,i4,1x,i4,1x,a2,1x,a4,2x,i8,i6,i7,2x,a12,1x,i10)
- 6102 format( '   Elimination de ',I4,' enregistrements redondants.'/)
+ 6102 format( '   Elimination de ',I6,' enregistrements redondants.'/)
  6103 format( '   Enregistrements de renvois sauves dans...'/
      +        '   ', A/)
 
@@ -1379,6 +1395,7 @@ CCC   if (ier.ne.0) print *,'erreur dans hpcheck=',ier
      +        6x,   ' Destination... ',5x,A/)
  6205 format( 6x,   ' Destination... ',I3,2x,A/)
  6250 format(/'   Codage des IP2 en heures (IP type ',I2,')'/)
+ 6300 format(/"   L'argument -rewrit n'est plus supporte."/)
 
  6001 format(/'   Deux noms de fichiers sont requis a l''entree...'/)
  6002 format(/"   Impossible d'associer un nom a une unite d'E/S"/:3x,A/)

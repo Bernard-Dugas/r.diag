@@ -9,13 +9,15 @@
 *Ccard		-23 util2.F90	Too many argument values
 *Ccard		-24 util2.F90	Too many arguments or positional mode not allowed
 *Ccard		-25 util2.F90	Error return from call to GET_COMMAND_ARGUMENT
-*Chklvlc	-1	coord.ftn	Illegal height value
+*Chklvlc		-1	coord.ftn	Illegal height value
 *Clesui		-1	convsub.ftn	Illegal call to CLESUI: no INICLE initialization
 *Clesui		-2	convsub.ftn	Unknown I/O unit number
 *Clrlmt		-1	dimgt.ftn	Problems with input LR,LM,KTR values
 *Clrlmt		-2	dimgt.ftn	Problem with LRLMT_DIGITS environment variable
-*Convip_plus	-4	diag_convert_ip123.cdk90	Illegal KIND conversion requested
-*Coordab	-1	coord.ftn	COORD parameter not recognized
+*Convhour		-1	coord.ftn	IP2 does not represent an hourly value
+*Convip_plus	-4	diag_convip_plus.ftn90	Illegal KIND conversion requested
+*Coordab		-1	coord.ftn	COORD parameter not recognized
+*Decode_Range	-1	diag_convip_plus.ftn90	Decode error
 *Decodr		-1	lowio.ftn	IEEE-754 real*8 overflow
 *Decodr2 	-1	lowio92.ftn	IEEE-754 real*8 overflow
 *Dimgt		-1	dimgt.ftn	LR is less than LM
@@ -29,6 +31,8 @@
 *Ecrtoc		-1	diag_toc.cdk90	WARNING - error during write
 *Elael		-1	pael.ftn	Entry levels are not monotonous
 *Elael		-2	pael.ftn	Output levels are not monotonous
+*Encode_Range	-1	diag_convip_plus.ftn90	Encode error with time range
+*Encode_Range	-2	diag_convip_plus.ftn90	Encode error with level range
 *Ffgfw		-1	fftcray.ftn	ILG is less than LON+2
 *Ffgfw3		-1	fftcray.ftn	ILG is less than LON+2
 *Ffwfg		-1	fftcray.ftn	ILG is less than LON+2
@@ -42,14 +46,16 @@
 *Gbyt92		-2	pacc92.ftn	Illegal machine type
 *Gem4apl 	-1	gemdiag.ftn	Destination levels are not monotonous
 *Gem4apl 	-2	gemdiag.ftn	Source levels not hybrid type
-*Gem4apl	-3	gemdiag.ftn	Source levels are not monotonous
-*Gem4ath	-1	gemdiag.ftn	Indentified an inversion layer
+*Gem4apl		-3	gemdiag.ftn	Source levels are not monotonous
+*Gem4ath		-1	gemdiag.ftn	Indentified an inversion layer
 *Getbuf2 	-1	get.ftn		Mismatch between HEAD and IOHEAD
 *Getbuf2 	-2	get.ftn		Unknown packing type
 *Gethic  	-1	get.ftn		Unknown character parameter name
 *Gethigh 	-1	get.ftn		Unknown integer parameter name
 *Getkindc 	-1	coord.ftn	Unrecognized numeric KIND value
 *Getlign 	-1	get.ftn		LEN greater than 999 characters
+*Getmset 	-1	get.ftn		Found wrong levels
+*Getmset 	-2	get.ftn		More than one size
 *Getset2 	-1	get.ftn		NLEV*NWDS greater than MAXPK
 *Getsiz3 	-1	get.ftn		Last variable set is incomplete
 *Getsiz3 	-2	get.ftn		More than one size in file
@@ -58,23 +64,24 @@
 *Getyp		-1	get.ftn		Fortran I/O error
 *Getzdes 	-1	convsub.ftn	Unable to open file zcrochets
 *Getzdes 	-2	convsub.ftn	Bad dimensions for data in file zcrochets
-*Getzdes	-3	convsub.ftn	Unmatched dimensions
-*Getzipx	-1	convsub.ftn	Unable to open file zcrochets
-*Getzipx	-2	convsub.ftn	Bad dimensions for data in file zcrochets
+*Getzdes		-3	convsub.ftn	Unmatched dimensions
+*Getzipx		-1	convsub.ftn	Unable to open file zcrochets
+*Getzipx		-2	convsub.ftn	Bad dimensions for data in file zcrochets
 *Getzref 	-1	convsub.ftn	Unable to open file zcrochets
 *Getzref 	-2	convsub.ftn	Z-reference records un-available
 *Getzref 	-3	convsub.ftn	Fortran I/O error with file zcrochets
 *Getzref 	-4	convsub.ftn	Bad dimensions for data in file zcrochets
-*Getztyp	-1	convsub.ftn	Unmatched dimensions
-*Getztyp	-2	convsub.ftn	Bad dimensions for data in file zcrochets
+*Getztyp		-1	convsub.ftn	Unmatched dimensions
+*Getztyp		-2	convsub.ftn	Bad dimensions for data in file zcrochets
 *Getzx2		-1	get.ftn		Allocated field too small to unpack data
+*Ibufill 	-2	convsub.ftn	 Decode IP error
 *Ibufill 	-3	convsub.ftn	Unsupported standart file grid type
 *Inctdia 	-1	inctdia.ftn	Unable to define a constant value
 *InfNaN		-1	util.ftn	Found illegal data (Inf or NaN)
 *Inicle		-1	convsub.ftn	I/O unit number too large
 *Intpz		-1	mrcdiag.ftn	Illegal cubic-spline derivative
 *Jclpnt		-1	util.ftn	Too many I/O units	
-*Jclpnt		-2	util.ftn	File name longer than 256 characters
+*Jclpnt		-2	util.ftn	File name longer than 512 characters
 *Jclpnt		-3	util.ftn	Tried openning empty stdin file
 *Jclpnt		-4	util.ftn	Fortran I/O error
 *Jclpnt		-5	util.ftn	Unknown file type returned by WKOFFIT
@@ -115,15 +122,16 @@
 *Pael		-2	pael.ftn	Local sigma levels are not monotonous
 *Parfill 	-1	convsub.ftn	Illegal SUBA grid type
 *Parfill 	-2	convsub.ftn	Cannot save GRTYP=L time-series
-*Plagem4	-1	gemdiag.ftn	Source pressure levels are not monotonous
-*Plagem4	-2	gemdiag.ftn	Bad coding for GEM4 levels. Should be HYBRID
-*Plagem4	-3	gemdiag.ftn	Destination GEM4 levels are not monotonous
+*Plagem4		-1	gemdiag.ftn	Source pressure levels are not monotonous
+*Plagem4		-2	gemdiag.ftn	Bad coding for GEM4 levels. Should be HYBRID
+*Plagem4		-3	gemdiag.ftn	Destination GEM4 levels are not monotonous
 *Precede 	-1	util.ftn	FSTINF(X) seek error
 *Precede 	-2	util.ftn	Found a ++ record at the start of the file
 *Precle		-1	convsub.ftn	Stack not initialized via INICLE
 *Precle		-2	convsub.ftn	Requested offset too large
 *Precle		-3	convsub.ftn	Unknown I/O unit number
 *Probf		-1	prob.ftn	Illegal number of degrees of freedom
+*Prtlab3		-1	label.ftn	Decode IP error
 *PushU		-1	convsub.ftn	Too many U reference records
 *Pushyz		-1	convsub.ftn	Too many Y/Z different reference sets
 *Putbuf2 	-1	put.ftn		Header record problem (type PK92)
@@ -133,13 +141,19 @@
 *Puthic		-2	put.ftn		Unknown character parameter name
 *Puthigh 	-1	put.ftn		Size discrepancy in IBUF high area
 *Puthigh 	-2	put.ftn		Unknown integer parameter name
+*Puthir 	-1	put.ftn		Size discrepancy in high area
+*Puthir 	-2	put.ftn		Unknown character parametre name
 *Putlab		-1	label.ftn	Unsupported file type
+*Putsamplz 	-1	put.ftn		Encode error with time range
+*Putsamplz 	-2	put.ftn		Too many samples
+*Putsamplz 	-3	put.ftn		Encode error with level range
 *Putzref 	-1	convsub.ftn	Unable to open file zcrochets
 *Recget		-1	rec.ftn		MAXPK less or equal to 0
 *Recget		-2	rec.ftn		Input buffer too small
 *Recpk2		-1	rec.ftn		Output buffer too small
 *Recput		-1	rec.ftn		Problem writing buffer to file
 *Recup2		-1	rec.ftn		Illegal packing density for character data
+*Rmzref 	-1	convsub.ftn	Unable to remove old file
 *Savzref 	-1	convsub.ftn	Unable to open file zcrochets
 *Savzref 	-2	convsub.ftn	Not the same number of ^^ and >> records
 *Savzref 	-3	convsub.ftn	Problem reading ^^ or   >> records
@@ -159,10 +173,10 @@
 *Spectra 	-2	spectra.ftn	LR is less than LM
 *Vfft		-1	fftcray.ftn	LOT greater than MAXLOT
 *Writef		-1	util.ftn	Fortran I/O error
-*WritSTD	-1	convsub.ftn	FCLOS or FSTFRM error
-*WritSTD	-2	convsub.ftn	FNOM or FSTOUV error
-*WritSTD	-3	convsub.ftn	Y and Z grids in same file 
-*WritSTD	-4	convsub.ftn	Problem with sizes of deet,npas
+*WritSTD		-1	convsub.ftn	FCLOS or FSTFRM error
+*WritSTD		-2	convsub.ftn	FNOM or FSTOUV error
+*WritSTD		-3	convsub.ftn	Y and Z grids in same file 
+*WritSTD		-4	convsub.ftn	Problem with sizes of deet,npas
 *WritUref	-1	convsub.ftn	Descripancy between internal descriptors
 *
 *
@@ -176,7 +190,7 @@
 *
 *
 *			Contact: Dugas.Benard@uqam.ca
-*			Last Revision: October 2016.
+*			Last Revision: January 2018.
 *
 #endif
 #     if defined (RDIAG_LICENCE)
@@ -208,6 +222,12 @@
 ***    documentation des codes d'erreurs des sous-routines de libdiag.a
 
 *     $Log: lssub.ftn,v $
+*     Revision 3.34  2018/01/10 13:13  dugas
+*     - Documenter les erreurs des routines CONVHOUR, DECODE_RANGE,
+*       ENCODE_RANGE, GETMSET, PRTLAB3, PUTHIR, PUTSAMPLZ et RMZREF
+*     - Correction de la description de l'erreur -2 de JCLPNT
+*     - Ajouter erreur -2 de IBUFILL
+*
 *     Revision 3.33  2016/10/27 13:37  dugas
 *     - Ajouter erreur -2 de clrlmt.
 *     - Ajouter les erreurs de CCARD (CCARD_OPT='DEBUG')
