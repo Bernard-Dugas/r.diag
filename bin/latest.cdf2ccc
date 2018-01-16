@@ -1,6 +1,6 @@
 #!/bin/bash
 Location=$(true_path $0) ; Location=${Location%/bin/*}
 export DIAGNOSTIQUE=${DIAGNOSTIQUE:-${Location}}
-CDF2CCC=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/latest.cdf2ccc
+CDF2CCC=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/latest_cdf2ccc
 ${CDF2CCC} "$@"
 exit $?
