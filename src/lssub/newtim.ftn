@@ -23,17 +23,23 @@
       INTEGER*8 ITIME
 
 !**    AUTHOR: F. ZWIERS -- DEC 27/84
+
+!**    Modifications...
+!**    Dugas B. January 18, 2018 : Add the DTM=4 option
+
 !**   
-!**    PURPOSE -- TO CONVERT ONE OF THE FOUR APPROVED TIME FORMATS INTO
-!**               COUNT TYPE UNITS.
+!**    PURPOSE -- TO CONVERT ONE OF FIVE TIME FORMATS INTO COUNT TYPE UNITS.
 !**   
 !**    IF DTM=0 THEN TIME IS IN COUNT UNITS SO RETURN
 !**    IF DTM=1 THEN TIME IS IN FORMAT YYMMDDHH. TIME IS CONVERTED TO HOURS.
-!**    IF DTM=2 THEN TIME IS IN FORMAT YYMMDDHHMM. TIME IS CONVERTED TO
+!**    IF DTM=2 THEN TIME IS IN FORMAT YYMMDDHHmm. TIME IS CONVERTED TO
 !**             MINUTES.
 !**    IF DTM=3 THEN TIME IS IN FORMAT YYMMDDHH. TIME IS CONVERTED TO
 !**             HOURS AND LEAP YEARS ARE TAKEN INTO ACCOUNT.
-!**             YEARS ARE COUNTED AS YEARS SINCE 00 AD.
+!**    IF DTM=4 THEN TIME IS IN FORMAT YYMMDDHHmm. TIME IS CONVERTED TO
+!**             MINUTES AND LEAP YEARS ARE ALSO TAKEN INTO ACCOUNT.
+!**
+!**    YEARS ARE COUNTED AS YEARS SINCE 00 AD.
 !**   
 !**    CONSISTENCY CHECKING IS PERFORMED AND OK IS RETURNED FALSE IF
 !**    AN INCONSISTENCY IS DETECTED.
@@ -49,7 +55,6 @@
       DATA     JDAYS / 0,31,59,90,120,151,181,212,243,273,304,334 /
 !-------------------------------------------------------------------------
 
-      OK     =.TRUE.
       OBS    =.FALSE.
       MIN    = 0
       TIME   = ITIME
@@ -60,6 +65,7 @@
 !**    IF DTM=0 THEN TIME IS IN COUNT UNITS.
 
           NEWTIM = TIME
+          OK     =.TRUE.
 
       ELSE IF (DTM.EQ.1)                                       THEN
 
@@ -119,6 +125,29 @@
               NEWTIM = HH + JD*JOUR
           END IF
 
+      ELSE IF (DTM.EQ.4)                                       THEN
+
+!**    IF DTM=4 THEN TIME IS IN FORMAT YYYYMMDDHHmm. TIME IS CONVERTED
+!**                  TO MINUTES AND LEAP YEARS ARE TAKEN INTO ACCOUNT.
+!**                  YEARS ARE COUNTED AS YEARS SINCE 00 AD.
+
+          OBS  =.TRUE.
+          YY   = TIME/100000000
+          TIME = TIME-YY*100000000
+          MM   = TIME/1000000
+          TIME = TIME-MM*1000000
+          DD   = TIME/10000
+          TIME = TIME-DD*10000
+          HH   = TIME/100
+          MIN  = TIME-HH*100
+
+          CALL CHECKT( ITIME, YY,MM,DD,HH,MIN,OBS, OK )
+
+          IF (OK)                                              THEN
+              CALL JDATEC( JD,YY,MM,DD )
+              NEWTIM = ( ( HH + JD * JOUR ) * HEUR ) + MIN
+          END IF
+
       ELSE
 
           OK=.FALSE.
@@ -144,7 +173,7 @@
 
       LOGICAL   OK
       INTEGER*8 :: HH,NT,NY,HEUR=60,JOUR=24,CENT=100
-      INTEGER   DD,JD,MM,YY,I,JDAYS(0:12)
+      INTEGER   DD,JD,MM,MIN,YY,I,JDAYS(0:12)
 
       INTEGER*8,EXTERNAL :: NEWTIM
       EXTERNAL  DATEC
@@ -169,17 +198,17 @@
 
 !**            CODE NT ACCORDING TO DTM.
 
-              IF (DTM.EQ.1 .OR. DTM.EQ.3)                      THEN
+              IF (DTM == 1 .OR. DTM == 3)                      THEN
                   HH = NT
-              ELSE IF (DTM.EQ.2)                               THEN
-                  MM = MOD( NT,HEUR )
+              ELSE IF (DTM == 2 .OR. DTM == 4)                 THEN
+                  MIN = MOD( NT,HEUR )
                   HH = NT/HEUR
               END IF
 
               DD = HH/JOUR +1
               HH = MOD( HH,JOUR )
 
-              IF (DTM.NE.3)                                    THEN
+              IF (.NOT.(DTM == 3 .OR. DTM == 4))               THEN
 
                  YY = (DD-1)/365
                  DD = MOD( DD-1,365 )+1
@@ -200,8 +229,51 @@
               END IF
 
   100         ADDTIM = ((YY*CENT+MM)*CENT+DD)*CENT+HH
-              IF (DTM.EQ.2) ADDTIM = ADDTIM*CENT+MM
+              IF (DTM == 2 .OR. DTM == 4) ADDTIM = ADDTIM*CENT+MIN
                  
+          END IF
+
+      END IF
+
+      RETURN
+!--------------------------------------------------------------------------
+
+      END
+
+      INTEGER*8 FUNCTION DIFDTM( T2,T1, DTM,OK )
+
+      IMPLICIT none
+
+      LOGICAL   OK
+      INTEGER*8 T1,T2
+      INTEGER   DTM
+
+!**    AUTHOR: B.DUGAS -- JAN 24/18
+
+!**    DIFFERENCE BETWEEN T2 AND T1 TIME UNITS OF TYPE DTM TO TIME.
+!**    DTM IS ITSELF CONSISTENT WITH FUNCTION NEWTIM.
+
+      LOGICAL   OK1,OK2
+      INTEGER*8 :: NT1,NT2
+
+      INTEGER*8,EXTERNAL :: NEWTIM
+
+!--------------------------------------------------------------------------
+      DIFDTM = -999999999 ; OK = .FALSE.
+
+      IF (DTM.EQ.0)                                            THEN
+
+          DIFDTM = T2-T1 ; OK = .TRUE.
+
+      ELSE
+
+***        CONVERT T2 AND T1 TO DTM UNITS.
+
+          NT1 = NEWTIM( T1,DTM,OK1 )
+          NT2 = NEWTIM( T2,DTM,OK2 )
+
+          IF (OK1 .AND. OK2)                                   THEN
+              DIFDTM = NT2-NT1 ; OK = .TRUE.
           END IF
 
       END IF

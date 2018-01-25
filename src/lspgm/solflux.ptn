@@ -39,11 +39,14 @@
 *                     = 1 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT
 *                             YYYYMMDDHH AND T3 IS IN HOURS.
 *                     = 2 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT
-*                             YYMMDDHHMM AND T3 IS IN MINUTES AND
+*                             YYMMDDHHmm AND T3 IS IN MINUTES AND
 *                             NO LEAP YEAR.
 *                     = 3 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT
 *                             YYYYMMDDHH AND T3 IS IN HOURS. BUT NOW,
 *                             LEAP YEARS ARE ACCOUNTED FOR.
+*                     = 4 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT
+*                             YYYYMMDDHHmm AND T3 IS IN MINUTES. BUT
+*                             NOW, LEAP YEARS ARE ACCOUNTED FOR.
 *     KHEM   (nhem)   = 0,1,2 TYPE DE GRILLE (GLOBAL, PS NORD OU SUD)
 *
 *     SCON   (c)      = SOLAR CONSTANT USED (DEF=1367. W/M**2)
@@ -89,6 +92,8 @@
 *       1 UNABLE TO READ INFILE
 *       2 UNABLE TO READ DIRECTIVES
 *       3 UNSUPPORTED GRID TYPE
+*       4 DTM must equal to 3 or 4 for CMC/RPN files
+*       5 ERROR IN NEWTIM CALL
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -113,6 +118,10 @@
 *    1           TAPE2=INFILE, TAPE1=FSO, TAPE5=INPUT, TAPE6=OUTPUT) 
 *     -----------------------------------------------------------
 *     $Log: solflux.ptn,v $
+*     Revision 4.16  2018/01/18 20:20:20  dugas
+*     - Ajouter le support de l'option DTM=4.
+*     - Effectuer des corrections pour DTM=2.
+*
 *     Revision 4.15  2014/09/25 20:20:53  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -213,7 +222,7 @@
      +            NWDS,JPAK,IER,IO,INCDAY,KHEM,ILG,
      +            ILG1,ILAT,NSTEPS,NSIZE,ILATH,I,J,
      +            NT,MONTH,N,DATE,ANNE,JOUR,MOIS,
-     +            JULI,IG1,IG2,IG3,IG4,ZIG1,
+     +            JULI,IG1,IG2,IG3,IG4,ZIG1,MIN,
      +            ZIG2,ZIG3,ZIG4,DIMX,DIMY,
      +            SEND,K,SMOOTH,NPAS
 
@@ -226,9 +235,9 @@
       REAL,       DIMENSION(:), ALLOCATABLE :: FSO
 
       LOGICAL     RPBLOC
-      INTEGER*8   NEWTIM,ADDTIM
       INTEGER     GETSIZ,GETHIGH
       CHARACTER*4 GETYP,PKTYP,GETHIC
+      INTEGER*8   NEWTIM,ADDTIM,DIFDTM
       EXTERNAL    RPBLOC,JCLPNT,GETLIGN,BURNF,XIT,GAUSSG,
      +            TRIGL2,SDET,CLATLON,PUTFLD2,GETSIZ,
      +            SUIVANT,GETYP,GETHIGH,GETHIC,CIGAXG,
@@ -269,6 +278,7 @@ CCCC  also used in the CCCMARAD port of the Li Correlated-K code)
       PKTYP  = PKTYP(1:2)
 
       INCDAY = -1
+      DTM    = -1
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
 
@@ -374,17 +384,36 @@ CCCC  also used in the CCCMARAD port of the Li Correlated-K code)
           IF (DELT.EQ.0.) NPAS = GETHIGH('NPAS',JBUF )
           IF (DELT.EQ.0.) DELT = GETHIGH('DEET',JBUF )
 
-          DTM  = 3
+          IF (DTM == -1) DTM = 3
+
+          IF (.NOT.(DTM == 3 .OR. DTM == 4))                   THEN
+              WRITE(6,6004) DTM
+              CALL                                XIT(' Solflux',-4 )
+          END IF
+
+          CALL SET_DTM( DTM )
 
 ***        RECUPERER LES PARAMETRES TEMPORELS.
 
           CALL STAMP2DATE( JBUF(2),DATE8 )
-          ANNE  = DATE8/1000000_8
-          DATE8 = DATE8-ANNE*1000000_8
-          MOIS  = DATE8/10000
-          DATE8 = DATE8-MOIS*10000
-          JOUR  = DATE8/100
-          GMT   = DATE8-JOUR*100
+
+          IF (DTM == 3)                                        THEN
+              ANNE  = DATE8/1000000_8
+              DATE8 = DATE8-ANNE*1000000_8
+              MOIS  = DATE8/10000
+              DATE8 = DATE8-MOIS*10000
+              JOUR  = DATE8/100
+              GMT   = DATE8-JOUR*100
+          ELSE IF (DTM == 4)                                   THEN
+              ANNE  = DATE8/100000000_8
+              DATE8 = DATE8-ANNE*100000000_8
+              MOIS  = DATE8/1000000
+              DATE8 = DATE8-MOIS*1000000
+              JOUR  = DATE8/10000
+              DATE8 = DATE8-JOUR*10000
+              GMT   = DATE8/100
+              MIN   = DATE8-GMT*100
+          END IF
 
 ***        TROUVER LE JOUR JULIEN CORRESPONDANT.
 
@@ -393,9 +422,19 @@ CCCC  also used in the CCCMARAD port of the Li Correlated-K code)
 
           DAY    = DATE-JULI+1
 
-      END IF
+      ELSE
 
-      CALL SET_DTM( DTM )
+          IF (PKTYP == 'SQ')                                  THEN
+              ! DEFAUT = FAUX
+              IF (DTM == -1) DTM = 3
+          ELSE IF (DTM == -1)                                       THEN
+              ! Fichier CCCma et DTM non defini via la ligne de commande
+              DTM = 0
+          END IF
+
+          CALL SET_DTM( DTM )
+
+      END IF
 
       IF (PKTYP.EQ.'SQ')                                       THEN
 
@@ -606,6 +645,11 @@ CCCC  also used in the CCCMARAD port of the Li Correlated-K code)
       CALL STAMP2DATE( JBUF(2),IT1 )
       NT1 = NEWTIM( IT1,DTM, OK )
 
+      IF (.NOT.OK)                                             THEN
+          WRITE(6,6005) IT1,DTM
+          CALL                                     XIT(' Solflux',-5 )
+      END IF
+
       LASTBUF2 = IT1
 
 ***    SCAN INPUT FILE FOR TIMESTEP INFORMATIONp.
@@ -618,12 +662,22 @@ CCCC  also used in the CCCMARAD port of the Li Correlated-K code)
               IF (NSTEPS.EQ.0) CALL                XIT(' Solflux',-1 )
               CALL STAMP2DATE( IBUF(2),IT2 )
               NT2 = NEWTIM( IT2,DTM,OK )
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6005) IT2,DTM
+                  CALL                             XIT(' Solflux',-5 )
+              END IF
               GOTO 100 
           END IF 
           IF (ERR) CALL                            XIT(' Solflux',-1 )
           CALL STAMP2DATE( IBUF(2),IT2 )
           IF (NSTEPS >  0 .AND. LASTBUF2 == IT2) GOTO 050
-          IF (NSTEPS == 1) NT3 = NEWTIM( IT2,DTM,OK ) - NT1 
+          IF (NSTEPS == 1)                                     THEN
+              NT3 = DIFDTM( IT2,IT1,DTM,OK )
+              IF (.NOT.OK)                                     THEN
+                  WRITE(6,6006) IT2,IT1,DTM
+                  CALL                             XIT(' Solflux',-6 )
+              END IF
+          END IF
           LASTBUF2 = IT2
       NSTEPS = NSTEPS+1 
       GOTO 050
@@ -638,12 +692,14 @@ CCCC  also used in the CCCMARAD port of the Li Correlated-K code)
 
       IF (DTM.EQ.0)                                            THEN
           STEP = DBLE( NT3 )*DELT/3600.D0
-      ELSE
+      ELSE IF (DTM == 1 .OR. DTM == 3)                         THEN
           STEP = NT3
+      ELSE IF (DTM == 2 .OR. DTM == 4)                         THEN
+          STEP = NT3/60.D0
       END IF
 
       IF (INCDAY.EQ.-1)                                        THEN
-          IF (DELT.NE.0. .AND. NT1.LT.NT2)                     THEN
+          IF (NT1 < NT2)                                       THEN
              INCDAY = 1
           ELSE
              INCDAY = 0
@@ -663,7 +719,11 @@ CCCC  also used in the CCCMARAD port of the Li Correlated-K code)
 
       IF (SMOOTH.NE.0 .AND. DELT.NE.0.)                        THEN
           SSTEP  = DELT/      3600D0
-          OVSEND = DELT/(STEP*3600D0)
+          IF (DTM == 2 .OR. DTM == 4)                          THEN
+              OVSEND = DELT/(STEP*60D0)
+          ELSE
+              OVSEND = DELT/(STEP*3600D0)
+          END IF
           SEND   = NINT( 1./OVSEND )
       ELSE
           SSTEP  = 0.
@@ -791,12 +851,17 @@ CCC           RDEC = -0.412*COS( (SDAY+10.)*RADYEAR )
           GMTOLD = GMT+STEP 
           GMT    = MOD(GMTOLD,24.)
           DAY    = DAY+(GMTOLD-GMT)/24.
+
           IF (INCDAY.EQ.0) DAY = DAYFIX
 
       END DO
 
       WRITE(6,6050) NSTEPS,NAME,NT
-      WRITE(6,6200) IT1,IT2,NT3
+      IF (DTM == 0 .OR. DTM == 1 .OR. DTM == 3)                THEN
+          WRITE(6,6200) IT1,IT2,NT3
+      ELSE
+          WRITE(6,6201) IT1,IT2,NT3
+      END IF
       EPSILN = 0.1
       GMTM   = GMT0-EPSILN
       GMTP   = GMT0+EPSILN
@@ -819,6 +884,9 @@ CCC           RDEC = -0.412*COS( (SDAY+10.)*RADYEAR )
 
  6000 FORMAT(' DAY,GMT,DELT,INCDAY,DTM...',3F10.2,2I6)
  6003 FORMAT(' Found unsupported grid type ',A,', aborting...'/)
+ 6004 FORMAT(' DTM ',I2,' must equal to 3 or 4 for CMC/RPN files...'/)
+ 6005 FORMAT(' Error in NEWTIM, TIME=',I12,', DTM=',I1,' ...'/)
+ 6006 FORMAT(' Error in DIFDTM, IT2,IT1=',2I13,', DTM=',I1,' ...'/)
 
  6050 FORMAT(1X,I10,' input  records of ',A,/,
      +       1X,I10,' output records of FSO')
@@ -828,6 +896,8 @@ CCC           RDEC = -0.412*COS( (SDAY+10.)*RADYEAR )
      + F5.1,' - ',F4.0,'Z')
  6200 FORMAT(' From NT1 =',I12,' to NT2 =',I12,
      +       ' with increments of NT3=',I6,' hours.')
+ 6201 FORMAT(' From NT1 = ',I12,' to NT2 = ',I12,
+     +       ' with increments of NT3=',I6,' minutes.')
  6300 FORMAT(' DAY,GMT,DELT,INCDAY,DTM...',3F10.2,2I6/
      +       ' KHEM,PX,PY,D60,DGRW...    ',I6,4F10.2)
  6350 FORMAT(' Using solar constant = ',F10.2,' W/M**2.')

@@ -24,6 +24,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: label.ftn,v $
+C     Revision 3.32  2017/12/18 17:18  dugas
+C     Corriger une erreur d'omission d'initialisation
+C      de la variable LOVAL dans la routine PRTLAB3
+C
 C     Revision 3.31  2017/10/02 20:20  dugas
 C     Tenir compte des differentes signatures d'operations temporelles
 C      qui pourraient se retrouver dans le deuxieme caracteres du TYPVAR
@@ -1132,6 +1136,8 @@ CCC           call swapa4( ibuf(1) )
               END IF
               IF (iKind == KIND_HOURS)                         THEN
                   LOVAL = HIVAL - NINT( npas*DBLE( deet )/5 )/720.0_8
+              ELSE
+                  LOVAL = 0
               END IF
           ELSE
               HIVAL = NINT( npas*DBLE( deet )/5 )/720.0_8

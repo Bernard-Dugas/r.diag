@@ -5,6 +5,9 @@
 !
 ! REVISIONS
 !
+! B. Dugas janvier 2018 :
+! - Ajouter les variables caracteres TYPVAR et
+!   ETIKET qui seront contenues dans Extras_CMC_RPN
 ! B. Dugas mai 2017 :
 ! - Enlever le parametre HEAD. Il est declare via un macro
 !   dans les routines qui en ont besoin, comme dans r.diag
@@ -281,6 +284,11 @@
 
       common /vcard/ cap,cb,gem2,gem3,htoit,vkind,nkm,nkt
       common /vcard/ hyb_pt,hyb_pref,hyb_r,hyb_r2
+
+! Descripteurs CMC/RPN :
+
+      character  TYPVAR*2,ETIKET*12
+      common /Extras_CMC_RPN/ TYPVAR,ETIKET
 
 ! Projection :
 

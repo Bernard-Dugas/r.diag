@@ -96,7 +96,7 @@
 
 !    vGrid_Descriptors variable declarations
 
-      integer, parameter :: max_nbr=2   ! Maximum number of TocToc in any file
+      integer, parameter :: max_nbr=10  ! Maximum number of TocToc in any file
       integer, parameter :: STDERR=0    ! Standard error I/O unit 
       integer, parameter :: STDOUT=6    ! Standard output I/O unit 
 
@@ -326,13 +326,13 @@
           IF (TOC_NBR(NF) == 0) GOTO 100
 
           IF (status < 0)                                      THEN
-              IF (DEBUG) WRITE(STDERR,6101) status
-              GOTO 100
-          END IF
-
-          IF (TOC_NBR(NF) > max_nbr)                           THEN
-              TOC_NBR(NF) = 0
-              IF (DEBUG) WRITE(STDOUT,6102) TOC_NBR(NF)
+              IF (status /= -3)                                THEN
+                  IF (INFO) WRITE(STDOUT,6101) STATUS
+              ELSE
+                  ! TOC_NBR(NF) > max_nbr
+                  TOC_NBR(NF) = 0 ! Just to make sure
+                  IF (INFO) WRITE(STDOUT,6102) max_nbr
+              END IF
               GOTO 100
           END IF
 
@@ -348,7 +348,7 @@
 
               IF (status < 0)                                  THEN
                   TOC_NBR(NF) = 0
-                  IF (DEBUG) WRITE(STDERR,6103) status,I
+                  IF (INFO) WRITE(STDERR,6103) status,I
                   TOC_NBR(NF) = 0 ; EXIT
                   EXIT
               END IF
@@ -585,9 +585,9 @@
 
  6000 FORMAT(' LirTOC:   Attempt to find !! on file...'/10X,A/)
 
- 6101 FORMAT('*DEBUG: LirTOC error ',I3,' in FSTINFX')
- 6102 FORMAT('*DEBUG: LirTOC found too many !! ',I4)
- 6103 FORMAT('*DEBUG: LirTOC error ',I3,' in FSTPRM, VGRID # ',I2)
+ 6101 FORMAT('*INFO:  LirTOC error ',I3,' in FSTINL')
+ 6102 FORMAT('*INFO:  LirTOC found more than ',I2,' !! ')
+ 6103 FORMAT('*INFO:  LirTOC error ',I3,' in FSTPRM, VGRID # ',I2)
  6104 FORMAT('*INFO:  LirTOC VGD_NEW *OK*')
  6105 FORMAT('*INFO:  LirTOC VGD_GET *OK* on ',A)
  6106 FORMAT('*INFO:  LirTOC first grid descriptor found... IP1/2 =',2I7/)

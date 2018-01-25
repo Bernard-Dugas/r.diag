@@ -18,6 +18,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.123  2018/01/18 14:14:14  dugas
+c     Ajouter l'option DTM=4 dans SET_DTM
+c
 C     Revision 3.122  2016/10/26 15:15:24  dugas
 C     - Explicitement desactiver tous les types de donnees
 C       manquantes dans JCLPNT lorsque MValue est faux
@@ -2698,11 +2701,12 @@ CCC           END IF
       ENTRY SET_DTM ( DTM )
 
 ***   PARAMETERS...
-*      DTM     = FLAG TO INDICATE METHOD OF TIME MEASUREMENT IN CCC FILES
-*              = 0 ==> TIME IN UNITS OF TIME STEPS.
-*              = 1 ==> TIME IN YYYYMMDDHH FORMAT, NO LEAP YEARS.
-*              = 2 ==> TIME IN YYYYMMDDHHMM FORMAT AND AGAIN, NO LEAP YEARS.
-*              = 3 ==> TIME IN YYYYMMDDHH FORMAT, LEAP YEARS ACCOUNTED FOR,
+*      DTM = FLAG TO INDICATE METHOD OF TIME MEASUREMENT IN CCC FILES
+*          = 0 ==> TIME IN UNITS OF TIME STEPS.
+*          = 1 ==> TIME IN YYYYMMDDHH FORMAT, NO LEAP YEARS.
+*          = 2 ==> TIME IN YYYYMMDDHHMM FORMAT AND AGAIN, NO LEAP YEARS.
+*          = 3 ==> TIME IN YYYYMMDDHH FORMAT, LEAP YEARS ACCOUNTED FOR.
+*          = 4 ==> TIME IN YYYYMMDDHHMM FORMAT AND AGAIN, LEAP YEARS ACCOUNTED FOR.
 
       IF (DTM == 0)                                            THEN
           DATE_CONVERSION_FACTOR = 0
@@ -2714,6 +2718,9 @@ CCC           END IF
           CALL Ignore_LeapYear()
       ELSE IF (DTM == 3)                                       THEN
           DATE_CONVERSION_FACTOR = 1 00 00 00
+          CALL Accept_LeapYear()
+      ELSE IF (DTM == 4)                                       THEN
+          DATE_CONVERSION_FACTOR = 1 00 00
           CALL Accept_LeapYear()
       END IF
 

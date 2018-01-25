@@ -40,6 +40,8 @@
 !
 !REVISIONS
 !
+! B.Dugas janvier '18 :
+! - TYPVAR et ETIKET sont maintenant definies dans cdf2ccc.h
 ! B.Dugas novembre '17 :
 ! - Passer du format .f au format .F90 et ainsi
 !   possiblement invoquer  un pre-processeur
@@ -197,7 +199,7 @@
 !*****RPN/CMC :
 
       character(len=1)   GRTYP,pGRTYP,NULS,ModTypV
-      character(len=128) ETIKET,string,level_value
+      character(len=128) string,level_value
       character(len=4),  save :: Gtyp='GRID',Ztyp='ZONL',Dtyp='DATA'
 
       integer, parameter :: TURBO16=134,IEEE=5,STD=1
@@ -551,12 +553,12 @@
 
       endif
 
-      ! tenter mettre le titre ou un autre bout
-      ! de texte pertinent dans l'etiquette RPN/CMC
+      ! tenter mettre le titre ou un autre bout de texte pertinent
+      ! dans l'etiquette RPN/CMC si celle-ci est definie par defaut
 
   100 status=nf_inq_varnatts( ncid,nf_global,natts )
 
-      if (status == nf_noerr .and. natts > 0) then
+      if (status == nf_noerr .and. natts > 0 .and. ETIKET == 'Netcdf2RPN') then
 
          allocate( att_name(natts) )
 
@@ -614,14 +616,8 @@
          if (na <= natts) then
             status=nf_get_att_text( ncid,nf_global, &
                                     att_name(na), cfield )
-            call clean_char( cfield,etiket,len )
-         else
-            etiket='Netcdf2CCC'
+            call clean_char( cfield,ETIKET,len )
          endif
-
-      else
-
-         etiket='Netcdf2CCC'
 
       endif
 
@@ -888,7 +884,7 @@
 
             if (ccc_pktyp(1:2) == 'SQ') then
                GRTYP=pGRTYP ; IG1=pIG1 ; IG2=pIG2 ; IG3=pIG3 ; IG4=pIG4
-               call fill_high2( ibuf, GRTYP,IG1,IG2,IG3,IG4,etiket,ModTypV )
+               call fill_high3( ibuf, TYPVAR,GRTYP,IG1,IG2,IG3,IG4,ETIKET,ModTypV )
             endif
 
             if (fill_val_cdf .neqv. miss_val_cdf) then
@@ -1176,8 +1172,8 @@
                            
                   if (fill_all) then
                      if (rpn_info) then
-                        call fill_high2( ibuf, &
-                                        GRTYP,IG1,IG2,IG3,IG4,etiket,ModTypV )
+                        call fill_high3( ibuf, &
+                                        TYPVAR,GRTYP,IG1,IG2,IG3,IG4,ETIKET,ModTypV )
                         call setlab(ibuf,type,ccctime,cccname,ilevel(k), &
                                     dim1+iii,dim2,nhem,opack1)
                         call prtlab2(' Passer (FILL-ALL) ...', &
@@ -1217,7 +1213,7 @@
 !                     list(id)%name == 'b' ) &
 !                     write(6,'(3A4,A)') Dtyp,type,ibuf(1),GRTYP
 
-                  call fill_high2( ibuf, GRTYP,IG1,IG2,IG3,IG4,etiket,ModTypV )
+                  call fill_high3( ibuf, TYPVAR,GRTYP,IG1,IG2,IG3,IG4,ETIKET,ModTypV )
                   call setlab(ibuf,type,ccctime,cccname,ilevel(k), &
                              dim1+iii,dim2,nhem,opack2)
 
@@ -1570,24 +1566,23 @@
 
 !-----------------------------------------------------------------------
       end
-      subroutine fill_high2( ibuf, GRTYP,IG1,IG2,IG3,IG4,etiket,ModTypV )
+      subroutine fill_high3( ibuf, TYPVAR,GRTYP,IG1,IG2,IG3,IG4,ETIKET,ModTypV )
 
       implicit none
 
 !     Bernard Dugas   mai 2007
 
       integer ibuf(*),IG1,IG2,IG3,IG4
-      character*(*) GRTYP,etiket,ModTypV
+      character*(*) TYPVAR,GRTYP,ETIKET,ModTypV
 
-      character label*12,TYPVAR*2
+      character label*12,ltypvar*2
 !-----------------------------------------------------------------------
 
-      label = etiket
+      label = ETIKET
 
-      TYPVAR = 'NC' ; if (ModTypV /= ' ') TYPVAR(2:2) = ModTypV(1:1)
+      ltypvar = TYPVAR ; if (ModTypV /= ' ') ltypvar(2:2) = ModTypV(1:1)
 
-      
-      CALL puthic( TYPVAR ,'TYPVAR', IBUF )
+      CALL puthic( ltypvar,'TYPVAR', IBUF )
       CALL puthic(  GRTYP ,'GRTYP', IBUF )
 
       CALL puthigh( IG1   ,'IG1'  , IBUF )

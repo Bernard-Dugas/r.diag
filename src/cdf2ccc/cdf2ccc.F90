@@ -155,12 +155,17 @@
 !  cles(43) = 'calendar',def1(43) = 'gregorian',def2(43) = '?'
 !  cles(44) = 'gribcode',def1(44) = '?'       , def2(44) = '?'
 !  cles(45) = 'cell_method', def1(45) = '?'   , def2(45) = '?'
+!  cles(46) = 'title'  , def1(46) = ' '       , def2(46) = ' '
+!  cles(47) = 'typvar' , def1(47) = 'NC'      , def2(47) = ' '
+!  cles(48) = 'etiket' , def1(48) = 'Netcdf2RPN'/,def2(48) = ' '
 !
 !  Data type : (C) character - (I) integer - (R) real
 !
 !  description(1)  = (C) Nom du fichier netCDF
 !  description(2)  = (C) Nom du fichier CCCma
 !  description(3)  = (C) Convertir vers ('cccma' ou 'rpncmc') ou 'netcdf'
+!  Items 4 a 11 decrivent les parametres de base
+!     d'un fichier source en format CCCma
 !  description(4)  = (C) Annee bissextile (no / yes)
 !  description(5)  = (I) Date de depart de la simulation (AAAAMMJJHH)  
 !  description(6)  = (R) Pas de temps (secondes)  
@@ -189,6 +194,7 @@
 !  description(19) = (R) Latitude d'origine (degres nord)
 !  description(20) = (R) Longueur de la maille selon longitude (degres)
 !  description(21) = (R) Longueur de la maille selon latitude (degres)
+!  Items 22 a 35 divers
 !  description(22) = (C) Inverse l'ordre de l'indice 'j' dans la sortie
 !  description(23) = (I) Densite de compression 0,1,2,4,-64,-32,-16
 !  description(24) = (C) Ecrire les latitudes et longitudes ('no'/'yes')
@@ -196,7 +202,7 @@
 !                        defaut primaire et secondaire, respectivement, sont
 !                        file_attr = /LOGICIELS/cdf2ccc/etc/attribut_netcdf.dat
 !                        local     = ./attribut_netcdf.dat
-!  description(27) = (R) Valeur de remplissage dans sortie
+!  description(27) = (R) Valeur de remplissage dans sortie ('FILL VALUE')
 !  description(28) = (I) 1=Hem Nord, 2=Hem Sud pour grille PS vers CCCma
 !  description(29) = (C) Chemin complet du fichier 'udunits2.xml'
 !  description(30) = (R) Deplacement des longitudes d'une grille tournee
@@ -205,6 +211,7 @@
 !  description(33) = (R) Exposant pour la coordonnee hybride
 !  description(34) = (C) Nom du fichier RPN-CMC
 !  description(35) = (C) Nom du fichier PHIS (Option Gal-Chen)
+!  Items 36 a 43 ne concernent les fichiers NetCDF
 !  description(36) = (C) Unites associes a la variable temporelle. Les
 !                        seules valeurs reconnues sont 'seconds','minutes',
 !                        'hours','days','months' et 'years' (since ...)
@@ -215,8 +222,12 @@
 !  description(41) = (C) Nom de la coordoonnee en T du fichier NetCDF
 !  description(42) = (R) Interval d'accumulation temporelle en heures
 !  description(43) = (C) Nom du calendrier
+!  Items 44 a 48 ne concernent que les fichiers CMC/RPN et NetCDF
 !  description(44) = (I) Code GRIB pour une grille Lambert Conforme Conique
-!  description(44) = (C) Cell Method utilisee dans les calculs temporels
+!  description(45) = (C) Cell Method utilisee dans les calculs temporels
+!  description(46) = (C) Optional "title" for meta-data
+!  description(47) = (C) Optional TYPVAR (default = NC)
+!  description(48) = (C) Optional ETIKET (default = Netcdf2RPN)
 !
 !
 ! Notes regarding the above arguments:
@@ -293,7 +304,7 @@
 ! Good luck.
 !
 ! Maintained by: B.Dugas, ESCER/UQAM (Dugas.Bernard@uqam.ca)
-! Latest revision: November 2017
+! Latest revision: January 2018
 !
 !
 #     endif

@@ -4,17 +4,12 @@
     <meta content="text/html; charset=windows-1252" http-equiv="content-type">
     <title>R.DIAG Routines Error Codes</title>
   </head>
-  <body>
-    <big><br>
-      <big>
-        The following list describes the different&nbsp;XIT abort conditions
+  <body> <big><br>
+      <big> The following list describes the different&nbsp;XIT abort conditions
         that can occur whithin the low-level (lssub) routines invoked by the <b>R.DIAG</b>
-        package. High-level routines are auto-documented.
-        <br>
-      </big>
-      <br>
-    </big>
-    <br>
+        package. High-level routines are auto-documented. <br>
+      </big> <br>
+    </big> <br>
     <div>
       <table width="100%">
         <tbody>
@@ -131,6 +126,12 @@
             </td>
           </tr>
           <tr>
+            <td>Convhour</td>
+            <td>-1</td>
+            <td>coord.ftn</td>
+            <td>IP2 does not represent an hourly value</td>
+          </tr>
+          <tr>
             <td width="15%"> Convip_plus </td>
             <td width="5%">-4</td>
             <td width="20%">diag_convert_ip123.cdk90</td>
@@ -141,6 +142,12 @@
             <td width="5%">-1</td>
             <td width="20%">coord.ftn</td>
             <td width="50%">COORD parameter not recognized</td>
+          </tr>
+          <tr>
+            <td>Decode_Range</td>
+            <td>-1</td>
+            <td>diag_convip_plus.ftn90</td>
+            <td>Decode error</td>
           </tr>
           <tr>
             <td width="15%"> Decodr </td>
@@ -223,6 +230,18 @@
             <td>-2</td>
             <td>pael.ftn</td>
             <td>Output levels are not monotonous</td>
+          </tr>
+          <tr>
+            <td>Encode_Range</td>
+            <td>-1</td>
+            <td>diag_convip_plus.ftn90</td>
+            <td>Encode error with time range</td>
+          </tr>
+          <tr>
+            <td>Encode_Range</td>
+            <td>-2</td>
+            <td>diag_convip_plus.ftn90</td>
+            <td>Encode error with level range</td>
           </tr>
           <tr>
             <td width="15%"> Ffgfw </td>
@@ -360,6 +379,12 @@
             <td width="50%">LEN greater than 999 characters</td>
           </tr>
           <tr>
+            <td>Getmset</td>
+            <td>-1</td>
+            <td>get.ftn</td>
+            <td>Found wrong levels</td>
+          </tr>
+          <tr>
             <td width="15%"> Getset2 </td>
             <td width="5%">-1</td>
             <td width="20%">get.ftn</td>
@@ -486,6 +511,12 @@
             <td width="50%">Allocated field too small to unpack data</td>
           </tr>
           <tr>
+            <td>Ibufill</td>
+            <td>-2</td>
+            <td>convsub.ftn</td>
+            <td>Decode IP error</td>
+          </tr>
+          <tr>
             <td width="15%"> Ibufill </td>
             <td width="5%">-3</td>
             <td width="20%">convsub.ftn</td>
@@ -525,7 +556,7 @@
             <td width="15%"> Jclpnt </td>
             <td width="5%">-2</td>
             <td width="20%">util.ftn</td>
-            <td width="50%">File name longer than 256 characters</td>
+            <td width="50%">File name longer than 512 characters</td>
           </tr>
           <tr>
             <td width="15%"> Jclpnt </td>
@@ -846,6 +877,12 @@
             <td width="50%">Illegal number of degrees of freedom</td>
           </tr>
           <tr>
+            <td>Prtlab3</td>
+            <td>-1</td>
+            <td>label.ftn</td>
+            <td>Decode IP error</td>
+          </tr>
+          <tr>
             <td style="vertical-align: top;">PushU<br>
             </td>
             <td style="vertical-align: top;">-1<br>
@@ -903,10 +940,40 @@
             <td width="50%">Unknown integer parameter name</td>
           </tr>
           <tr>
+            <td>Puthir</td>
+            <td>-1</td>
+            <td>put.ftn</td>
+            <td>Size discrepancy in high area</td>
+          </tr>
+          <tr>
+            <td>Puthir</td>
+            <td>-2</td>
+            <td>put.ftn</td>
+            <td>Unknown character parametre name</td>
+          </tr>
+          <tr>
             <td width="15%"> Putlab </td>
             <td width="5%">-1</td>
             <td width="20%">label.ftn</td>
             <td width="50%">Unsupported file type</td>
+          </tr>
+          <tr>
+            <td>Putsamplz</td>
+            <td>-1</td>
+            <td>put.ftn</td>
+            <td>Encode error with time range</td>
+          </tr>
+          <tr>
+            <td>Putsamplz</td>
+            <td>-2</td>
+            <td>put.ftn</td>
+            <td>Too many samples</td>
+          </tr>
+          <tr>
+            <td>Putsamplz</td>
+            <td>-3</td>
+            <td>put.ftn</td>
+            <td>Encode error with level range</td>
           </tr>
           <tr>
             <td width="15%"> Putzref </td>
@@ -943,6 +1010,12 @@
             <td width="5%">-1</td>
             <td width="20%">rec.ftn</td>
             <td width="50%">Illegal packing density for character data</td>
+          </tr>
+          <tr>
+            <td>Rmzref</td>
+            <td>-1</td>
+            <td>convsub.ftn</td>
+            <td>Unable to remove old file</td>
           </tr>
           <tr>
             <td width="15%"> Savzref </td>
@@ -1099,24 +1172,18 @@
     <div style="margin-left: 40px; text-align: center;"><br>
       <big>The above subroutine source files can probably be found under<br>
         <br>
-        &nbsp;
-        $(dirname `which r.diag`)/../development/src/lssub<br>
+        &nbsp; $(dirname `which r.diag`)/../development/src/lssub<br>
         <br>
-        &nbsp;
-        wherever the R.DIAG ssm package is installed and is in use (via
+        &nbsp; wherever the R.DIAG ssm package is installed and is in use (via
         s.ssmuse.dot).<br>
-        Please note as well that adding "-info" to the
-        original command line that generated an error may in some instances add
-        relevant details.</big><br>
+        Please note as well that adding "-info" to the original command line
+        that generated an error may in some instances add relevant details.</big><br>
       <br>
       <br>
     </div>
-    <div style="text-align: center;">
-    </div>
+    <div style="text-align: center;"> </div>
     <div style="margin-left: 40px; text-align: center;">Contact:
-      Dugas.Benard@uqam.ca
-      <br>
-      Last Revision: January 2017.
-    </div>
+      Dugas.Benard@uqam.ca <br>
+      Last Revision: January 2018. </div>
   </body>
 </html>

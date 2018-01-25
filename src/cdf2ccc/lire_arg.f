@@ -40,6 +40,8 @@
 *
 *REVISIONS
 *
+*  B. Dugas janvier '18 :
+*   - Ajouter les arguments -typvar et -etiket
 *  B. Dugas novembre '17 :
 *   - Utiliser ${DIAGNOSTIQUE}/man/pdoc/attribut_netcdf.dat
 *     lorsque l'argument -attr n'est pas specifie ou qu'il
@@ -184,7 +186,7 @@
 
 ******les_arg(ccard)
 
-      integer, parameter :: ncle = 46 ! nombre de cles
+      integer, parameter :: ncle = 48 ! nombre de cles
 
       character*16  cles(ncle)    ! nom de la cle
       character*60  def(ncle)     ! defenition de la cle
@@ -241,7 +243,9 @@
      .  cles(43)/'calendar'/, def1(43)/'?'       /,  def2(43)/'?'     /,
      .  cles(44)/'gribcode'/, def1(44)/'?'       /,  def2(44)/'?'     /,
      .  cles(45)/'cell_method'/, def1(45)/'?'    /,  def2(45)/'?'     /,
-     .  cles(46)/'title'  /,  def1(46)/' '       /,  def2(46)/' '     /
+     .  cles(46)/'title'  /,  def1(46)/' '       /,  def2(46)/' '     /,
+     .  cles(47)/'typvar' /,  def1(47)/'NC'      /,  def2(47)/' '     /,
+     .  cles(48)/'etiket' /,  def1(48)/'Netcdf2RPN'/,def2(48)/' '     /
 
       data
      .  def(1) /'(C) Nom du fichier netCDF'                           /, 
@@ -289,7 +293,9 @@
      .  def(43)/'(C) Nom du calendrier (gregorian, 365_day, 360-day)' /,
      .  def(44)/'(I) Code GRIB pour une grille Lambert conforme conic'/,
      .  def(45)/'(C) Cell Method utilisee dans les calculs temporels' /,
-     .  def(46)/'(C) Optional "title" meta-data'                      /
+     .  def(46)/'(C) Optional "title" meta-data'                      /,
+     .  def(47)/'(C) Optional TYPVAR (default = NC)'                  /,
+     .  def(48)/'(C) Optional ETIKET (default = Netcdf2RPN)'          /
 
 ******
 
@@ -1014,6 +1020,14 @@ CCC     endif
 * des attributs globaux du fichier NetCDF    
 
       meta_title = def1(46)
+
+* (optionnellement) TYPVAR qui sera insere dans le fichier CMC/RPN
+
+      typvar = 'NC' ; if (def1(47) /= ' ') typvar = def1(47)
+
+* (optionnellement) ETIKET qui sera insere dans le fichier CMC/RPN
+
+      etiket = 'Netcdf2RPN' ; if (def1(48) /= ' ') etiket = def1(48)
 
 * (optionnellement) definir les noms des coordonnees NetCDF
 

@@ -30,26 +30,40 @@
 *      KIND    = FLAG TO INDICATE METHOD OF TIME MEASUREMENT.
 *              = 0 ==> IBUF(2),T1,T2 AND T3 IN KOUNT UNITS.
 *              = 1 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHH
-*                      AND T3 IS IN HOURS.
-*              = 2 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHHMM
-*                      AND T3 IS IN MINUTES AND NO LEAP YEAR.
+*                      AND T3 IS IN HOURS, NO LEAP YEARS.
+*              = 2 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHHmm
+*                      AND T3 IS IN MINUTES AND AGAIN, NO LEAP YEARS.
 *              = 3 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHH
 *                      AND T3 IS IN HOURS. BUT NOW, LEAP YEARS ARE
 *                      ACCOUNTED FOR.
+*              = 4 ==> IBUF(2),T1 AND T2 ARE IN THE FORMAT YYYYMMDDHHmm
+*                      AND T3 IS IN MINUTES AND AGAIN, LEAP YEARS
+*                      ARE ACCOUNTED FOR..
 *
 *      NOTES: 1) KIND = 0,1 OR 2 DO NOT TAKE LEAP YEARS INTO ACCOUNT
 *                AND ARE INTENDED FOR USE WITH MODEL OUTPUT.
-*             2) KIND CAN ONLY BE SPECIFIED ON THE FIRST INPUT CARD.
-* 
-*      READ( 5,5000 ) T1,T2,DT,KIND
-*5010 FORMAT(10X,2I10,2I5)
+*             2) KIND CAN ONLY BE SPECIFIED ON THE COMMAND-LINE.
+*
+*     if (KIND == 1 .or. KIND == 3) READ( 5,5010 ) T1,T2,DT
+*     if (KIND == 2 .or. KIND == 4) READ( 5,5015 ) T1,T2,DT
+*5010 FORMAT(10X,2I10,I5)
+*5015 FORMAT(10X,2I15,I5) 
 *
 *
-*     EXAMPLE OF INPUT CARDS...
+*     EXAMPLE OF INPUT CARDS (IF KIND = 1,3) ...
 *
-* LININT       22176     22344    6    0
+* LININT       22176     22344    6
 *              65520     65784   10
 *             149184    149256    2
+*
+*        0123456789012345678901234567890123456789012345678901234567890
+*        1         2         3         4         5         6         7
+*
+*     EXAMPLE OF INPUT CARDS (IF KIND = 2,4) ...
+*
+* LININT     197901010500   197901010600   12
+*            197901010600   197901010700   12
+*            197901010700   197901010800   12
 *
 *        0123456789012345678901234567890123456789012345678901234567890
 *        1         2         3         4         5         6         7
@@ -66,6 +80,7 @@
 *       7 COULD NOT FIND T2
 *       8 COULD NOT FIND T1
 *       9 UNABLE TO ALLOCATE MEMORY
+*      10 KIND CAN ONLY BE SET VIA THE COMMAND-LINE
 #     endif
 #     if defined (RDIAG_LICENCE)
 !---------------------------------- LICENCE BEGIN -------------------------------
@@ -90,6 +105,15 @@
 *    3               TAPE5=INPUT, TAPE6=OUTPUT) 
 
 *     $Log: linint.ptn,v $
+*     Revision 4.13  2018/01/28 15:15:15  dugas
+*     - Ajouter l'option KIND=4 et le documenter.
+*     - Corrections pour pouvoir utiliser l'option KIND=2
+*       avec plus que 6 intervalles specifies (et donc,
+*       specifies ailleurs que sur la ligne de commande).
+*     - Faire en sorte que le parametre KIND ne puisse
+*       etre defini que sur la ligne de commande et non
+*       a la fin de la premier "carte" d'entree.
+*
 *     Revision 4.12  2017/10/13 13:13:13  dugas
 *     Correction majeure au programme. Il y avait un
 *     probleme lorsque T2(I)==T1(I-1). Le champs G2
@@ -197,12 +221,12 @@
       CHARACTER   TYPE*4,LIGNE*80
       CHARACTER   NAM1*512,NAM2*512
       CHARACTER*20 CTIME,CT1,CT2
-      INTEGER*8 :: DT(NMAX),T1(NMAX),T2(NMAX),
+      INTEGER*8 :: DT(NMAX),T1(NMAX),T2(NMAX),LAST,
      +             NT1,NT2,NDT,TIME,TIME1,TIME2,ZER=0
       INTEGER     LEV(MAXLEV),NLEV,NLEV1,NLEV2,
      +            JBUF(HEAD),IER,JPAK,
      +            MAXW,NWDS,FIRST,DTM,MEM,
-     +            LAST,K,I,IL,NFIL,N,IO,LEN
+     +            K,I,IL,NFIL,N,IO,LEN
 
       REAL,       DIMENSION(:), ALLOCATABLE :: G1,G2,GI,GO
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF 
@@ -225,6 +249,7 @@
       N    =  0 
       NFIL =  4 
       LAST =  0 
+      DTM  = -1
 
       CALL JCLPNT( NFIL, 1,2, 5,6 )
 
@@ -346,37 +371,53 @@
            END IF
           END IF
 
-      ELSE
+      END IF
+
+      IF (DTM == -1)                                           THEN
+          WRITE(6,6010) ! KIND/DTM must be set via the command line
+          CALL                                     XIT(' Linint ',-10) 
+      END IF
+
+      IF (N == 0)                                              THEN
 
 ***        READ-IN AS MANY AS NMAX SET OF TIMESTEPS
 ***        WHERE INTERPOLATION HAS TO BE DONE. 
 
-          CALL GETLIGN( 5, LIGNE,80,OK )
+          IF (.not.(DTM == 2 .or. DTM == 4))                   THEN
 
-          IF (.NOT.OK)                                         THEN
-              GOTO 100
+  050         CALL GETLIGN( 5, LIGNE,80,OK )
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 100
+                  ELSE ! Read dates in I10 format
+                      READ(LIGNE,5010, END=100,ERR=100,IOSTAT=IO) 
+     +                                 T1(N+1), T2(N+1), DT(N+1)
+                  END IF
+
+              N  = N+1 
+              GOTO 050 
+
           ELSE
-              READ(LIGNE,5000, END=100,ERR=100,IOSTAT=IO) 
-     +                        T1(1), T2(1), DT(1), DTM
+
+  051         CALL GETLIGN( 5, LIGNE,80,OK )
+
+                  IF (.NOT.OK)                                 THEN
+                      GOTO 100
+                  ELSE ! Read dates in up to I15 format
+                      READ(LIGNE,5015, END=100,ERR=100,IOSTAT=IO) 
+     +                                 T1(N+1), T2(N+1), DT(N+1)
+                  END IF
+
+              N  = N+1 
+              GOTO 051 
+
           END IF
-
-          N  = 1
-
-  050     CALL GETLIGN( 5, LIGNE,80,OK )
-
-              IF (.NOT.OK)                                     THEN
-                  GOTO 100
-              ELSE
-                  READ(LIGNE,5000, END=100,ERR=100,IOSTAT=IO) 
-     +                             T1(N+1), T2(N+1), DT(N+1), I
-              END IF
-
-          N  = N+1 
-          GOTO 050 
 
       END IF
 
   100 IF (N.EQ.0) CALL                             XIT(' Linint ',-2 ) 
+
+      TIME = T1(1) ! Initialiser...
 
       CALL SET_DTM( DTM )
 
@@ -434,7 +475,7 @@
 
       DO 350 I=FIRST,N 
 
-          WRITE (6,6010) DT(I), T1(I), T2(I) 
+          WRITE (6,6110) DT(I), T1(I), T2(I) 
 
           NT1 = NEWTIM( T1(I),DTM, OK )
           NT2 = NEWTIM( T2(I),DTM, OK )
@@ -526,7 +567,7 @@
 
 ***                OVERSTEPING WHILE SEARCHING FOR T2.
 
-                  WRITE(6,6078) TIME2,'T2',T2(I)
+                  WRITE(6,6100) TIME2,'T2',T2(I)
                   CALL                             XIT(' Linint ',-7 )
 
               ELSE 
@@ -541,7 +582,7 @@
 
 ***            OVERSTEPING WHILE SEARCHING FOR T1.
 
-              WRITE(6,6078) TIME1,'T1',T1(I)
+              WRITE(6,6100) TIME1,'T1',T1(I)
               CALL                                 XIT(' Linint ',-8 )
 
           ELSE 
@@ -573,13 +614,16 @@
  0010 FORMAT(BN,I10)
  0020 FORMAT(BN,I20)
 
- 5000 FORMAT(10X,2I10,2I5) 
+ 5010 FORMAT(10X,2I10,I5) 
+ 5015 FORMAT(10X,2I15,I5) 
 
- 6002 FORMAT(' Set ',I3,' of ',I3,' T1,T2,DT=',I12,1X,I12,1X,I6)
+ 6002 FORMAT(' Set ',I4,' of ',I4,' T1,T2,DT=',I12,1X,I12,1X,I6)
  6003 FORMAT(' First timestep ',I12,' is inside the interpolation',
-     +       ' interval number ',I3)
- 6078 FORMAT(' Found ',I12,' while searching for ',A2,'=',I12)
- 6010 FORMAT(' Inserting ',I2,' timestep(s) between ',I12, 
+     +       ' interval number ',I4)
+ 6010 FORMAT(' KIND *must* be set via the command-line...')
+
+ 6100 FORMAT(' Found ',I12,' while searching for ',A2,'=',I12)
+ 6110 FORMAT(' Inserting ',I3,' timestep(s) between ',I12, 
      +       ' and ',I12,'.')
 
       END 
