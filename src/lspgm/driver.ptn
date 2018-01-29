@@ -10,6 +10,10 @@
 *     * maximal de processeurs allouables.
 *
 *     $Log: driver.ptn,v $
+*     Revision 4.116  2018/01/28 16:16:16  dugas
+*     - Ajouter la verification de nomprg='-VERSION' dans DRIVER
+*     - Modifier la sortie 'DAT' de PROGRAM_VERSION
+*
 *     Revision 4.115  2017/11/21 15:15:15  dugas
 *     Passer a la version 6.4.2 (development).
 *
@@ -901,6 +905,22 @@
       CALL up2low( nom, nom )
       nomprg = nom
 
+      If (nomprg == '-version')                                Then
+         ! Y-a-t'il un autre argument ?
+         If (iargc() > 1)                                      Then
+             CALL getarg( 2,nom )
+             CALL LOW2UP( nom,nom )
+             IF (NOM == 'ALL'
+     +      .OR. NOM == 'DAT'
+     +      .OR. NOM == 'REV')                                 Then
+                CALL program_version( NOM )
+             End If
+         Else
+             CALL PROGRAM_VERSION('ALL')
+         End If
+         CALL qqexit( 0 )
+      End If
+
 ***    Enlever tout postfixe.
 
   100 Do i=1,8
@@ -1531,7 +1551,7 @@
 ***    Objet: Imprimer de l'information sur la version courante.
 
       CHARACTER *80 RDIAG,VERSION,AMODE*3
-      CHARACTER     DAT*20,REV*6
+      CHARACTER     vdate*20,REV*6
 
       EXTERNAL      RMNLIB_version
 *---------------------------------------------------------------------
@@ -1540,8 +1560,8 @@
       CALL LOW2UP( AMODE,AMODE )
 
       REV   = '6.4.2'
-      DAT   = 'November 21, 2017'
-      RDIAG = 'Version ' // trim( REV ) // ' ' // trim( DAT )
+      vdate = 'November 21, 2017'
+      RDIAG = 'Version ' // trim( REV ) // ' ' // trim( vdate )
 
       CALL RMNLIB_version( VERSION, .false.)
 
@@ -1552,7 +1572,7 @@
 
       ELSE IF (AMODE.EQ.'DAT')                                 THEN
 
-          write(6,'(A)') DAT
+          write(6,'(A)') 'Date '// vdate
           stop
 
       ELSE IF (AMODE.EQ.'ALL' .OR.AMODE.EQ.'OUI')              THEN

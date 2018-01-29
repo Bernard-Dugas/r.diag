@@ -1,7 +1,16 @@
 .SUFFIXES :
 .SUFFIXES : .txt .f .F90 .f90 .h .o .a
 
-# CDF2CCC Makefile
+# Description: Makefile de CDF2CCC
+
+# revision 2018/01/28 17:17  dugas
+# - Appel a command-change-date.sh lors de la generation du binaire CDF2CCC
+#
+# revision 2017/11/02 15:15  dugas
+# - Modifier/Completer les dependances aux modules de R.DIAG
+#
+# revision 2016/10/27 15:49  dugas
+# - Le macro ENTETE passe de 28 a 32
 
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
@@ -348,12 +357,13 @@ cdf2ccc: initial cdf2ccc.F90
 	$(AR) xv $(LIBP) lire_arg.o
 # Following line is for shared load via the netcdff SSM package
 #	s.f90 -Wl,-rpath,$$(nf-config --runpath) -src $@.F90
-	s.f90 -src $@.F90 \
+	$(DIAGNOSTIQUE)/bin/command-change-date.sh $@.F90 cdf2ccc2 ; \
+	s.f90 -src cdf2ccc2.F90 \
 	-o $@ $$(s.prefix -L $(LIBPATH)) $$(s.prefix -I "$(INCLUDES) $(MODDIR)") \
 	$$(s.prefix -l $(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB) \
 	$(RMNLIB) $(DDFUN90)) $(DEFINE) lire_arg.o $(OBJ) $(CODEBETA)
 	if [ -x $@ ] ; then \
-		/bin/rm -f lire_arg.o $@.o ; \
+		/bin/rm -f lire_arg.o cdf2ccc2.F90 $@.o ; \
 		/bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) ;cd $(BINDIR) ; \
 		ssh localhost ldd $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) | grep -i "not found" && exit 1 ; \
 		/bin/ln -f $@_$(CONV_VERSION)_$(COMP_ARCH) cdf2rpn_$(CONV_VERSION)_$(COMP_ARCH) ; \

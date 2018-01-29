@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.152 2018/01/28 17:17  dugas
+# - Appel a command-change-date.sh lors de la generation du binaire r.diag
+#
 # revision 4.151 2017/11/02 15:15  dugas
 # - Modifier/Completer les dependances aux modules de r.diag
 #
@@ -116,13 +119,13 @@ default:  $(LIBP)
 
 .ptn.txt:
 	$(FTNT) $< | sed s/'^[*]'/' '/ > $(MANDIR)/$@ ;\
-	command-origin-document.sh $< $(MANDIR)/$@ ;\
+	$(DIAGNOSTIQUE)/bin/command-origin-document.sh $< $(MANDIR)/$@ ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 .ptn90.txt:
 	$(FTNT) $< | sed s/'^[!]'/' '/ > $(MANDIR)/$@ ;\
-	command-origin-document.sh $< $(MANDIR)/$@ ;\
+	$(DIAGNOSTIQUE)/bin/command-origin-document.sh $< $(MANDIR)/$@ ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
@@ -463,6 +466,7 @@ document: driver.ptn info.lspgm $(TXTDECKS)
 driver: driver.ptn $(LIBP) $(LIBS)
 #Section de creation du binaire proprement dit
 	$(CPPT) $(DEFINE) $@.ptn > $@.f
+	$(DIAGNOSTIQUE)/bin/command-change-date.sh $@.f ; \
 	$(FC) $@.f  -o $@ -libpath $(DIAGS)/lib/$(EC_ARCH) \
 	-libappl "$(PROGLIB) $(DIAGLIB) $(VGDLIB) $(GRAFLIB)" \
 	-librmn $(RMNLIB) $(CODEBETA) -obj "$(OBJ)" \

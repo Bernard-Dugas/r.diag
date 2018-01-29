@@ -18,6 +18,11 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.124  2018/01/28 15:15:15  dugas
+C     - Ajouter l'argument general '-version'
+C     - Tenir compte des valeurs optionelles 'ALL',
+C       'DAT' et 'REV' de l'argument general '-vers'
+C
 C     Revision 3.123  2018/01/18 14:14:14  dugas
 c     Ajouter l'option DTM=4 dans SET_DTM
 c
@@ -877,7 +882,7 @@ C
 
       IMPLICIT        none
 
-      INTEGER,        PARAMETER :: NBRGEN = 16 , NBRUNT = 80
+      INTEGER,        PARAMETER :: NBRGEN = 17 , NBRUNT = 80
       INTEGER,        PARAMETER :: MAXUNIT = unite_io_maximale
 
       INTEGER         LISTE(NBRUNT)
@@ -1019,7 +1024,8 @@ C
      +     cles(13)/ 'MVALUE' /,nam(13)/ 'NONE' /,def(13)/ 'OUI'  /,
      +     cles(14)/ 'MVALUE' /,nam(14)/ 'NONE' /,def(14)/ '  -1' /,
      +     cles(15)/ 'BISECT' /,nam(15)/ 'OUI'  /,def(15)/ 'NON'  /,
-     +     cles(16)/ 'CENDIAN'/,nam(16)/ 'BIG'  /,def(16)/ 'SMALL'/ 
+     +     cles(16)/ 'CENDIAN'/,nam(16)/ 'BIG'  /,def(16)/ 'SMALL'/,
+     +     cles(17)/ 'VERSION'/,nam(17)/ 'NON'  /,def(17)/ 'OUI'  /
 
 *----------------------------------------------------------------------
 ***    GET INITIAL SYSTEM TIME AND SAVE IT.
@@ -1212,7 +1218,19 @@ C
       IF (INFMODI.EQ. 4)            INFMODX = 'INFORM  '
       IF (INFMODI.EQ. 5)            INFMODX = 'TRIVIAL '
 
-      IF (INFO .OR. IS_ON( NAM(10) )) CALL program_version('OUI')
+***    Check for the "-vers" or "-version" arguments.
+
+      IF (INFO .OR. IS_ON( NAM(10) )
+     +         .OR. IS_ON( NAM(17) ))                          THEN
+          CALL program_version('OUI')
+      ELSE
+          CALL LOW2UP( NAM(10),NAM(10) )
+          IF (NAM(10) == 'ALL'
+     +   .OR. NAM(10) == 'DAT'
+     +   .OR. NAM(10) == 'REV')                                THEN
+              CALL program_version( NAM(10) )
+          END IF
+      END IF
 
       IF (INFO)                                                THEN
           IF (BIGENDI == 0) EVALUE = ' Little Endian machine'

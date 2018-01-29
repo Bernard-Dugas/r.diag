@@ -339,6 +339,8 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas 29 janvier 2018 :
+!  - Tenir compte du cas ou '-version' est le premier l'argument
 !  Bernard Dugas 28 novembre 2017 : 
 !  - Mettre a jour la documentation automatique
 !  Bernard Dugas 21 novembre 2017 : 
@@ -416,6 +418,8 @@
       data    funit,phis_unit,lat_unit,lon_unit /87,88,89,90/
 
       logical OK
+      integer nargs
+      character(8) argument
       real(8) RVALUE,REPSIL
 
       CHARACTER NOMPRG*256
@@ -425,7 +429,32 @@
       character(4), EXTERNAL :: GETYP
 
 !-----------------------------------------------------------------------
-      NOMPRG='cdf2ccc.ftn' ! Pour QQQDOC (-help)
+      NOMPRG='cdf2ccc.F90' ! Pour QQQDOC (-help)
+
+!**   Verifier la presence de "-version" comme premier argument
+
+      argument = ' ' ; nargs = iargc()
+
+      if (nargs > 0) then
+         Call getarg( 1,argument )
+         if (argument /= ' ') then
+            call low2up( argument,argument )
+            if (argument == '-VERSION') then
+               if (nargs > 1) then
+                  CALL getarg( 2,argument )
+                  CALL LOW2UP( argument,argument )
+                  if (argument == 'ALL' &
+                 .or. argument == 'DAT' &
+                 .or. argument == 'REV') then
+                     call program_version( argument )
+                  endif
+               else
+                  call PROGRAM_VERSION('ALL')
+               endif
+               call qqexit( 0 )
+            endif
+         endif
+      endif
 
       call initialise
 
@@ -518,7 +547,7 @@
 
       IF (AMODE.EQ.'REV')                                      THEN
 
-          write(6,'(A)') 'Version '// version
+          write(6,'(A)') version
           stop
 
       ELSE IF (AMODE.EQ.'DAT')                                 THEN
