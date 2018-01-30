@@ -10,6 +10,10 @@
 *     * maximal de processeurs allouables.
 *
 *     $Log: driver.ptn,v $
+*     Revision 4.117  2018/01/30 14:14:14  dugas
+*     - Remplacer GETARG par GET_COMMAND_ARGUMENT et utiliser
+*       COMMAND_ARGUMENT_COUNT pour obtenir le # d'arguments.
+*
 *     Revision 4.116  2018/01/28 16:16:16  dugas
 *     - Ajouter la verification de nomprg='-VERSION' dans DRIVER
 *     - Modifier la sortie 'DAT' de PROGRAM_VERSION
@@ -797,7 +801,7 @@
 
       IMPLICIT  none
 
-      INTEGER   i,j,k
+      INTEGER   i,j,k, nargs,ier
       CHARACTER nom*256,nomprg*8
 
       EXTERNAL  qqexit, addf,   adjust,
@@ -848,10 +852,10 @@
       EXTERNAL  crvplot,ggplot, hdplot, hovplot,spplot, txtplot,xmplot, 
      +          xplot, zxplot
 #     endif
-      integer   nice19,ier
-      logical   is_on,is_off
-      external  is_on,is_off
-      external  getenvc,nice19
+      integer,  external :: nice19
+      logical,  external :: is_on,is_off
+      external  getenvc
+
       character niceval*5,nicemac*5
       character oui*3,on*2,vrai*4,true*4,yes*3,off*3,no*2,non*3,false*5
       data      oui , on , vrai , true , yes , off , no , non , false /
@@ -875,12 +879,14 @@
 
 ***    Recuperer le nom du programme. S'assurer de sa validite.
 
-      Call getarg( 1,nom )
+      nargs = command_argument_count()
 
-      If (nom.eq.' ')                                          Then
+      If (nargs < 1)                                           Then
           Write(6,'(" Specifier LSPGM pour en savoir plus sur r.diag")')
           CALL qqexit( 1 )
       End If
+
+      Call get_command_argument( 1,nom )
 
       If (nom(256:256).EQ.'/')                                 Then
           Write(6,'(" Pas trouve le nom du programme dans"/A256)') nom
@@ -907,8 +913,8 @@
 
       If (nomprg == '-version')                                Then
          ! Y-a-t'il un autre argument ?
-         If (iargc() > 1)                                      Then
-             CALL getarg( 2,nom )
+         If (command_argument_count() > 1)                     Then
+             CALL get_command_argument( 2,nom )
              CALL LOW2UP( nom,nom )
              IF (NOM == 'ALL'
      +      .OR. NOM == 'DAT'

@@ -339,6 +339,10 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas 30 janvier 2018 :
+!  - Remplacer les commandes F77 GETARG et IARGC par
+!    GET_COMMAND_ARGUMENT et COMMAND_ARGUMENT_COUNT,
+!    respectivement
 !  Bernard Dugas 29 janvier 2018 :
 !  - Tenir compte du cas ou '-version' est le premier l'argument
 !  Bernard Dugas 28 novembre 2017 : 
@@ -433,15 +437,15 @@
 
 !**   Verifier la presence de "-version" comme premier argument
 
-      argument = ' ' ; nargs = iargc()
+      argument = ' ' ; nargs = command_argument_count()
 
       if (nargs > 0) then
-         Call getarg( 1,argument )
+         Call get_command_argument( 1,argument )
          if (argument /= ' ') then
             call low2up( argument,argument )
             if (argument == '-VERSION') then
                if (nargs > 1) then
-                  CALL getarg( 2,argument )
+                  CALL get_command_argument( 2,argument )
                   CALL LOW2UP( argument,argument )
                   if (argument == 'ALL' &
                  .or. argument == 'DAT' &

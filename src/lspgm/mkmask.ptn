@@ -164,7 +164,7 @@
 *------------------------------------------------------------------
 ***    Recuperer le nom du programme. S'assurer de sa validite.
 
-      Call getarg( 1,nom )
+      Call GET_COMMAND_ARGUMENT( 1,nom )
 
       If (nom(256:256).EQ.'/')                                 Then
           Write(6,'(" Pas trouve le nom du programme dans"/A256)') nom

@@ -363,7 +363,7 @@ cdf2ccc: initial cdf2ccc.F90
 	$$(s.prefix -l $(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB) \
 	$(RMNLIB) $(DDFUN90)) $(DEFINE) lire_arg.o $(OBJ) $(CODEBETA)
 	if [ -x $@ ] ; then \
-		/bin/rm -f lire_arg.o cdf2ccc2.F90 $@.o ; \
+		/bin/rm -f lire_arg.o cdf2ccc2.F90 cdf2ccc2.o ; \
 		/bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) ;cd $(BINDIR) ; \
 		ssh localhost ldd $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) | grep -i "not found" && exit 1 ; \
 		/bin/ln -f $@_$(CONV_VERSION)_$(COMP_ARCH) cdf2rpn_$(CONV_VERSION)_$(COMP_ARCH) ; \

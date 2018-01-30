@@ -41,6 +41,8 @@
 *REVISIONS
 *
 *  B. Dugas janvier '18 :
+*   - Remplacer la commande GETARG par GET_COMMAND_ARGUMENT
+*  B. Dugas janvier '18 :
 *   - Ajouter les arguments -typvar et -etiket
 *  B. Dugas novembre '17 :
 *   - Utiliser ${DIAGNOSTIQUE}/man/pdoc/attribut_netcdf.dat
@@ -1162,7 +1164,7 @@ c      write(6,*) "grid_desc :", grid_desc                               !debug
 
 ***    Recuperer le nom du programme.
 
-      Call getarg( 0,lnom )
+      Call get_command_argument( 0,lnom )
 
 ***    Enlever tout prefixe (positionel).
 

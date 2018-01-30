@@ -14,7 +14,7 @@
 ! 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 !---------------------------------- LICENCE END ---------------------------------
 !
-      subroutine les_arg(CLES,DEF,def1,DEF2,NBR,VERSION)
+      subroutine les_arg( CLES,DEF,def1,DEF2,NBR,VERSION )
 
       implicit none
 
@@ -45,6 +45,10 @@
 *     
 * REVISIONS
 *
+* Bernard Dugas 30 janvier 2018 :
+* - Remplacer les commandes F77 GETARG et IARGC par
+*   GET_COMMAND_ARGUMENT et COMMAND_ARGUMENT_COUNT,
+*   respectivement
 * Bernard Dugas juillet 2007 :
 * - La boucle principale devient un "Do while"
 * - Call xit en cas d'erreur plutot que "stop"
@@ -53,12 +57,12 @@
 *
 ******
 
-      integer*4     argc,iarg,iargc,jarg
+      integer*4     argc,iarg,jarg
       integer       j,n,init,fini,nt,nlen
       character(512) string,dummy
 *-----------------------------------------------------------------------
 
-      argc = iargc()         ! nombre total d arguments d appel
+      argc = command_argument_count()         ! nombre total d arguments d appel
 
       if(.false.) print*,'argc =',argc
 
@@ -68,7 +72,7 @@
 
       do while (iarg.le.argc) !boucle sur tous les arguments d appel
 
-         call getarg(iarg,string)
+         call get_command_argument(iarg,string)
 
          if(string(1:1).eq.'-') then                ! chercher une cle
 
@@ -83,7 +87,7 @@
                   if(jarg.le.argc)then              ! affecter une valeur
 
                      init=1
- 100                 call getarg(jarg,string)       ! boucler jusqu'a la cle suivante
+ 100                 call get_command_argument(jarg,string)       ! boucler jusqu'a la cle suivante
                      if(string(1:1).eq.'-') then
 
                         if (init.eq.1) def1(j)=def2(j) !1ere cle sans valeur
