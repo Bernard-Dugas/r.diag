@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: convsub.ftn,v $
+!     Revision 3.129  2018/02/01 13:13  dugas
+!     - Initialiser la variable FoundIt dans savUref
+!
 !     Revision 3.128  2017/11/09 10:10  dugas
 !     - Tous les prefixes de commentaires passent de 'C' a '!'
 !     - Securiser les sorties debug 6101/2/3/4 dans IBUFILL
@@ -4380,7 +4383,7 @@
 
 *-------------------------------------------------------------------
 
-      OK = .true. ; nfa = abs( nf ) ; ll = 0
+      OK = .true. ; nfa = abs( nf ) ; ll = 0 ; FoundIt = 0
 
       if (.not. U_READ(nfa))                                   THEN
 
@@ -4415,7 +4418,6 @@
 
           ! Est-ce qu'on l'a deja sauve...
 
-          foundit = 0
           do i=1,min(lastdesc,maxdesc)
              if (U_NI    == descu(i)%ni    .and.
      +           U_NJ    == descu(i)%nj    .and.
