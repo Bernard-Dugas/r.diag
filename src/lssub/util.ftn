@@ -18,6 +18,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.125  2018/02/20 10:10:10  dugas
+C     Ajouter deux messages informatifs dans QQQDOC
+C
 C     Revision 3.124  2018/01/28 15:15:15  dugas
 C     - Ajouter l'argument general '-version'
 C     - Tenir compte des valeurs optionelles 'ALL',
@@ -3819,6 +3822,10 @@ CCC           ERROR = .FALSE.
       CHARACTER*256          nom
       COMMON       /PROGNAM/ nom
 
+      LOGICAL                INFO,DEBUG
+      COMMON       /ZZVERBO/ INFO
+      COMMON       /ZZDEBUG/      DEBUG
+
       EXTERNAL      getenvc,messys
 
 #include <clib_interface.cdk>
@@ -3867,18 +3874,45 @@ CCC           ERROR = .FALSE.
 
       if (path == ' ')                                         then
           docs = './' // nom(i:j) // '.txt'
+          if (DEBUG)                                           then
+              write(6,'(/A )')
+     +       'QQQDOC: Since $ARMNLIB and $DIAGNOSTIQUE are undefined...'
+              write(6,'(/A )') 'QQQDOC: Trying to use local directory'
+          end if
       else
           err = clib_isdir( trim( path ) // '/man/pdoc/' )
           if (err == CLIB_OK ) then
               docs = trim( path ) // '/man/pdoc/' // nom(i:j) // '.txt'
+              if (DEBUG)                                       then
+                  if (checked_ARMNLIB)                         then
+                      write(6,'(/A/)')
+     +               'QQQDOC: Using man/pdoc under $ARMNLIB'
+                  else
+                      write(6,'(/A/)')
+     +               'QQQDOC: Using man/pdoc under $DIAGNOSTIQUE'
+                  end if
+              end if
           else
               err = clib_isdir( trim( path ) // '/pdoc/' )
               if (err == CLIB_OK ) then
-                  docs = trim( path ) // '/pdoc/' // nom(i:j) // '.txt'
-              else if (.not.checked_ARMNLIB)                    then
+                  docs = trim( path ) // '/pdoc/' //
+     +                       nom(i:j) // '.txt'
+                  if (DEBUG)                                   then
+                      if (checked_ARMNLIB)                     then
+                          write(6,'(/A/)')
+     +                   'QQQDOC: Using pdoc under $ARMNLIB'
+                      else
+                          write(6,'(/A/)')
+     +                   'QQQDOC: Using pdoc under $DIAGNOSTIQUE'
+                      end if
+                  end if
+              else if (.not.checked_ARMNLIB)                   then
                   path = ' '
                   goto 250
               else
+                  if (DEBUG)
+     +            write(6,'(/A/)') 'Unable to find directories ' //
+     +           'man/pdoc or pdoc under $DIAGNOSTIQUE or $ARMNLIB'
                   return
               end if
           end if
@@ -3886,8 +3920,12 @@ CCC           ERROR = .FALSE.
 
       err = clib_isfile( trim( docs ) )
 
-      if (err /= CLIB_OK )                                      then
-          if (checked_ARMNLIB) return
+      if (err /= CLIB_OK )                                     then
+          if (checked_ARMNLIB)                                 then
+              if (DEBUG) write(6,'(/A/)')
+     +           'Unable to find ' // trim( docs )
+              return
+          end if
           path = ' '
           goto 250
       end if
@@ -3899,7 +3937,12 @@ CCC           ERROR = .FALSE.
 
 ***    do it...
 
-  400 call system( trim( pager ) // ' ' //d ocs )
+      if (INFO)                                                then
+          write(6,'(/"QQQDOC issuing command line ..."/A/)')
+     +              trim( pager ) // ' ' // trim( docs ) 
+      end if
+
+  400 call system( trim( pager ) // ' ' // trim( docs ) )
 
 ***    open docs and read/write till EOF.
 ***    unit number corresponds to stderr.

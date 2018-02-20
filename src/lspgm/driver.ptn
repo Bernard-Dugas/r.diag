@@ -10,6 +10,9 @@
 *     * maximal de processeurs allouables.
 *
 *     $Log: driver.ptn,v $
+*     Revision 4.118  2018/02/20 10:10:10  dugas
+*     Petite correction au traitement du premier argument
+*
 *     Revision 4.117  2018/01/30 14:14:14  dugas
 *     - Remplacer GETARG par GET_COMMAND_ARGUMENT et utiliser
 *       COMMAND_ARGUMENT_COUNT pour obtenir le # d'arguments.
@@ -908,7 +911,7 @@
 ***    Minimiser le nom du programme et s'assurer
 ***    que le nom du programme est dans nomprg.
 
-      CALL up2low( nom, nom )
+  100 CALL up2low( nom, nom )
       nomprg = nom
 
       If (nomprg == '-version')                                Then
@@ -929,11 +932,12 @@
 
 ***    Enlever tout postfixe.
 
-  100 Do i=1,8
+      Do i=1,8
           If (nomprg(i:i).EQ.'.')                              Then
               Do j=i,8
                   nomprg(j:j) = ' '
               End Do
+              ! print *,'nomprg=',trim(nomprg)
               GoTo 200
           End If
       End Do
