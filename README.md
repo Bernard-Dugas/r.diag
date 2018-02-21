@@ -66,13 +66,14 @@
  packages also have to be available. These in turn require the hdf5, dl,
  and z libraries (if NetCDF v4 is used) and the expat library (for
  UdUnits v2). The current configuration assumes that the the NetCDF
- v4 package is used and that the netcdff library is provided as a SSM
- bundle that also points to the UdUnits2 necessary components.
+ v4 package is used and that the FORTRAN interface netcdff library
+ is provided via a SSM bundle that also points to the UdUnits2
+ necessary components.
 
  Most of the code available here is written in FORTRAN (and a lot
  of it is still in F77). As a consequnce of this, the conversion tool
- requires a FORTRAN to C wrapper for the UDUNITS2 C routines. This is
- again available on github.com (see mfvalin/wrapper-code/udunits).
+ requires a FORTRAN to C wrapper for the UdUnits v2 C routines. This
+ is again available on github.com (see mfvalin/wrapper-code/udunits).
 
  Some versions of the toolkit may also use the DDFUN90 package as
  produced by  David H. Bailey of the NERSC, Lawrence Berkeley Lab.
@@ -92,5 +93,5 @@
  Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : January 2018
+ Last revision : February 2018
 
