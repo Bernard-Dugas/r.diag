@@ -23,7 +23,7 @@ SHELL   = /bin/bash
 
 AR      = s.ar
 CPPT    = r.gppf -chop_bang -gpp -F
-ZIP     = `which zip`
+ZIP     = $(shell which zip)
 
 DIAGNOSTIQUE = $(CURDIR)/../..
 MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)

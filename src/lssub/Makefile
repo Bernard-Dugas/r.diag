@@ -24,7 +24,7 @@ SHELL = /bin/bash
 
 AR      = s.ar
 CPPT    = r.gppf -chop_bang -gpp -F
-ZIP     = `which zip`
+ZIP     = $(shell which zip)
 
 LSSDIR  = $(CURDIR)
 DIAGNOSTIQUE = $(LSSDIR)/../..
