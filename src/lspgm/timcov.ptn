@@ -43,7 +43,7 @@
 *
 *
 *     Command-line arguments...
-*      def    = Remove mean from FILEDEV (see note 1)
+*      def    = no value or 'ZEROM'. Remove means from input time series (see note 1)
 *      kind   = [STDEV ONLY] 'STD' ==> Output standard deviations (Default)
 *               [STDEV ONLY] 'VAR' ==> Output variances rather than std devs
 *      mvalue = Real number used to identify missing values (DEF = none)
@@ -80,6 +80,9 @@
 *               used to construct the average. Other R.DIAG modules such as
 *               TIMGEN and the statistical testing modules (FTEST, ...)
 *               can then use this information directly.
+*            7) The NOMODTYP -def optional value, if set, disallows applying
+*               the TYPVAR-specific signatures for covariances and standard
+*               deviations that can be used in RPN/CMC files.
 *
 *
 *     EXIT CONDITIONS...
