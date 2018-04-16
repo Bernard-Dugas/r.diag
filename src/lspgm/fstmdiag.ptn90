@@ -88,6 +88,13 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  ! Revision 1.14  2018/04/16 14:14  dugas
+  ! - Tenir compte des TYPVAR utilises par le programme
+  !   de moyennes temporelles de MFV
+  ! - Aussi tenir compte des jeux incomplets de moyennes
+  !   dans le calcul de HEUREMAX et HEUREMIN. Dans ce cas,
+  !   on definira HEUREMAX = DATEVF-DATEOI plutot que HIVAL
+  !
   ! Revision 1.13  2017/12/20 20:20  dugas
   ! Sorties compressees en e32/e64 (datyp=133),
   !  plutot qu'en E32/E64 (datyp=5)
@@ -233,7 +240,7 @@
             infont,infonv,deet,npas,   extra1,extra2,extra3, &
             ig1,ig2,ig3,ig4,           swa,lng,dltf,ubc
 
-  logical   ReWrit,Force,lMeanVar
+  logical   ReWrit,Force,lMeanVar,vMeanVar
 
   ! Declarations pour les fonctions FST.
 
@@ -985,9 +992,11 @@
           vip1 = vip1s(ii) ; k1 = k1set(ii)
           vip2 = vip2s(ii) ; k2 = k2set(ii)
 
-          lMeanVar = Faux ; write(cMeanVar,'(a1)') chaine(ii)(2:2)
+          lMeanVar = Faux ; vMeanVar = Faux
+          write(cMeanVar,'(a1)') chaine(ii)(2:2)
           if (cMeanVar == time_mean_signature .OR. &
               cMeanVar == variance_signature) lMeanVar = Vrai
+          if (cMeanVar == 'MN' .or. cMeanVar == 'VA') vMeanVar = Vrai
 
           if (bits(ii) <= 32 )                             then
               inf  = fstluk( buff, key, ni,nj,nk )
@@ -1037,7 +1046,7 @@
 
         ! if (pas(ii)*delt(ii) == 0                   &
         !.or.                                         &
-          if (lMeanVar                                &
+          if (lMeanVar .or. vMeanVar                  &
          .or.                                         &
              (rkind(ii)        == KIND_HOURS    .and. & ! Tentatives de determiner si cet nouvel
              (npas_deet        == time_range_5  .or.  & ! enregistrement  est le produit de calculs
@@ -1115,9 +1124,15 @@
               ! plus, si MDIAG=NPAS+1, on a alors un ensemble complet
               ! et IP2 pourrait alors contenir l'heure absolue de
               ! prevision (KIND_HOURS).
-                  mdiag = nint( vip3s(ii) )
+                  mdiag  = nint( vip3s(ii) )
                   heures = npas_deet/720.0_8
-                  deltat   = nint( heures/(mdiag-1) )
+                  deltat = nint( heures/(mdiag-1) )
+              else if (vMeanVar)                           then
+              ! Codage utilise par les routines
+              ! de traitement temporel de MFV.
+                  mdiag  = lip3(ii)
+                  heures = heure(ii)
+                  deltat = nint( heures/(mdiag-1) )
               else if (rkind(ii)  == KIND_HOURS)           then
               ! Interval de temps.
               !  On suppose que c'est le debut d'un interval deja
@@ -1466,6 +1481,8 @@
           else 
               if (Complet1)                                then
                   heuremax = HIVAL ; heuremin = LOVAL
+              else
+                  heuremax = heures ; heuremin = 0.0
               end if
               ! Placer heuremax ou bien (heuremax-heuremin) dans
               ! IP2 et le nombre d'echantillons dans IP3.

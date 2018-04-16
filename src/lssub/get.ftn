@@ -24,6 +24,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: get.ftn,v $
+C     Revision 3.99  2018/04/16 13:13  dugas
+C     Tenir compte des TYPVAR utilises par le programme de
+C      moyennes temporelles de MFV dans la routine GETSAMPLZ.
+C
 C     Revision 3.98  2017/11/02 02:02  dugas
 C     Tenir compte des differentes signatures d'operations temporelles
 C      qui pourraient se retrouver dans le deuxieme caracteres du TYPVAR
@@ -4350,7 +4354,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
       ! Variables locales
 
       REAL(8)      TDIFF
-      LOGICAL      lMeanVar
+      LOGICAL      lMeanVar,vMeanVar
       REAL         VIP2,VIP3,HEURES
       INTEGER(8)   TIME_RANGE,VIP2_5,
      +             NPAS_DEET,  NPAS_DEET60,  NPAS_DEET3600,
@@ -4379,13 +4383,17 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
       typvar = GETHIC('TYPVAR',IBUF )
 
       ! Signature d'une operation temporelle ?
-      lMeanVar = .FALSE.
+      lMeanVar = .FALSE. ; vMeanVar = .FALSE.
       if (typvar(2:2) == time_mean_signature .OR.
      +    typvar(2:2) == variance_signature .OR.
      +    typvar(2:2) == median_signature .OR.
      +    typvar(2:2) == stdev_signature .OR.
      +    typvar(2:2) == timmax_signature .OR.
      +    typvar(2:2) == timmin_signature ) lMeanVar = .true.
+
+      if (.not.lMeanVar)                                       THEN
+          if (typvar == 'MN' .OR. typvar == 'VA') vMeanVar =  .TRUE.
+      end if
 
       ! Verifier si on a un interval temporel OU VERTICAL encode
       !  dans ibuf et retoruner les valeurs correspondantes
@@ -4428,7 +4436,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
           ! et IP2 pourrait alors contenir l'heure absolue de
           ! prevision (KIND_HOURS).
 
-          IP3   = GETHIGH('IP3' ,IBUF )
+          IP3   = MAX( 1, GETHIGH('IP3' ,IBUF ) )
 
           CALL Diag_CONVIP_plus( IP3,VIP3,IKIND,-2,NULS,.FALSE. )
 
@@ -4455,7 +4463,14 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
               LOVAL = 0.0
           END IF
               
-        
+      ELSE IF (vMeanVar)                                       THEN
+
+          ! Codage utilise par les routines
+          ! de traitement temporel de MFV.
+
+         NSAMPZ = MAX( 1, GETHIGH('IP3' ,IBUF ) )
+         LOVAL = 0.0 ; HIVAL = HEURES ; IPMODE = 0
+          
       ELSE IF (RKIND == KIND_HOURS)                            THEN
 
           ! Interval de temps.
@@ -4540,7 +4555,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
            !  KIND_SAMPLES. Sinon, on ignore tout codage et
            !  on est en mode de compatibilite arriere
 
-          IP3 = MAX( 1, GETHIGH( 'IP3',IBUF ) )
+          IP3 = GETHIGH( 'IP3',IBUF )
 
           IF (IP3 > 32767)                                     THEN
 

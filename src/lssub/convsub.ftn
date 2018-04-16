@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: convsub.ftn,v $
+!     Revision 3.130  2018/04/16 14:14  dugas
+!     - Petite correction du format DEBUG #6102 de PARFILL
+!
 !     Revision 3.129  2018/02/01 13:13  dugas
 !     - Initialiser la variable FoundIt dans savUref
 !
@@ -1643,7 +1646,7 @@
 
  6104 FORMAT('*DEBUG:PARFILL (4) Ibuf 29 a ',I2,' = ',I2,3(1x,Z8))
  6103 FORMAT('*DEBUG:PARFILL (4) Ibuf 25 a 28 =',1X,4A4)
- 6102 FORMAT('*DEBUG:PARFILL (3) Ibuf 17 a 24 =',2I6,1X,Z8,I11,2I8,2(1X,A))
+ 6102 FORMAT('*DEBUG:PARFILL (3) Ibuf 17 a 24 =',2I6,1X,Z8,3I11,2(1X,A))
  6101 FORMAT('*DEBUG:PARFILL (2) Ibuf  9 a 16 =',2(A4,1X),3I8,I12,2I6)
      +                                          
  6100 FORMAT('*DEBUG:PARFILL (1) Ibuf  1 a 8  =',A4,I12,1X,A4,1x,5I8)

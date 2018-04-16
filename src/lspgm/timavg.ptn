@@ -152,6 +152,10 @@
 *     ------------------------------------------------
 
 *     $Log: timavg.ptn,v $
+*     Revision 4.44 2018/04/16 15:15  dugas
+*     Tenir compte des jeux incomplets de moyennes
+*      lors des calculs des NPAS et DEET en sortie
+*
 *     Revision 4.43 2017/11/02 19:19  dugas
 *     Ajouter une signature de moyennes (time_mean_signature) ou
 *      de minimums (timmin_signature) ou de maximums (timmax_signature)
@@ -358,7 +362,8 @@
       LOGICAL     MODTIM,MVALUE,MISSOUT,SQUARE,AVGDATA,
      +            OK,OK2,ACCUM,TIMAX,TIMIN,SAMPLES,ACCOK,
      +            OLDIP3,NoModT,Vrai,Faux
-      REAL(8)     FNI,HEURE,MISFLAG,EPSILON,EPS,tdiff,H0
+      REAL(8)     FNI,HEURE,HEUREO,MISFLAG,
+     +            EPSILON,EPS,tdiff,H0
       REAL        ZERO, HIVALi,LOVALi,
      +            HIVALA(MAXLEV),LOVALA(MAXLEV),
      +            HIVALB(MAXLEV),LOVALB(MAXLEV),
@@ -368,8 +373,8 @@
      +            RKINDB(MAXLEV),RKM(MAXLEV)
       INTEGER     I,K,NF,MEM,NWDS,LEN,IER,IER2,MAXW,
      +            LPAK,NWDS2,DATEV,NR,NSET,NSET2,
-     +            NRECS,DEET,DEETA,DEETB,NPG,IO,
-     +            NLEV,NLEV2,KPAK,IPMi,IPM,NPASA,
+     +            NRECS,DEET,DEETA,DEETB,DEETO,NPG,
+     +            IO,NLEV,NLEV2,KPAK,IPMi,IPM,NPASA,
      +            DATEI,DATEF,DATEO,DATEAI,DATEAF,
      +            MAXW2,LEN2,NPAS,HOLD,M0,M1,KIND,
      +            KBUF(HEAD),LBUF(HEAD),MBUF(HEAD),
@@ -1125,7 +1130,7 @@
                       END IF
                   END DO
               ELSE
-                  ! Possibly redefine DATEAI and/or DATEAF.
+                  ! Possibly redefine DATEI and/or DATEF.
                   IF (DATEO /= DATEI)                          THEN
                       CALL DIFDATR( DATEO,DATEI,tdiff )
                       IF (TDIFF < 0._8) DATEI = DATEO
@@ -1304,7 +1309,7 @@
       NSAMP(1:NSET) = NSAMP(1:NSET)+NSAMPA(1:NSET)
       NSETS         = NSAMP(1)
 
-      IF (NSETS == 1)                                          THEN
+      IF (MAXVAL( NSAMP(1:NSET) ) == 1)                        THEN
 
           ! Nothing to do. Save data and exit !
 
@@ -1386,18 +1391,30 @@
 ***            SAVED ON THE FILE WILL CORRESPOND TO THAT
 ***            THE LATEST SAMPLE.
 
-              NPAS = NSETS-1
-              DEET = NINT( (HEURE*3600._8)/NPAS )
-              H0   =        DEET /3600._8
+              HEUREO = (NSETS-1)*((DBLE( DEET )/60.)/60.)
+
+              IF (HEUREO /= HEURE)                             THEN
+                ! Tentative de determiner si
+                ! l'ensemble est COMPLET. Il
+                ! semble qu'il ne l'est pas.
+                  NPAS  = NINT( HEURE )
+                  DEETO = 3600
+                  HIVAL = HEURE
+                  LOVAL = 0
+              ELSE
+                  NPAS  = NSETS-1
+                  DEETO = NINT( (HEURE*3600._8)/NPAS )
+                  H0    =        DEET /3600._8
+              END IF
 
           ELSE
 
 ***            RESET DEET TO AN HOUR AND DO THE
 ***            SAME THING AS IN THE PREVIOUS CASE.
 
-              NPAS = HEURE
-              DEET = 3600
-              H0   = 0
+              NPAS  = NINT( HEURE )
+              DEETO = 3600
+              H0    = 0
 
           END IF
 
@@ -1406,7 +1423,7 @@
           END IF
 
           CALL PUTHIGH( DATEAI,'DATEO',IBUF )
-          CALL PUTHIGH( DEET  ,'DEET' ,IBUF )
+          CALL PUTHIGH( DEETO ,'DEET' ,IBUF )
           CALL PUTHIGH( NPAS  ,'NPAS' ,IBUF )
 
           IBUF(2) = NPAS

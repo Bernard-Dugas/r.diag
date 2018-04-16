@@ -22,6 +22,9 @@
 #     endif
 C
 C     $Log: put.ftn,v $
+C     Revision 3.53  2018/04/16 13:13  dugas
+C     Tenir compte d'un jeux incomplet de moyennes dans PUTSAMPLZ
+C
 C     Revision 3.52  2017/11/02 21:21  dugas
 C     Tenir compte des differentes signatures d'operations temporelles
 C      qui pourraient se retrouver dans le deuxieme caracteres du TYPVAR
@@ -1832,7 +1835,7 @@ C
 
       CHARACTER(4) NULS,typvar*2
       LOGICAL      COMPLET,lMeanVar
-      REAL(8)      HEURES
+      REAL         HEURES
       REAL         HIVAL,LOVAL
       type(FLOAT_IP) :: RP1,RP2,RP3
       REAL         VIP1,VIP2,VIP3,HOLD
@@ -1900,15 +1903,22 @@ C
 
               end if
           else
-              ! Placer HIVAL (ou bien HIVAL-LOVAL) dans 
-              !IP2 et le nombre d'echantillons dans IP3.
-             if (HIVAL <= 1000000.)                            then
-                 ! Coder HIVAL dans IP2
-                  call diag_convip_plus( ip2,HIVAL,
+              if (COMPLET)                                     then
+                  ! Placer HIVAL (ou bien HIVAL-LOVAL) dans 
+                  ! IP2 et le nombre d'echantillons dans IP3.
+                  if (HIVAL <= 1000000.)                       then
+                      ! Coder HIVAL dans IP2
+                      call diag_convip_plus( ip2,HIVAL,
      +                                   KIND_HOURS,+2,nuls,.false. )
-              else if (HIVAL-LOVAL <= 1000000.)                then
-                 ! Coder HIVAL-LOVAL dans IP2
-                  call diag_convip_plus( ip2,HIVAL-LOVAL,
+                  else if (HIVAL-LOVAL <= 1000000.)            then
+                      ! Coder HIVAL-LOVAL dans IP2
+                      call diag_convip_plus( ip2,HIVAL-LOVAL,
+     +                                   KIND_HOURS,+2,nuls,.false. )
+                  end if
+              else
+                  ! Placer le nombre total d'heures dans IP2
+                  HEURES = NPAS*((dble( deet )/60.)/60.)
+                  call diag_convip_plus( ip2,HEURES,
      +                                   KIND_HOURS,+2,nuls,.false. )
               end if
               if (NSAMPZ < 2000000)                            then
