@@ -22,10 +22,10 @@
 ! At UQAM, the latest released version of the scripts that
 ! call the actual Linux binaries can be found under
 !
-! ${diag-tool}/r.diag_6.4.1-2.3.1_linux26-x86-64/bin
+! ${diag-tool}/r.diag_6.4.2-2.3.2_linux26-x86-64/bin
 !
 ! where diag-tools=/unique/armnssm/ECssm/ssm-domains-base/tools/diag-tools
-! and it is made available via the diagtools-6.4.1 SSM bundle.
+! and it is made available via the diagtools-6.4.2 SSM bundle.
 
 ! In Dorval, the different AIX (now deprecated) and
 ! Linux binaries used to be found under

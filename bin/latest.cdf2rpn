@@ -1,6 +1,0 @@
-#!/bin/bash
-Location=$(true_path $0) ; Location=${Location%/bin/*}
-export DIAGNOSTIQUE=${DIAGNOSTIQUE:-${Location}}
-CDF2RPN=${DIAGNOSTIQUE}/bin/${BASE_ARCH}/latest_cdf2rpn
-${CDF2RPN} "$@"
-exit $?
