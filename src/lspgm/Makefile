@@ -62,7 +62,7 @@ LIBP    = $(LIBDIR)/lib$(PROGLIB).a
 LIBS    = $(LIBDIR)/lib$(DIAGLIB).a
 ZIPFILE = $(LIBDIR)/lspgm_STD$(STD).f.zip
 
-DIAG_VERSION = 6.4.2
+DIAG_VERSION = 6.4.3
 
 HOSTWEB =
 DIAGWEB =
