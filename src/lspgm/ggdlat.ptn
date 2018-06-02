@@ -27,7 +27,8 @@
 *            2) FOR RPN/CMC STANDARD FILES, THE SUPPORTED INPUT GRID
 *               TYPES ARE G (GAUSSIAN), A (LAT-LONG), B (LAT-LONG WITH
 *               POLES AND EQUATOR), L (GENERALIZED LAT-LONG) AND
-*               ROTATED, Z (VARIABLE-RESOLUTION LAT-LONG).
+*               ROTATED, Z (VARIABLE-RESOLUTION LAT-LONG). NOTE
+*               THAT U GRIDS (YinYan) ARE **NOT** SUPPORTED.
 *
 *     NOTES CONCERNING THE USE OF FILE LOLA...
 *            1) THE COORDINATES IN LOLA WILL GENERALLY REFER TO A
@@ -173,8 +174,8 @@
      +            WL(MAXJ),WOSSL(MAXJ),
      +            LATSPAN,PI,LAT1,RAD(MAXJ)
       INTEGER     NFF,NWDS,NR,NLON,NLAT,NIR,
-     +            ILATH,NHEM,J,MAXW,IER,NJR,
-     +            JBUF(HEAD),LEN,JPAK,KIND,
+     +            ILATH,NHEM,J,MAXW,MAXW2,IER,
+     +            NJR,JBUF(HEAD),LEN,JPAK,KIND,
      +            KBUF(HEAD),KPAK,INTERP,
      +            IG1R,IG2R,IG3R,IG4R,I,
      +            IG1,IG2,IG3,IG4,IJ
@@ -195,7 +196,7 @@
      +            GETSIZ,RPBLOC
 
       DATA        NHEM,NLAT,NLON / -1,-1,-1 /,
-     +            GRTYPI / ' ' /
+     +            GRTYPI / ' ' /, NEW /.FALSE./
 *===================================================================
 
       NOMPRG =
@@ -215,7 +216,7 @@
       CO = PI  / 180.
 
   050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
-      IF (MAXW.LE.0) CALL                          XIT(' Ggdlat ',-1 )
+      IF (MAXW <= 0) CALL                          XIT(' Ggdlat ',-1 )
 
       WRITE(TYPE,'(A4)') JBUF(1)
 
@@ -233,23 +234,24 @@
 
       END IF
 
-      allocate( IBUF(HEAD+MAXW),D(MAXW),DP(MAXW), stat=ier )
-      DLAT => DP
-
       IF (LOLA)                                                THEN
 
 ***        ALLOCATE AND READ LOLA FILE ONCE AND FOR ALL.
 
-          MAXW = GETSIZ( 3, KBUF,LEN,NWDS,KPAK )
+          MAXW2 = GETSIZ( 3, KBUF,LEN,NWDS,KPAK )
 
-          IF (MAXW.EQ.0) CALL                      XIT(' Ggdlat ',-3 )
+          IF (MAXW2 <= 0) CALL                     XIT(' Ggdlat ',-3 )
 
           CALL CMPLBL( 0,JBUF, 0,KBUF, OK ) 
 
+          MAXW = MAX( MAXW,MAXW2 )
+
           IF (OK)                                              THEN
 
-            ! Allocate  LA, LA+ and LA-,      LO,      DM
-              allocate( LA(JBUF(5)*JBUF(6)*3),LO(MAXW),DM(MAXW), stat=ier )
+              allocate( IBUF(HEAD+MAXW), D(NWDS),DP(NWDS),
+     +                  LO(NWDS),LA(NWDS*3),DM(NWDS), stat=ier )
+
+              DLAT => DP
 
           ELSE
 
@@ -310,15 +312,22 @@
                                A = LA(J)+DELTA
               IF (A .GT.  90.) A = 90.
               IF (A .LT. -90.) A =-90.
-              LA(J+  MAXW)  =  A
+              LA(J+  NWDS)  =  A
                                A = LA(J)-DELTA
               IF (A .GT.  90.) A = 90.
               IF (A .LT. -90.) A =-90.
-              LA(J+2*MAXW)  =  A
+              LA(J+2*NWDS)  =  A
 
           END DO
 
-      END IF
+      ELSE
+
+***        Allocating work arrays.
+
+          allocate( IBUF(HEAD+MAXW),D(NWDS),DP(NWDS), stat=ier )
+          DLAT => DP
+
+       END IF
 
 ***    READ THE NEXT GRID FROM FILE GGIN.
 
@@ -480,14 +489,14 @@
 
 ***            INTERPOLATE TO DOWNSTREAM POINT.
 
-              CALL EZ_IGSCINT( DP, NLON,NLAT, LA(MAXW+1),LO, 
+              CALL EZ_IGSCINT( DP, NLON,NLAT, LA(NWDS+1),LO, 
      +                         D  ,NLON,NLAT, GRTYP, 
      +                         RTYP,IG1R,IG2R,IG3R,IG4R,
      +                        .TRUE., ALON,ALAT )
 
 ***            INTERPOLATE TO UPSTREAM POINT.
 
-              CALL EZ_IGSCINT( DM, NLON,NLAT, LA(2*MAXW+1),LO, 
+              CALL EZ_IGSCINT( DM, NLON,NLAT, LA(2*NWDS+1),LO, 
      +                         D  ,NLON,NLAT, GRTYP, 
      +                         RTYP,IG1R,IG2R,IG3R,IG4R,
      +                        .TRUE., ALON,ALAT )

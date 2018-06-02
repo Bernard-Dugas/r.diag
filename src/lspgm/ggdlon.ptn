@@ -27,7 +27,8 @@
 *            2) FOR RPN/CMC STANDARD FILES, THE SUPPORTED INPUT GRID
 *               TYPES ARE G (GAUSSIAN), A (LAT-LONG), B (LAT-LONG WITH
 *               POLES AND EQUATOR), L (GENERALIZED LAT-LONG) AND
-*               ROTATED, Z (VARIABLE-RESOLUTION LAT-LONG).
+*               ROTATED, Z (VARIABLE-RESOLUTION LAT-LONG). NOTE
+*               THAT U GRIDS (YinYan) ARE **NOT** SUPPORTED.
 *            3) THE COMPUTED VALUE IS 1./COS(LAT) * D(GG)/D(LON).
 *
 *     NOTES CONCERNING THE USE OF FILE LOLA...
@@ -176,7 +177,7 @@
      +            WL(MAXJ),WOSSL(MAXJ),RAD(MAXJ),
      +            LATSPAN,PI,CO,LAT1
       INTEGER     NFF,NWDS,NR,NLON,NHEM,NLAT,
-     +            ILATH     ,IER,I,J,MAXW,
+     +            ILATH,IER,I,J,MAXW,MAXW2,
      +            JBUF(HEAD),LEN,JPAK,KIND,
      +            KBUF(HEAD),KPAK,INTERP,
      +            IG1R,IG2R,IG3R,IG4R,
@@ -200,7 +201,7 @@
      +            GETSIZ,RPBLOC
 
       DATA        NHEM,NLAT,NLON / -1,-1,-1 /,
-     +            GRTYPI / ' ' /
+     +            GRTYPI / ' ' /, NEW /.FALSE./
 *===================================================================
 
       NOMPRG =
@@ -220,7 +221,8 @@
       CO = PI  / 180.
 
   050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
-      IF (MAXW.LE.0) CALL                          XIT(' Ggdlon ',-1 )
+
+      IF (MAXW <= 0) CALL                          XIT(' Ggdlon ',-1 )
 
       WRITE(TYPE,'(A4)') JBUF(1)
 
@@ -233,24 +235,28 @@
 
       END IF
 
-      allocate( IBUF(HEAD+MAXW),D(MAXW),DP(MAXW), stat=ier )
-      DLON => DP
-
       IF (LOLA)                                                THEN
 
 ***        ALLOCATE AND READ LOLA FILE ONCE AND FOR ALL.
 
-          MAXW = GETSIZ( 3, KBUF,LEN,NWDS,KPAK )
+          MAXW2 = GETSIZ( 3, KBUF,LEN,NWDS,KPAK )
 
-          IF (MAXW.EQ.0) CALL                      XIT(' Ggdlon ',-3 )
+          IF (MAXW2 <= 0) CALL                     XIT(' Ggdlon ',-3 )
 
           CALL CMPLBL( 0,JBUF, 0,KBUF, OK ) 
+
+          MAXW = MAX( MAXW,MAXW2 )
 
           IF (OK)                                              THEN
 
               NLON   = JBUF(5)
               NLAT   = JBUF(6)
-              allocate( LO(NLON,NLAT,3),LA(MAXW),OVLA(MAXW),DM(MAXW), stat=ier )
+
+              allocate( IBUF(HEAD+MAXW),D(NWDS),DP(NWDS),
+     +                  LO(NLON,NLAT,3),LA(NWDS),OVLA(NWDS),
+     +                  DM(NWDS), stat=ier )
+
+              DLON => DP
 
           ELSE
 
@@ -346,6 +352,13 @@
               END DO
 
           END DO
+
+      ELSE
+
+***        Allocating work arrays.
+
+          allocate( IBUF(HEAD+MAXW),D(NWDS),DP(NWDS), stat=ier )
+          DLON => DP
 
       END IF
 
