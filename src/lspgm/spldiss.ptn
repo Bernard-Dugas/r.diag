@@ -211,7 +211,7 @@
       MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
       IF (MAXW.EQ.0) CALL                          XIT(' Spldiss',-1 )
 
-      ALLOCATE( G(MAXW),IBUF(LEN) )
+      ALLOCATE( G(MAX( MAXW,NWDS )),IBUF(LEN) )
 
 ***    READ RECORDS OF INPUT FILE, TO GIVE FILE OUT THE SAME DIMENSION.
 

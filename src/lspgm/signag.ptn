@@ -1,7 +1,7 @@
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
-*      signag  GRID INPUT OUTPUT [ -kind VAL1 ]
+*      signag  GRID INPUT OUTPUT [ -kind VAL1 [VAL2] ]
 *
 *
 *     DESCRIPTION...
@@ -12,17 +12,20 @@
 *     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/signag.ptn,v 4.6 2014/09/25 20:20:52 dugas Exp $
 *
 *
-*     PURPOSE - READ INPUT RECORDS CONTAINING A TABLE OF "-", "0" OR "+" AND
-*               GENERATE STANDART CCRN FILES WITH CORRESPONDING FLOATING POINT
-*               VALUES. MAXIMUM ARRAY SIZE IS 100000 WORDS.
+*     PURPOSE - READ INPUT RECORDS CONTAINING A TABLE OF "-", "0" OR "+"
+*               AND GENERATE STANDART CCRN (gaussian grid) FILES WITH
+*               CORRESPONDING FLOATING POINT VALUES.
 *
 *
 *     OUTPUT FILE...
-*      GRID = STANDART CCRN FILE IMAGE OF THE INPUT RECORDS.
-*             CONTAINS -1.0, 0.0 OR 1.0 .
+*      GRID = STANDART CCRN FILE IMAGE OF THE INPUT RECORDS. WILL
+*             CONTAIN RECORDS WITH -1.0, 0.0 OR 1.0 VALUES UPON EXIT.
+*             IF THE FILE EXISTS AT STARTUP, IT WILL BY DEFAULT BE
+*             OVER-WRITTEN (SEE THE KIND(2) COMMAND-LINE ARGUMENT).
+*             BUT EVEN THEN, IT'S FILE-TYPE WILL BE KEPT.
 *
 *
-*     INPUT PARAMETERS...
+*     INPUT PARAMETERS (FROM STD INPUT)...
 *
 *      IBUF = STANDART CCRN 8 WORD LABEL
 *      CG   = SIGN INFO READ AND LATER TRANSLATED BY PROGRAM. IT IS READ ONE
@@ -31,7 +34,9 @@
 *             THERE SHOULD BE ILG-1 CHARACTERS/INPUT LINE. THE 0 LONGITUDE
 *             VALUE IS THEN USED FOR THE 360 LONGITUDE VALUE.
 *
-*      KIND = VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
+*     INPUT PARAMETERS (FROM COMMAND-LINE ARGUMENTS)...
+*
+*      KIND(1) = VERTICAL LEVEL TYPE. IT CAN ONLY BE USED WITH CMC/RPN STD
 *             FILES AND THEN LV1 AND LV2 ARE ASSUMED TO CONTAIN DECODED
 *             VALUES. FURTHERMORE, THIS PARAMETRE CAN ONLY BE SPECIFIED
 *             IN COMMAND-LINE MODE. THE CURRENTLY SUPPORTED VALUES ARE:
@@ -44,7 +49,8 @@
 *             'HYBRIDE'   , hybrid GEM coordinate
 *             'THETA'     , potential temperature coordinate
 *             'GALCHEN'   , GalChen generalized coordinate
-*
+*      KIND(2) = Append or over-write exiting GRID file ? The default
+*             is to over-write, unless KIND(2) is defined as 'APPEND'.
 *
 *      READ( 5,5001 ) IBUF
 *5000  FORMAT(6X,A4,I10,6X,A4,5I10)
@@ -133,20 +139,21 @@
 
       LOGICAL     OK 
       REAL        PR
+      CHARACTER   PKTYP*2,STATF*4,CIOM*6
       CHARACTER*10 ATIM,ALEV,CKIND,LIGNE*80
-      INTEGER     IER,NR,NFF,VKIND,IO,MAXW,
-     +            ILG1,ILG,ILAT,I,J,JJ,JR,
-     +            JBUF(HEAD),LEN,NWDS,JPAK
+      INTEGER*8   TIME
+      INTEGER     IER,NR,NFF,VKIND,IO,MAXW,NCAR,
+     +            ILG1,ILG,ILAT,I,J,JJ,JR,JLEN,KLEN,NWDS,
+     +            JBUF(HEAD),JPAK,KBUF(HEAD),KPAK
 
       REAL,       DIMENSION(:), ALLOCATABLE :: G
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       CHARACTER,  DIMENSION(:), ALLOCATABLE :: CG
 
-      LOGICAL     RPBLOC
-      CHARACTER   PKTYP*2,GETYP*4
-      INTEGER     GETKIND,      GETSIZ
-      EXTERNAL    GETKIND,GETYP,GETSIZ,SETKIND
-      EXTERNAL    JCLPNT,RPBLOC,GETLIGN,XIT,PUTFLD2
+      LOGICAL,    EXTERNAL :: RPBLOC
+      CHARACTER,  EXTERNAL :: GETYP*4
+      INTEGER,    EXTERNAL :: GETKIND,GETSIZ
+      EXTERNAL    JCLPNT,GETLIGN,XIT,PUTFLD2,SETKIND
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -161,7 +168,17 @@
       NFF = 3
       CALL JCLPNT( NFF, 1, 5,6 )
 
-      PKTYP = GETYP( 0 )
+      ! Check I/O unit 1 status
+      call GETSTAT( 1,STATF )
+
+      IF (STATF == 'OLD')                                      THEN
+          PKTYP = GETYP( 1 )
+      ELSE
+          PKTYP = GETYP( 0 )
+      END IF
+
+      NR    =  0
+      CIOM  = ' '
       CKIND = ' '
       VKIND =  2
 
@@ -175,14 +192,18 @@
               VKIND = GETKIND( )
           ENDIF
 
+          ! Activate append-mode for pre-existing files ?
+          OK = RPBLOC('KIND2',CIOM)
+          IF (OK .and. STATF == 'OLD'
+     +           .and. CIOM  == 'APPEND') CALL PUTPOSIT( 1,CIOM )
+
       END IF
 
-***    ASK FOR NECESSARY MEMORY. READ FIRST SET OF INFO BUFFERS.
-
-  050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
-      IF (MAXW.LE.0) GOTO 903
-
-      ALLOCATE( IBUF(LEN),G(MAXW),CG(1:MAXW/4) )
+      IF (STATF == 'OLD')                                      THEN
+        ! Read first set of info buffers
+          MAXW = GETSIZ( 1, KBUF,KLEN,NWDS,KPAK )
+          IF (MAXW <= 0) GOTO 903
+      END IF
 
 ***    READ-IN 8 WORD LABEL CARD.
 
@@ -192,36 +213,57 @@
               GOTO 900
           ELSE
               READ( LIGNE, 5000,ERR=900,END=900,IOSTAT=IO )
-     +        IBUF(1),ATIM,IBUF(3),ALEV,(IBUF(I),I=5,8)
+     +        JBUF(1),ATIM,JBUF(3),ALEV,(JBUF(I),I=5,8)
           END IF
 
-          IBUF(2) = 1979010100
-          IBUF(4) = 0
+          JBUF(2) = 1979010100
+          JBUF(4) = 0
 
-          IF (ATIM.NE.' ') READ(ATIM,10,ERR=900,IOSTAT=IO) IBUF(2)
+          IF (ATIM.NE.' ')                                     THEN
+              READ(ATIM,10,ERR=900,IOSTAT=IO) TIME
+              CALL DATE2STAMP( TIME,JBUF(2) )
+          END IF
 
           IF (ALEV.NE.' ')                                     THEN
               IF (INDEX( ALEV, '.' ).EQ.0 .AND. CKIND.EQ.' ')  THEN
-                  READ( LIGNE,10,ERR=900,IOSTAT=IO ) IBUF(4)
+                  READ( LIGNE,10,ERR=900,IOSTAT=IO ) JBUF(4)
                   IF (PKTYP.EQ.'SQ')                           THEN
-                      CALL CONVPR( IBUF(4), PR, VKIND, -2 )
-                      CALL CONVPR( IBUF(4), PR, VKIND, +2 )
+                      CALL CONVPR( JBUF(4), PR, VKIND, -2 )
+                      CALL CONVPR( JBUF(4), PR, VKIND, +2 )
                   END IF
               ELSE
                   READ(ALEV,11,ERR=900,IOSTAT=IO) PR
                   IF (PKTYP.EQ.'SQ')                           THEN
-                      CALL CONVPR( IBUF(4), PR, VKIND,  +2 )
+                      CALL CONVPR( JBUF(4), PR, VKIND,  +2 )
                   ELSE
-                      CALL LVCODE( IBUF(4), PR/1000.,1 )
+                      CALL LVCODE( JBUF(4), PR/1000.,1 )
                   END IF
               END IF
           END IF
                       
-          CALL PRTLAB( IBUF )
+          CALL LBLCHK( JLEN,NWDS,JPAK,JBUF )
+          CALL PRTLAB( JBUF )
+
+          IF (NR == 0)                                         THEN
+
+              IF (STATF /= 'OLD')                              THEN
+                  MAXW = 2*NWDS
+              ELSE
+                  
+              END IF
+
+            ! Ask for necessary memory
+              ALLOCATE( IBUF(HEAD+MAXW),G(NWDS),CG(1:NWDS) )
+              
+          END IF
+
+          IF (STATF == 'OLD')
+     +    IBUF(1:HEAD) = KBUF(1:HEAD)
+          IBUF(1:8)    = JBUF(1:8)
 
           ILG1 = IBUF(5)
           ILAT = IBUF(6)
-          ILG  = ILG1-1
+          ILG  = ILG1-MOD( ILG1,2 )
 
           IF (ILG1*ILAT .GT. MAXW) CALL            XIT(' Signag ',-1 )
 

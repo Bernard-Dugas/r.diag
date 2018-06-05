@@ -360,13 +360,15 @@
 
       MAXW = MAX( MAX1,MAX2 )
 
-      ALLOCATE( IBUF(HEAD+MAXW),JBUF(HEAD+MAXW),
-     +          U(MAXW),V(MAXW),UPS(MAXW),VPS(MAXW), STAT=IER )
+      ALLOCATE( IBUF(HEAD+MAXW),     JBUF(HEAD+MAXW),
+     +          U  (MAX( MAXW,NWDS )),V  (MAX( MAXW,NWDS )),
+     +          UPS(MAX( MAXW,NWDS )),VPS(MAX( MAXW,NWDS )), STAT=IER )
       IF (IER /= 0) CALL                           XIT( verbe ,-9 )
 
       IF (ZMODE)                                               THEN
-          ALLOCATE( THETA(MAXW),COST(MAXW),SINT(MAXW),
-     +              WEIGHT(MAXW),RANK(MAXW), STAT=IER )
+          ALLOCATE( THETA (MAX( MAXW,NWDS )), COST(MAX( MAXW,NWDS )),
+     +              WEIGHT(MAX( MAXW,NWDS )), SINT(MAX( MAXW,NWDS )),
+     +              RANK  (MAX( MAXW,NWDS )), STAT=IER )
           IF (IER /= 0) CALL                       XIT( verbe ,-10)
       END IF
       

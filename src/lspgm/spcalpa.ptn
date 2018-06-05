@@ -149,7 +149,7 @@
       MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
       IF (MAXW.EQ.0) CALL                          XIT(' Spcalpa',-1 )
 
-      ALLOCATE( BUF(LEN),G(MAXW) )
+      ALLOCATE( BUF(LEN),G(MAX( MAXW,NWDS )) )
 
 ***    READ RECORDS FROM INPUT FILE TO GIVE FILE OUT THE SAME DIMENSION
  

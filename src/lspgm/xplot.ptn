@@ -265,7 +265,8 @@
       VKIND  = VKIND0
       CKIND  = ' '
 
-      ALLOCATE( BUF(HEAD+MAXW),G(MAXW),Y(MAXW) )
+      ALLOCATE( BUF(HEAD+NWDS),G(MAX( MAXW,NWDS )),
+     +                         Y(MAX( MAXW,NWDS )), STAT=IER )
 
       CALL SYSDAT
       CALL DISPLA( 2,0,1 )

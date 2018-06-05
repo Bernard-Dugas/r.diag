@@ -193,8 +193,8 @@
 
 ***    ALLOCATE WORK SPACE.
 
-      ALLOCATE( IBUF(2*LEN) , F(MAXW) ,
-     +          JBUF(2*LEN) , G(MAXW) )
+      ALLOCATE( IBUF(2*LEN) , F(MAX( MAXW,NWDS )) ,
+     +          JBUF(2*LEN) , G(MAX( MAXW,NWDS )) )
 
 ***    TEMP NAME DEPENDS ON FILE TYPE.
 

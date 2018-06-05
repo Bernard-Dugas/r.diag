@@ -130,14 +130,14 @@
 *-----------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     MAXR       , HEAD
-      PARAMETER ( MAXR = 999 , HEAD = taille_entete )
+      INTEGER, PARAMETER :: MAXR = 9999, HEAD = taille_entete
 
       REAL        RLV
       LOGICAL     OK,RPIO
       INTEGER*8 :: NT,MUN=-1,ZER=0
+      CHARACTER*4 NAME,PKTYP
       CHARACTER   SLEVEL*15,ALEVEL*10,ASTEP*20
-      CHARACTER   NAME*4, LIGNE*80,ROW(MAXR)
+      CHARACTER   LIGNE*80,ROW(MAXR)
       INTEGER     IER,NFF,IO,NSTEP,VKIND,
      +            VKIND0,LEVEL,LX,LY,JR,N,I,J,K,
      +            MAXW, LEN,NWDS,JPAK,JBUF(HEAD)
@@ -145,13 +145,12 @@
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       REAL,       DIMENSION(:), ALLOCATABLE :: F
 
-      LOGICAL     RPBLOC
-      INTEGER*8   Y2KDAT8
-      CHARACTER*4 GETYP,PKTYP
-      INTEGER     GETKIND,GETSIZ
-      EXTERNAL    JCLPNT,GETLIGN,BURNF,GETSIZ
-     +            XIT,GETBUF2,GETFLD2,CONVPR,
-     +            Y2KDAT8,RPBLOC,GETYP,GETKIND
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER(8), EXTERNAL :: Y2KDAT8
+      CHARACTER,  EXTERNAL :: GETYP*4
+      INTEGER,    EXTERNAL :: GETKIND,GETSIZ
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,XIT,
+     +            GETBUF2,GETFLD2,CONVPR
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -176,7 +175,7 @@
       MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
       IF (MAXW.LE.0) CALL                      XIT(' Ggsign ',-1 )
 
-      ALLOCATE(  IBUF(HEAD+MAXW),F(MAXW) )
+      ALLOCATE(  IBUF(HEAD+MAXW),F(MAX( MAXW,NWDS )) )
 
       VKIND0 = GETKIND( )
 

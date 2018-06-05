@@ -178,8 +178,8 @@
       MAXW = GETSIZ2( 1, KBUF,LEN,NWDS,KPAK, LEV,NLEV )
       IF (MAXW.EQ.0) CALL                          XIT(' Fullmix',-1 )
 
-      ALLOCATE( IBUF(LEN), DATA1(MAXW),
-     +          JBUF(LEN), DATA2(MAXW), STAT=IER )
+      ALLOCATE( IBUF(LEN), DATA1(MAX( MAXW,NWDS )),
+     +          JBUF(LEN), DATA2(MAX( MAXW,NWDS )), STAT=IER )
 
       IF (IER /= 0) CALL                           XIT(' Fullmix',-8 )
 

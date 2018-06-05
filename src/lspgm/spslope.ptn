@@ -226,7 +226,8 @@
       VKIND  = VKIND0
       CKIND  = ' '
 
-      ALLOCATE( F(MAXW),G(MAXW),IBUF(2*LEN) )
+      ALLOCATE( F(MAX( MAXW,NWDS )), IBUF(2*LEN),
+     +          G(MAX( MAXW,NWDS )), STAT=IER )
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
 

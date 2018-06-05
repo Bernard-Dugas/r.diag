@@ -114,7 +114,7 @@
       CHARACTER     KIND*4,LIGNE*80
       REAL          DEMI,V1,V2,V3,AMP,ZERO
       INTEGER       CY,X, MAXW,NFIL, LEN,IO,I,NR,CMPL, IER,
-     +              JBUF(HEAD),LENI,NWDS,JPAK
+     +              JBUF(HEAD),LENI,NWDS,NWDS2,JPAK
 
       INTEGER,      DIMENSION(:),   ALLOCATABLE :: IBUF
       REAL,         DIMENSION(:,:), ALLOCATABLE :: TS
@@ -174,7 +174,8 @@
   050 MAXW = GETSIZ( 1, JBUF,LENI,NWDS,JPAK )
       IF (MAXW.LE.0) GOTO 902
 
-      ALLOCATE( IBUF(LENI),TS(2,0:MAXW/2+1) )
+      NWDS2 = MAX( MAXW,NWDS )
+      ALLOCATE( IBUF(LENI),TS(2,0:NWDS2/2+1) )
 
       CALL PRTLAB2(' Unseas on ibuf = ', IBUF )
  

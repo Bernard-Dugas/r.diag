@@ -169,8 +169,10 @@
       IF (MAXW.LE.0) GOTO 901
       IF (JBUF(6) /= 1) CALL                       XIT(' Binning',-1 )
 
-      ALLOCATE( MEANTS(MAXW),COLAPSE(MAXW),OU(MAXW),
-     +          TSIN(MAXW),IBUF(HEAD+MAXW), STAT=IER )
+      ALLOCATE( IBUF(HEAD+MAXW), MEANTS (MAX( MAXW,NWDS )),
+     +                           COLAPSE(MAX( MAXW,NWDS )),
+     +                           OU     (MAX( MAXW,NWDS )),
+     +                           TSIN   (MAX( MAXW,NWDS )), STAT=IER )
 
       IF (IER /= 0) CALL                           XIT(' Binning',-8 )
 

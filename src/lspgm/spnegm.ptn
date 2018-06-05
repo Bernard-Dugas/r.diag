@@ -140,7 +140,7 @@
   050 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
       IF (MAXW.LE.0) CALL                          XIT(' Spnegm ',-1 )
 
-      ALLOCATE( BUF(LEN),F(MAXW) )
+      ALLOCATE( BUF(LEN),F(MAX( MAXW,NWDS )) )
 
   100 CALL GETFLD2( 1, F, 'SPEC',-1,' ',-1, BUF,MAXW,OK )
 

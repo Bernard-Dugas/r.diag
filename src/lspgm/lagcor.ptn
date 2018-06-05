@@ -277,8 +277,8 @@
  
 ***    ALLOUER L'ESPACE DE TRAVAIL.
 
-      ALLOCATE( TS1(MAXW),COREL(MAXW),
-     +          TS2(MAXW),IBUF(MAXW+HEAD),STAT=IER )
+      ALLOCATE( TS1(MAX( MAXW,NWDS )),COREL(MAX( MAXW,NWDS )),
+     +          TS2(MAX( MAXW,NWDS )),IBUF(MAXW+HEAD),STAT=IER )
 
       IF (IER /= 0) CALL                           XIT(' Lagcor ',-9 )
 

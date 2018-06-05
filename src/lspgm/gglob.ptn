@@ -182,7 +182,8 @@
 
       MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
 
-      ALLOCATE( IBUF(4*LEN),GGH(MAXW),GGF(2*MAXW) )
+      ALLOCATE( IBUF(4*LEN),GGH(  MAX( MAXW,NWDS )),
+     +                      GGF(2*MAX( MAXW,NWDS )) )
 
 ***     GET THE NEXT HEMISPHERIC GRID FROM FILE 1.
 

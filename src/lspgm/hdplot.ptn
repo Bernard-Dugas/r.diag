@@ -22,7 +22,7 @@
 *               NCAR PLOT PACKAGE.
 *
 *     NOTE    - PROGRAM READS DATA LABELLED WITH STANDARD 8 WORD LABEL.
-                THE MAXIMUM NUMBER OF POINTS IS nombre_de_rapports .
+*               THE MAXIMUM NUMBER OF POINTS IS nombre_de_rapports .
 *
 *
 *     INPUT FILE...
@@ -214,7 +214,7 @@
       MAXW = GETSIZ( 10, JBUF,LEN,NWDS,JPAK )
       IF (MAXW.LE.0) GOTO 900
 
-      ALLOCATE( IBUF(LEN),F(2,MAXW/2+1) )
+      ALLOCATE( IBUF(LEN),F(2,MAX( MAXW,NWDS )/2+1) )
 
       VKIND0 = GETKIND( )
       VKIND  = VKIND0

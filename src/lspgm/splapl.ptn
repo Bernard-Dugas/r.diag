@@ -179,7 +179,8 @@
       MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
       IF (MAXW.EQ.0) CALL                          XIT(' Splapl ',-1 )
 
-      ALLOCATE( IBUF(LEN),G(MAXW),ALPHA(MAXW) )
+      ALLOCATE( IBUF(LEN),G    (MAX( MAXW,NWDS )),
+     +                    ALPHA(MAX( MAXW,NWDS )), STAT=IER )
 
 ***    DETERMINE KIND OF SPECTRAL FIELDS (FULL OR OTHERWISE).
 

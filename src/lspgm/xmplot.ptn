@@ -219,7 +219,8 @@
   025 MAXW = GETSIZ( 1, JBUF,LEN,NWDS,JPAK )
       IF (MAXW.LE.0) CALL                           XIT(' Xmplot ',-3 )
 
-      ALLOCATE( BUF(LEN),X(MAXW),Y(MAXCRV*MAXW) )
+      ALLOCATE( BUF(LEN),X(       MAX( MAXW,NWDS )),
+     +                   Y(MAXCRV*MAX( MAXW,NWDS )), STAT=IER )
 
       VKIND = GETKIND( )
 

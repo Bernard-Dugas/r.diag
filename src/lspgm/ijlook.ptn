@@ -229,7 +229,7 @@
       CHARACTER    RES*2,ALV1*15,ALV2*15,LIGNE*ligne_maximale
       CHARACTER*20 VALEUR,ANT1,ANT2,CKIND,FORMC
       LOGICAL      OK, HIGH,RPBLOC,LINEIO,ALLEV,ALLTIM
-      INTEGER      NFF,LV1,LV2,I,IP1,I1,I2,J1,
+      INTEGER      NFF,LV1,LV2,I,IP1,I1,I2,J1,IER,
      +             J2,IO,ILON,ILAT,VKIND1,VKIND2,
      +             VKIND,KIND,I10,I20,J10,J20,NI2,
      +             NJ2,NLEV,PERIOD,LEV(MAXLEV),
@@ -281,7 +281,8 @@
       MAXW = GETSIZ( 1,LBUF,LEN1,NWDS,LEN2 )
       IF (MAXW.LE.0) CALL                      XIT(' Ijlook ',-7 )
 
-      ALLOCATE( IBUF(2*LEN1),FIELD(MAXW),C(MAXW) )
+      ALLOCATE( IBUF(2*LEN1),FIELD(MAX( MAXW,NWDS )),
+     +                       C    (MAX( MAXW,NWDS )), STAT=IER )
 
       VKIND0 = GETKIND( )
 
@@ -519,7 +520,8 @@
           MAXW = GETSIZ( 1,LBUF,LEN1,NWDS,LEN2 )
           IF (MAXW.EQ.0) CALL                      XIT(' Ijlook ',-7 )
 
-          ALLOCATE( IBUF(2*LEN1),FIELD(MAXW),C(MAXW) )
+          ALLOCATE( IBUF(2*LEN1),FIELD(MAX( MAXW,NWDS )),
+     +                           C    (MAX( MAXW,NWDS )) )
 
       END IF
 

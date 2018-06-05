@@ -201,7 +201,8 @@
 
 ***    ALLOCATE WORK SPACE.
 
-      ALLOCATE( IBUF(HEAD+MAXW) , PS(MAXW) , BET(MAXW) )
+      ALLOCATE( IBUF(HEAD+MAXW), PS (MAX( MAXW,NWDS )),
+     +                           BET(MAX( MAXW,NWDS )), STAT=IER )
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
 

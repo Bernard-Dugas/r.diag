@@ -118,7 +118,7 @@
       REAL(8)     SL(MAXJ),WL(MAXJ),CL(MAXJ),
      +            RADL(MAXJ),WOSSL(MAXJ),TOTAL,RAD2DEG
       INTEGER     IER,NF,ILG,ILAT,ILATH,LR,I,J,JJ,IJ,L,
-     +            LEN,IERR,NLEV,LEV(MAXLEV),IPAK,NWDS,IHEM,
+     +            LEN,NLEV,LEV(MAXLEV),IPAK,NWDS,IHEM,
      +            JBUF(HEAD),MAXW
 
       INTEGER,    DIMENSION(:),   ALLOCATABLE :: IBUF
@@ -158,7 +158,8 @@
       MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,IPAK, LEV,NLEV )
       IF (MAXW.LE.0) GOTO 999
  
-      ALLOCATE( IBUF(HEAD+MAXW),F(MAXW),C(MAXW) )
+      ALLOCATE( IBUF(HEAD+MAXW),F(MAX( MAXW,NWDS )),
+     +                          C(MAX( MAXW,NWDS )), STAT=IER )
 
       DO  I=1,HEAD
           IBUF(I) = JBUF(I)

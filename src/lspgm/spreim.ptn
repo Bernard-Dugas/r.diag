@@ -146,7 +146,9 @@
  
 ***    ALLOCATE WORKING MEMORY.
 
-      ALLOCATE( IBUF(LEN),A(MAXW),B(MAXW),C(MAXW) )
+      ALLOCATE( IBUF(LEN),A(MAX( MAXW,NWDS )),
+     +                    B(MAX( MAXW,NWDS )),
+     +                    C(MAX( MAXW,NWDS )) )
 
   100 CALL GETFLD2( 1, A, ' ',-1,' ',-1, IBUF,MAXW,OK )
 
