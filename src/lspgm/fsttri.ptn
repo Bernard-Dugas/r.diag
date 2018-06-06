@@ -4,8 +4,9 @@
 #     if defined (AUTO_DOC)
 *
 * Sequence d'appel...
-*  fsttri  -s source        [-dateo  [*]] [-typvar [*]]  \ 
-*          -d destination   [-etiket [*]] [-nomvar [*]]  \ 
+*  fsttri  -s source1 [source2 [sources3 ... ]] \ 
+*          -d destination   [-dateo  [*]]       \ 
+*         [-typvar [*]]     [-etiket [*]] [-nomvar [*]]  \ 
 *         [-info  [valeur]] [-npas   [*]] [-ip1    [*]]  \ 
 *         [-rnd]  [-help]   [-nobox]      [-ip3    [*]]  \ 
 *         [-split [valeur]] [-sqi]   [-desc]       [-f]  \ 
@@ -18,19 +19,20 @@
 *
 * Objet:
 * -----
-*  FSTTRI   Trie un fichier standart RPN/RND. Le resultat de
-*           l'operation est par defaut un fichier de type SQI, 
-*           puisque ce sont les seuls garantissant les positions 
-*           des enregistrement. L'ordre du tri se fait selon  
-*           IP3/DATEO/NPAS/TYPVAR/ETIKET/NOMVAR/IP1. Cet ordre ne
-*           peut encore etre modifie mais certaines cles peu-
-*           vent etre desactivees en placant "*" dans la
-*           liste a la position correspondante.
+*  FSTTRI   Trie un ou plusieurs fichiers standarts RPN/RND.
+*           L'ordre du tri se fait selon l'ordre suivant :
+*
+*              IP3/DATEO/NPAS/TYPVAR/ETIKET/NOMVAR/IP1
+*
+*           Cet ordre ne peut etre modifie mais les cles
+*           peuvent etre desactivees en invoquant la cle
+*           elle-meme en argument (ce qui place une "*"
+*           dans la liste a la position correspondante).
 *
 *
 * Parametres d'appel:
 * ------------------
-*  s         Fichier source (jusqu'a nombre_maximal_de_fichiers fichiers)
+*  s         Fichiers sources (supporte jusqu'a 128 fichiers)
 *  d         Fichier destination. Celui-ci ne doit pas exister
 *            a l'entree, sauf si la cle f est egalement specifiee.
 *
