@@ -25,9 +25,12 @@
 !    Ron Mctaggart-Cowan's Vgrid_Descriptors
 
 !    Author: Bernard Dugas, automne 2009/hiver 2010
-!    Last revision: $Header: /home/cvs/RMNLIB/utils/rdiag/lssub/diag_toc.cdk90,v 3.6 2015/03/30 22:18:18 dugas Exp $
-
-!    $Log: diag_toc.cdk90,v $
+!
+!    Revision 3.9  2018/06/12 17:17  dugas
+!    - Variable globale max_nbr passe de 10 a 20.
+!    - Correction du format 6101 et elimination
+!      du format 6102 dans LirTOC.
+!
 !    Revision 3.8  2017/10/25 22:22  dugas
 !    Correction dans toutes les instances de GetToc, et
 !    dans SavToc et LoPToc d'un probleme d'initialisation
@@ -96,7 +99,7 @@
 
 !    vGrid_Descriptors variable declarations
 
-      integer, parameter :: max_nbr=10  ! Maximum number of TocToc in any file
+      integer, parameter :: max_nbr=20  ! Maximum number of TocToc in any file
       integer, parameter :: STDERR=0    ! Standard error I/O unit 
       integer, parameter :: STDOUT=6    ! Standard output I/O unit 
 
@@ -323,18 +326,14 @@
                            -1,' ',-1,-1,-1,'X','!!', &
                            CLE, TOC_NBR(NF),max_nbr )
 
-          IF (TOC_NBR(NF) == 0) GOTO 100
-
           IF (status < 0)                                      THEN
-              IF (status /= -3)                                THEN
-                  IF (INFO) WRITE(STDOUT,6101) STATUS
-              ELSE
-                  ! TOC_NBR(NF) > max_nbr
-                  TOC_NBR(NF) = 0 ! Just to make sure
-                  IF (INFO) WRITE(STDOUT,6102) max_nbr
-              END IF
+              ! status = -TOC_NBR(NF) (le nombre touve * -1)
+              IF (INFO) WRITE(STDOUT,6101) trim( NAME )
+              TOC_NBR(NF) = 0
               GOTO 100
           END IF
+
+          IF (TOC_NBR(NF) == 0) GOTO 100
 
           DO  I=1,TOC_NBR(NF)
 
@@ -585,8 +584,9 @@
 
  6000 FORMAT(' LirTOC:   Attempt to find !! on file...'/10X,A/)
 
- 6101 FORMAT('*INFO:  LirTOC error ',I3,' in FSTINL')
- 6102 FORMAT('*INFO:  LirTOC found more than ',I2,' !! ')
+ 6101 FORMAT('*INFO:  LirTOC error in FSTINL.'/ &
+             '        The !! record treatment has been interrupted in file...'/ &
+             '        ',A)
  6103 FORMAT('*INFO:  LirTOC error ',I3,' in FSTPRM, VGRID # ',I2)
  6104 FORMAT('*INFO:  LirTOC VGD_NEW *OK*')
  6105 FORMAT('*INFO:  LirTOC VGD_GET *OK* on ',A)
