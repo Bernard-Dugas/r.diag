@@ -80,26 +80,30 @@
 *      at startup will remove any ambiguity and may in fact be required.
 *
 *
-*     Notes: 1) Specifying the "-npg" command-line parametre with a valid
+*     Notes: 1) All timesteps are assumed to have the same variable/level
+*               structure. However, the different variables within a timestep
+*               may be defined on different sets of variables. In orher words,
+*               the input files are assumed to have been sorted 'a la' FSTTRI.
+*            2) Specifying the "-npg" command-line parametre with a valid
 *               value forces TIMAVG/TIMMIN/TIMMAX to use this packing density
 *               on output.
-*            2) The first file's sample size may also be used by ACCUMUL to
+*            3) The first file's sample size may also be used by ACCUMUL to
 *               correctly build the ensemble mean. This will always occurr
 *               with RPN/CMC files, but will only occurr with CCRN files
 *               when the command-line parameter sequence "-kind SAMPLES"
 *               is specified. In the latter case, the number in IBUF(2) will
 *               be assumed to be a sample size and not a date/step number.
-*            3) Each record in a file can also be representative of several
+*            4) Each record in a file can also be representative of several
 *               samples. Specifying the same "-kind SAMPLES" arguments with
 *               TIMAVG will correctly account for the sample sizes.
-*            4) When dealing with RPN/CMC files, accumul and timavg modify
+*            5) When dealing with RPN/CMC files, accumul and timavg modify
 *               the file's time descriptors such that the earliest sample time
 *               is saved in DATEO, while the latest can be reconstructed from
 *               new values of DATEO, NPAS and DEET. In addition, IP3 will then
 *               contain the number of time samples used to construct the average.
 *               Other R.DIAG modules such as TIMGEN and the statistical testing
 *               modules (FTEST, ...) can then use this information directly.
-*            5) The NOMODTYP -def optional value, if set, disallows applying
+*            6) The NOMODTYP -def optional value, if set, disallows applying
 *               the TYPVAR-specific signatures for time averages, minimums and
 *               maximums that can be used in RPN/CMC files. Note that if the
 *               KEEPTIME option is activated, NOMODTYP will also be set.
@@ -152,6 +156,12 @@
 *     ------------------------------------------------
 
 *     $Log: timavg.ptn,v $
+*     Revision 4.45 2018/07/31 13:13  dugas
+*     - Description explicite de la structure requise des
+*       fichiers dans une note de la documentation automatique
+*     - Utiliser ZNAME lorsque NSET=1
+*     - Initialiser H0 a 0
+*
 *     Revision 4.44 2018/04/16 15:15  dugas
 *     Tenir compte des jeux incomplets de moyennes
 *      lors des calculs des NPAS et DEET en sortie
@@ -390,7 +400,8 @@
       REAL*8,     DIMENSION(:), ALLOCATABLE :: F,AVG,MF,MA
 
 #     include "machtype.cdk" 
-
+#     include "zlabel.cdk"
+      
       LOGICAL,    EXTERNAL :: SETIO64,RPBLOC
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
       INTEGER,    EXTERNAL :: GETSIZ4,GETHIGH,GETIPMODE
@@ -596,6 +607,8 @@
 
           IF (IPMi == 0) OLDIP3 = Vrai
           
+          IF (NSET == 1) ZNAME = VARIAB( NSET )(1:4)
+
       ELSE IF (MAXW.LE.0)                                      THEN
 
           WRITE(6,6100) VERBE,NSET,MAXLEV
@@ -1379,7 +1392,7 @@
               END IF
           END IF
 
-          CALL DIFDATR( DATEAF,DATEAI,HEURE )
+          CALL DIFDATR( DATEAF,DATEAI,HEURE ) ; H0 = 0
 
         ! IF (DEET.NE.0)                                       THEN
           IF (HEURE /= 0.0_8)                                  THEN
@@ -1414,7 +1427,6 @@
 
               NPAS  = NINT( HEURE )
               DEETO = 3600
-              H0    = 0
 
           END IF
 

@@ -24,6 +24,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: get.ftn,v $
+C     Revision 3.100 2018/07/31 14:14  dugas
+C     Deplacer les appels a GETIO64 dans les routines
+C      GETMSET* et GETSET2 hors de la boucle temporelle
+C
 C     Revision 3.99  2018/04/16 13:13  dugas
 C     Tenir compte des TYPVAR utilises par le programme de
 C      moyennes temporelles de MFV dans la routine GETSAMPLZ.
@@ -1048,13 +1052,11 @@ CCC   CHARACTER*4   TYPE,NOM
       REAL             PR
       POINTER    ( IP, PR(1) )
 
-      CHARACTER*4  GETYP
-      INTEGER      GETHIGH,GETPARI
-      LOGICAL      GETIO64,SETIO64
-      EXTERNAL     GETYP,GETBUF2,READF,PRECEDE, 
-     +             LVCODE,SKIPREC,GETIO64,SETIO64,
-     +             CONVPR,GETHIGH,PUTPARI,ISMOV,
-     +             GETPARI
+      CHARACTER(4),EXTERNAL :: GETYP
+      INTEGER,     EXTERNAL :: GETHIGH,GETPARI
+      LOGICAL,     EXTERNAL :: GETIO64,SETIO64
+      EXTERNAL     GETBUF2,READF,PRECEDE,LVCODE,
+     +             SKIPREC,CONVPR,PUTPARI,ISMOV
 
 ***    VARIABLES UTILISEES DANS LA TENTATIVE DE
 ***    RECHERCHE FORCEE D'UN ENREGISTREMENT ++.
@@ -1473,14 +1475,14 @@ C     END IF
       COMMON     /ZZVERBO/ INFO
       COMMON     /ZZZSNGL/      SINGLZ
 
-      LOGICAL     GETIO64
-      EXTERNAL    GETIO64,GETSET2,GETFLD2,GETRABT,XIT,CMPLBL,RECGET
+      LOGICAL,    EXTERNAL :: GETIO64
+      EXTERNAL    GETSET2,GETFLD2,GETRABT,XIT,CMPLBL,RECGET
 
       SAVE        MESSAG
       DATA        MESSAG / 'AUCUN' /
 
 *-------------------------------------------------------------------
-      NR = 0 ; MVALUE = .FALSE.
+      NR = 0 ; MVALUE = .FALSE. ; IO64B = GETIO64( IO64B )
 
       CALL GETRABT( RECABT )
 
@@ -1507,7 +1509,6 @@ C     END IF
      +        KIND.EQ.'FOUR' .OR.
      +        KIND.EQ.'SPEC') NWDS = NWDS * 2
 
-              IO64B     = GETIO64( IO64B )
           IF (IO64B) PG = LOC( G(1) )
 
           CALL PRECEDE( NF,1 )
@@ -1696,7 +1697,6 @@ C     END IF
 
           IF (.NOT.ORDER) RETURN
 
-              IO64B     = GETIO64( IO64B )
           IF (IO64B) PG = LOC( G(1) )
 
           NWDS = IBUF(5)*IBUF(6)
@@ -1829,15 +1829,15 @@ C     END IF
 
 #     include    "zlabel.cdk"
 
-      LOGICAL     GETIO64
-      EXTERNAL    GETIO64,GETSET2,GETFLD2,GETRABT,XIT,CMPLBL,RECGET
+      LOGICAL,    EXTERNAL :: GETIO64
+      EXTERNAL    GETSET2,GETFLD2,GETRABT,XIT,CMPLBL,RECGET
       EXTERNAL    GET_IP1_STRING
 
       SAVE        MESSAG
       DATA        MESSAG / 'AUCUN' /
 *-------------------------------------------------------------------
 
-      NR = 0 ; MVALUE = .FALSE.
+      NR = 0 ; MVALUE = .FALSE. ; IO64B = GETIO64( IO64B )
 
       CALL GETRABT( RECABT )
 
@@ -1864,7 +1864,6 @@ C     END IF
      +        KIND.EQ.'FOUR' .OR.
      +        KIND.EQ.'SPEC') NWDS = NWDS * 2
 
-              IO64B     = GETIO64( IO64B )
           IF (IO64B) PG = LOC( G(1) )
 
           CALL PRECEDE( NF,1 )
@@ -1958,7 +1957,6 @@ C     END IF
 ***        MODE DE FONCTIONNEMENT "SERIES TEPORELLES" N'EST PAS
 ***        SUPPORTE...
 
-              IO64B     = GETIO64( IO64B )
           IF (IO64B) PG = LOC( G(1) )
 
           NWDS = IBUF(5)*IBUF(6)
@@ -2124,7 +2122,7 @@ C     END IF
       DATA        MESSAG / 'AUCUN' /
 *-------------------------------------------------------------------
 
-      NR = 0 ; MVALUE = .FALSE.
+      NR = 0 ; MVALUE = .FALSE. ; IO64B = GETIO64( IO64B )
 
       ALLOCATE( INT_LEV(SET(NSET)) )
 
@@ -2164,7 +2162,6 @@ C     END IF
      +        KIND.EQ.'FOUR' .OR.
      +        KIND.EQ.'SPEC') NWDS = NWDS * 2
 
-              IO64B     = GETIO64( IO64B )
           IF (IO64B) PG = LOC( G(1) )
 
           CALL PRECEDE( NF,1 )
@@ -2314,7 +2311,6 @@ C     END IF
 ***        MODE DE FONCTIONNEMENT "SERIES TEPORELLES" N'EST PAS
 ***        SUPPORTE...
 
-              IO64B     = GETIO64( IO64B )
           IF (IO64B) PG = LOC( G(1) )
 
           NWDS = IBUF(5)*IBUF(6)
@@ -2497,7 +2493,7 @@ C     END IF
       DATA        MESSAG / 'AUCUN' /
 *-------------------------------------------------------------------
 
-      NR = 0 ; MVALUE = .FALSE.
+      NR = 0 ; MVALUE = .FALSE. ; IO64B = GETIO64( IO64B )
 
       ALLOCATE( INT_LEV(SET(NSET)) )
 
@@ -2537,7 +2533,6 @@ C     END IF
      +        KIND.EQ.'FOUR' .OR.
      +        KIND.EQ.'SPEC') NWDS = NWDS * 2
 
-              IO64B     = GETIO64( IO64B )
           IF (IO64B) PG = LOC( G(1) )
 
           CALL PRECEDE( NF,1 )
@@ -2689,7 +2684,6 @@ C     END IF
 ***        MODE DE FONCTIONNEMENT "SERIES TEPORELLES" N'EST PAS
 ***        SUPPORTE...
 
-              IO64B     = GETIO64( IO64B )
           IF (IO64B) PG = LOC( G(1) )
 
           NWDS = IBUF(5)*IBUF(6)
@@ -2860,7 +2854,7 @@ CCC   INTEGER     MEMOIRC,IER
 CCC   EXTERNAL    MEMOIRC
 
 *-------------------------------------------------------------------
-      CALL GETRABT( RECABT )
+      IO64B = GETIO64( IO64B ) ; CALL GETRABT( RECABT )
 
       DO  I=1,HEAD
           IB(I)=IBUF(I) 
@@ -2906,7 +2900,6 @@ C 100 IER = MEMOIRC( 0 )
 
           ELSE
 
-                  IO64B     = GETIO64( IO64B )
               IF (IO64B) PG = LOC( G(1) )
 
               KIND   = IBUF(1)
@@ -3856,7 +3849,7 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
      +            LEVELK /  0  /
 
 *-------------------------------------------------------------------
-      CALL GETRABT( RECABT )
+      IO64B = GETIO64( IO64B ) ; CALL GETRABT( RECABT )
 
       MAXB  = MAXWRD0
       PKTYP = GETYP( NF )
@@ -3867,7 +3860,6 @@ CCC   MAXWRD0 = MAX( NWDS*NLEV , MAXWRD0 , MAXSWRD0 )
   100 CALL RECGET( NF, 'ZONL',-1,' ',-1, IBUF,MAXPK,OK )
       IF (.NOT.OK) RETURN
 
-          IO64B     = GETIO64( IO64B )
       IF (IO64B) PZ = LOC( ZX(1) )
 
       INITT = IBUF(2) 

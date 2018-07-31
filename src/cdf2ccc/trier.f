@@ -32,6 +32,9 @@
 *
 *REVISIONS
 *
+* B.Dugas juil 2018 :
+* - Ajouter le traitement des attributs 'inverse_flattening'
+*   et 'semi_major_axis' dans la routine def_grille_lambert
 * B.Dugas juil 2012 :
 * - La valeur par defaut de rlonoff pour des grilles
 *   tournees est de 180 degres
@@ -138,7 +141,8 @@
 *     Cas particulier de la coordonnees Lambert Conforme qui pourrait
 *     ne pas etre placee dans une variable de type caractere:
 
-         else if(cfield == 'lambert_conformal') then
+         else if(cfield == 'lambert_conformal'        .or.
+     .           cfield == 'lambert_conformal_conic') then
 
             call get_attribut(ncid,id,list(id)%nattr,cfield)
             call def_grille_lambert( list(id)%nattr )
@@ -538,6 +542,8 @@
       real(8) latproj   ! latitude_of_projection_origin
       real(8) feasting  ! false_easting
       real(8) fnorthing ! false_northing
+      real(8) semajaxis ! semi_major_axis
+      real(8) invflatng ! inverse_flattening
 
       character(256) cfield
       integer i
@@ -548,44 +554,55 @@
       project%name = ' ' ; project%len = 0
       feasting = -999999999. ; fnorthing = -999999999.
       latproj = -999. ; lonproj = -999. ; stdpar = -999.
+      semajaxis = -999999999. ; invflatng = -999.
 
       do i=1,nattrs
-         if (attr(i)%name.eq.
-     .      'grid_mapping_name') then
+         if (
+     .      attr(i)%name == 'grid_mapping_name') then
             call attr_cvalue( cfield,i )
             call up2low( cfield,cfield )
             if (cfield /= "lambert_conformal_conic") return
-         elseif (attr(i)%name.eq.
-     .      'standard_parallel') then
+         else if (
+     .      attr(i)%name == 'standard_parallel') then
             call attr_dvalue2( stdpar(1),i,1 )
             if (attr(i)%len > 1) call attr_dvalue2( stdpar(2),i,2 )
-         elseif (attr(i)%name.eq.
-     .      'latitude_of_projection_origin') then
+         else if (
+     .      attr(i)%name == 'latitude_of_projection_origin') then
             call attr_dvalue( latproj,i )
-         elseif (attr(i)%name.eq.
-     .      'longitude_of_projection_origin') then
+         else if (
+     .      attr(i)%name == 'longitude_of_projection_origin' .or.
+     .      attr(i)%name == 'longitude_of_central_meridian') then
             call attr_dvalue( lonproj,i )
-         elseif (attr(i)%name.eq.
-     .      'false_easting') then
+         else if (
+     .      attr(i)%name == 'false_easting') then
             call attr_dvalue( feasting,i )
-         elseif (attr(i)%name.eq.
-     .      'false_northing') then
+         else if (
+     .      attr(i)%name == 'false_northing') then
             call attr_dvalue( fnorthing,i )
+         else if (
+     .      attr(i)%name == 'semi_major_axis') then
+            call attr_dvalue( semajaxis,i )
+         else if 
+     .      (attr(i)%name == 'inverse_flattening') then
+            call attr_dvalue( invflatng,i )
          endif            
       enddo
 
-      project%len  = 6
+      project%len  = 8
       project%name = "lambert_conformal_conic"
 
       project%nampar(1) = 'stdpar1'   ; project%value(1) = stdpar(1)
       project%nampar(2) = 'stdpar2'   ; project%value(2) = stdpar(2)
-      project%nampar(4) = 'latproj'   ; project%value(3) = latproj
-      project%nampar(4) = 'lonproj'   ; project%value(3) = lonproj
-      project%nampar(5) = 'feasting'  ; project%value(4) = feasting
-      project%nampar(6) = 'fnorthing' ; project%value(5) = fnorthing
+      project%nampar(3) = 'latproj'   ; project%value(3) = latproj
+      project%nampar(4) = 'lonproj'   ; project%value(4) = lonproj
+      project%nampar(5) = 'feasting'  ; project%value(5) = feasting
+      project%nampar(6) = 'fnorthing' ; project%value(6) = fnorthing
+      project%nampar(7) = 'semajaxis' ; project%value(7) = semajaxis
+      project%nampar(8) = 'invflatng' ; project%value(8) = invflatng
 
 
-      write(6,6000) stdpar,latproj,lonproj,feasting,fnorthing
+      write(6,6000) stdpar,latproj,lonproj,feasting,fnorthing,
+     .              semajaxis,invflatng
 
       return
 *-----------------------------------------------------------------------
@@ -595,6 +612,8 @@
      .        22x,'latproj   = ',f15.2/
      .        22x,'lonproj   = ',f15.2/
      .        22x,'feasting  = ',f15.2/
-     .        22x,'fnorthing = ',f15.2/)
+     .        22x,'fnorthing = ',f15.2/
+     .        22x,'semajaxis = ',f15.2/
+     .        22x,'invflatng = ',f15.2/)
 
       end

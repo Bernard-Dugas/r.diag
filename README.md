@@ -55,7 +55,7 @@
  The "export" target copies the final products to the parent directory.
  The "web-document" target pushes the documentation to $HOSTWEB:$DIAGWEB.
  The git working directory that holds the package is assumed to be just
- that, somewhere users may not be too confortable. The package
+ that, somewhere users may not be too comfortable. The package
  implicitely assumes that make=gmake.
 
  To generate the toolkit executable, the RPN/CMC development environment
@@ -93,5 +93,5 @@
  Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : February 2018
+ Last revision : July 2018
 

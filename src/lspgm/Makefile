@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.153 2018/07/21 13:13  dugas
+# - Ajouter la dependance a zlabel.cdk pour la cible timavg.o
+#
 # revision 4.152 2018/01/28 17:17  dugas
 # - Appel a command-change-date.sh lors de la generation du binaire r.diag
 #
@@ -352,7 +355,9 @@ $(LIBP)(spvdgx.o)  : spvdgx.ptn \
 $(LIBP)(tfilter.o) : tfilter.ptn \
 	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk 
 $(LIBP)(timavg.o)  : timavg.ptn \
-	$(INCLUDE)/diagmacros.cdk $(INCLUDE)/machtype.cdk \
+	$(INCLUDE)/diagmacros.cdk \
+	$(INCLUDE)/machtype.cdk \
+	$(INCLUDE)/zlabel.cdk \
 	$(MODDIR)/diag_convert_ip123.mod \
 	$(MODDIR)/stats_signatures.mod
 $(LIBP)(timcov.o)  : timcov.ptn \

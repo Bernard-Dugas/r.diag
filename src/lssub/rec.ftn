@@ -18,8 +18,11 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: rec.ftn,v $
+C     Revision 3.49  2018/07/26 16:16  dugas
+C     Initialiser INOM1 et modifier le message d'erreur -2 de RECGET.
+C
 C     Revision 3.48  2016/10/26 15:22  dugas
-C     - Legeres modifications syntaxiques F77 --> F90
+C     Legeres modifications syntaxiques F77 --> F90
 C
 C     Revision 3.47  2014/12/04 21:35:20  dugas
 C     Enlever le DATA ZERO redondant dans RECUP2.
@@ -332,7 +335,7 @@ C
 ***    POSSIBLY SPLIT THE FIRST 10 CHARACTERS OF NAME
 ***    INTO TWO FIELDS, ALSO REMOVING ALL LEADING BLANKS.
 
-      NOM1 = NAME(1:LEN( NAME ))
+      NOM1 = NAME(1:LEN( NAME )) ; INOM1 = 0
 
       IF (NOM1 .NE.'    ') CALL LEADBLK( NOM1 )
       IF (NOM1 .EQ.'NEXT') INOM1 = INEXT
@@ -441,7 +444,11 @@ C
      +    ZZMAXWRD .NE. -1         .AND.
      +    TYP1     .NE.'LABL'  )   )                           THEN
           IF (INFO)                                            THEN
-              WRITE(6,6001) MAXPK,ZZMAXWRD
+              IF (NWDS > ZZMAXWRD)                             THEN
+                  WRITE(6,6001) ZZMAXWRD,NWDS
+              ELSE
+                  WRITE(6,6002) MAXPK+HEAD,LENGTH
+              END IF
               CALL PRTLAB( IBUF )
           END IF
           IF (DEBUG) IER = MEMOIRC( 0 )
@@ -483,7 +490,8 @@ C
 
 *---------------------------------------------------------------------
     4 FORMAT(A4)
- 6001 FORMAT(' Buffer/MaxWord ',2I9,' too small for...')
+ 6001 FORMAT(' MaxWord =',I9,' too small. Nwds =',I9,' for...')
+ 6002 FORMAT(' Maxpk+Head ',I9,' too small. Length =',I9,' for...')
 
       END 
 
