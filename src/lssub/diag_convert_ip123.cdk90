@@ -194,7 +194,7 @@ function is_level_int(kind) result(status)  ! is this kind a level ?
   logical :: status
   integer, intent(IN) :: kind
   status = .false.
-  if(kind < 31 .or. kind < 0) status = islevel(kind)==1
+  if(kind >= 0 .and. kind < 31) status = islevel(kind)==1
 end function is_level_int
 !===============================================================================================
 function ascending(kind) result(status) ! is this kind "ascending" (larger value higher in atmosphere) ?
@@ -202,7 +202,7 @@ function ascending(kind) result(status) ! is this kind "ascending" (larger value
   logical :: status
   integer, intent(IN) :: kind
   status = .false.
-  if(kind < 31 .or. kind < 0) status = order(kind)==1
+  if(kind >= 0 .and. kind < 31) status = order(kind)==1
 end function ascending
 !===============================================================================================
 function descending(kind) result(status) ! is this kind "descending" (larger value lower in atmosphere) ?
@@ -210,7 +210,7 @@ function descending(kind) result(status) ! is this kind "descending" (larger val
   logical :: status
   integer, intent(IN) :: kind
   status = .false.
-  if(kind < 31 .or. kind < 0) status = order(kind)==-1
+  if(kind >= 0 .and. kind < 31) status = order(kind)==-1
 end function descending
 !===============================================================================================
 function is_invalid_kind_int(kind) result(status) ! is this kind invalid ?
@@ -371,8 +371,8 @@ function diag_decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,nam
   character(len=1) :: dummy
   integer :: IP1, IP2, IP3
 
-  IP1=IP1V ; IP2=IP2V ; IP3 = IP3V
-  status=CONVERT_OK
+  IP1=IP1V ; IP2=IP2V ; IP3=IP3V
+  status = CONVERT_OK
   if(ip1 < 0 .or. ip2 < 0 .or. ip3 < 0 ) goto 777
 
   call diag_convip_plus(IP1,P(1),kind(1),-2,dummy,.false.)  ! kind of ip1 should be a level
@@ -384,7 +384,7 @@ function diag_decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,nam
     RP3%lo = IP3 ; RP3%hi = IP3
     if(IP3 <= 240) then                         ! time in hours ?
       RP3%kind = KIND_HOURS
-      status = ior(status,CONVERT_BAD_GUESS)      ! unreliable guess
+      status = ior(status,CONVERT_BAD_GUESS)    ! unreliable guess
     else                                        ! arbitraty value ?
       RP3%kind = KIND_ARBITRARY
       status = ior(status,CONVERT_TERRIBLE_GUESS)  ! highly unreliable guess
@@ -398,7 +398,7 @@ function diag_decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,nam
   
   if(IP2 < 32768 .or. (IP3 == 0 .and. IP2 < 999999)) then   ! IP2 is old style, probably a time value
     RP2%lo = IP2 ; RP2%hi = IP2
-    RP2%kind = KIND_HOURS                        ! time in hours ?
+    kind(2) = KIND_HOURS ; RP2%kind = kind(2)    ! time in hours ?
     status = ior(status , CONVERT_GOOD_GUESS)    ! reasonable guess
   else
     call diag_convip_plus(IP2,P(2),kind(2),-2,dummy,.false.)  ! kind of ip2 should be new style time
@@ -430,8 +430,8 @@ function diag_decode_ip_0(RP1,RP2,RP3,IP1V,IP2V,IP3V) result(status) BIND (C,nam
   endif
 
   if( .not. is_level_int(kind(1)) ) status=ior(status,CONVERT_ERROR)  ! ip1 must always be a level
-  if( is_level_int(kind(2)) .and. kind(1) /= kind(2) .and. ip2 /= 0 ) status=ior(status,CONVERT_ERROR)  ! invalid level pair 
-  if( is_level_int(kind(3)) .and. kind(1) /= kind(3) .and. ip3 /= 0 ) status=ior(status,CONVERT_ERROR)  ! invalid level pai
+  if( is_level_int(kind(2)) .and. kind(1) /= kind(2) .and. ip2 /= 0 ) status=ior(status,CONVERT_ERROR)  ! invalid level pair
+  if( is_level_int(kind(3)) .and. kind(1) /= kind(3) .and. ip3 /= 0 ) status=ior(status,CONVERT_ERROR)  ! invalid level pair
   if(kind(2) /= KIND_HOURS) then                        ! ip2 should be a time (ip2 level, ip3 nb of samples is also OK)
     if(.not. (is_level_int(kind(2)) .and. kind(3) == KIND_SAMPLES)) status=ior(status,CONVERT_ERROR)
   endif
