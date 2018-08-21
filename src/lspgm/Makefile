@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.154 2018/08/16 16:16  dugas
+# - Passer a la version 6.4.4 du binaire r.diag (driver.Abs)
+#
 # revision 4.153 2018/07/21 13:13  dugas
 # - Ajouter la dependance a zlabel.cdk pour la cible timavg.o
 #
@@ -65,7 +68,7 @@ LIBP    = $(LIBDIR)/lib$(PROGLIB).a
 LIBS    = $(LIBDIR)/lib$(DIAGLIB).a
 ZIPFILE = $(LIBDIR)/lspgm_STD$(STD).f.zip
 
-DIAG_VERSION = 6.4.3
+DIAG_VERSION = 6.4.4
 
 HOSTWEB =
 DIAGWEB =
@@ -92,7 +95,7 @@ default:  $(LIBP)
 	sed s/'      PROGRAM '/'      SUBROUTINE '/ $< > $*.ftn ;\
 	$(FC) $*.ftn
 	if [ -f $@ ]; then chmod 644 $@ ; fi
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	$(ZIP) $(ZIPFILE) $*.f
 	/bin/rm -f $*.o $*.f $*.ftn
 
@@ -100,7 +103,7 @@ default:  $(LIBP)
 	sed s/' PROGRAM $*'/' SUBROUTINE $*'/ $< > $*.ftn90 ;\
 	$(FC) $*.ftn90
 	if [ -f $@ ]; then chmod 644 $@ ; fi
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	$(ZIP) $(ZIPFILE) $*.f90
 	/bin/rm -f $*.o $*.f90 $*.ftn90
 

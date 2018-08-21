@@ -60,28 +60,28 @@ default: $(LIBS)
 .f.a:
 	$(FCOMP) $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	$(ZIP) $(FICHIZ) $<
 	/bin/rm -f $*.o
 
 .c.a:
 	$(CC) $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	$(ZIP) $(FICHIZ) $<
 	/bin/rm -f $*.o
 
 .F90.a:
 	s.f90 $(F90FLAGS) -c $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	$(ZIP) $(FICHIZ) $<
 	/bin/rm -f $*.o
 
 .f90.a:
 	$(FCOMP) $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	$(ZIP) $(FICHIZ) $<
 	/bin/rm -f $*.o
 

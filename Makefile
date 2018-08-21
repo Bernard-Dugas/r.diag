@@ -69,8 +69,8 @@ lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
 UDUNITS  = udunits2f_s udunits2_s expat
 
 
-DIAG_VERSION = 6.4.3
-CONV_VERSION = 2.3.3
+DIAG_VERSION = 6.4.4
+CONV_VERSION = 2.3.4
 
 ENTETE  = 32
 STD     = 98

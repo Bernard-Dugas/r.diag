@@ -3,6 +3,9 @@
 
 # Description: Makefile de CDF2CCC
 
+# revision 2018/08/16 16:16  dugas
+# - Passer a la version 2.3.4 du binaire CDF2CCC
+#
 # revision 2018/01/28 17:17  dugas
 # - Appel a command-change-date.sh lors de la generation du binaire CDF2CCC
 #
@@ -40,7 +43,7 @@ MANDIR   = $(DIAGS)/man/pdoc
 INCLUDES = $(DIAGS)/include
 MODDIR   = $(INCLUDES)/$(EC_ARCH)
 
-CONV_VERSION = 2.3.3
+CONV_VERSION = 2.3.4
 
 HOSTWEB =
 DIAGWEB =
@@ -106,21 +109,21 @@ default:  $(LIBP)
 
 .f.a:
 	$(FC) $<
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	/bin/rm -f $*.o
 
 .F90.a:
 	$(FF90) $<
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	/bin/rm -f $*.o
 
 .f90.a:
 	$(FC) $<
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	/bin/rm -f $*.o
 
 .o.a:
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 
 .F90.txt:
 	$(FTNT) $< | sed s/'^[!*]'/' '/ > $(MANDIR)/$@ ;\
@@ -276,7 +279,7 @@ obj: $(OBJECTS)
 
 genlib: $(OBJECTS)
 #	Creer une programmatheque ayant pour nom $LIBP et incluant TOUS les fichiers objets
-	$(AR) rv $(LIBP) $(OBJECTS)
+	$(AR) rUv $(LIBP) $(OBJECTS)
 
 #Descriptions des recettes personnelles
 

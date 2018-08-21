@@ -140,7 +140,7 @@ default: $(ARCH)
 .f.a:
 	$(FCOMP) $<
 	if [ -f $@ ]; then /bin/chmod 644 $@ ; fi
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	/bin/cp -p $*.f $(SOURCES)
 	/bin/rm -f $*.o
 
@@ -150,12 +150,12 @@ default: $(ARCH)
 .f90.a:
 	$(FCOMP) $<
 	if [ -f $@ ]; then /bin/chmod 644 $@ ; fi
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 	/bin/cp -p $*.f90 $(SOURCES)
 	/bin/rm -f $*.o
 
 .o.a:
-	$(AR) rv $@ $*.o
+	$(AR) rUv $@ $*.o
 
 %.o: %.mod
 
