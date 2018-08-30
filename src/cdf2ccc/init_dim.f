@@ -30,8 +30,12 @@
 *
 * REVISIONS
 *
+*  Bernard Dugas Aout 2018 :
+*   Ne plus initialiser les variables project%nampar(project%len) et
+*   project%value(project%len) que si project%name = 'unknown'     
+*
 *  Bernard Dugas Octobre 2007 :
-*  Initialiser coord(xid)%dimid(1)et coord(yid)%dimid(1) a -1
+*   Initialiser coord(xid)%dimid(1)et coord(yid)%dimid(1) a -1
 *
 ******
 
@@ -54,8 +58,10 @@
       coord(xid)%dimid(1)= -1
       coord(yid)%dimid(1)= -1
 
-      project%nampar(project%len)='nhem'
-      project%value(project%len)=float(0) ! representation globale (defaut)
+      if (project%name == 'unknown') then
+         project%nampar(project%len)='nhem'
+         project%value(project%len)=float(0) ! representation globale (defaut)
+      endif
 
 *-----------------------------------------------------------------------
       end

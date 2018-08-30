@@ -40,6 +40,13 @@
 *
 *REVISIONS
 *
+*  B. Dugas aout '18 :
+*   - Remplacer polar-stereographic par polar_stereographic
+*   - Permettre la definition des parametres des grilles PS
+*     (project%name='polar_stereographic') en mode NetCDF --> RPN
+*   - Pour le cas non-PS, alors project%name='unknown' dans ce mode
+*   - Definir NHEM directement lorsqu'on specifie un type de
+*     grille PS lors de la lecture d'un fichier NETCDF
 *  B. Dugas janvier '18 :
 *   - Remplacer la commande GETARG par GET_COMMAND_ARGUMENT
 *  B. Dugas janvier '18 :
@@ -313,7 +320,7 @@
       CHARACTER(30)   :: DIAG_ATTRIBUT_NETCDF
       CHARACTER(512)  :: UDUNITS2_DEF,DIAGNOSTIQUE
 
-      INTEGER         NBRCLE,NDATE,NHELP,PART1,PART2,LL
+      INTEGER         NBRCLE,NDATE,NHELP,PART1,PART2,LL,LNHEM
 
       INTEGER         NEWDATE,datchek,L_argenv
       EXTERNAL        NEWDATE
@@ -672,29 +679,38 @@
             write(6,6001) ' -grid "grid_desc" ?'
             call                                   xit('lire_arg',  -11)
          endif
+      else if (direction /= 'netcdf') then
+         if (def1(11) == 'polar_stereographic') then
+            project%name = def1(11)
+         else
+            project%name = 'unknown'
+         endif
       endif
 
-      if(project%name.eq.'polar-stereographic')then
+      if(project%name.eq.'polar_stereographic')then
 
-         project%name='polar_stereographic'
-         project%len=7
+         project%len=8
          
-         if(def1(12).eq.'?') then
-            write(6,6001) ' -ni "NI" '
-            call                                   xit('lire_arg',  -12)
-         else
-            read(def1(12),9003) nis
-            project%nampar(5) = 'nis'
-            project%value(5) = float(nis)
-         endif
+         if (direction == 'netcdf') then
 
-         if(def1(13).eq.'?') then
-            write(6,6001) ' -nj "NJ" '
-            call                                   xit('lire_arg',  -13)
-         else  
-            read(def1(13),9003) njs
-            project%nampar(6) = 'njs'
-            project%value(6) = float(njs)
+            if(def1(12).eq.'?')then
+               write(6,6001) ' -ni "NI" '
+               call                                xit('lire_arg',  -12)
+            else
+               read(def1(12),9003) nis
+               project%nampar(5) = 'nis'
+               project%value(5) = float(nis)
+            endif
+
+            if(def1(13).eq.'?')then
+               write(6,6001) ' -nj "NJ" '
+               call                                xit('lire_arg',  -13)
+            else  
+               read(def1(13),9003) njs
+               project%nampar(6) = 'njs'
+               project%value(6) = float(njs)
+            endif
+         
          endif
 
          if(def1(14).eq.'?' )then
@@ -727,6 +743,23 @@
          else
             project%nampar(4) = 'd60'
             read(def1(17),9004,err=1000) project%value(4)
+         endif
+
+         if(def1(28).eq.'?' )then
+            write(6,6001) ' -cle_nhem "NHEM" ?'
+            call                                   xit('lire_arg',  -28)
+         else
+            read(def1(28),9003,err=1000) lnhem
+            if (lnhem /= 1 .and. lnhem /= 2) then
+               write(6,6001) ' -cle_nhem "NHEM" ?'
+               call                                xit('lire_arg',  -28)
+            else
+               project%nampar(7) = 'latproj'
+               if (lnhem == 1) project%value(7) = 90.
+               if (lnhem == 2) project%value(7) =-90.
+               project%nampar(8) = 'nhem'
+               project%value(8) = lnhem
+            endif
          endif
 
       endif
@@ -845,6 +878,7 @@ CCC     endif
 * Lecture de cle_nhem  (valeur de defaut=99)
 * si direction=cccma necessaire pour grille polaire stereo seulement
 * (car avant on assignait nhem=1 dans rdlatlon2.f).
+      if (project%name /= 'polar_stereographic')then
          cle_nhem=99
          if(direction.eq.'cccma') then
             if(def1(28).ne. '?') then
@@ -858,7 +892,8 @@ CCC     endif
                endif
             endif
          endif
-
+      endif
+      
 ***    print * , 'dans lire_arg.f CLE 28 def1(28)=======',def1(28) !debug
 ***    print * , 'dans lire_arg.f CLE 28 cle_nhem=======',cle_nhem !debug
 

@@ -179,10 +179,10 @@
 !  description(9)  = (R) variable TMOYEN de PARAMETRES  
 !  description(10) = (R) Hauteur du toit du modele en metres
 !  description(11) = (C) Type de projection. Les seules valeurs reconnues
-!                        sont 'lon/lat','gaussian','polar-stereographic',
+!                        sont 'lon/lat','gaussian','polar_stereographic',
 !                        'rotated_latitude_longitude','rotated_pole'
 !                        et 'unknown'
-!  Items 12 a 17 decrivent une projection 'polar-stereographic'
+!  Items 12 a 17 decrivent une projection 'polar_stereographic'
 !  description(12) = (I) Nbre de points de grille en X
 !  description(13) = (I) Nbre de points de grille en Y
 !  description(14) = (R) Coordonnee selon x du pole (nbr de dx)
@@ -339,6 +339,9 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas, 29 aout 2018 :
+!  - Remplacer polar-stereographic par polar_stereographic dans
+!    la description de l'argument 11 (-grid) pour la doc interne
 !  Bernard Dugas 16 aout 2018 :
 !  - Passer a la version 2.3.4 (development)
 !  Bernard Dugas 9 mai 2018 :

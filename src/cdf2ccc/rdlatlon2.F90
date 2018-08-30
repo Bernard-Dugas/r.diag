@@ -40,6 +40,10 @@
 !
 !REVISIONS
 !
+! B.Dugas aout '18
+! - Definir NHEM via les parametres 'project' pour les grilles PS
+! - Grilles 'B' par defaut lorsque xdid=ydid=0 mais alors,
+!   seulement si en plus project%name="unknown"
 ! B.Dugas janvier '18 :
 ! - TYPVAR et ETIKET sont maintenant definies dans cdf2ccc.h
 ! B.Dugas novembre '17 :
@@ -633,6 +637,7 @@
             if(project%nampar(i).eq.'pj'  )pj  =project%value(i)
             if(project%nampar(i).eq.'d60' )d60 =project%value(i)
             if(project%nampar(i).eq.'dgrw')dgrw=project%value(i)
+            if(project%nampar(i).eq.'nhem')nhem=project%value(i)
          enddo
 
          if (nhem.eq.1) GRTYP = 'N'
@@ -707,7 +712,7 @@
 !     des nvars variables, xdid,ydid ou zdid ne sont
 !     peut-etre pas encore definis
 
-      if (xdid < 1 .or. ydid < 1) then
+      if ((xdid < 1 .or. ydid < 1) .and. project%name == "unknown") then
 
 !        Projection par defaut lorsque les valeurs
 !        des coordonnees en x et y sont manquantes

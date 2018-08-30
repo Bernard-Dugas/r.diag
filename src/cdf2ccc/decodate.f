@@ -48,6 +48,9 @@
 *
 *REVISION:
 *
+*     Aout 2018 - Bernard Dugas :
+*           Passer directement coord(tid)%name a la fonction
+*           nf_inq_varid plutot qu'une variable en minuscule
 *     Fevrier 2017 - Bernard Dugas :
 *           tout le traitement de type udunits (y compris 
 *           l'initialisation) se fait maintenant dans
@@ -125,7 +128,6 @@
 
       real(8)       hours,fraction
       integer(8)    elapsed,nombre
-      character*80  tname
       character*128 unitstring,calendarstring,string
 
       data  unitstring /''/      ! initialisation a vide 
@@ -134,9 +136,7 @@
 
 *     Extraire l'attribut "units" de la coordonnee "time" :
 
-      call up2low( coord(tid)%name, tname )
-
-      status=nf_inq_varid(ncid,trim( tname ), timeid)
+      status=nf_inq_varid(ncid, coord(tid)%name, timeid)
       if (status == nf_noerr) then
          status=nf_get_att_text(ncid,timeid,'units',unitstring)
          call handle_err2(status,'decodate')

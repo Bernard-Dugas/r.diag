@@ -28,6 +28,8 @@
 *
 *REVISIONS
 *
+* B Dugas aout '18 :
+* - Remplacer 'polar-stereographic' par 'polar_stereographic'
 * B.Dugas sept '12 :
 * - Ajouter le support des grilles inconnues ('unknown')
 * B.Dugas juin '12 :
@@ -69,7 +71,7 @@
 *
       possible%grid(1)='lon/lat'
       possible%grid(2)='gaussian'
-      possible%grid(3)='polar-stereographic'
+      possible%grid(3)='polar_stereographic'
       possible%grid(4)='rotated_latitude_longitude'
       possible%grid(5)='rotated_pole'
       possible%grid(6)='unknown'

@@ -32,6 +32,8 @@
 *
 *REVISIONS
 *
+* B.Dugas aout 2018 :
+* - Modifier les initialisations dans def_grille_lambert
 * B.Dugas juil 2018 :
 * - Ajouter le traitement des attributs 'inverse_flattening'
 *   et 'semi_major_axis' dans la routine def_grille_lambert
@@ -551,9 +553,11 @@
 *-----------------------------------------------------------------------
 
       ! Initialiser les descripteurs
-      project%name = ' ' ; project%len = 0
-      feasting = -999999999. ; fnorthing = -999999999.
-      latproj = -999. ; lonproj = -999. ; stdpar = -999.
+
+      project%name = "lambert_conformal_conic" ; project%len  = 8
+
+      feasting  = -999999999. ; fnorthing = -999999999.
+      latproj   = -999.       ; lonproj   = -999.    ; stdpar = -999.
       semajaxis = -999999999. ; invflatng = -999.
 
       do i=1,nattrs
@@ -587,9 +591,6 @@
             call attr_dvalue( invflatng,i )
          endif            
       enddo
-
-      project%len  = 8
-      project%name = "lambert_conformal_conic"
 
       project%nampar(1) = 'stdpar1'   ; project%value(1) = stdpar(1)
       project%nampar(2) = 'stdpar2'   ; project%value(2) = stdpar(2)
