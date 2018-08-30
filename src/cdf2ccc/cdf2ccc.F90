@@ -304,7 +304,7 @@
 ! Good luck.
 !
 ! Maintained by: B.Dugas, ESCER/UQAM (Dugas.Bernard@uqam.ca)
-! Latest revision: January 2018
+! Latest revision: August 2018
 !
 !
 #     endif
