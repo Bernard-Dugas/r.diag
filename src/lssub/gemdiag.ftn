@@ -15,6 +15,11 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: gemdiag.ftn,v $
+*     Revision 3.32  2018/09/19 16:16  dugas
+*     - Modifier l'initialisation de DLAT dans D_ZONGINI
+*     - Verifier la valeur de NORM avant de finaliser
+*       le calcul des poids dans D_ZONGINI
+*
 *     Revision 3.31  2016/10/26 15:44  dugas
 *     - Ajouter les arguments log_presure et calclp a GEM4APL ce
 *       qui rend le calcul de la pression locale optionnelle
@@ -30,7 +35,7 @@
 *       aussi declarees en 64 bits
 *     - Ajouter la routine D_VT2GZ qui calcule le GZ hydrostatique
 *       a partir de PR et VT (adaptation du VT2GZ de la librairie GEM4)
-
+*
 *     Revision 3.30  2015/03/30 22:15:33  dugas
 *     Initialiser les pointeurs qui seront passes a VGRIDDESCRIPTORS.
 *
@@ -3198,7 +3203,7 @@ C
       nj    = G_nj
 
       nbin  = F_nbin
-      dlat  = 180./nbin           
+      dlat  = 180._8/nbin
       latmn = -90.0
 
       xg_8 = Geomn_longs * deg2rad
@@ -3349,13 +3354,15 @@ CCC               mp(3,2) =  cos( latr(ij) )
             endif
   100    continue
 
-***      Deuxieme boucle sur le domaine complet pour la normalisation
-         do 200 j=1,nj
-         do 200 i=1,ni
-            if (  rang(i,j) .eq. jj ) then
-               poids(i,j)=poids(i,j) / norm
-            endif
-  200    continue 
+         if (norm /= 0.0_8) then
+***          Deuxieme boucle sur le domaine complet pour la normalisation
+            do 200 j=1,nj
+            do 200 i=1,ni
+               if (rang(i,j) == jj) then
+                  poids(i,j)=poids(i,j) / norm
+               end if
+  200       continue
+         endif
 
       enddo
 

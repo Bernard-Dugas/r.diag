@@ -117,6 +117,9 @@
 *     -----------------------------------------------------------------
 
 *     $Log: ggvecps.ptn,v $
+*     Revision 4.19  2018/09/19 15:15  dugas
+*     Utiliser le format 6251 lorsque ZMODE est vrai.
+*
 *     Revision 4.18  2014/09/25 20:20:49  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -545,7 +548,10 @@
               CALL                                 XIT( verbe ,-4 )
           END IF
 
-          IF (NR.EQ.0) WRITE(6,6250) IBUF(5),IBUF(6)
+          IF (NR == 0)                                         THEN
+              IF (.not.ZMODE) WRITE(6,6250) IBUF(5),IBUF(6)
+              IF (     ZMODE) WRITE(6,6251) IBUF(5),IBUF(6)
+          END IF
 
           IF (KIND.EQ.1)                                       THEN
 
@@ -753,6 +759,7 @@
  6101 FORMAT(1X,'Kind =',I2)
  6150 FORMAT(1X,I6,' records read.'/)
  6250 FORMAT(1X,'Number of longitudes',I6,10X,'number of latitudes',I6)
+ 6251 FORMAT(1X,'Number of columns',I6,10X,'number of rows',I6)
  6300 FORMAT(/' Saving rotation angle THETA')
       END
 #     endif
