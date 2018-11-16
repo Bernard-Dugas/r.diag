@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.155 2018/11/16 17:17  dugas
+# - Ajouter la dependance au module diag_toc a la cible windowf.o
+#
 # revision 4.154 2018/08/16 16:16  dugas
 # - Passer a la version 6.4.4 du binaire r.diag (driver.Abs)
 #
@@ -385,6 +388,7 @@ $(LIBP)(txtplot.o) : txtplot.ptn \
 $(LIBP)(vsinth.o) : vsinth.ptn \
 	$(INCLUDE)/toc_gest_1.cdk	$(INCLUDE)/toc_gest_2.cdk \
 	$(INCLUDE)/set_a_b_from_AABB.cdk	$(MODDIR)/diag_toc.mod
+$(LIBP)(windowf.o) : windowf.ptn	$(MODDIR)/diag_toc.mod
 $(LIBP)(xappend.o) : xappend.ptn \
 	$(INCLUDE)/machtype.cdk
 $(LIBP)(xfind.o)   : xfind.ptn \

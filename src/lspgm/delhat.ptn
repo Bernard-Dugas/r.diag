@@ -1,7 +1,7 @@
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
-*      delhat  PSFIL DHFIL INPUT OUTPUT [ -plv VAL1 -def ]
+*      delhat  PSFIL DHFIL INPUT OUTPUT [ -plv VAL1 -def [DEFLEVS][FREEFMT] ]
 *
 *
 *     DESCRIPTION...
@@ -30,10 +30,11 @@
 *
 *     INPUT PARAMETERS...
 *
-*      NLEV (plv) = NUMBER OF PRESSURE LEVELS (DEF=16, MAX=999).
-*                   IF NLEV IS NEGATIVE, EACH -NLEV LEVP VALUES ARE
-*                   READ WITH A I10 FORMAT OR AN E10.0 IF ITS VALUE
-*                   CONTAINS A DECIMAL POINT.
+*      NLEV (plv) = NUMBER OF REQUESTED PRESSURE LEVELS (DEF 16, MAX 999).
+*                   IF NLEV IS NEGATIVE, EACH -NLEV LEV VALUES ARE READ WITH
+*                   EITHER A I10 FORMAT OR AN E10.0 DEPENDING ON WETHER ANY
+*                   OF THESE VALUES CONTAINS A DECIMAL POINT. INTEGER VALUES
+*                   ARE THEN ASSUMED TO BE ENCODED (via LVCODE or CONVIP)
 *
 *      LEV        = VALUES OF THE PRESSURE IN MILLIBARS AS CODED 
 *                   BY ROUTINE LVCODE. THE DEFAULTS ARE SPECIFIED
@@ -41,20 +42,27 @@
 *
 *      Notes: 1) The first input line is NOT read if any command-line
 *                parameters are passed.
-*             2) Furthermore, the second line will not be read either
-*                if the "-def" defaults processing mode is requested.
+*             2) Furthermore, the second line will not be read when
+*                the "-def" (or "-def DEFLEVS") defaults processing
+*                mode is requested. Any "-plv" value is also ignored.
+*             3) Specifying "-def FREEFMT" indicates that the output pressure
+*                levels should read with a list-directed free format. This
+*                is obviously not the default behaviour. Pressure values
+*                should then only be separated by spaces or comas, and
+*                spread over one or more lines. These numbers are then
+*                always assumed to be the actual real pressure values,
+*                and not their possibly encoded integer values.
 *
 *      READ( 5,5010 )  NLEV
-*      IF (NLEV.GT.0)
-*      READ( 5,5020 ) (LEV(I),I=1,NLEV)
-*      IF (NLEV.LT.0)
-*      READ( 5,5030 ) (LEV(I),I=1,-NLEV)
+*      IF (FREEFMT)      READ( 5,* )    ( PR(I),I=1,ABS(NPL))
+*      ELSEIF (NLEV > 0) READ( 5,5020 ) (LEV(I),I=1,    NPL)
+*      ELSEIF (NLEV < 0) READ( 5,5030 ) (LEV(I),I=1,   -NPL)
 *5010  FORMAT(10X,I5)
 *5020  FORMAT(16I5)
 *5030  FORMAT(8E10.0)
 *
 *
-*     EXAMPLE OF INPUT CARDS...
+*     EXAMPLE OF INPUT CARDS (with format 5010 & 5020)...
 *
 *   DELHAT   16
 *  10   20   30   50   70  100  150  200  250  300  400  500  700  850  925 1000
@@ -71,6 +79,7 @@
 *       4 ERROR READING FIRST LINE INPUT PARAMETERS
 *       5 ERROR READING SECOND LINE INPUT PARAMETERS
 *       6 LEV DOES NOT CONTAIN PRESSURE DATA
+*       7 UNRECOGNIZED -DEF ARGUMENT VALUE
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -95,20 +104,64 @@
 *    1          TAPE1=PSFIL, TAPE2=DHFIL, TAPE5=INPUT, TAPE6=OUTPUT)
 *     --------------------------------------------------------------
 
-*     APR 02/92 - B.DUGAS  (PORT TO CY920/IRIX f77)
+*     $Log: beta.ptn,v $
+*     Revision 4.8  2018/11/16 16:16  dugas
+*     Ajouter l'option 'FREEFMT' de lecture des niveaux de pression.
+*
+*     Revision 4.7  2014/09/25 20:20:45  dugas
+*     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
+*
+*     Revision 4.6  2008/05/03 21:06:30  dugas
+*     Modification generale pour r.gppf.
+*
+*     Revision 4.5  2007/12/20 21:11:29  dugas
+*     - Support du format E10.0 pour les niveaux verticaux en arguments.
+*     - Utiliser ALLOCATE/DEALLOCATE plutot que HPALLOC/HPDEALLC.
+*     - Faire appel aux routines PRTLAB/PRTLAB2.
+*
+*     Revision 4.4  1998/10/20 17:29:31  armnrbd
+*     Implanter le support de RPBLOC.
+*
+*     Revision 4.3  1998/07/03  02:26:20  armnrbd
+*     Allonger le format d'ecriture de la date sur le listing.
+*
+*     Revision 4.2  1996/11/12  19:41:23  armnrbd
+*     Ajouter le support de grilles de type SUBA.
+*
+*     Revision 4.1  1995/08/30  15:22:17  armnrbd
+*     Ne plus forcer la compaction a 32 bits.
+*
+*     Revision 4.0  1994/11/17  14:19:17  armnrbd
+*     Messages informatifs quand au passage de la version 3.x a 4.0...
+*     1) Les espaces en debut des noms de variables de sont plus pertinents.
+*     2) Les grilles complexes de type CMPL sont maintenant supportees.
+*     3) Les fichiers SQI sont reconnus, lus et ecrit directements.
+*     4) Plusieurs nouvelles cles sont disponibles au demarrage.
+*
+*     Revision 3.2  94/01/13  21:40:49  armnrbd
+*     Ajouter du code de verification de monotonicite des niveaux.
+*     
+*     Revision 3.1  94/01/12  21:32:02  armnrbd
+*     Modifier l'appel a GETLIGN qui s'occupe des niveaux verticaux.
+*     
+*     Revision 3.0  93/10/13  13:55:32  armnrbd
+*     Premiere version compatible HP-UX.
+*     
+*     Revision 1.0  92/04/02  14:58:19  armnrbd
+*     Initial revision
+*     
 *     MAY 06/83 - R.LAPRISE.
 *     JUL 08/80 - J.D.HENDERSON.
 
 *-----------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     MAXLEV,       HEAD
-      PARAMETER ( MAXLEV = 999, HEAD = taille_entete )
+      INTEGER,    PARAMETER :: MAXLEV = 999, HEAD = taille_entete
 
       REAL        PR(MAXLEV)
       CHARACTER*10 CLEVP(MAXLEV)
-      CHARACTER*4 LIGNE*80,CDELH
-      LOGICAL     OK,DEF,MONOTON,BIGF
+      CHARACTER   LIGNE*80,CDELH*4,PKTYP*2
+      LOGICAL     OK,DEF,MONOTON,BIGF,FFMT,RLV
       INTEGER     I,K,L,IO,LEV(MAXLEV),IER,
      +            NFF,NR, NLAT,NLEV,NLG,NWDS,LIM1,LIM2,
      +            TOP,BOT,INC, MAXW,JBUF(HEAD),
@@ -126,12 +179,11 @@
      +              '  700','  850','  925',' 1000'
      +                                 /
 
-      INTEGER     GETSIZ
-      LOGICAL     RPBLOC 
-      CHARACTER*4 GETYP,PKTYP*2
-      EXTERNAL    JCLPNT,CONVPR,GETFLD2,GETYP,
-     +            PUTFLD2,HPALLOC,WRITLEV,GETLIGN,
-     +            BURNF,RPBLOC,MONVERT,GETSIZ
+      LOGICAL,    EXTERNAL :: RPBLOC 
+      INTEGER,    EXTERNAL :: GETSIZ
+      CHARACTER*4,EXTERNAL :: GETYP
+      EXTERNAL    JCLPNT,CONVPR,GETFLD2,PUTFLD2,
+     +            WRITLEV,GETLIGN,BURNF,MONVERT
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -154,17 +206,34 @@
 
       PKTYP = GETYP( 1 )
       BIGF  =.FALSE.
+      FFMT  =.FALSE.
+      RLV   =.FALSE.
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
 
 ***        CHECK PARAMETRE BLOCK.
 
-          NLEV = 16
-
           OK = RPBLOC('PLV',LIGNE)
           IF (OK) READ(LIGNE,0005,END=904,ERR=904,IOSTAT=IO) NLEV
 
-          DEF = RPBLOC('DEFAUT',LIGNE)
+          OK = RPBLOC('DEFAUT',LIGNE)
+          IF (OK)                                              THEN
+              IF (LIGNE /= ' ') CALL LEADBLK( LIGNE )
+              IF (LIGNE == '-1')                               THEN
+                  DEF = OK
+              ELSE IF (LIGNE /= ' ')                           THEN
+                  CALL low2up( LIGNE,LIGNE )
+                  IF (index( LIGNE,'DEFLEVS' ) > 0) DEF    = OK
+                  IF (index( LIGNE,'FREEFMT' ) > 0) FFMT   = OK
+                  IF (.NOT.(DEF .OR. FFMT))          THEN
+                      WRITE(6,6007) TRIM( LIGNE )
+                      CALL                         XIT(' Delhat ',-7 )
+                  END IF
+              END IF
+          END IF
+
+          IF (DEF)  NLEV = 16
+          IF (FFMT) RLV  =.TRUE.
 
       ELSE
 
@@ -189,7 +258,14 @@
 
       IF (.NOT.(DEF .AND. (NLEV.EQ.16)))                       THEN
 
-          IF (BIGF)                                            THEN
+***        READ THE REQUESTED PRESSURE LEVELS.
+
+          IF (FFMT)                                            THEN
+              ! Use a list-directed input command.
+              READ( 5, *, END=905,ERR=905,IOSTAT=IO) (PR(K),K=1,NLEV)
+              CLEVP(:)(1:NLEV) = ' '
+
+          ELSE IF(BIGF)                                        THEN
               DO  K=1,(NLEV-1)/8+1
                   CALL GETLIGN( 5,LIGNE,80,OK ) 
 
@@ -200,6 +276,9 @@
                       LIM2 = MIN( NLEV, 8*K )
                       READ( LIGNE, 5030,END=905,ERR=905,IOSTAT=IO) 
      +                                  (CLEVP(I),I=LIM1,LIM2)
+                      DO  I=LIM1,LIM2
+                          IF (INDEX( CLEVP(I),'.') /= 0) RLV = .TRUE.
+                      END DO
                   END IF  
               END DO
           ELSE
@@ -213,6 +292,9 @@
                       LIM2 = MIN( NLEV, 16*K )
                       READ( LIGNE, 5020,END=905,ERR=905,IOSTAT=IO) 
      +                                  (CLEVP(I),I=LIM1,LIM2)
+                      DO  I=LIM1,LIM2
+                          IF (INDEX( CLEVP(I),'.') /= 0) RLV = .TRUE.
+                      END DO
                   END IF  
               END DO
           END IF
@@ -221,25 +303,44 @@
 
       END IF
 
-***    CHECK LEV CODING.
+***    CHECK LEV ENCODING(+2)/DECODING(-2).
 
       DO  K=1,NLEV
-          IF (INDEX( CLEVP(K),'.' ).EQ.0)                      THEN
+          IF (FFMT .OR. RLV)                                   THEN
+              IF (.NOT.FFMT)
+     +            READ( CLEVP(K),11, ERR=905,END=905,IOSTAT=IO ) PR(K)
+              IF (PKTYP == 'SQ')                               THEN
+                  VKIND = 2
+                  CALL CONVPR( LEV(K), PR(K), VKIND, +2 )
+              ELSE IF (PR(K) >= 0.)                            THEN
+                  CALL LVCODE( LEV(K), PR(K)/1000.,1 )
+              END IF
+
+              IF (-10000. < PR(K) .AND. PR(K) < -99.)          THEN
+                 ! Attemp to account for old-style CCCma
+                 ! coding of pressures < 10hPa and > 10**-7.
+                  LEV(K) = NINT( PR(K) )
+                  CALL CONVPR( LEV(K), PR(K), VKIND, -2 )
+              ELSE IF (PR(K) <= -10000.)                       THEN
+                  LEV(K) = -999999 ! Signals an error
+              END IF
+
+          ELSE
               READ( CLEVP(K),10, ERR=905,END=905,IOSTAT=IO ) LEV(K)
               CALL CONVPR( LEV(K), PR(K), VKIND, -2 )
               IF (PKTYP.EQ.'SQ')                               THEN
-                  IF (VKIND.NE.2) CALL             XIT(' Delhat ',-6 )
-                  CALL CONVPR( LEV(K), PR(K), VKIND, +2 )
+                  IF (VKIND /= 2) CALL             XIT(' Delhat ',-6 )
+                  CALL CONVPR( LEV(K),PR(K),VKIND, +2 )
               END IF
-          ELSE
-             READ( CLEVP(K),11, ERR=905,END=905,IOSTAT=IO ) PR(K)
-             IF (PKTYP.EQ.'SQ')                                THEN
-                 VKIND = 2
-                 CALL CONVPR( LEV(K), PR(K), VKIND, +2 )
-             ELSE
-                 CALL LVCODE( LEV(K), PR(K)/1000.,1 ) 
-             END IF
+
           END IF
+
+          IF (LEV(K) == -999999)                               THEN
+              ! Check for CONVPR error condition.
+              WRITE(6,6005) K,PR(K)
+              GOTO 905
+          END IF
+
       END DO
 
       CALL WRITLEV( PR,NLEV,'PRES' )
@@ -320,6 +421,10 @@ CCC                         IBUF(8) = -32
  5010 FORMAT(10X,I5)
  5020 FORMAT(16A5)
  5030 FORMAT(8A10)
+
+ 6005 FORMAT(' Found illegal pressure value for level # ',I3,
+     +       ' PR=',E20.10/)
+ 6007 FORMAT(' Unrecognized -def argument value... ',A/)
 
  6010 FORMAT('0',I6,'  records read.')
 

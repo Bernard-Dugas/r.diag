@@ -8,7 +8,8 @@
 *          [ -n   VAL1 -name VAL2 -plv VAL3  -lon  VAL4 \ 
 *            -lat VAL5 -npg  VAL6 -a   VAL7  -delt VAL11 \ 
 *            -kind VAL5 VAL6     -t1   VAL10  VAL11 \ 
-*            -lv1  VAL12 [ VAL13 [ VAL14 ] ] -def ]
+*            -lv1  VAL12 [ VAL13 [ VAL14 ] ] \
+*            -def [ DEFLEVS ][ FREEFMT ] ] 
 *
 *
 *     AUTHOR - B.Dugas, AVRIL 23/87.
@@ -61,28 +62,38 @@
 *      Notes: 1) The first input line is NOT read if any command-line
 *                parameters are passed.
 *             2) Furthermore, the second line will not be read either
-*                if the -def defaults processing mode is requested.
-*                These defaults are then as specified in the example
-*                below and ILEV is also reset to 16, for consistency.
-*             3) The results are mutiplied by the local level pressure
+*                if the -def command-line argument is specied by itself
+*                or with the 'DEFLEVS' value, as this activates a default
+*                level values processing mode. These defaults are then 
+*                as specified in the example below and ILEV is also
+*                reset to 16, for consistency.
+*             3) Specifying '-def FREEFMT' indicates that the output model
+*                levels should read with a list-directed free format. This
+*                is obviously not the default behaviour. Level values should
+*                then only be separated by spaces or comas, and spread over
+*                one or more lines. These numbers are then always assumed
+*                to be the actual real model levels, and not their possibly
+*                encoded integer values.
+*             4) The results are mutiplied by the local level pressure
 *                in HPa, so that the uniform range of values goes from
 *                0 to the local pressure. The gaussian distribution has
 *                zero mean and unit variance before again being mutiplied
 *                by the local pressure.
-*             4) Finally, the -def parameter will be ignored if any
-*                level values are specified with the -lv1 parameter.
+*             5) Finally, the -def level-related parameters will all
+*                ignored if any level values are specified via the
+*                '-lv1' parameter.
 *
 *      READ(5,5000) NSETS,NAME,ILEV,ILG,ILAT,NPACK, SEED,KIND
-*      IF (ILEV.GT.0)
-*      READ( 5,5001 ) (LVL(I),I=1,ILEV)
-*      IF (ILEV.LT.0)
-*      READ( 5,5002 ) (LVL(I),I=1,-ILEV)
+*
+*      IF (FREEFMT)      READ( 5,* )    (ETA(I),I=1,ABS(ILEV))
+*      IF (ILEV.GT.0)    READ( 5,5001 ) (LVL(I),I=1,ILEV)
+*      IF (ILEV.LT.0)    READ( 5,5002 ) (LVL(I),I=1,-ILEV)
 *5000  FORMAT(10X,I5,1X,A4,4I5,I10,1X,A4,i5) 
 *5001  FORMAT(16I5)
 *5002  FORMAT(8I10)
 *
 *
-*     EXAMPLE OF INPUT CARDS...
+*     EXAMPLE OF INPUT CARDS (with format 5002 & 5002)...
 *
 *RANGRD      20 DATA   10  128   64  -16  12345678
 * 100  200  300  400  500  600  700  800  900 1000
@@ -96,7 +107,9 @@
 *      1 MEMORY ALLOCATION PROBLEM
 *      2 PROBLEM READING FIRST INPUT LINE
 *      3 PROBLEM READING SECOND OR SUCCESSIVE INPUT LINES
-*      4 LVL DOES NOT DATA CONSISTENT WITH VKIND
+*      4 CODED LVL DATA IS NOT CONSISTENT WITH VKIND
+*      5 UNRECOGNIZED -DEF ARGUMENT VALUE
+*      6 KIND MUST DE DEFINED WHEN REAL OUTPUT LEVELS ARE SPECIFIED
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -121,6 +134,9 @@
 *    2               TAPE11=GG, TAPE5=INPUT, TAPE6=OUTPUT) 
  
 *     $Log: rangrd.ptn,v $
+*     Revision 4.18  2018/11/09 21:21  dugas
+*     Ajouter l'option 'FREEFMT' de lecture des niveaux de sortie.
+*
 *     Revision 4.16  2014/09/25 20:20:52  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -220,7 +236,7 @@
       INTEGER     SEED(1)
 
       REAL*8      HOURS
-      LOGICAL     OK,DEF,BIGF
+      LOGICAL     OK,DEF,BIGF,RLV,FFMT
       CHARACTER*10 CLEVP(MAXLEV)
       REAL        PR(MAXLEV),HOLD
       CHARACTER*4 LIGNE*100,VTYP*16,DATA,NAME,KIND,PKTYP
@@ -288,6 +304,8 @@
       HHMMSS   = 00 
 
       BIGF   =.FALSE.
+      RLV    =.FALSE.
+      FFMT   =.FALSE.
 
       IF (RPBLOC( ' ',LIGNE ))                                THEN
 
@@ -329,13 +347,30 @@
           OK = RPBLOC('KIND2',LIGNE)
           IF (OK) VTYP = LIGNE
 
-          IF (VTYP.NE.' ')                                     THEN
+          IF (VTYP /= ' ' .AND. PKTYP == 'SQ')                 THEN
               CALL SETKIND( VTYP )
               VKIND = GETKIND( )
           END IF
 
-          DEF = RPBLOC('DEFAUT',LIGNE)
+          OK  = RPBLOC('DEFAUT',LIGNE)
 
+          IF (OK)                                              THEN
+              IF (LIGNE /= ' ') CALL LEADBLK( LIGNE )
+              IF (LIGNE == '-1')                               THEN
+                  DEF = OK
+              ELSE IF (LIGNE /= ' ')                           THEN
+                  CALL low2up( LIGNE,LIGNE )
+                  IF (index( LIGNE,'DEFLEVS' ) > 0) DEF  = OK
+                  IF (index( LIGNE,'FREEFMT' ) > 0) FFMT = OK
+                  IF (.NOT.(DEF .OR. FFMT))                    THEN
+                      WRITE(6,6005) TRIM( LIGNE )
+                      CALL                         XIT(' Rangrd ',-5 )
+                  END IF
+              END IF
+          END IF
+
+          IF (FFMT) RLV = .TRUE.
+          
           OK  = RPBLOC('LV1',LIGNE)
 
           IF (OK)                                              THEN
@@ -455,11 +490,16 @@
           CALL PUTHIGH( STAMP,'DATEO',IBUF )
       END IF
 
-***    READ LEVELS (16/CARD)
+***    READ OUTPUT LEVELS.
  
-      IF (.NOT.DEF)                                            THEN
+      IF (.NOT.DEF .AND. (ILEV == 16 .OR. ILEV == 1))          THEN
 
-          IF (BIGF)                                            THEN
+          IF (FFMT)                                            THEN
+              ! Use a list-directed input command.
+              READ( 5, *, END=902,ERR=902,IOSTAT=IO) (PR(K),K=1,ILEV)
+              CLEVP(:)(1:ILEV) = ' '
+
+          ELSE IF (BIGF)                                       THEN
               START = 1
               ENDL  = MIN( ILEV, 8 )
 
@@ -468,6 +508,9 @@
                   IF (.NOT.OK) GOTO 902
                   READ( LIGNE, 5002, ERR=902,END=902,IOSTAT=IO ) 
      +                               (CLEVP(L), L=START,ENDL)
+                  DO  L=START,ENDL
+                      IF (INDEX( CLEVP(L),'.') /= 0) RLV = .TRUE.
+                  END DO
 
               IF (ENDL.LT.ILEV)                                THEN
                   START = ENDL+1
@@ -483,7 +526,10 @@
                   IF (.NOT.OK) GOTO 902
                   READ( LIGNE, 5001, ERR=902,END=902,IOSTAT=IO ) 
      +                               (CLEVP(L), L=START,ENDL)
-
+                  DO  L=START,ENDL
+                      IF (INDEX( CLEVP(L),'.') /= 0) RLV = .TRUE.
+                  END DO
+ 
               IF (ENDL.LT.ILEV)                                THEN
                   START = ENDL+1
                   ENDL  = MIN( ILEV,ENDL+16 )
@@ -495,29 +541,42 @@
 
       END IF
 
-***    CHECK LVL CODING.
+      IF (PKTYP == 'SQ' .AND.
+     +    VTYP  == ' '  .AND. (RLV .OR. FFMT))                 THEN
+         ! VTYP must de defined when real output levels are specified
+          WRITE(6,6006)
+          CALL                                     XIT(' Rangrd ',-6 )
+      ELSE IF (PKTYP /= 'SQ')                                  THEN
+          VTYP = 'PRESSION'
+      END IF
+
+***   CHECK LVL ENCODING(+2)/DECODING(-2).
 
       DO  L=1,ILEV
-          IF (INDEX( CLEVP(L),'.' ).EQ.0 .AND. VTYP.EQ.' ')    THEN
-              READ( CLEVP(L),05, ERR=902,END=902,IOSTAT=IO ) LVL(L)
+          IF (RLV)                                             THEN
+              IF (.NOT.FFMT)
+     +            READ( CLEVP(L),10, ERR=902,END=902,IOSTAT=IO ) PR(L)
+              IF (PKTYP == 'SQ')                               THEN
+                  CALL CONVPR( LVL(L), PR(L), VKIND, +2 )
+              ELSE IF (PR(L) >= 0.)                            THEN
+                  CALL LVCODE( LVL(L), PR(L)/1000.,1 )
+              END IF
+             
+          ELSE
+              READ( CLEVP(L),10, ERR=902,END=902,IOSTAT=IO ) LVL(L)
               CALL CONVPR( LVL(L), PR(L), VK, -2 )
-              IF (PKTYP.EQ.'SQ')                               THEN
-                  IF (VK.NE.VKIND)                             THEN
-                      IF (L.EQ.1)                              THEN
+
+              IF (VTYP == ' ' .AND. PKTYP.EQ.'SQ')             THEN
+                  IF (VK /= VKIND)                             THEN
+                      IF (L == 1)                              THEN
                           VKIND = VK
                       ELSE
+                          WRITE(6,6005) trim( GETKINDC( VK ) ),
+     +                                  trim( VTYP )
                           CALL                     XIT(' Rangrd ',-4 )
                       END IF
                   END IF
-                  CALL CONVPR( LVL(L),PR(L),VK, +2 )
               END IF
-          ELSE
-             READ( CLEVP(L),10, ERR=902,END=902,IOSTAT=IO ) PR(L)
-             IF (PKTYP.EQ.'SQ')                                THEN
-                 CALL CONVPR( LVL(L), PR(L), VKIND, +2 )
-             ELSE
-                 CALL LVCODE( LVL(L), PR(L)/1000.,1 ) 
-             END IF
           END IF
       END DO
 
@@ -594,6 +653,10 @@
  6001 FORMAT(' Missing at least ',I6,'words of available memory.')
  6003 FORMAT(' Unsupported default ILEV=',I3,'. Only 1- and 16-level'
      +       ' defaults are provided.')
+ 6004 FORMAT(' LVL inconsistent VKIND. Found ',A,', expecting ',A/)
+ 6005 FORMAT(' Unrecognized -def argument value... ',A/)
+ 6006 FORMAT(' Parameter -kind must de defined when real output',
+     +       ' levels are specified.'/)
 #     if defined (AIX)
  6100 FORMAT(/' Nsets=',I5,',  name= ',A,',',4X,'ilev= ',I5,', ilg=', 
      +     I5,','/'  ilat=',I5,', npack=',I5,', seed= ',E15.5,

@@ -15,6 +15,11 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: gemdiag.ftn,v $
+*     Revision 3.33  2018/11/12 17:17  dugas
+*     - Modifier la declaration de F_pr dans D_VT2GZ
+*     - Meme chose pour FST_PR et TEMP_PR dans GEM4ATH
+*     - Deux autres BUGFIXs dans cette meme routine
+*
 *     Revision 3.32  2018/09/19 16:16  dugas
 *     - Modifier l'initialisation de DLAT dans D_ZONGINI
 *     - Verifier la valeur de NORM avant de finaliser
@@ -445,7 +450,8 @@
       INTEGER     NI,NJ,NSL,NSLT,NTHL
       INTEGER     TOP,BOT,INC, TOPT,BOTT,INCT
       REAL        FST(NI,NJ,*),TEMP(NI,NJ,NSLT),TH(NTHL)
-      REAL,       DIMENSION(:,:,:), POINTER :: FST_PR,TEMP_PR
+!!!   REAL,       DIMENSION(:,:,:), POINTER :: FST_PR,TEMP_PR
+      REAL        FST_PR(NI,NJ,NSL),TEMP_PR(NI,NJ,NSLT)
 
 ***    WORK SPACE.
 
@@ -468,7 +474,7 @@
 
       ! Loop over all horizontal points.
 
-      DO J=1,NJ ; DO I=1,NJ
+      DO J=1,NJ ; DO I=1,NI
 
           MTH = 0 ! Initialise inversion marker.
 
@@ -550,11 +556,11 @@
           K = TOPT
           DO  N=1,NTHL
 
-              ! Find which ETAT interval we are in.
+              ! Find which LOG(THETA) interval we are in.
 
               DO  L=K,BOTT,INCT
                   INTVL=L
-                  IF (TH(N).GT.THS(L)) GOTO 200
+                  IF (LTH(N).GT.THS(L)) GOTO 200
               END DO
 
               INTVL = BOTT +INCT
@@ -3675,7 +3681,8 @@ CCC      deg2rad_8 = acos(-1Q0)/180.
 !
       integer ni,nj, Nk
       real   F_gz(ni,nj,Nk), F_vt(ni,nj,Nk)
-      real,  pointer  :: F_pr(:,:,:)
+!     real,  pointer  :: F_pr(:,:,:)
+      real   F_pr(ni,nj,nk)
 !
 !author
 !

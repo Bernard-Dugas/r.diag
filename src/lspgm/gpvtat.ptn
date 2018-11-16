@@ -43,10 +43,12 @@
 *       0 NO PROBLEMS
 *       1 UNABLE TO READ FIRST RECORDS IN INPUT FILES
 *       2 FOUND DATA OTHER THAN TYPE 'GRID' OR 'SUBA'
-*       3 HUMIDITY FILE IS NOT SHUM
+*       3 HUMIDITY VARIABLE NAME NOT RECOGNIZED (NOT 'HU' OR 'SHUM')
 *       4 PREMATURE EOF ON HUMIDITY FILE 
 *       5 PREMATURE EOF ON INPUT TEMPERATURE FILE 
 *       6 HUMIDITY AND TEMPERATURE ARRAYS NOT THE SAME SIZE
+*       7 TEMPERATURE VARIABLE NAME NOT RECOGNIZED (NOT 'TT' OR 'TEMP')
+*       8 VIRTUAL TEMPERATURE VARIABLE NAME NOT RECOGNIZED (NOT 'VT')
 #     endif
 #     if defined (RDIAG_LICENCE)
 !---------------------------------- LICENCE BEGIN -------------------------------
@@ -185,9 +187,6 @@
       WRITE(KIND,4) TYPE
       WRITE(NAME,4) HUM
 
-      IF (NAME.NE.'HU' .AND. NAME.NE.'SHUM')
-     +    CALL                                     XIT( VERBE ,-4 )
-
       IF (KIND.NE.'GRID' .AND.
      +    KIND.NE.'SUBA') CALL                     XIT( VERBE ,-2 )
 
@@ -196,12 +195,12 @@
       ALLOCATE( IBUF(2*LEN) , F(MAX( MAXW,NWDS )) ,
      +          JBUF(2*LEN) , G(MAX( MAXW,NWDS )) )
 
-***    TEMP NAME DEPENDS ON FILE TYPE.
+***    TEMP NAME DEPENDS ON FILE TYPE AND OPERATING MODE.
 
       IF (MODE)                                                THEN
           WRITE(INOMT,4) LBUF(3)
           IF (INOMT.NE.'VT')
-     +        CALL                                 XIT( VERBE ,-5 )
+     +        CALL                                 XIT( VERBE ,-8 )
           IF (PKTYP.NE.'SQ')                                   THEN
               ONOMT = 'TEMP'
           ELSE
@@ -210,7 +209,7 @@
       ELSE
           WRITE(INOMT,4) LBUF(3)
           IF (INOMT.NE.'TT' .AND. INOMT.NE.'TEMP')
-     +        CALL                                 XIT( VERBE ,-5 )
+     +        CALL                                 XIT( VERBE ,-7 )
           ONOMT = 'VT'
       END IF
 

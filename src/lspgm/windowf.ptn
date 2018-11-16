@@ -109,6 +109,9 @@
 *    2         TAPE1=GIN, TAPE2=GOUT, TAPE5=INPUT, TAPE6=OUTPUT)
   
 *     $Log: windowf.ptn,v $
+*     Revision 4.27  2018/11/16 13:13  dugas
+*     Sauver un enregistrement !! au besoin
+*
 *     Revision 4.26  2014/09/25 20:20:56  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -238,6 +241,8 @@
 ***        ...  AJOUTER UN APPEL A GETLIGN.
   
 *-----------------------------------------------------------------
+      use diag_toc, only: LirTOC, CopTOC
+
       IMPLICIT    none
   
       INTEGER, PARAMETER :: MAXI = longitude_maximale
@@ -263,8 +268,8 @@
      +            NLEV,NLEV1,I,J,L,MAXW,NR,LENIN,LENOUT,
      +            IER,IO,OLON,OLAT,LATH,IG1,IG2,IG3,IG4,
      +            IP1,IP2,IP3, ZIG1,ZIG2,ZIG3,ZIG4,
-     +            DIMX,DIMY,NIL,NIH,NJL,NJH,
-     +            NILA,NJLA,REPL,NPG
+     +            DIMX,DIMY,NIL,NIH,NJL,NJH,TOC_NBR,
+     +            NILA,NJLA,REPL,NPG,IG10,IG20
 
       INTEGER, ALLOCATABLE, DIMENSION(:) :: IBUF
       real(8), ALLOCATABLE, DIMENSION(:) :: G,DAT
@@ -781,6 +786,11 @@
               CALL CIGAXG( ZTYP, ZLAT1,ZLON1, ZLAT2,ZLON2,
      +                           ZIG1,ZIG2,ZIG3,ZIG4 )
 
+              ! TRY LOOKKING FOR A !! RECORD. IT'S IP1,IP2
+              ! WILL BE FOUND IN THE DATA'S IG1,IG2
+              CALL LirToc( 1, TOC_NBR )
+              IG10 = IG1 ; IG20 = IG2
+              
               IF (TYPE .EQ.0   .OR.
      +           (ZLAT1.NE.0.0 .OR. ZLAT2.NE.0.0))             THEN
 
@@ -980,6 +990,12 @@ C                         END IF
                   CALL PUTZREF( VALX,VALY, 'Z',
      +                          ZTYP,ZIG1,ZIG2,ZIG3,ZIG4,
      +                          IG1,IG2,IG3,OLON,OLAT )
+
+                  IF (TOC_NBR > 0 .AND.
+     +               (IG10 /= IG1 .OR. IG20 /= IG2))           THEN
+                      ! COPY/RE-ID AN EXISTING !! RECORD
+                      CALL CopTOC( 1, IG10,IG20, IG1,IG2 )
+                  END IF
 
               ELSE
 
@@ -1358,7 +1374,7 @@ C                         END IF
  9001 CALL                                         XIT(' Windowf',-4 )
   
 ***    PREMATURE E.O.F. ON UNIT 1.
-  
+
  9002 CALL                                         XIT(' Windowf',-5 )
   
 *---------------------------------------------------------------------

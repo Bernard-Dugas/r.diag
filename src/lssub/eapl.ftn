@@ -15,6 +15,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: eapl.ftn,v $
+C     Revision 3.15  2018/11/12 17:17  dugas
+C     Correction pour le cas ou tous les niveaux
+C     seraient sous la surface dans TGZEX/2
+C
 C     Revision 3.14  2014/09/25 18:31:50  dugas
 C     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG
 C
@@ -423,7 +427,9 @@ C
 
 ***        CORRECT ALL LEVELS BELOW GROUND.
 
-  340     DO 350 L=N,NPL
+  340     IF (N == 1) N = 2     ! All levels are below the surface !
+
+          DO 350 L=N,NPL
               PPEXP   = (PR(L)/PR(N-1))**POWER
               T(I,L)  = T(I,N-1)*PPEXP
               GZ(I,L) = GZ(I,N-1)-GOG*T(I,N-1)*(PPEXP-1.)

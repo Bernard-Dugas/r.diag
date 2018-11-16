@@ -1,7 +1,7 @@
 #     if defined (AUTO_DOC)
 *
 *     CALL SEQUENCE...
-*      beta  PSFC BETFIL INPUT OUTPUT [ -plv VAL1 -def ]
+*      beta  PSFC BETFIL INPUT OUTPUT [ -plv VAL1 -def [DEFLEVS][FREEFMT] ]
 *
 *
 *     DESCRIPTION...
@@ -32,31 +32,38 @@
 *
 *     INPUT PARAMETERS...
 *
-*      NLEV (plv) = NUMBER OF PRESSURE LEVELS (DEF=16, MAX=999).
-*                   IF NLEV IS NEGATIVE, EACH -NLEV LEVP VALUES ARE
-*                   READ WITH A I10 FORMAT OR AN E10.0 IF ITS VALUE
-*                   CONTAINS A DECIMAL POINT.
+*      NLEV (plv) = NUMBER OF REQUESTED PRESSURE LEVELS (DEF 16, MAX 999).
+*                   IF NLEV IS NEGATIVE, EACH -NLEV LEV VALUES ARE READ WITH
+*                   EITHER A I10 FORMAT OR AN E10.0 DEPENDING ON WETHER ANY
+*                   OF THESE VALUES CONTAINS A DECIMAL POINT. INTEGER VALUES
+*                   ARE THEN ASSUMED TO BE ENCODED (via LVCODE or CONVIP)
 *
-*      LEV        = VALUE OF THE PRESSURE IN MILLIBARS (LESS THAN 1013 MB)
-*                   AS CODED BY ROUTINE LVCODE. THE DEFAULTS ARE SPECIFIED
-*                   IN THE EXAMPLE BELOW.
+*      LEV        = MONOTONIC PRESSURE LEVELS (MB) (READ FROM STANDARD INPUT).
+*                   THE DEFAULTS ARE AS SPECIFIED IN THE EXAMPLE BELOW.
 *
 *      Notes: 1) The first input line is NOT read if any command-line
 *                parameters are passed.
-*             2) Furthermore, the second line will not be read either
-*                if the "-def" defaults processing mode is requested.
+*             2) Furthermore, the second line will not be read when
+*                the "-def" (or "-def DEFLEVS") defaults processing
+*                mode is requested. Any "-plv" value is also ignored.
+*             3) Specifying "-def FREEFMT" indicates that the output pressure
+*                levels should read with a list-directed free format. This
+*                is obviously not the default behaviour. Pressure values
+*                should then only be separated by spaces or comas, and
+*                spread over one or more lines. These numbers are then
+*                always assumed to be the actual real pressure values,
+*                and not their possibly encoded integer values.
 *
 *      READ( 5,5010 )  NLEV
-*      IF (NLEV.GT.0)
-*      READ( 5,5020 ) (LEV(I),I=1,NLEV)
-*      IF (NLEV.LT.0)
-*      READ( 5,5030 ) (LEV(I),I=1,-NLEV)
+*      IF (FREEFMT)      READ( 5,* )    ( PR(I),I=1,ABS(NPL))
+*      ELSEIF (NLEV > 0) READ( 5,5020 ) (LEV(I),I=1,    NPL)
+*      ELSEIF (NLEV < 0) READ( 5,5030 ) (LEV(I),I=1,   -NPL)
 *5010  FORMAT(10X,I5)
 *5020  FORMAT(16I5)
 *5030  FORMAT(8E10.0)
 *
 *
-*     EXAMPLE OF INPUT CARDS...
+*     EXAMPLE OF INPUT CARDS (with format 5010 & 5020)...
 *
 * BETA       16
 *  10   20   30   50   70  100  150  200  250  300  400  500  700  850  925 1000
@@ -74,6 +81,7 @@
 *       5 ERROR READING FIRST LINE INPUT PARAMETERS
 *       6 ERROR READING SECOND LINE INPUT PARAMETERS
 *       7 LEV DOES NOT CONTAIN PRESSURE DATA
+*       8 UNRECOGNIZED -DEF ARGUMENT VALUE
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -99,6 +107,9 @@
 *     ------------------------------------------------------------
 
 *     $Log: beta.ptn,v $
+*     Revision 4.8  2018/11/16 15:15  dugas
+*     Ajouter l'option 'FREEFMT' de lecture des niveaux de pression.
+*
 *     Revision 4.7  2014/09/25 20:20:45  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -147,13 +158,11 @@
 *--------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     MAXLEV,       HEAD
-      PARAMETER ( MAXLEV = 999, HEAD = taille_entete )
-
+      INTEGER,    PARAMETER :: MAXLEV = 999, HEAD = taille_entete
 
       CHARACTER*10 CLEVP(MAXLEV)
-      CHARACTER*4 LIGNE*80,CBETA
-      LOGICAL     OK,DEF,MONOTON,BIGF
+      CHARACTER   LIGNE*80,CBETA*4,PKTYP*2
+      LOGICAL     OK,DEF,MONOTON,BIGF,FFMT,RLV
       REAL        PR(MAXLEV),PH(0:MAXLEV+1),PHMAX
       INTEGER     I,K,L,IO,NFF,NR,IER,MAXW,LEN,KPAK,
      +            NLEV,NLEVM,NLEVP,NLAT,NLG,NWDS,VKIND,
@@ -175,11 +184,11 @@
      +              '  700','  850','  925',' 1000'
      +                                 /
 
-      LOGICAL     RPBLOC 
-      INTEGER     GETSIZ
-      CHARACTER*4 GETYP,PKTYP*2
-      EXTERNAL    BURNF,GETFLD2,GETLIGN,GETSIZ,GETYP,JCLPNT,
-     +            MONVERT,PUTFLD2,RPBLOC,WRITLEV,XIT
+      LOGICAL,    EXTERNAL :: RPBLOC 
+      INTEGER,    EXTERNAL :: GETSIZ
+      CHARACTER*4,EXTERNAL :: GETYP
+      EXTERNAL    BURNF,GETFLD2,GETLIGN,JCLPNT,
+     +            MONVERT,PUTFLD2,WRITLEV,XIT
 
       DATA        PHMAX / 1013.0 /, CBETA / 'BETA' /
 *===================================================================
@@ -198,6 +207,8 @@
 
       PKTYP = GETYP( 1 )
       BIGF  =.FALSE.
+      FFMT  =.FALSE.
+      RLV   =.FALSE.
 
 ***    ALLOCATE WORK SPACE.
 
@@ -208,12 +219,27 @@
 
 ***        CHECK PARAMETRE BLOCK.
 
-          NLEV = 16
-
           OK = RPBLOC('PLV',LIGNE)
           IF (OK) READ(LIGNE,0005,END=904,ERR=904,IOSTAT=IO) NLEV
 
-          DEF = RPBLOC('DEFAUT',LIGNE)
+          OK = RPBLOC('DEFAUT',LIGNE)
+          IF (OK)                                              THEN
+              IF (LIGNE /= ' ') CALL LEADBLK( LIGNE )
+              IF (LIGNE == '-1')                               THEN
+                  DEF = OK
+              ELSE IF (LIGNE /= ' ')                           THEN
+                  CALL low2up( LIGNE,LIGNE )
+                  IF (index( LIGNE,'DEFLEVS' ) > 0) DEF    = OK
+                  IF (index( LIGNE,'FREEFMT' ) > 0) FFMT   = OK
+                  IF (.NOT.(DEF .OR. FFMT))          THEN
+                      WRITE(6,6008) TRIM( LIGNE )
+                      CALL                         XIT('  Beta  ',-8 )
+                  END IF
+              END IF
+          END IF
+
+          IF (DEF)  NLEV = 16
+          IF (FFMT) RLV  =.TRUE.
 
       ELSE
 
@@ -239,7 +265,14 @@
 
       IF (.NOT.(DEF .AND. (NLEV.EQ.16)))                       THEN
 
-          IF (BIGF)                                            THEN
+***        READ THE REQUESTED PRESSURE LEVELS.
+
+          IF (FFMT)                                            THEN
+              ! Use a list-directed input command.
+              READ( 5, *, END=905,ERR=905,IOSTAT=IO) (PR(K),K=1,NLEV)
+              CLEVP(:)(1:NLEV) = ' '
+
+          ELSE IF (BIGF)                                       THEN
               DO  K=1,(NLEV-1)/8+1
                   CALL GETLIGN( 5,LIGNE,80,OK ) 
 
@@ -250,6 +283,9 @@
                       LIM2 = MIN( NLEV, 8*K )
                       READ( LIGNE, 5030,END=905,ERR=905,IOSTAT=IO) 
      +                                  (CLEVP(I),I=LIM1,LIM2)
+                      DO  I=LIM1,LIM2
+                          IF (INDEX( CLEVP(I),'.') /= 0) RLV = .TRUE.
+                      END DO
                   END IF  
               END DO
           ELSE
@@ -263,6 +299,9 @@
                       LIM2 = MIN( NLEV, 16*K )
                       READ( LIGNE, 5020,END=905,ERR=905,IOSTAT=IO) 
      +                                  (CLEVP(I),I=LIM1,LIM2)
+                      DO  I=LIM1,LIM2
+                          IF (INDEX( CLEVP(I),'.') /= 0) RLV = .TRUE.
+                      END DO
                   END IF  
               END DO
           END IF
@@ -271,25 +310,44 @@
 
       END IF
 
-***    CHECK LEV CODING.
+***    CHECK LEV ENCODING(+2)/DECODING(-2).
 
       DO  K=1,NLEV
-          IF (INDEX( CLEVP(K),'.' ).EQ.0)                      THEN
+          IF (FFMT .OR. RLV)                                   THEN
+              IF (.NOT.FFMT)
+     +            READ( CLEVP(K),11, ERR=905,END=905,IOSTAT=IO ) PR(K)
+              IF (PKTYP == 'SQ')                               THEN
+                  VKIND = 2
+                  CALL CONVPR( LEV(K), PR(K), VKIND, +2 )
+              ELSE IF (PR(K) >= 0.)                            THEN
+                  CALL LVCODE( LEV(K), PR(K)/1000.,1 )
+              END IF
+
+              IF (-10000. < PR(K) .AND. PR(K) < -99.)          THEN
+                 ! Attemp to account for old-style CCCma
+                 ! coding of pressures < 10hPa and > 10**-7.
+                  LEV(K) = NINT( PR(K) )
+                  CALL CONVPR( LEV(K), PR(K), VKIND, -2 )
+              ELSE IF (PR(K) <= -10000.)                       THEN
+                  LEV(K) = -999999 ! Signals an error
+              END IF
+
+          ELSE
               READ( CLEVP(K),10, ERR=905,END=905,IOSTAT=IO ) LEV(K)
               CALL CONVPR( LEV(K), PR(K), VKIND, -2 )
               IF (PKTYP.EQ.'SQ')                               THEN
-                  IF (VKIND.NE.2) CALL             XIT('  Beta  ',-7 )
-                  CALL CONVPR( LEV(K), PR(K), VKIND, +2 )
+                  IF (VKIND /= 2) CALL             XIT('  Beta  ',-7 )
+                  CALL CONVPR( LEV(K),PR(K),VKIND, +2 )
               END IF
-          ELSE
-             READ( CLEVP(K),11, ERR=905,END=905,IOSTAT=IO ) PR(K)
-             IF (PKTYP.EQ.'SQ')                                THEN
-                 VKIND = 2
-                 CALL CONVPR( LEV(K), PR(K), VKIND, +2 )
-             ELSE
-                 CALL LVCODE( LEV(K), PR(K)/1000.,1 ) 
-             END IF
+
           END IF
+
+          IF (LEV(K) == -999999)                               THEN
+              ! Check for CONVPR error condition.
+              WRITE(6,6006) K,PR(K)
+              GOTO 905
+          END IF
+
       END DO
 
       IF (PR(NLEV).GT.PHMAX) CALL                  XIT('  Beta  ',-2 )
@@ -308,9 +366,9 @@
 ***    HALF LEVELS - LOWEST HALF LEVEL PRESSURE IS SET = PHMAX =1013MB.
 
       PH(TOP)   = PR(TOP)*0.5
-      DO 100 L=TOP+INC,BOT,INC
+      DO  L=TOP+INC,BOT,INC
           PH(L) = (PR(L)+PR(L-INC))*0.5
-  100 CONTINUE
+      END DO
       PH(NLEVP) = PHMAX
 
 ***    GET THE NEXT SURFACE PRESSURE FIELD INTO PS.
@@ -337,9 +395,9 @@
 ***        COMPUTE BETA FOR EACH PRESSURE LEVEL AND SAVE ON FILE 2.
 ***        NOTE THAT BETA MAY BE >1 AT LOWEST LEVEL.
 
-          DO 400 L=1,NLEV
+          DO  L=1,NLEV
 
-              DO 300 I=1,NWDS
+              DO  I=1,NWDS
 
                   IF (     PS(I) .LT. PH(L+INC) .AND.
      +                     PS(I) .GT. PH(L)   )                THEN
@@ -365,7 +423,7 @@
      +                     BET(I) = (PS(I)    -PH(BOT))
      +                            / (PH(NLEVP)-PH(BOT))
 
-  300         CONTINUE
+              END DO
 
               READ(CBETA,4) IBUF(3)
                             IBUF(4) = LEV(L)
@@ -375,7 +433,7 @@ CCC                         IBUF(8) = -32
 
               IF (NR.EQ.0) CALL PRTLAB( IBUF )
 
-  400     CONTINUE
+          END DO
 
       NR = NR+1
       GOTO 200
@@ -394,6 +452,10 @@ CCC                         IBUF(8) = -32
  5010 FORMAT(10X,I5)
  5020 FORMAT(16A5)
  5030 FORMAT(8A10)
+
+ 6006 FORMAT(' Found illegal pressure value for level # ',I3,
+     +       ' PR=',E20.10/)
+ 6008 FORMAT(' Unrecognized -def argument value... ',A/)
 
  6010 FORMAT('0',I6,' records read.')
 

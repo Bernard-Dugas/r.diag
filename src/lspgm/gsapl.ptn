@@ -67,7 +67,7 @@
 *             5) Furthermore, the second set of lines will not be read either
 *                if the "-def" defaults processing mode is requested without
 *                a value. However, if an 'AABB' value is set (see notes #8
-*                for more details), a 'DEFVLS' character sequence must also
+*                for more details), a 'DEFLEVS' character sequence must also
 *                be added to activate this option, as in "-def AABB/DEFLEVS".
 *             6) 'GEM' is the original gem coordinate, while 'GEM2' is the
 *                original hybrid coordinate as implemented by Edouard &&
@@ -514,7 +514,8 @@
               END IF
           END IF
 
-          IF (FFMT) RLV = .TRUE.
+          IF (DEF)  NPL = 16
+          IF (FFMT) RLV =.TRUE.
       
       ELSE
 
@@ -531,7 +532,7 @@
 
       END IF
 
-***   ACCOUNT FOR DEFAULT TREATMENT.
+***    ACCOUNT FOR DEFAULT TREATMENT.
 
       IF (COORD.NE.' ') CALL LEADBLK( COORD )
       IF (COORD.EQ.' ') COORD = 'DEF'
@@ -608,7 +609,7 @@
                       LIM1 = 16*(K-1)+1
                       LIM2 = MIN( NPL, 16*K )
                       READ( LIGNE, 5020,END=910,ERR=910,IOSTAT=IO) 
-     +                     (CLEVP(I),I=LIM1,LIM2)
+     +                                  (CLEVP(I),I=LIM1,LIM2)
                       DO  I=LIM1,LIM2
                           IF (INDEX( CLEVP(I),'.') /= 0) RLV = .TRUE.
                       END DO
@@ -623,7 +624,7 @@
 ***    CHECK LEVP ENCODING(+2)/DECODING(-2).
 
       DO  K=1,NPL
-          IF (FFMT .OR. RLV)                                      THEN
+          IF (FFMT .OR. RLV)                                   THEN
               IF (.NOT.FFMT)
      +            READ( CLEVP(K),11, ERR=910,END=910,IOSTAT=IO ) PR(K)
               IF (PKTYP == 'SQ')                               THEN

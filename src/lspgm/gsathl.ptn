@@ -61,7 +61,7 @@
 *             2) Furthermore, the second set of lines will not be read either
 *                if the "-def" defaults processing mode is requested without
 *                a value. However, if an 'AABB' value is set (see notes #7
-*                for more details), a 'DEFVLS' character sequence must also
+*                for more details), a 'DEFLEVS' character sequence must also
 *                be added to activate this option, as in "-def AABB/DEFLEVS".
 *             3) Specifying "-na' prevents the routine EATHL from
 *                aborting when it find a well-mixed theta layer.
@@ -595,10 +595,13 @@
           WRITE(6,6160) RLUP,RLDN,COORD,PTOIT
       END IF
 
-***    ARE THESE THETA VALUES MONOTONOUSLY INCREASING ?
+***    ARE THESE THETA VALUES MONOTONOUSLY INCREASING UPWARDS ?
 
       DO  L=2,NTHL
-          IF (TH(L).GE.TH(L-1)) CALL               XIT( VERBEX ,-2 )
+          IF (TH(L).GE.TH(L-1))                                THEN
+              WRITE(6,6002)
+              CALL                                 XIT( VERBEX ,-2 )
+          END IF
       END DO
 
 ***    GET SIZE FROM FIRST SET OF BUFFERS.
@@ -607,7 +610,7 @@
       MAXW3 = GETSIZ2( 3, MBUF,LEN3,NWDS,MPAK, LEVT,NSLT )
       IF (MAXW3.EQ.0) CALL                         XIT( VERBEX ,-3 )
 
-      LEN2  = LEN1 ; MAXW2 = MAXW3
+      LEN2  = LEN3 ; MAXW2 = MAXW3
       IF (COORD.NE.'PRES')
      +MAXW2 = GETSIZ(  2, LBUF,LEN2,NWDS,LPAK )
       IF (MAXW2.EQ.0) CALL                         XIT( VERBEX ,-4 )
@@ -831,10 +834,10 @@
           IF (NSETS.EQ.0) CALL PRTLAB( IBUF )
 
           IF (.NOT.OK)                                         THEN
-              WRITE(6,6130) NSETS
               IF (NSETS.EQ.0)                                  THEN
                   CALL                             XIT( VERBEX ,-5 )
               ELSE
+                 WRITE(6,6130) NSETS,NAME
                   CALL                             XIT( VERBEX , 0 )
               END IF
           END IF
@@ -1022,6 +1025,7 @@
  5020 FORMAT(16A5)
  5030 FORMAT(8A10)
 
+ 6002 FORMAT(' THETA values are not monotonously increasing upwards.'/)
  6008 FORMAT(' Gsathl reports I/O error number ',I5/)
  6014 FORMAT(' Found illegal THETA value for level # ',I3/
      +       ' TH=',E20.10,' while using free-format input.'/)

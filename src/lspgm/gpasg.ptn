@@ -100,7 +100,7 @@
 *                if the "-def" defaults processing mode is requested without
 *                a value. However, if either an 'AABB' and/or an 'APPEND'
 *                value is set in GSASG (see notes #9, #11 for more details),
-*                a 'DEFVLS' character sequence must also be added to
+*                a 'DEFLEVS' character sequence must also be added to
 *                activate this option, as in "-def AABB/DEFLEVS".
 *             6) 'GEM' is the original gem coordinate. 'GEM2' is the
 *                hybrid coordinate implemented by Edouard & Gravel
@@ -161,9 +161,11 @@
 *
 *      READ( 5,5010 ) NSL,COORD,PTOIT,              RLUP,RLDN (gpasg)
 *      READ( 5,5015 ) NSL,COORD,PTOIT,COORDI,PTOITI,RLUP,RLDN (gsasg)
+*
 *      IF (FREEFMT)      READ( 5,* )    ( ETA(I),I=1,ABS(NSL)) 
 *      ELSEIF (NSL.GT.0) READ( 5,5020 ) (LEVS(I),I=1,    NSL)
 *      ELSEIF (NSL.LT.0) READ( 5,5030 ) (LEVS(I),I=1,   -NSL)
+*
 *5010  FORMAT(10X,I5,1X,A4,3E10.0)
 *5015  FORMAT(10X,I5,2(1X,A4,E10.0),2E10.0)
 *5020  FORMAT(16E5.0)
@@ -242,8 +244,8 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gpasg.ptn,v $
-*      Revision 4.32  2018/10/17 17:17  dugas
-*      Ajouter l'option 'FREEFMT' de lecture des niveaux modeles.
+*     Revision 4.32  2018/10/17 17:17  dugas
+*     Ajouter l'option 'FREEFMT' de lecture des niveaux modeles.
 *
 *     Revision 4.31  2016/10/29 20:18  dugas
 *     - Ajouter le support de sorties GEM4 dans GSASG.
@@ -546,7 +548,6 @@
                   GEM4LEV = LIGNE
                   CALL LOW2UP( GEM4LEV,GEM4LEV )
               END IF
-
 
               OK = RPBLOC('L2',LIGNE)
               IF (OK. AND. (LIGNE == 't' .OR. LIGNE == 'T'))

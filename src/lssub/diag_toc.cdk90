@@ -25,6 +25,8 @@
 !    Ron Mctaggart-Cowan's Vgrid_Descriptors
 
 !    Author: Bernard Dugas, automne 2009/hiver 2010
+!    Revision 3.10 2018/11/15 18:18  dugas
+!    - Ajouter la routine CopTOC.
 !
 !    Revision 3.9  2018/06/12 17:17  dugas
 !    - Variable globale max_nbr passe de 10 a 20.
@@ -89,6 +91,7 @@
       public :: savtoc ! Determines if a !! record needs to be saved 
       public :: loptoc ! Calculates 3d local pressure field
       public :: nostoc ! DO NOT save a !! record on certain I/O unit
+      public :: coptoc ! Re-ID an exiting !! record following an horizontal grid modification
 
       interface gettoc
          module procedure gettoc_i
@@ -1198,4 +1201,74 @@
       End SUBROUTINE NosTOC
 !-------------------------------------------------------------------
 
+      SUBROUTINE CopTOC (NFIN, IP10,IP20, IP1,IP2)
+
+!    NFIN      = input unit number from which we want to copy a !! record to
+!    IP10,IP20 = Original !! IP descriptors
+!    IP1, IP2  = New !! IP descriptors
+
+      integer , intent(IN)  :: NFIN, IP10,IP20, IP1,IP2
+
+!    External declarations
+
+      LOGICAL              info
+      COMMON     /ZZVERBO/ info
+      LOGICAL              debug
+      COMMON     /ZZDEBUG/ debug
+
+!    Local variables
+
+      INTEGER I,NF,status1,status2, LIP1,LIP2
+
+      IF (TOC_NBR(0) == 0) RETURN
+
+      NF = ABS( NFIN ) ; LIP1 = IP1 ; LIP2 = IP2
+
+!    Check that we have not already created the (possibly)
+!    associated grid descriptor to be saved to unit NFOUT
+!    as well.
+
+      DO  I=1,TOC_NBR(NF)
+          IF (LIP1 == TOC_IP(1,I,NF) .AND. LIP2 == TOC_IP(2,I,NF)) RETURN
+      END DO
+
+      IF (TOC_NBR(NF) < max_nbr) THEN
+
+          DO  I=1,TOC_NBR(NF)
+
+              IF (TOC_IP(1,I,NF) /= IP10 .OR. TOC_IP(2,I,NF) /= IP20) CYCLE
+
+              ! Copy the IP1,IP2-associated structure
+              TOC_NBR(              NF) = TOC_NBR(NF)+1
+              TOC_GD (  TOC_NBR(NF),NF) = TOC_GD (  I,NF)
+              TOC_NK (:,TOC_NBR(NF),NF) = TOC_NK (:,I,NF)
+              TOC_IP (1,TOC_NBR(NF),NF) = IP1
+              TOC_IP (2,TOC_NBR(NF),NF) = IP2
+              status1 = vgd_put( TOC_GD(TOC_NBR(NF),NF),'IP_1',IP1 )
+              status2 = vgd_put( TOC_GD(TOC_NBR(NF),NF),'IP_2',IP2 )
+
+              if (status1 /= VGD_OK .or. status2 /= VGD_OK)      THEN
+                  IF (DEBUG) write(STDOUT,6801) IP1,IP2
+                  call                             xit(' CopTOC ',-1 )
+              end if
+
+              EXIT
+
+          END DO
+
+      ELSE
+
+          ! Cannot create a new !! record associated with unit NF
+          if (INFO) write(6,6800) NF
+
+      END IF
+
+      RETURN
+
+ 6800 FORMAT(' CopTOC:   !! will not be written to I/O unit ',I2/)
+ 6801 format(' CopTOC:   Unable to save IP1,IP2 to !! record.'/)
+
+      END SUBROUTINE CopTOC
+
+!-------------------------------------------------------------------
       End module Diag_TOC

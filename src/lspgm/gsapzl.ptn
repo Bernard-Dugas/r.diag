@@ -6,7 +6,8 @@
 *     CALL SEQUENCE...
 *      gsapzl  GSPHI GSPHIS GSLNSP GPPHI GPTEMP INPUT OUTPUT \ 
 *                  [ -plv VAL1 -a VAL2 -b    VAL3 -c VAL4 \ 
-*                    -d   VAL5 -i VAL6 -kind VAL7 -def [AABB][DEFLEVS] ]
+*                    -d   VAL5 -i VAL6 -kind VAL7 \ 
+*                    -def [AABB][DEFLEVS][FREEFMT] ]
 *
 *
 *     DESCRIPTION...
@@ -56,9 +57,10 @@
 *     INPUT PARAMETERS...
 *
 *      NPL    (plv)  = NUMBER OF PRESSURE LEVELS, ((DEF 16, MAX 999).
-*                      IF NPL IS NEGATIVE, EACH -NPL LEVP VALUES ARE
-*                      READ WITH A I10 FORMAT OR AN E10.0 IF ITS
-*                      VALUE CONTAINS A DECIMAL POINT.
+*                      IF NPL IS NEGATIVE, EACH -NPL LEVP VALUES ARE READ
+*                      WITH EITHER A I10 FORMAT OR AN E10.0 DEPENDING ON
+*                      WETHER ANY OF THESE VALUES CONTAINS A DECIMAL POINT.
+*                      INTEGER VALUES ARE THEN ASSUMED TO BE ENCODED.
 *      RLUP   (a)    = DT/D LN(P) FOR TEMP EXTRAP UPWARDS (DEF=0.0)
 *      GAMMA  (b)    = DT/D LN(P) FOR TEMP,PHI EXTRAP DOWNWARD (DEF=6.5E-3)
 *      PTOIT  (c)    = PRESSURE (PA) OF LID AT TOP OF MODEL.
@@ -71,8 +73,8 @@
 *      R      (i)    = EXPONENT USED ONLY WHEN COORD='GEM2','GEM3' OR 'GEM4' (DEF 1.0)
 *      R2     (i2)   = EXPONENT USED ONLY WHEN COORD='GEM4' (DEF 1.0)
 *
-*      LP            = PRESSURE LEVELS (MB).  THE DEFAULTS
-*                      ARE AS SPECIFIED IN THE EXAMPLE BELOW.
+*      LP            = MONOTONIC PRESSURE LEVELS (MB) (READ FROM STANDARD INPUT).
+*                      THE DEFAULTS ARE AS SPECIFIED IN THE EXAMPLE BELOW.
 *
 *      Notes: 1) Units for RLUP are that of D(GSPHI)/D(LN PRES)
 *             2) RLUP is ignored when COORD='GEM','GEM2' or 'GEM3'
@@ -81,7 +83,7 @@
 *             4) Furthermore, the second set of lines will not be read either
 *                if the "-def" defaults processing mode is requested without
 *                a value. However, if an 'AABB' value is set (see notes #7
-*                for more details), a 'DEFVLS' character sequence must also
+*                for more details), a 'DEFLEVS' character sequence must also
 *                be added to activate this option, as in "-def AABB/DEFLEVS".
 *             5) 'GEM' is the original gem coordinate, while 'GEM2' is the
 *                original hybrid coordinate as implemented by Edouard &&
@@ -107,21 +109,27 @@
 *                Given the above, correctly using the AABB option with a
 *                GEM4 file requires specifying the "-kind GEM4" argument.
 *                                      *************
+*             8) Specifying "-def FREEFMT" indicates that the output pressure
+*                levels should read with a list-directed free format. This
+*                is obviously not the default behaviour. Pressure values
+*                should then only be separated by spaces or comas, and
+*                spread over one or more lines. These numbers are then
+*                always assumed to be the actual real pressure values,
+*                and not their possibly encoded integer values.
 *
 *
 *      READ( 5,5010 ) NPL,RLUP,GAMMA,COORD,PTOIT,PREF,R,R2
-*      IF (NPL.GT.0)
-*      READ( 5,5020 ) (LEVP(I),I=1,NPL)
-*      IF (NPL.LT.0)
-*      READ( 5,5030 ) (LEVP(I),I=1,-NPL)
+*      IF (FREEFMT)     READ( 5,* )    (  PR(I),I=1,ABS(NPL))
+*      ELSEIF (NPL > 0) READ( 5,5020 ) (LEVP(I),I=1,    NPL)
+*      ELSEIF (NPL < 0) READ( 5,5030 ) (LEVP(I),I=1,   -NPL)
 *5010  FORMAT(10X,I5,2E10.0,1X,A4,4E10.0)
 *5020  FORMAT(16I5)
 *5030  FORMAT(8E10.0)
 *
 *
-*     EXAMPLE OF INPUT CARDS...
+*     EXAMPLE OF INPUT CARDS (with format 5010 & 5020)...
 *
-  GSAPZL.    16        0.    6.5E-3  ETA      pression_au_toit
+* GSAPZL.    16        0.    6.5E-3  ETA      pression_au_toit
 *  10   20   30   50   70  100  150  200  250  300  400  500  700  850  925 1000
 *
 *        01234567890123456789012345678901234567890123456789012345678901234567890
@@ -140,7 +148,7 @@
 *       8 MORE THAN ONE VERTICAL SIZE IN GSPHI
 *       9 MISSING GSLNSP RECORD
 *      10 ERROR ABORT READING INPUT CARD 1
-*      11 ERROR ABORT READING INPUT CARD 2
+*      11 ERROR ABORT READING OUTPUT LEVELS
 *      12 GSPHI/GSPHIS/GSLNSP NAME PROBLEM
 *      13 LP DOES NOT CONTAIN PRESSURE DATA
 *      14 PTOIT GREATER THAN TOP MODEL LEVEL (=ETA(TOP)*PREF)
@@ -181,6 +189,9 @@
 *     ----------------------------------------------------------------
 
 *     $Log: gsapzl.ptn,v $
+*     Revision 4.33  2018/11/07 17:17  dugas
+*     Ajouter l'option 'FREEFMT' de lecture des niveaux de pression.
+*
 *     Revision 4.32  2016/10/29 20:48  dugas
 *     - Ajouter le support de GEM4 en mode AABB.
 *     - Modifications syntaxiques de type F77 --> F90.
@@ -351,8 +362,8 @@
       INTEGER,      PARAMETER :: HEAD = taille_entete
 
       REAL          AMIN,AMAX,AMEAN
-      LOGICAL       DEF,BIGF,MODETA,OK,
-     +              OK1,OK2,MONOTON,AABB
+      LOGICAL       DEF,BIGF,MODETA,OK,OK1,
+     +              OK2,MONOTON,AABB,FFMT,RLV
       CHARACTER     GRTYP,LIGNE*80,CHECK*2,VERBEX*8
       CHARACTER(10) CLEVP(MAXLEV),COORD,CHOLD
       REAL          GAMMA,RGAS,RLDN,RLUP,PREF,R,R0,R2,R20,
@@ -442,6 +453,8 @@
       COORD = 'DEF'
       BIGF  =.FALSE.
       AABB  =.FALSE.
+      FFMT  =.FALSE.
+      RLV   =.FALSE.
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
 
@@ -488,13 +501,16 @@
                   CALL low2up( LIGNE,LIGNE )
                   IF (index( LIGNE,'AABB'   )  > 0) AABB   = OK
                   IF (index( LIGNE,'DEFLEVS' ) > 0) DEF    = OK
-                  IF (.NOT.(AABB .OR. DEF))                    THEN
+                  IF (index( LIGNE,'FREEFMT' ) > 0) FFMT   = OK
+                  IF (.NOT.(AABB .OR. DEF .OR. FFMT))          THEN
                       WRITE(6,6025) TRIM( LIGNE )
                       CALL                         XIT( Verbex ,-25)
                   END IF
               END IF
           END IF
 
+          IF (FFMT) RLV = .TRUE.
+      
       ELSE
 
 ***        READ-IN DIRECTIVE CARDS.
@@ -555,17 +571,27 @@
 
       IF (.NOT.(DEF .AND. (NPL.EQ.16)))                        THEN
 
-          IF (BIGF)                                            THEN
+***        READ THE REQUESTED PRESSURE LEVELS.
+
+          IF (FFMT)                                            THEN
+              ! Use a list-directed input command.
+              READ( 5, *, END=911,ERR=911,IOSTAT=IO) (PR(K),K=1,NPL)
+              CLEVP(:)(1:NPL) = ' '
+
+          ELSE IF (BIGF)                                       THEN
               DO  K=1,(NPL-1)/8+1
                   CALL GETLIGN( 5,LIGNE,80,OK ) 
 
                   IF (.NOT.OK)                                 THEN
-                      GOTO 910
+                      GOTO 911
                   ELSE
                       LIM1 = 8*(K-1)+1
                       LIM2 = MIN( NPL, 8*K )
                       READ( LIGNE, 5030,END=911,ERR=911,IOSTAT=IO) 
      +                                  (CLEVP(I),I=LIM1,LIM2)
+                      DO  I=LIM1,LIM2
+                          IF (INDEX( CLEVP(I),'.') /= 0) RLV = .TRUE.
+                      END DO
                   END IF  
               END DO
           ELSE
@@ -573,12 +599,15 @@
                   CALL GETLIGN( 5,LIGNE,80,OK ) 
 
                   IF (.NOT.OK)                                 THEN
-                      GOTO 910
+                      GOTO 911
                   ELSE
                       LIM1 = 16*(K-1)+1
                       LIM2 = MIN( NPL, 16*K )
                       READ( LIGNE, 5020,END=911,ERR=911,IOSTAT=IO) 
      +                                  (CLEVP(I),I=LIM1,LIM2)
+                      DO  I=LIM1,LIM2
+                          IF (INDEX( CLEVP(I),'.') /= 0) RLV = .TRUE.
+                      END DO
                   END IF  
               END DO
           END IF
@@ -587,25 +616,43 @@
 
       END IF
 
-***    CHECK LP CODING.
+***    CHECK LP ENCODING(+2)/DECODING(-2).
 
       DO  K=1,NPL
-          IF (INDEX( CLEVP(K),'.' ).EQ.0)                      THEN
+          IF (FFMT .OR. RLV)                                   THEN
+              IF (.NOT.FFMT)
+     +            READ( CLEVP(K),11, ERR=911,END=911,IOSTAT=IO ) LP(K)
+              IF (PKTYP == 'SQ')                               THEN
+                  VKIND = 2
+                  CALL CONVPR( LP(K), PR(K), VKIND, +2 )
+              ELSE IF (PR(K) >= 0.)                            THEN
+                  CALL LVCODE( LP(K), PR(K)/1000.,1 )
+              END IF
+
+              IF (-10000. < PR(K) .AND. PR(K) < -99.)          THEN
+                 ! Attemp to account for old-style CCCma
+                 ! coding of pressures < 10hPa and > 10**-7.
+                  LP(K) = NINT( PR(K) )
+                  CALL CONVPR( LP(K), PR(K), VKIND, -2 )
+              ELSE IF (PR(K) <= -10000.)                       THEN
+                  LP(K) = -999999 ! Signals an error
+              END IF
+
+          ELSE
               READ( CLEVP(K),10, ERR=911,END=911,IOSTAT=IO ) LP(K)
               CALL CONVPR( LP(K), PR(K), VKIND, -2 )
               IF (PKTYP.EQ.'SQ')                               THEN
                   IF (VKIND.NE.2) CALL             XIT( VERBEX ,-13)
                   CALL CONVPR( LP(K),PR(K),VKIND, +2 )
               END IF
-          ELSE
-             READ( CLEVP(K),11, ERR=911,END=911,IOSTAT=IO ) PR(K)
-             IF (PKTYP.EQ.'SQ')                                THEN
-                 VKIND = 2
-                 CALL CONVPR( LP(K), PR(K), VKIND, +2 )
-             ELSE
-                 CALL LVCODE( LP(K), PR(K)/1000.,1 ) 
-             END IF
           END IF
+
+          IF (LP(K) == -999999)                                THEN
+              ! Check for CONVPR error condition.
+              WRITE(6,6011) K,PR(K)
+              GOTO 911
+          END IF
+
       END DO
 
 ***    GET SIZE FROM FIRST SET OF BUFFERS.
@@ -965,7 +1012,7 @@
 ***        CHECK THAT CLNSP REALLY CONTAINS LN( SURFP ).
 
           IF (CHECK /= 'OK')                                   THEN
-              CALL FMMM2( AMIN,AMAX,AMEAN, LP,NWDS )
+              CALL FMMM2( AMIN,AMAX,AMEAN, LNSP,NWDS )
               AMIN = EXP( AMIN ) ; AMAX = EXP( AMAX )
               IF (AMIN .LE. 330.  .OR.
      +            AMAX .GE. 1212.) CALL            XIT( VERBEX ,-24) 
@@ -1029,7 +1076,9 @@
      +                          NPL,NSL, RLUP,RLDN, IG1,IG2,
      +                          log_pressure, OK )
 
-              else
+                  PS(1:NWDS) = PS2D(1:NWDS,1) ! Surface pressures in Pascals.
+
+              ELSE
 
                   PS(1:NWDS) = exp( LNSP(1:NWDS)+CORR1 ) ! PS IN PASCAL.
 
@@ -1137,6 +1186,8 @@
  5030 FORMAT(8A10)
 
  6010 FORMAT(' Gsapzl reports I/O error number ',I5/)
+ 6011 FORMAT(' Found illegal pressure value for level # ',I3,
+     +       ' PR=',E20.10/)
  6014 FORMAT('  (P.LID/P.REF)-ETA(TOP)=',E12.4)
  6016 FORMAT(' Unsupported vertical coordinate in gsfld, VKIND =',I9/)
  6020 FORMAT(' Unable to read A,B in aabb.nml namelist file,',
