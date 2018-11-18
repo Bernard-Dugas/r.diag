@@ -74,6 +74,8 @@
 *                one or more lines. These numbers are then always assumed
 *                to be the actual real model levels, and not their possibly
 *                encoded integer values.
+*                Turning on the  "FREE_FORMAT_LEVEL_IO" environment
+*                variable will also activate this behaviour.
 *             4) The results are mutiplied by the local level pressure
 *                in HPa, so that the uniform range of values goes from
 *                0 to the local pressure. The gaussian distribution has
@@ -134,6 +136,9 @@
 *    2               TAPE11=GG, TAPE5=INPUT, TAPE6=OUTPUT) 
  
 *     $Log: rangrd.ptn,v $
+*     Revision 4.19  2018/11/17 22:22  dugas
+*     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
+*
 *     Revision 4.18  2018/11/09 21:21  dugas
 *     Ajouter l'option 'FREEFMT' de lecture des niveaux de sortie.
 *
@@ -249,9 +254,9 @@
       REAL,       DIMENSION(:), ALLOCATABLE :: GG
 
       REAL,       EXTERNAL :: TGAUSS
-      LOGICAL,    EXTERNAL :: RPBLOC
       INTEGER,    EXTERNAL :: GETKIND,NEWDATE
       CHARACTER*4,EXTERNAL :: GETYP,GETKINDC*16
+      LOGICAL,    EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
       EXTERNAL    JCLPNT,GETLIGN,BURNF,XIT,PUTFLD2,
      +            SETLAB,CONVPR,WRITLEV,PUTHIGH
 
@@ -369,8 +374,6 @@
               END IF
           END IF
 
-          IF (FFMT) RLV = .TRUE.
-          
           OK  = RPBLOC('LV1',LIGNE)
 
           IF (OK)                                              THEN
@@ -429,6 +432,9 @@
 
       END IF
 
+      FFMT = ( FFMT .OR. GetFreeFormatLevelIO() )
+      IF (FFMT) RLV = .TRUE.
+          
       STAMP = 0
       IER = NEWDATE( STAMP, YYYYMMDD,HHMMSS*100, 3 )
 

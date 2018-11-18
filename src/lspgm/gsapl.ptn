@@ -99,7 +99,9 @@
 *                should then only be separated by spaces or comas, and
 *                spread over one or more lines. These numbers are then
 *                always assumed to be the actual real pressure values,
-*                and not their possibly encoded integer values.
+*                and not their possibly encoded integer values.Turning
+*                on the "FREE_FORMAT_LEVEL_IO" environment variable
+*                will also activate this behaviour.
 *
 *
 *      READ( 5,5010 ) NPL,RLUP,RLDN,COORD,PTOIT,PREF,R,R2
@@ -176,6 +178,9 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gsapl.ptn,v $
+*     Revision 4.42  2018/11/17 22:22  dugas
+*     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
+*
 *     Revision 4.41  2018/10/17 16:16  dugas
 *     Ajouter l'option 'FREEFMT' de lecture des niveaux de pression.
 *
@@ -397,7 +402,7 @@
       REAL          A(MAXLEV+1), B(MAXLEV+1)
       NAMELIST     /AABB_NML/ A,B
 
-      LOGICAL,      EXTERNAL :: RPBLOC
+      LOGICAL,      EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
       CHARACTER(16),EXTERNAL :: GETKINDC
       INTEGER,      EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,GETHIGH
@@ -515,8 +520,7 @@
           END IF
 
           IF (DEF)  NPL = 16
-          IF (FFMT) RLV =.TRUE.
-      
+
       ELSE
 
 ***        READ THE FIRST CONTROL CARD.
@@ -532,6 +536,9 @@
 
       END IF
 
+      FFMT = ( FFMT .OR. GetFreeFormatLevelIO() )
+      IF (FFMT) RLV =.TRUE.
+      
 ***    ACCOUNT FOR DEFAULT TREATMENT.
 
       IF (COORD.NE.' ') CALL LEADBLK( COORD )

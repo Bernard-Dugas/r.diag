@@ -115,7 +115,9 @@
 *                should then only be separated by spaces or comas, and
 *                spread over one or more lines. These numbers are then
 *                always assumed to be the actual real pressure values,
-*                and not their possibly encoded integer values.
+*                and not their possibly encoded integer values.Turning
+*                on the "FREE_FORMAT_LEVEL_IO" environment variable
+*                will also activate this behaviour.
 *
 *
 *      READ( 5,5010 ) NPL,RLUP,GAMMA,COORD,PTOIT,PREF,R,R2
@@ -189,6 +191,9 @@
 *     ----------------------------------------------------------------
 
 *     $Log: gsapzl.ptn,v $
+*     Revision 4.34  2018/11/17 22:22  dugas
+*     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
+*
 *     Revision 4.33  2018/11/07 17:17  dugas
 *     Ajouter l'option 'FREEFMT' de lecture des niveaux de pression.
 *
@@ -397,7 +402,7 @@
       real,         dimension(:,:,:), pointer  :: log_pressure=>null()
       real,         dimension(:,:),ALLOCATABLE :: PS2D
 
-      LOGICAL,      EXTERNAL :: RPBLOC
+      LOGICAL,      EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
       CHARACTER(16),EXTERNAL :: GETKINDC
       INTEGER,      EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,
@@ -509,8 +514,6 @@
               END IF
           END IF
 
-          IF (FFMT) RLV = .TRUE.
-      
       ELSE
 
 ***        READ-IN DIRECTIVE CARDS.
@@ -527,6 +530,9 @@
 
       END IF  
 
+      FFMT = ( FFMT .OR. GetFreeFormatLevelIO() )
+      IF (FFMT) RLV = .TRUE.
+      
 ***    ACCOUNT FOR DEFAULT TREATMENT.
 
       IF (COORD.NE.' ') CALL LEADBLK( COORD )

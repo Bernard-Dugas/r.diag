@@ -18,6 +18,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.126  2018/11/17 22:20  dugas
+C     Ajouter le traitement de la variable FREE_FORMAT_LEVEL_IO
+C
 C     Revision 3.125  2018/02/20 10:10:10  dugas
 C     Ajouter deux messages informatifs dans QQQDOC
 C
@@ -771,6 +774,33 @@ C
 *---------------------------------------------------------------------
 
       END
+      LOGICAL FUNCTION  GetFreeFormatLevelIO (VALUE)
+
+      IMPLICIT       none
+
+***    Nov 18/18 - Bernard Dugas, UQAM/ESCER.
+
+***   This routine sets/retrieves the current status
+***    of the Free Format Level input mode.
+
+      LOGICAL        FreeFormatLevelIO,SetFreeFormatLevelIO,VALUE
+      SAVE           FreeFormatLevelIO
+*---------------------------------------------------------------------
+
+      GetFreeFormatLevelIO = FreeFormatLevelIO
+      
+      RETURN
+      
+*---------------------------------------------------------------------
+      ENTRY SetFreeFormatLevelIO (VALUE)
+
+         FreeFormatLevelIO = VALUE
+      SetFreeFormatLevelIO = FreeFormatLevelIO
+
+      RETURN
+*---------------------------------------------------------------------
+
+      END
       LOGICAL FUNCTION is_on( VARIAB )
 
       IMPLICIT       none
@@ -923,7 +953,7 @@ C
      +                IU61,IU62,IU63,IU64,IU65,IU66,IU67,IU68,IU69,IU70,
      +                IU71,IU72,IU73,IU74,IU75,IU76,IU77,IU78,IU79,IU80
 
-      LOGICAL         HELP, Done, EX, OP, LVALUE
+      LOGICAL         HELP, Done, EX, OP, LVALUE, OK, NotOK
       LOGICAL,        SAVE :: Vrai = .true. , Faux = .false.
       LOGICAL,        SAVE :: MSGLVL = .false., SETYP
 
@@ -981,6 +1011,7 @@ C
 
 #     include        "machtype.cdk"
 
+      LOGICAL,EXTERNAL :: SetFreeFormatLevelIO
       LOGICAL,EXTERNAL :: IS_ON,IS_OFF,SETIO64
       INTEGER,EXTERNAL :: NEWDATE,ME32O64,INTEFLT,CHKENDI
       INTEGER,EXTERNAL :: FCLOS,FNOM,FSTNBR,FSTOPC,FSTFRM,XDFOPT
@@ -993,7 +1024,8 @@ C
 
       CHARACTER(20)   BIGTMP,DATFMT,DEBUGM,ECHOJCL,INPUT,
      +                KDATEV,LEAPYR,MISVAL,OLDIP1V,OUTPUT,
-     +                PKVAL,TMPDIR,UZBIGT,VRBOSE,XITVAL
+     +                PKVAL,TMPDIR,UZBIGT,VRBOSE,XITVAL,
+     +                FRLIFMT
 
       DATA            BIGTMP /       'BIG_TMPDIR'     /,
      +                DATFMT /      'DATE_FORMAT'     /,
@@ -1009,7 +1041,8 @@ C
      +                TMPDIR /        'TMPDIR'        /,
      +                UZBIGT /     'USE_BIG_TMPDIR'   /,
      +                VRBOSE /        'INFORM'        /,
-     +                XITVAL /        'XITVAL'        /
+     +                XITVAL /        'XITVAL'        /,
+     +                FRLIFMT/ 'FREE_FORMAT_LEVEL_IO' /
 
 
       DATA cles(1) / 'HELP'   /,nam(1) / 'NON'  /,def(1) / 'OUI'  /,
@@ -1517,6 +1550,16 @@ C
           END IF
           WRITE(6,'(A1)') ' '
       END IF
+
+***    IS FREE FORMAT LEVEL INPUT REQUESTED ?
+
+      CALL GETENVC( FRLIFMT,EVALUE )
+
+      If (EVALUE /= ' ')                                       THEN
+          If (IS_ON( EVALUE )) OK = SetFreeFormatLevelIO( Vrai )
+      Else
+          NotOK = SetFreeFormatLevelIO( Faux )
+      End If
 
 ***    IF NF.GT.NBRUNT ABORT.
 

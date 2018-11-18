@@ -156,7 +156,9 @@
 *                one or more lines. These numbers are then always assumed
 *                to be the actual real model levels, and not their possibly
 *                encoded integer values. Only one of either "FREEFMT" or
-*                "APPEND" can be be defined at any one time.
+*                "APPEND" can be be defined at any one time. Turning on
+*                the "FREE_FORMAT_LEVEL_IO" environment variable will
+*                also act as if "-def FREEFMT" had been specified.
 *     
 *
 *      READ( 5,5010 ) NSL,COORD,PTOIT,              RLUP,RLDN (gpasg)
@@ -244,6 +246,9 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gpasg.ptn,v $
+*     Revision 4.33  2018/11/17 22:22  dugas
+*     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
+*
 *     Revision 4.32  2018/10/17 17:17  dugas
 *     Ajouter l'option 'FREEFMT' de lecture des niveaux modeles.
 *
@@ -403,10 +408,10 @@
       REAL        A(MAXLEV+1),B(MAXLEV+1)
       NAMELIST   /AABB_NML/ A,B
 
-      LOGICAL,    EXTERNAL :: RPBLOC
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
       INTEGER,    EXTERNAL :: FCLOS,FNOM,GETHIGH
       INTEGER,    EXTERNAL :: GETSIZ,GETSIZ2,GETKIND
+      LOGICAL,    EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
       EXTERNAL    MACSPE,JCLPNT,GETLIGN,XIT,BURNF,CONVPR,
      +            CMPLBL,COORDAB,GETSET2,FMMM2,LEADBLK,
      +            SETKIND,MONVERT,GEMVRTL,ELAEL,
@@ -569,14 +574,9 @@
                   IF (.NOT.(APPEND .OR. AABB .OR. DEF .OR. FFMT)) THEN
                       WRITE(6,6028) TRIM( LIGNE )
                       CALL                         XIT( Verbex ,-28)
-                  ELSE IF (APPEND .AND. FFMT)                  THEN
-                      WRITE(6,6029) TRIM( LIGNE )
-                      CALL                         XIT( Verbex ,-29)
                   END IF
               END IF
           END IF
-
-          IF (FFMT) RLV = .TRUE.
 
           IF (COORD /= 'GEM4') APPEND = .FALSE.
 
@@ -611,6 +611,15 @@
 
       END IF
 
+      FFMT = ( FFMT .OR. GetFreeFormatLevelIO() )
+
+      IF (APPEND .AND. FFMT)                                   THEN
+          WRITE(6,6029) TRIM( LIGNE )
+          CALL                                     XIT( Verbex ,-29)
+      END IF
+
+      IF (FFMT) RLV = .TRUE.
+      
 ***    ACCOUNT FOR DEFAULT TREATMENT.
 
       IF (NSL.LT.0)                                            THEN

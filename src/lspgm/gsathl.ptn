@@ -102,6 +102,8 @@
 *                spread over one or more lines. These numbers are then
 *                always assumed to be the actual real theta values,
 *                and not their possibly encoded integer values.
+*                Turning on the "FREE_FORMAT_LEVEL_IO" environment
+*                variable will also activate this behaviour.
 *
 *
 *      READ(5,5010) NTHL,RLUP,RLDN,COORD,PTOIT,PREF,R,R2
@@ -180,6 +182,9 @@
 *     ----------------------------------------------------------------
 
 *      $Log: gsathl.ptn,v $
+*      Revision 4.33  2018/11/17 22:22  dugas
+*      Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
+*
 *      Revision 4.32  2018/10/17 15:15  dugas
 *      Ajouter l'option 'FREEFMT' de lecture des niveaux theta.
 *
@@ -346,7 +351,7 @@
       real,       dimension(:,:,:), pointer  :: log_pr =>null()
       real,       dimension(:,:,:), pointer  :: log_prt=>null()
 
-      LOGICAL,     EXTERNAL :: RPBLOC
+      LOGICAL,     EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
       CHARACTER(4),EXTERNAL :: GETYP,GETHIC
       INTEGER,     EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,
      +                         GETHIGH,FNOM,FCLOS
@@ -449,8 +454,6 @@
               END IF
           END IF
 
-          IF (FFMT) RLV = .TRUE.
-      
       ELSE
 
 ***        READ-IN FIRST DIRECTIVE CARD.
@@ -467,6 +470,9 @@
 
       END IF
 
+      FFMT = ( FFMT .OR. GetFreeFormatLevelIO() )
+      IF (FFMT) RLV = .TRUE.
+      
 ***    ACCOUNT FOR DEFAULT TREATMENT.
 
       IF (COORD.NE.' ') CALL LEADBLK( COORD )

@@ -52,8 +52,10 @@
 *                should then only be separated by spaces or comas, and
 *                spread over one or more lines. These numbers are then
 *                always assumed to be the actual real pressure values,
-*                and not their possibly encoded integer values.
-*
+*                and not their possibly encoded integer values. Turning
+*                on the "FREE_FORMAT_LEVEL_IO" environment variable will
+*                also activate this behaviour.
+      
 *      READ( 5,5010 )  NLEV
 *      IF (FREEFMT)      READ( 5,* )    ( PR(I),I=1,ABS(NPL))
 *      ELSEIF (NLEV > 0) READ( 5,5020 ) (LEV(I),I=1,    NPL)
@@ -107,6 +109,9 @@
 *     ------------------------------------------------------------
 
 *     $Log: beta.ptn,v $
+*     Revision 4.9  2018/11/17 22:22  dugas
+*     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
+*
 *     Revision 4.8  2018/11/16 15:15  dugas
 *     Ajouter l'option 'FREEFMT' de lecture des niveaux de pression.
 *
@@ -172,8 +177,7 @@
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       REAL,       DIMENSION(:), ALLOCATABLE :: PS,BET
 
-      CHARACTER   NOMPRG*256
-      COMMON     /PROGNAM/ NOMPRG
+      CHARACTER   NOMPRG*256      ; COMMON /PROGNAM/ NOMPRG
 
       DATA        DEF / .FALSE. /
 
@@ -184,7 +188,7 @@
      +              '  700','  850','  925',' 1000'
      +                                 /
 
-      LOGICAL,    EXTERNAL :: RPBLOC 
+      LOGICAL,    EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
       INTEGER,    EXTERNAL :: GETSIZ
       CHARACTER*4,EXTERNAL :: GETYP
       EXTERNAL    BURNF,GETFLD2,GETLIGN,JCLPNT,
@@ -239,7 +243,6 @@
           END IF
 
           IF (DEF)  NLEV = 16
-          IF (FFMT) RLV  =.TRUE.
 
       ELSE
 
@@ -256,6 +259,11 @@
  
       END IF
 
+***    Account for the FREE_FORMAT_LEVEL_IO environment variable.
+
+      FFMT = ( FFMT .OR. GetFreeFormatLevelIO() )
+      IF (FFMT) RLV  =.TRUE.
+      
       IF (NLEV.LT.0)                                           THEN
           NLEV =-NLEV
           BIGF =.TRUE.
