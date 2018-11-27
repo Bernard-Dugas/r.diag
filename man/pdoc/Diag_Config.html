@@ -447,13 +447,21 @@ est
       <span style="font-family: Helvetica,Arial,sans-serif;"> Enfin, certaines
         commandes peuvent être invoquées avec un mode de fonctionnement
         particulier en utilisant la clé </span><b style="font-family: Helvetica,Arial,sans-serif;">-def</b><span
-        style="font-family: Helvetica,Arial,sans-serif;">. Cette clé signifie
-        que la commande devra soit d'utiliser ses valeurs par défaut (e.g. </span><a
-        style="font-family: Helvetica,Arial,sans-serif;" href="xlin.txt">xlin</a><span
-        style="font-family: Helvetica,Arial,sans-serif;">), soit d'utiliser un
-        mode de fonctionnement alternatif (e.g. </span><a style="font-family: Helvetica,Arial,sans-serif;"
-        href="timcov.txt">timcov</a><span style="font-family: Helvetica,Arial,sans-serif;">).</span><br
         style="font-family: Helvetica,Arial,sans-serif;">
+        [Valeur1][...][ValeursN]. Cette clé signifie que la commande devra soit
+        d'utiliser ses valeurs par défaut (e.g. </span><a style="font-family: Helvetica,Arial,sans-serif;"
+        href="xlin.txt">xlin</a><span style="font-family: Helvetica,Arial,sans-serif;">),
+        soit d'utiliser un mode de fonctionnement alternatif (e.g. </span><a style="font-family: Helvetica,Arial,sans-serif;"
+        href="timcov.txt">timcov</a><span style="font-family: Helvetica,Arial,sans-serif;">).
+        Dans tous les cas, la présence de cette clé empêchera la lecture d'un
+        premier groupe d'arguments qui pourraient être définis via un
+        enregistrement (ligne) STDIN et ce, tel que décrit dans la documentation
+        des différents modules. Si d'autres variables sont normalement définies
+        via des enregistrements STDIN supplémentaires, celles-ci pourraient
+        également ne plus l'être ou l'être différemment, dépendant des valeurs
+        qui auront été définies avec cette clé (e.g. la liste de niveaux
+        verticaux qui seront utilisés dans <a href="gsapl.txt">gsapl</a> et <a
+          href="pgen.txt">pgen</a>) .</span> <br style="font-family: Helvetica,Arial,sans-serif;">
       <br style="font-family: Helvetica,Arial,sans-serif;">
       <br style="font-family: Helvetica,Arial,sans-serif;">
       <big style="font-family: Helvetica,Arial,sans-serif;"><span style="font-weight: bold;">
