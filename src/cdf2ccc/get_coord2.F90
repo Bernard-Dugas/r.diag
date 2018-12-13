@@ -34,6 +34,13 @@
 !     a chaque coordonnee.
 !
 ! REVISIONS
+!  B.Dugas decembre '18 :
+!  - Ajouter 'xc' et 'yc' comme noms reconnus des coordonnees
+!    en X et Y, respectivement. Ce sont les noms produits par une
+!    conversion prealable de champs polaire-stereographiques
+!  - Ajouter les coordonnees 'soil_layers_stag', 'west-east' et
+!   'south-north' utilisees dans les fichiers de re-analyses ASR,
+!    Arctic System Reanalysis - The Ohio State Univresity
 !  B.Dugas novembre '17 :
 !  - Passer du format .f au format .F90
 !  B.Dugas juillet '17 :
@@ -134,19 +141,21 @@
          call up2low( coord(cid)%name, cfield )
 !                     =======================
 
-         if (cfield          == 'p'         .or. &
-             cfield          == 'lev'       .or. &
-             cfield          == 'plev'      .or. &
-             cfield          == 'level'     .or. &
-             cfield          == 'ht'        .or. &
-             cfield          == 'height'    .or. &
-             cfield          == 'sigma'     .or. &
-             cfield          == 'hybrid'    .or. &
-             cfield          == 'levelist'  .or. &
-             cfield          == 'nlevels'   .or. &
-             coord(cid)%name ==  zcoord     .or. &
-             attr(ii)%cvalue == 'z'         .or. & 
-                                            attr(ii)%cvalue.eq.'Z') then 
+         if (cfield          == 'p'                .or. &
+             cfield          == 'lev'              .or. &
+             cfield          == 'plev'             .or. &
+             cfield          == 'level'            .or. &
+             cfield          == 'ht'               .or. &
+             cfield          == 'height'           .or. &
+             cfield          == 'sigma'            .or. &
+             cfield          == 'hybrid'           .or. &
+             cfield          == 'levelist'         .or. &
+             cfield          == 'nlevels'          .or. &
+             cfield          == 'bottom_top'       .or. &
+             cfield          == 'soil_layers_stag' .or. &
+             coord(cid)%name ==  zcoord            .or. &
+             attr(ii)%cvalue == 'z'                .or. & 
+                                            attr(ii)%cvalue.eq.'Z') then
             zid=cid
             zdid=list(id)%dimid(1)
 
@@ -159,10 +168,12 @@
 
          else &
          if (cfield         .eq.'x'         .or. &
+             cfield         .eq.'xc'        .or. &
              cfield         .eq.'x_2'       .or. &
              cfield         .eq.'lon'       .or. &
              cfield         .eq.'rlon'      .or. &
              cfield         .eq.'longitude' .or. &
+             cfield         .eq.'west-east' .or. &
              coord(cid)%name.eq. xcoord     .or. &
              attr(ii)%cvalue.eq.'x'         .or. &
                                             attr(ii)%cvalue.eq.'X') then
@@ -178,13 +189,15 @@
             endif
 
          else &
-         if (cfield         .eq.'y'         .or. &
-             cfield         .eq.'y_2'       .or. &
-             cfield         .eq.'lat'       .or. &
-             cfield         .eq.'rlat'      .or. &
-             cfield         .eq.'latitude'  .or. &
-             coord(cid)%name.eq. ycoord     .or. &
-             attr(ii)%cvalue.eq.'y'         .or. &
+         if (cfield         .eq.'y'          .or. &
+             cfield         .eq.'yc'         .or. &              
+             cfield         .eq.'y_2'        .or. &
+             cfield         .eq.'lat'        .or. &
+             cfield         .eq.'rlat'       .or. &
+             cfield         .eq.'latitude'   .or. &
+             cfield         .eq.'south-north'.or. &
+             coord(cid)%name.eq. ycoord      .or. &
+             attr(ii)%cvalue.eq.'y'          .or. &
                                             attr(ii)%cvalue.eq.'Y') then
             yid=cid
             ydid=list(id)%dimid(1)

@@ -40,6 +40,11 @@
 *
 *REVISIONS
 *
+*  B. Dugas decembre '18 :
+*   - Forcer en minuscule certains arguments caracteres plutot que les
+*     laisser tels quels (ce qui est le comportement par defaut). Les
+*     exceptions sont "grid" (11), "timedesc" (36). "calendar" (43) et
+*     "cell_method" (45).
 *  B. Dugas aout '18 :
 *   - Remplacer polar-stereographic par polar_stereographic
 *   - Permettre la definition des parametres des grilles PS
@@ -217,7 +222,7 @@
      .  cles(8) /'lev'    /,  def1(8) /'?'       /,  def2(8) /'?'     /,
      .  cles(9) /'tm'     /,  def1(9) /'220.0'   /,  def2(9) /'?'     /,
      .  cles(10)/'ht'     /,  def1(10)/'?'       /,  def2(10)/'?'     /,
-     .  cles(11)/'grid'   /,  def1(11)/'?'       /,  def2(11)/'?'     /,
+     .  cles(11)/'grid_'  /,  def1(11)/'?'       /,  def2(11)/'?'     /,
      .  cles(12)/'ni'     /,  def1(12)/'?'       /,  def2(12)/'?'     /,
      .  cles(13)/'nj'     /,  def1(13)/'?'       /,  def2(13)/'?'     /,
      .  cles(14)/'pi'     /,  def1(14)/'?'       /,  def2(14)/'?'     /,
@@ -235,23 +240,23 @@
      .  cles(26)/'miss_ccc'/, def1(26)/'?'       /,  def2(26)/'ERR'   /,
      .  cles(27)/'fill_ccc'/, def1(27)/'?'       /,  def2(27)/'ERR'   /,
      .  cles(28)/'cle_nhem'/, def1(28)/'?'       /,  def2(28)/'?'     /,
-     .  cles(29)/'udunits'/,  def1(29)/'default' /,  def2(29)/'?'     /,
+     .  cles(29)/'udunits' /, def1(29)/'default' /,  def2(29)/'?'     /,
      .  cles(30)/'rlonoff'/,  def1(30)/'?'       /,  def2(30)/'?'     /,
      .  cles(31)/'hyb_pt' /,  def1(31)/'?'       /,  def2(31)/'?'     /,
      .  cles(32)/'hyb_pref'/, def1(32)/'?'       /,  def2(32)/'?'     /,
      .  cles(33)/'hyb_r'  /,  def1(33)/'?'       /,  def2(33)/'?'     /,
      .  cles(34)/'rpn'    /,  def1(34)/'?'       /,  def2(34)/'?'     /,
      .  cles(35)/'phis'   /,  def1(35)/'?'       /,  def2(35)/'?'     /,
-     .  cles(36)/'timdesc'/,  def1(36)/'hours'   /,  def2(36)/'?'     /, 
+     .  cles(36)/'timdesc_'/, def1(36)/'hours'   /,  def2(36)/'?'     /, 
      .  cles(37)/'nongeog'/,  def1(37)/'oui'     /,  def2(37)/'non'   /,
      .  cles(38)/'xcoord' /,  def1(38)/'!@#$%^&' /, def2(38)/'!@#$%^&'/,
      .  cles(39)/'ycoord' /,  def1(39)/'!@#$%^&' /, def2(39)/'!@#$%^&'/,
      .  cles(40)/'zcoord' /,  def1(40)/'!@#$%^&' /, def2(40)/'!@#$%^&'/,
      .  cles(41)/'tcoord' /,  def1(41)/'!@#$%^&' /, def2(41)/'!@#$%^&'/,
      .  cles(42)/'dtsize' /,  def1(42)/'0.0'     /,  def2(42)/'?'     /,
-     .  cles(43)/'calendar'/, def1(43)/'?'       /,  def2(43)/'?'     /,
+     .  cles(43)/'calendar_'/, def1(43)/'?'      /,  def2(43)/'?'     /,
      .  cles(44)/'gribcode'/, def1(44)/'?'       /,  def2(44)/'?'     /,
-     .  cles(45)/'cell_method'/, def1(45)/'?'    /,  def2(45)/'?'     /,
+     .  cles(45)/'cell_method_'/, def1(45)/'?'   /,  def2(45)/'?'     /,
      .  cles(46)/'title'  /,  def1(46)/' '       /,  def2(46)/' '     /,
      .  cles(47)/'typvar' /,  def1(47)/'NC'      /,  def2(47)/' '     /,
      .  cles(48)/'etiket' /,  def1(48)/'Netcdf2RPN'/,def2(48)/' '     /
@@ -639,7 +644,7 @@
          IONAM(IPOS) =  '+'
       endif
 
-      if(level_desc.eq.'Gal-Chen Levels')then
+      if(level_desc == 'Gal-Chen Levels')then
 
          if(def1(10).eq.'?') then
             write(6,6001) ' -ht "HTOIT" ?'
@@ -1006,7 +1011,7 @@ CCC     endif
 * lecture de la cle 'calendar', tout en tenant compte
 * d'une possible definition prealable de la cle -leap
 
-      evalue = def1(43) ; call up2low( evalue,evalue )
+      evalue = def1(43)
 
       if (evalue /= '?' .and. def1(4) == '?') then
          if      (evalue == 'standard'  .or.

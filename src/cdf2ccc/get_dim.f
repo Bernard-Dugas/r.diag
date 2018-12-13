@@ -67,6 +67,15 @@
 *
 * REVISIONS
 *
+*  B.Dugas decembre '18 :
+*  - Ajouter 'xc' et 'yc' comme noms reconnus des coordonnees
+*    en X et Y, respectivement. Ce sont les noms produits par une
+*    conversion prealable de champs polaire-stereographiques
+*  - Ajouter la coordonnee 'soil_layers_stag' utilisee dans les
+*    fichiers de re-analyses ASR, Arctic System Reanalysis, tout
+*    comme 'west-east' et 'south-north', deja reconnus
+*  - (t,x,y,z)coord sont compares avec les valeurs originales des
+*    noms des coordonnees, et non pas leurs valeurs en minuscules
 *  B.Dugas novembre '17 :
 *  - Ajouter 'time_counter' a la liste des coordonnees temporelles reconnues
 *  B.Dugas aout '12 :
@@ -85,7 +94,7 @@
 *
 ******
       integer dimid,nlen,tdid,ncc
-      character(len=128) cfield
+      character(len=128) cfield,cfield2
 
 *-----------------------------------------------------------------------
 
@@ -105,15 +114,15 @@
          do dimid=1,ndims
 
             call clean_char( dim(dimid)%name,cfield,nlen )
-            call up2low( cfield, cfield )
+            call up2low( cfield, cfield2 )
 
 !           Chercher coordonnee T (avec caracteristique unlimdimid)
 
             if (coord(tid)%dimid(1).eq.-1) then
 
-               if((cfield   == 'time'         .or. 
-     .             cfield   == 'time_counter' .or.
-     .             cfield   == 't'            .or.
+               if((cfield2  == 'time'         .or. 
+     .             cfield2  == 'time_counter' .or.
+     .             cfield2  == 't'            .or.
      .             cfield   ==  tcoord)       .and.
      .             dimid    ==  unlimdimid)   then
 
@@ -137,14 +146,15 @@
 
             if (coord(xid)%dimid(1).eq.-1) then
 
-               if((cfield == 'x'          .or.
-     .             cfield == 'x_2'        .or.
-     .             cfield == 'lon'        .or.
-     .             cfield == 'rlon'       .or.
-     .             cfield == 'longitude'  .or. 
-     .             cfield == 'west_east'  .or. 
-     .             cfield ==  xcoord    ) .and.
-     .             dimid  /=  unlimdimid) then
+               if((cfield2 == 'x'          .or.
+     .             cfield2 == 'xc'         .or.
+     .             cfield2 == 'x_2'        .or.
+     .             cfield2 == 'lon'        .or.
+     .             cfield2 == 'rlon'       .or.
+     .             cfield2 == 'longitude'  .or. 
+     .             cfield2 == 'west_east'  .or. 
+     .             cfield  ==  xcoord    ) .and.
+     .             dimid   /=  unlimdimid) then
 
                   ncc = ncc+1
                   xid = ncc
@@ -169,14 +179,15 @@
 
             if (coord(yid)%dimid(1).eq.-1) then
 
-               if((cfield == 'y'            .or.
-     .             cfield == 'y_2'          .or.
-     .             cfield == 'lat'          .or.
-     .             cfield == 'rlat'         .or.
-     .             cfield == 'latitude'     .or. 
-     .             cfield == 'south_north'  .or. 
-     .             cfield ==  ycoord      ) .and.
-     .             dimid  /=  unlimdimid  ) then
+               if((cfield2 == 'y'            .or.
+     .             cfield2 == 'yc'           .or.
+     .             cfield2 == 'y_2'          .or.
+     .             cfield2 == 'lat'          .or.
+     .             cfield2 == 'rlat'         .or.
+     .             cfield2 == 'latitude'     .or. 
+     .             cfield2 == 'south_north'  .or. 
+     .             cfield  ==  ycoord      ) .and.
+     .             dimid   /=  unlimdimid  ) then
 
                   ncc = ncc+1
                   yid = ncc
@@ -201,14 +212,20 @@
 
             if (coord(zid)%dimid(1).eq.-1) then
 
-               if((cfield == 'p'           .or.
-     .             cfield == 'lev'         .or.
-     .             cfield == 'plev'        .or.
-     .             cfield == 'level'       .or.
-     .             cfield == 'height'      .or.
-     .             cfield == 'bottom_top'  .or.
-     .             cfield ==  zcoord     ) .and.
-     .             dimid  /=  unlimdimid ) then
+               if((cfield2 == 'p'                .or.
+     .             cfield2 == 'lev'              .or.
+     .             cfield2 == 'plev'             .or.
+     .             cfield2 == 'level'            .or.
+     .             cfield2 == 'ht'               .or.
+     .             cfield2 == 'height'           .or.
+     .             cfield2 == 'sigma'            .or.
+     .             cfield2 == 'hybrid'           .or.
+     .             cfield2 == 'levelist'         .or.
+     .             cfield2 == 'nlevels'          .or.
+     .             cfield2 == 'bottom_top'       .or.
+     .             cfield2 == 'soil_layers_stag' .or.
+     .             cfield  ==  zcoord     )      .and.
+     .             dimid   /=  unlimdimid ) then
 
                   ncc = ncc+1
                   zid = ncc

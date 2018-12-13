@@ -45,6 +45,9 @@
 *     
 * REVISIONS
 *
+* Bernard Dugas decembre 2018 :
+* - Ajouter le support de '_' a la fin des cles (tel que dans CCARD).
+*   La presence de ce caractere '_' minusculise la valeur du champs
 * Bernard Dugas 30 janvier 2018 :
 * - Remplacer les commandes F77 GETARG et IARGC par
 *   GET_COMMAND_ARGUMENT et COMMAND_ARGUMENT_COUNT,
@@ -58,7 +61,7 @@
 ******
 
       integer*4     argc,iarg,jarg
-      integer       j,n,init,fini,nt,nlen
+      integer       i,j,m,n,init,fini,nt,nlen
       character(512) string,dummy
 *-----------------------------------------------------------------------
 
@@ -70,51 +73,57 @@
 
       iarg=1
 
-      do while (iarg.le.argc) !boucle sur tous les arguments d appel
+      do while (iarg <= argc) !boucle sur tous les arguments d appel
 
          call get_command_argument(iarg,string)
 
-         if(string(1:1).eq.'-') then                ! chercher une cle
+         if(string(1:1) == '-') then                ! chercher une cle
 
             string=string(2:nt)
-            if (string.eq.'h')call definition(cles,def,def1,nbr,version)
+            if (string == 'h')call definition(cles,def,def1,nbr,version)
             jarg=iarg+1
 
             n=0
             do j=1,nbr
-               if(string.eq.cles(j))then            ! definir la cle
-                  n=j
-                  if(jarg.le.argc)then              ! affecter une valeur
+               i=len_trim(string)
+               if(cles(j) == string            .or.
+     .            cles(j) == string(1:i)//'_') then ! definir la cle
+                  
+                  n=j ; m=len_trim(cles(n))
+                  if(jarg <= argc)then              ! affecter une valeur
 
                      init=1
  100                 call get_command_argument(jarg,string)       ! boucler jusqu'a la cle suivante
-                     if(string(1:1).eq.'-') then
+                     if(string(1:1) == '-') then
 
-                        if (init.eq.1) def1(j)=def2(j) !1ere cle sans valeur
+                        if (init == 1) def1(n)=def2(n) !1ere cle sans valeur
 
-                     else if(string(1:1).eq. '=')then   !possible valeur negative
+                     else if(string(1:1) == '=')then   !possible valeur negative
 
                         call def_name(string,nt,' ',dummy,nlen)
                         dummy=dummy(2:nlen)       !sans le =
                         fini=init+nlen-1
-                        def1(j)(init:fini)=dummy
+                        def1(n)(init:fini)=dummy
                         init=fini+1
                         jarg=jarg+1
 
-                     else if(string(1:1).ne. ' ')then
+                     else if(string(1:1) /= ' ')then
 
                         call def_name2(string,nt,dummy,nlen)
-                        if(init.eq.1)def1(j)=' '
+                        if(init.eq.1)def1(n)=' '
                         dummy=dummy(1:nlen)
+                        if(cles(n)(m:m) == '_')then
+                           call up2low(dummy(1:nlen),dummy(1:nlen))
+                        endif
                         fini=init+nlen
-                        def1(j)(init:fini)=dummy
+                        def1(n)(init:fini)=dummy(1:nlen)
                         init=fini+1
                         jarg=jarg+1
                         goto 100
 
                      endif
                   else
-                     def1(j)=def2(j)     !juste la cle sans valeur
+                     def1(n)=def2(n)     !juste la cle sans valeur
                   endif
 
                   iarg=jarg
@@ -123,7 +132,7 @@
                endif
             enddo               !j
 
-              if(n.eq.0) then
+              if(n == 0) then
                  call def_name(string,nt,' ',dummy,nlen)
                  write(6,6001) string (1:nlen)
                  call xit('les_arg',-1 )
