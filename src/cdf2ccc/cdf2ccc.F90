@@ -1,40 +1,39 @@
 #     if defined (AUTO_DOC)
 !
 !
-! The NetCDF to/from CMC-RPN/CCCma format converter
+! NetCDF to/from CMC-RPN/CCCma format converter
 !
 ! There may be several tools that do CMC-RPN to/from NetCDF
 ! format conversions at CMC/Dorval. The one described here is
 ! based on the Ouranos NetCDF to/from CCCma format converter,
-! cdf2ccc. The two programs, cdf2rpn and cdf2ccc, somewhat
-! follow the 1.0 to 1.6 CF-Metadata conventions that are
-! recommended for climate and large-scale forecast data.
-! For more info on this, see
+! cdf2ccc. The resulting two programs, cdf2rpn and cdf2ccc,
+! somewhat follow the 1.0 to 1.6 CF-Metadata conventions that
+! are recommended for climate and large-scale forecast data.
+! The only difference between the two programs is that each
+! one will by default expect its own file format. In fact,
+! the two are hard-linked and the program’s name at startup
+! provides for the default behavior. For more info on the
+! CF-Meta-data, please see
 !
-! http://cf-pcmdi.llnl.gov/documents/cf-conventions/
+! http://cfconventions.org/documents.html
 !
 ! Given the above, and the very "free" implementations
-! often found in NetCDF files, and as mentionned in the
-! following web page, "Your mileage will vary":
+! often found in NetCDF files, "Your mileage will vary".
 !
-! http://web-mrb.cmc.ec.gc.ca/mrb/si/eng/si/howto-si/doku.php?id=netcdf
-!
-! At UQAM, the latest released version of the scripts that
+! At UQAM, the latest development version of the scripts that
 ! call the actual Linux binaries can be found under
 !
-! ${diag-tool}/r.diag_6.4.2-2.3.2_linux26-x86-64/bin
+! ${diag-tool}/r.diag_6.4.4-2.3.4_linux26-x86-64/bin
 !
 ! where diag-tools=/unique/armnssm/ECssm/ssm-domains-base/tools/diag-tools
-! and it is made available via the diagtools-6.4.2 SSM bundle.
+! and it is made available via the diagtools-alpha SSM bundle.
 
 ! In Dorval, the different AIX (now deprecated) and
 ! Linux binaries used to be found under
 !
 ! ${ARMNLIB}/modeles/diag/bin/${BASE_ARCH}
 !
-! You will also need to define a UDUNITS2 environment variable.
-!
-! For example:
+! You will also need to define a UDUNITS2 environment variable, such as:
 !
 ! export UDUNITS2_XML_PATH=/opt/udunits2/share/udunits/udunits2.xml
 !
@@ -76,21 +75,20 @@
 ! from CMC-RPN files when it detects the presence of multi-sample
 ! representing data such as the resuluts of time averages, maximums,
 ! minimums, variances and standard deviations operations on a variable.
-! This applies in particular to the output of the TIMAVG, TIMMAX,
-! TIMMIN, TIMCOV, STDEV, FSTMDIAG and ACCUMUL r.diag commands.
-! The '-dtsize' argument need not be used with such a variable.
-!
-! However, when converting from a NetCDF file, the '-dtsize' argument
-! should be specified in order to reproduce the full CMC-RPN time-mean
-! file information.
+! This applies in particular to the output of the TIMAVG (TIMMAX,
+! TIMMIN, ACCUMUL), TIMCOV (STDEV) and FSTMDIAG RDIAG commands.
+! However, when converting from a NetCDF file, the '-dtsize'
+! argument should be specified in order to reproduce the
+! full CMC-RPN time-mean file information.
 !
 ! Current limitations of the converter:
 !
-! - Only one set of multiple vertical levels is supported per file.
-!   And all of these must be of the same type. However, any number
-!   of single level variables are supported in the same file.
-! - Again, only one set of timesteps is supported for time-varying
-!   variables.
+! - Only one set of multiple vertical levels is supported
+!   per file. And all of these must be of the same type.
+! - However, any number of single level variables
+!   are supported in the same file.
+! - Again, only one set of time-steps is
+!   supported for time-varying variables.
 !
 ! These constraints are mainly due to the use of NetCDF 3.x and its
 ! limited coordinate definitions; NetCDF version 4.x somewhat removes 
@@ -159,14 +157,16 @@
 !  cles(47) = 'typvar' , def1(47) = 'NC'      , def2(47) = ' '
 !  cles(48) = 'etiket' , def1(48) = 'Netcdf2RPN'/,def2(48) = ' '
 !
-!  Data type : (C) character - (I) integer - (R) real
+!  FORTRAN Data type : (C) character - (I) integer - (R) real
 !
 !  description(1)  = (C) Nom du fichier netCDF
 !  description(2)  = (C) Nom du fichier CCCma
 !  description(3)  = (C) Convertir vers ('cccma' ou 'rpncmc') ou 'netcdf'
-!  Items 4 a 11 decrivent les parametres de base
+!
+!  Les arguments 4 a 10 decrivent les parametres de base
 !     d'un fichier source en format CCCma
-!  description(4)  = (C) Annee bissextile (no / yes)
+!
+!  description(4)  = (C) Annee bissextile ('off'/'no'/'non'/'on'/'yes'/'oui')
 !  description(5)  = (I) Date de depart de la simulation (AAAAMMJJHH)  
 !  description(6)  = (R) Pas de temps (secondes)  
 !  description(7)  = (C) Format temporel CCCma = AAAAMMDDHH ?
@@ -178,56 +178,70 @@
 !                        et 'Hybrid Height'
 !  description(9)  = (R) variable TMOYEN de PARAMETRES  
 !  description(10) = (R) Hauteur du toit du modele en metres
+!
 !  description(11) = (C) Type de projection. Les seules valeurs reconnues
 !                        sont 'lon/lat','gaussian','polar_stereographic',
-!                        'rotated_latitude_longitude','rotated_pole'
-!                        et 'unknown'
-!  Items 12 a 17 decrivent une projection 'polar_stereographic'
+!                        'rotated_latitude_longitude','rotated_pole' et
+!                        'unknown'. Cet argument est surtout utilisé pour
+!                        décrire les fichiers CCCma, mais il peut aussi
+!                        l’être si le fichier source NetCDF ne contient
+!                        pas toutes les informations requises.
+!
+!  Les arguments 12 a 17 decrivent les details d'une projection 'polar_stereographic'
+!
 !  description(12) = (I) Nbre de points de grille en X
 !  description(13) = (I) Nbre de points de grille en Y
-!  description(14) = (R) Coordonnee selon x du pole (nbr de dx)
-!  description(15) = (R) Coordonnee selon y du pole (nbr de dy)
-!  description(16) = (R) Angle entre Greenwich et l'axe X (deg. ouest)
-!  description(17) = (R) Longueur de la maille vraie a 60 deg (metres)
-!  Items 18 a 21 decrivent une projection 'lon/lat'
+!  description(14) = (R) Coordonnee selon X du pole (nombre de delta-x)
+!  description(15) = (R) Coordonnee selon Y du pole (nombre de delta-y)
+!  description(16) = (R) Angle entre le meridien de Greenwich et l'axe X (degres ouest)
+!  description(17) = (R) Longueur de la maille vraie a 60 deg (en metres)
+!
+!  Les arguments 18 a 21 decrivent les details d'une projection 'lon/lat'
+!
 !  description(18) = (R) Longitude d'origine (degres ouest)
 !  description(19) = (R) Latitude d'origine (degres nord)
 !  description(20) = (R) Longueur de la maille selon longitude (degres)
 !  description(21) = (R) Longueur de la maille selon latitude (degres)
-!  Items 22 a 35 divers
-!  description(22) = (C) Inverse l'ordre de l'indice 'j' dans la sortie
+!
+!  Les arguments 22 a 35 sont de divers types
+!
+!  description(22) = (C) Inverser l'ordre de l'indice 'j' dans la sortie
 !  description(23) = (I) Densite de compression 0,1,2,4,-64,-32,-16
-!  description(24) = (C) Ecrire les latitudes et longitudes ('no'/'yes')
+!  description(24) = (C) Ecrire les latitudes et longitudes ('off'/'no'/'non'/'on'/'yes'/'oui')
 !  description(25) = (C) Nom du fichier dictionnaire. Les valeurs par
 !                        defaut primaire et secondaire, respectivement, sont
 !                        file_attr = /LOGICIELS/cdf2ccc/etc/attribut_netcdf.dat
 !                        local     = ./attribut_netcdf.dat
 !  description(27) = (R) Valeur de remplissage dans sortie ('FILL VALUE')
-!  description(28) = (I) 1=Hem Nord, 2=Hem Sud pour grille PS vers CCCma
+!  description(28) = (I) 0=Global, 1=Hem Nord, 2=Hem Sud (pour grilles PS ou Lat/Lon)
 !  description(29) = (C) Chemin complet du fichier 'udunits2.xml'
 !  description(30) = (R) Deplacement des longitudes d'une grille tournee
 !  description(31) = (R) Pression au toit de la coordonnee hybride (Pa)
 !  description(32) = (R) Pression de reference pour la coordonnee hybride
 !  description(33) = (R) Exposant pour la coordonnee hybride
-!  description(34) = (C) Nom du fichier RPN-CMC
+!  description(34) = (C) Nom du fichier CMC-RPN
 !  description(35) = (C) Nom du fichier PHIS (Option Gal-Chen)
-!  Items 36 a 43 ne concernent les fichiers NetCDF
-!  description(36) = (C) Unites associes a la variable temporelle. Les
+!
+!  Items 36 a 43 ne concernent que les fichiers NetCDF
+!
+!  description(36) = (C) Unites associees a la variable temporelle. Les
 !                        seules valeurs reconnues sont 'seconds','minutes',
 !                        'hours','days','months' et 'years' (since ...)
 !  description(37) = (C) Convertir les variables non-geographiques
-!  description(38) = (C) Nom de la coordoonnee en X du fichier NetCDF
-!  description(39) = (C) Nom de la coordoonnee en Y du fichier NetCDF
-!  description(40) = (C) Nom de la coordoonnee en Z du fichier NetCDF
-!  description(41) = (C) Nom de la coordoonnee en T du fichier NetCDF
-!  description(42) = (R) Interval d'accumulation temporelle en heures
-!  description(43) = (C) Nom du calendrier
-!  Items 44 a 48 ne concernent que les fichiers CMC/RPN et NetCDF
+!  description(38) = (C) Nom de la coordonnee en X du fichier NetCDF (voir Notes #2,3)
+!  description(39) = (C) Nom de la coordonnee en Y du fichier NetCDF    "    "    "
+!  description(40) = (C) Nom de la coordonnee en Z du fichier NetCDF    "    "    "
+!  description(41) = (C) Nom de la coordonnee en T du fichier NetCDF    "    "    "
+!  description(42) = (R) Intervalle d'accumulation temporelle en heures
+!  description(43) = (C) Nom du calendrier (pour plus de détails voir Note #4)
+!
+!  Items 44 a 48 ne concernent que les fichiers CMC-RPN et NetCDF
+!
 !  description(44) = (I) Code GRIB pour une grille Lambert Conforme Conique
-!  description(45) = (C) Cell Method utilisee dans les calculs temporels
-!  description(46) = (C) Optional "title" for meta-data
-!  description(47) = (C) Optional TYPVAR (default = NC)
-!  description(48) = (C) Optional ETIKET (default = Netcdf2RPN)
+!  description(45) = (C) "Cell Method" utilisee dans les calculs temporels
+!  description(46) = (C) Optionnel, "title" for meta-data
+!  description(47) = (C) Optionnel, TYPVAR (default = "NC")
+!  description(48) = (C) Optionnel, ETIKET (default = "Netcdf2RPN")
 !
 !
 ! Notes regarding the above arguments:
@@ -238,12 +252,15 @@
 ! the file dimensions, followed the included variables headers, each
 ! with their particular attributes. A global atributes section should be
 ! displayed at the end of this section. A (very large) data section will
-! be displayed after the global descriptors. Normaly, each of the declared
-! dimensions should also be extensively described in the variable section
-! of a file. A data section relating to each of these coordinates should
-! also be found following the header sections of a NetCDF file. The
-! converter may attempt to supply default values when any of these 
-! conditions are not met, but will more likely fail.
+! be displayed after the global descriptors. Adding the -h argument to the
+! ncdump command will prevent the display of this large data section.
+! Normaly, each of the declared dimensions should also be extensively
+! described in the variable section of a file. A data section relating
+! to each of these coordinates should also be found following the header
+! sections of a NetCDF file. The converter may attempt to supply default
+! values when any of these conditions are not met,
+!
+!        ** but it more than likely that it will FAIL to do so**.
 !
 ! 2) The -xcoord, -ycoord, -zcoord and -tcoord arguments may be used when
 ! the program fails to recognize any of the existing x, y, z or t dimension
@@ -252,15 +269,15 @@
 ! to the unlimdimid dimension.
 !
 ! 3) Assuming the vertical coordinate is recognized but its values are
-! either missing or not appropriate for conversion to a CMC/RPN file format,
+! either missing or not appropriate for conversion to a CMC-RPN file format,
 ! it is possible to input an alternative set of values to be written in the
-! CMC/RPN file. Given a NetCDF vertical dimension name of "lev", and given
+! CMC-RPN file. Given a NetCDF vertical dimension name of "lev", and given
 ! that a file called "lev_remplacement.txt" exists in the current working
 ! directory, the converter will attempt to read this file with a (BN,I10)
 ! FORTRAN I/O format (one 10 character integer "lev" value per line).
 ! The values thus retreived will be assumed to be already coded and
-! will be used "AS IS" when writing the CMC/RPN file. Any "lev" values
-! in the NetCDF files will then be ignored.
+! will be used "AS IS" when writing the CMC-RPN file. Any "lev" values
+! to be found in the NetCDF files will then be ignored.
 !
 ! 4) The recognized -calendar arguments are gregorian (or standard),
 ! proleptic_gregorian, 365_day (or noleap) and 360-day. The two 'gregorian'
@@ -277,34 +294,33 @@
 !
 !
 ! Finally, as this converter shares much of its low-level I/O routines
-! with r.diag toolbox, the following arguments are also relevant:
+! with the RDIAG toolbox, the following arguments are also relevant:
 ! 
-!  cles(1)  = 'help'   ,def1(1)  = 'non' ,def2(1)  = 'oui'
-!  cles(2)  = 'info'   ,def1(2)  = 'non' ,def2(2)  = 'oui'
-!  cles(3)  = 'ipktyp' ,def1(3)  = ' '   ,def2(3)  = '
-!  cles(4)  = 'opktyp' ,def1(4)  = ' '   ,def2(4)  = '
-!  cles(5)  = 'input.' ,def1(5)  = '****',def2(5)  = '****' 
-!  cles(6)  = 'output.',def1(6)  = '****',def2(6)  = '****' 
-!  cles(7)  = 'date'   ,def1(7)  = ' '   ,def2(7)  = '  -1' 
-!  cles(8)  = 'singlz' ,def1(8)  = ' '   ,def2(8)  = '  -1' 
-!  cles(9)  = 'seq'    ,def1(9)  = 'rnd' ,def2(9)  = 'seq'
-!  cles(10) = 'vers'   ,def1(10) = 'non' ,def2(10) = 'oui'
-!  cles(11) = 'na'     ,def1(11) = '****',def2(11) = '  -1' 
-!  cles(12) = 'keepip2',def1(12) = 'non' ,def2(12) = 'oui'
-!  cles(13) = 'mvalue' ,def1(13) = 'none',def2(13) = '  -1' 
-!  cles(14) = 'mvalue' ,def1(14) = 'none',def2(14) = '  -1' 
-!  cles(15) = 'bisect' ,def1(15) = 'oui' ,def2(15) = 'non'
+!  cles(R1)  = 'help'   ,def1(R1)  = 'non' ,def2(R1)  = 'oui'
+!  cles(R2)  = 'info'   ,def1(R2)  = 'non' ,def2(R2)  = 'oui'
+!  cles(R3)  = 'ipktyp' ,def1(R3)  = ' '   ,def2(R3)  = '
+!  cles(R4)  = 'opktyp' ,def1(R4)  = ' '   ,def2(R4)  = '
+!  cles(R5)  = 'input.' ,def1(R5)  = '****',def2(R5)  = '****'
+!  cles(R6)  = 'output.',def1(R6)  = '****',def2(R6)  = '****'
+!  cles(R7)  = 'date'   ,def1(R7)  = ' '   ,def2(R7)  = '  -1'
+!  cles(R8)  = 'singlz' ,def1(R8)  = ' '   ,def2(R8)  = '  -1'
+!  cles(R9)  = 'seq'    ,def1(R9)  = 'rnd' ,def2(R9)  = 'seq'
+!  cles(R10) = 'vers'   ,def1(R10) = 'non' ,def2(R10) = 'oui'
+!  cles(R11) = 'na'     ,def1(R11) = '****',def2(R11) = '  -1'
+!  cles(R12) = 'keepip2',def1(R12) = 'non' ,def2(R12) = 'oui'
+!  cles(R13) = 'mvalue' ,def1(R13) = 'none',def2(R13) = '  -1'
+!  cles(R14) = 'mvalue' ,def1(R14) = 'none',def2(R14) = '  -1'
+!  cles(R15) = 'bisect' ,def1(R15) = 'oui' ,def2(R15) = 'non'
 !
 ! This last set of arguments are documented at the end of
-! the following web page (if you know the 'science' password): 
-!
-! http://collaboration.cmc.ec.gc.ca/science/si/eng/si/utilities/r.diag/Diag_Config.html
-!
+! the Diag_Config.html which can be accessed via the RPN
+! utilities RDIAG web page. Note that this page usually
+! resides in the same directory as the current file.
 !
 ! Good luck.
 !
 ! Maintained by: B.Dugas, ESCER/UQAM (Dugas.Bernard@uqam.ca)
-! Latest revision: August 2018
+! Latest revision: December 2018
 !
 !
 #     endif
@@ -339,6 +355,8 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas, 18 decembre 2018 :
+!  - Mise-a-jour de la documentation automatique
 !  Bernard Dugas, 29 aout 2018 :
 !  - Remplacer polar-stereographic par polar_stereographic dans
 !    la description de l'argument 11 (-grid) pour la doc interne
