@@ -246,6 +246,11 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gpasg.ptn,v $
+*     Revision 4.34  2019/01/08 16:16  dugas
+*     En mode APPEND, tenir compte des niveaux diagnostiques qui
+*     se trouvent dans les TocToc pour les versions 5005+ de la
+*     coordonnee GEM4.
+*
 *     Revision 4.33  2018/11/17 22:22  dugas
 *     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
 *
@@ -842,8 +847,9 @@
                   CALL LirToc( NFOUT, NBRtoc )
 
                   IF (NBRtoc > 0)                              THEN
-                      call GetTOC( NFOUT, 'IP1',IP1, NBRtoc )
-                      call GetTOC( NFOUT, 'IP2',IP2, NBRtoc )
+                      call GetTOC( NFOUT, 'IP1',IP1,  NBR=NBRtoc )
+                      call GetTOC( NFOUT, 'IP2',IP2,  NBR=NBRtoc )
+                      call GetTOC( NFOUT, 'VER',VERSION, IP1,IP2 )
                   END IF
 
               END IF
@@ -888,7 +894,10 @@
                   CALL                             XIT( VERBEX ,-23 )
               END IF
 
-              NSL = size( LEVS )
+              ! Size as returned from GetTOC (-1 to remove the last
+              !  height [1.5m (T) or 10m (M)] levels for vcode=5005+)
+              NSL = size( LEVS ) ; IF (MOD( VERSION,1000) >= 5) NSL = NSL-1
+
               IF (NSL < 1 .OR. NSL > MAXLEV) CALL  XIT( VERBEX ,-23 )
               DEALLOCATE( ETA ) ; ALLOCATE( ETA(NSL) )
 
