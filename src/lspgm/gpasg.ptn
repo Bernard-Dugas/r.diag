@@ -246,10 +246,11 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gpasg.ptn,v $
-*     Revision 4.34  2019/01/08 16:16  dugas
-*     En mode APPEND, tenir compte des niveaux diagnostiques qui
-*     se trouvent dans les TocToc pour les versions 5005+ de la
-*     coordonnee GEM4.
+*     Revision 4.34  2019/01/09 15:15  dugas
+*     - Ajouter un message explicatif pour l'erreur -19.      
+*     - En mode APPEND, tenir compte des niveaux diagnostiques qui
+*       se trouvent dans les TocToc pour les versions 5005+ de la
+*       coordonnee GEM4.
 *
 *     Revision 4.33  2018/11/17 22:22  dugas
 *     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
@@ -811,7 +812,10 @@
               READ( CLEVS(K),10, ERR=915,END=915,IOSTAT=IO ) LEVS(K)
               CALL CONVPR( LEVS(K), ETA(K), VK, -2 )
               IF (PKTYP.EQ.'SQ')                               THEN
-                  IF (VK.NE.VKIND) CALL            XIT( VERBEX , -19)
+                  IF (VK /= VKIND)                            THEN
+                      WRITE(6,6019) VK,VKIND
+                      CALL                         XIT( VERBEX ,-19 )
+                  END IF
                   CALL CONVPR( LEVS(K), ETA(K), VK, +2 )
               ELSE IF (VK.EQ.2)                                THEN
                   ETA(K) = ETA(K) * 0.001
@@ -850,6 +854,7 @@
                       call GetTOC( NFOUT, 'IP1',IP1,  NBR=NBRtoc )
                       call GetTOC( NFOUT, 'IP2',IP2,  NBR=NBRtoc )
                       call GetTOC( NFOUT, 'VER',VERSION, IP1,IP2 )
+                      VERSION = MOD( VERSION,1000)
                   END IF
 
               END IF
@@ -896,7 +901,7 @@
 
               ! Size as returned from GetTOC (-1 to remove the last
               !  height [1.5m (T) or 10m (M)] levels for vcode=5005+)
-              NSL = size( LEVS ) ; IF (MOD( VERSION,1000) >= 5) NSL = NSL-1
+              NSL = size( LEVS ) ; IF (APPEND .and. VERSION >= 5) NSL = NSL-1
 
               IF (NSL < 1 .OR. NSL > MAXLEV) CALL  XIT( VERBEX ,-23 )
               DEALLOCATE( ETA ) ; ALLOCATE( ETA(NSL) )
@@ -905,7 +910,10 @@
 
               DO  K=1,NSL
                   CALL CONVPR( LEVS(K), ETA(K), VK, -2 )
-                  IF (VK /= VKIND) CALL            XIT( VERBEX ,-19 )
+                  IF (VK /= VKIND)                            THEN
+                      WRITE(6,6019) VK,VKIND
+                      CALL                         XIT( VERBEX ,-19 )
+                  END IF
               END DO
 
               CALL GETTOC( NFOUT, 'PTOP' ,PTOIT8, IP1,IP2 )
@@ -1419,6 +1427,7 @@
  6015 FORMAT(' Found illegal eta value for level # ',I3,
      +       ' ETA=',E20.10/)
  6016 FORMAT(' Unsupported vertical coordinate in gsfld, VKIND =',I9/)
+ 6019 FORMAT(' Found vertical kind ,'I4,' while expecting ',I4/)
  6020 FORMAT( A6,' Unable to read AI,BI in aabb.nml namelist file,',
      +      ' error no.',I5/)
  6021 FORMAT(' More that one input vertical coordinate'/) 
