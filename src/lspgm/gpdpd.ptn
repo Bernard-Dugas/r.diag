@@ -134,6 +134,10 @@
 *     -------------------------------------------------------------
 
 *     $Log: gpdpd.ptn,v $
+*     Revision 4.28  2019/01/10 17:17  dugas
+*     Faire appel aux nouveaux comdecks *_formats.cdk
+*     associes aux autres implementes en fin 2016.
+*
 *     Revision 4.27  2018/06/14 15:15  dugas
 *     - Allocation de max( MAXW,NWDS ) mots, au lieu de MAXW.
 *     - Autres modifications des appels a ALLOCATE pour GFORTRAN.
@@ -292,9 +296,10 @@
       real,       dimension(:,:,:), save, pointer  :: local_pressure=>null()
       REAL,       DIMENSION(:,:), ALLOCATABLE      :: PS2D
 
-      LOGICAL,    EXTERNAL :: RPBLOC
-      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
-      INTEGER,    EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,GETHIGH
+      LOGICAL,      EXTERNAL :: RPBLOC
+      CHARACTER(16),EXTERNAL :: GETKINDC
+      CHARACTER(4), EXTERNAL :: GETYP,GETHIC
+      INTEGER,      EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,GETHIGH
       EXTERNAL    JCLPNT,CONVPR,XIT,LIRPT,GETPT,
      +            SETPT,GETFLD2,CMPLBL,PUTFLD2,
      +            INCTDIA,WRITLEV,GENAB,
@@ -838,13 +843,11 @@
  6011 FORMAT(' Unsupported type of vertical coordinate ',A,
      +       ' in COORD argument.')
  6012 FORMAT(' Gpdpd reports I/O error number ',I5/)
- 6016 FORMAT(' Unsupported vertical coordinate in hum, VKIND =',I9/)
+# include "toc_gest_formats.cdk"
  6019 FORMAT(' More that one input vertical coordinate.'/) 
  6020 FORMAT(' Unable to read A,B in aabb.nml namelist file,',
      +       ' error no.',I5/)
- 6021 FORMAT(' More that one input vertical coordinate.'/) 
- 6022 FORMAT(' Wrong number of A,B entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+# include "set_a_b_formats.cdk"
  6023 FORMAT(' Unrecognized -def argument value... ',A/)
 
  6110 FORMAT(' Using A and B from file aabb.nml'/)

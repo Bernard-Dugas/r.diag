@@ -137,6 +137,10 @@
 *    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
  
 *     $Log: dxdp.ptn,v $
+*     Revision 4.26  2019/01/10 17:17  dugas
+*     Faire appel aux nouveaux comdecks *_formats.cdk
+*     associes aux autres implementes en fin 2016.
+*
 *     Revision 4.25  2016/10/28 15:20  dugas
 *     - Ameliorer le support des coordonnees verticales de
 *       GEM4, et ce aussi pour le mode de traitement AABB.
@@ -302,9 +306,11 @@
       real,       dimension(:,:,:), save, pointer  :: local_pressure=>null()
       real,       dimension(:,:),    allocatable   :: ps
 
-      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
-      LOGICAL,    EXTERNAL :: RPBLOC,SETIO64
-      INTEGER,    EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,GETHIGH,FNOM,FCLOS
+      CHARACTER(16),EXTERNAL :: GETKINDC
+      CHARACTER(4), EXTERNAL :: GETYP,GETHIC
+      LOGICAL,      EXTERNAL :: RPBLOC,SETIO64
+      INTEGER,      EXTERNAL :: GETHIGH,FNOM,FCLOS
+      INTEGER,      EXTERNAL :: GETSIZ,GETSIZ2,GETKIND
       EXTERNAL    MACSPE,JCLPNT,XIT,GETSET2,CMPLBL,CONVPR,PUTSET2,
      +            BASCAL,MONVERT,WRITLEV,COORDAB, GETPT,LIRPT,
      +            SETPT,GENAB,GETFLD2,SETKINDi
@@ -874,14 +880,10 @@
  6004 FORMAT(' Levels should be varying monotonically.')
  6005 FORMAT(' Found illegal KIND value =',I5)
  6008 FORMAT(' Dxdp reports I/O error number ',I5/)
-!6013 FORMAT(' Vertical levels need to be stored from the TOP to',
-!    +       ' the surface.'/' Please sort XIN with FSTTRI...'/)
- 6016 FORMAT('  Unsupported vertical coordinate in XIN, VKIND =',I9/)
+# include "toc_gest_formats.cdk"
  6020 FORMAT(' Unable to read A,B in aabb.nml namelist file,',
      +       ' error no.',I5/)
- 6021 FORMAT(' More that one input vertical coordinate.'/) 
- 6022 FORMAT(' Wrong number of A,B entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+# include "set_a_b_formats.cdk"
  6023 FORMAT(' Unrecognized -def argument value... ',A/)
 
  6000 FORMAT(' Dxdp will use weighted differences.')

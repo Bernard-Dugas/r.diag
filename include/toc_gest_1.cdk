@@ -7,6 +7,12 @@
 ! Revision 1.0  2016/10/29 21:42  dugas
 ! Version initiale
 !
+! Revision 1.1  2019/01/10 14:14  dugas
+! - Imprimer le vcode caractere plutot que numerique
+!   dans le message du code d'erreur -16
+! - Ajouter des messages informatifs aux differentes
+!   instances du code d'erreur -17
+!
 # endif
           VKIND = GETKIND()
 
@@ -55,24 +61,30 @@
           ! VKIND = 5002,5003,5004,5005 are not supported !     
 #         endif
      +  .AND. VKIND /= 5    .AND. VKIND /= 1003 .AND. VKIND /= 5001)
-     +    THEN
-              WRITE(6,6016) VKIND
+     +                                                         THEN
+              WRITE(6,6016) TRIM( GETKINDC( VKIND ))
               CALL                                 XIT( VERBEX ,-16)
-          ELSE IF (VKIND == 1001)                            THEN
+          ELSE IF (VKIND == 1001)                              THEN
               IF (COORD == 'DEF') COORD = 'SIG'
-              IF (COORD /= 'SIG') CALL            XIT( VERBEX ,-17)
+              IF (COORD /= 'SIG')                              THEN
+                  WRITE(6,6017) 'SIG',TRIM( COORD )
+                  CALL           XIT( VERBEX ,-17)
+              END IF
 #             if defined(SET_VKINDC)
               VKINDC = 'SIGMA'
 #             endif
-          ELSE IF (VKIND == 1002)                            THEN
+          ELSE IF (VKIND == 1002)                              THEN
               IF (COORD.EQ.'DEF') COORD = 'GEM'
               IF (.NOT.
      +           (COORD  == 'ETA'
-     +       .OR. COORD  == 'GEM')) CALL          XIT( VERBEX ,-17)
+     +       .OR. COORD  == 'GEM'))                            THEN
+                  WRITE(6,6017) 'ETA or GEM',TRIM( COORD )
+                  CALL           XIT( VERBEX ,-17)
+              END IF
 #             if defined(SET_VKINDC)
               VKINDC = 'ETA'
 #             endif
-          ELSE IF (VKIND == 1    .OR. VKIND == 1003)         THEN
+          ELSE IF (VKIND == 1    .OR. VKIND == 1003)           THEN
               IF (COORD.EQ.'DEF') COORD = 'GEM3'
               IF (.NOT.
      +           (COORD  == 'ETA'  .OR. COORD == 'ET10'
@@ -80,30 +92,44 @@
      +       .OR. COORD  == 'SIG'
      +       .OR. COORD  == 'GEM'
      +       .OR. COORD  == 'GEM2'
-     +       .OR. COORD  == 'GEM3')) CALL         XIT( VERBEX ,-17)
+     +       .OR. COORD  == 'GEM3'))                           THEN
+                  WRITE(6,6017)
+     +               'One of ETA, ET1[056], SIG, GEM, GEM2 or GEM3',
+     +                TRIM( COORD )
+                  CALL           XIT( VERBEX ,-17)
+              END IF
 #             if defined(SET_VKINDC)
               VKINDC = 'ETA'
 #             endif
 #         if !defined(NO_TOC_PRESS_IN)
-          ELSE IF (VKIND == 2    .OR. VKIND == 2001)         THEN
+          ELSE IF (VKIND == 2    .OR. VKIND == 2001)           THEN
               IF (COORD == 'DEF') COORD = 'PRES'
-              IF (COORD /= 'PRES') CALL           XIT( VERBEX ,-17)
+              IF (COORD /= 'PRES')                             THEN
+                  WRITE(6,6017) 'PRES',TRIM( COORD )
+                  CALL           XIT( VERBEX ,-17)
+              END IF
 #             if defined(SET_VKINDC)
               VKINDC = 'PRESSURE'
 #             endif
 #         endif
-          ELSE IF (VKIND == 5    .OR. VKIND == 5001)         THEN
+          ELSE IF (VKIND == 5    .OR. VKIND == 5001)           THEN
               IF (COORD == 'DEF') COORD = 'GEM2'
               IF (COORD /= 'GEM2' .AND.
-     +            COORD /= 'GEM3') CALL           XIT( VERBEX ,-17)
+     +            COORD /= 'GEM3')                             THEN
+                  WRITE(6,6017) 'GEM2 or GEM3',TRIM( COORD )
+                  CALL           XIT( VERBEX ,-17)
+              END IF
 #             if defined(SET_VKINDC)
               VKINDC = 'HYBRIDE'
 #             endif
 #         if !defined(NO_TOC_GEM4_IN)
           ELSE IF (VKIND == 5002 .OR. VKIND == 5003
-     +        .OR. VKIND == 5004 .OR. VKIND == 5005)         THEN
+     +        .OR. VKIND == 5004 .OR. VKIND == 5005)           THEN
               IF (COORD == 'DEF') COORD = 'GEM4'
-              IF (COORD /= 'GEM4') CALL           XIT( VERBEX ,-17)
+              IF (COORD /= 'GEM4')                             THEN
+                  WRITE(6,6017) 'GEM4',TRIM( COORD )
+                  CALL           XIT( VERBEX ,-17)
+              END IF
 #             if defined(SET_VKINDC)
               VKINDC = 'HYBRIDE'
 #             endif
@@ -124,12 +150,12 @@
 
               CALL GETTOC( IN1, 'PTOP' ,PTOIT8, IG10,IG20 )
               PTOIT0 = PTOIT8
-              IF (VKIND /= 1002)                             THEN
+              IF (VKIND /= 1002)                               THEN
                   CALL GETTOC( IN1, 'PREF' ,PREF8 , IG10,IG20 )
                   CALL GETTOC( IN1, 'RC_1' ,R8    , IG10,IG20 )
                   PREF0 = PREF8 ; R0 = R8
 #                 if !defined(NO_TOC_GEM4_IN)
-                  IF (VKIND /= 1003 .AND. VKIND /= 5001)     THEN
+                  IF (VKIND /= 1003 .AND. VKIND /= 5001)       THEN
                       CALL GETTOC( IN1,'RC_2',R28,IG10,IG20 )
                       R20 = R28
                   END IF

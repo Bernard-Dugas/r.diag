@@ -111,18 +111,19 @@
 *     GENERAL NOTES :
 *             1) Specifying "-def APPEND" indicates that the program should
 *                attempt to check to output file in order to find a TicTac
-*                ( >> and ^^ ) set of variables or a TocToc (!!) variable,
-*                for Z-grid or YinYang-grids outputs, respectively, to fully
-*                specify the horizontal grid description of the output data.
-*                In this mode, a new set of descriptors will no be created. If
-*                the horizontal dimensions are specified as well (see above),
-*                this will constrain the choice of the TicTac set or of the
-*                TocToc variables. Otherwise, the first set or variable found
-*                is retained. The resulting newly interpolated data will then
-*                be APPENDED to the file. Note again that this is the only
-*                available option for MAKEYY and MAKEYYV and no other
-*                parametres are supported at this time with
-*                these two commands. 
+*                ( >> and ^^ ) set of variables for Z-grid or U-grid (Ying-Yang)
+*                outputs to fully specify the horizontal grid description of
+*                the output data. In this mode, a new set of descriptors will
+*                not be created. If the horizontal dimensions are specified as
+*                well (see above), this will constrain the choice of the TicTac
+*                set (as well as that of any TocToc (!!) variable). Otherwise,
+*                the first set or variable found is retained. The resulting
+*                newly interpolated data will then be APPENDED to the file.
+*                Note again that this is the only available option for MAKEYY
+*                and MAKEYYV and no other parametres are then supported at this
+*                time with these two commands. Note that any TocToc variable
+*                should be consistent with the relevant TicTac set (i.e. have
+*                the same set of IP1,IP2 values).
 *
 *     NOTES FOR THE NON-PS GRID OPTIONS :
 *             2) In non-APPEND mode (which is the default), the only two
@@ -177,6 +178,10 @@
 *    2         TAPE1=GIN, TAPE2=GOUT, TAPE6=OUTPUT)
   
 *     $Log: makezg.ptn,v $
+*     Revision 4.27  2019/01/10 11:11  dugas
+*     Corrections de la documentation automatique
+*     concernant les enregistrements TocToc
+*
 *     Revision 4.26  2018/02/01 13:13  dugas
 *     Ajouter le support des grilles de type 'U' en entree.
 *
@@ -302,10 +307,10 @@
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
 
-      LOGICAL,    EXTERNAL :: RPBLOC
-      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
-      INTEGER,    EXTERNAL :: GETSIZ,GETHIGH,EZQKDEF,
-     +                        EZGDEF,EZDEFSET,EZSINT,EZUVINT
+      LOGICAL,     EXTERNAL :: RPBLOC
+      CHARACTER(4),EXTERNAL :: GETYP,GETHIC
+      INTEGER,     EXTERNAL :: GETSIZ,GETHIGH,EZQKDEF,
+     +                         EZGDEF,EZDEFSET,EZSINT,EZUVINT
       EXTERNAL    JCLPNT,XIT,PUTHIGH,PUTHIC,PUTZREF,D_GRIDGEF,
      +            EZSETOPT,EZSETVAL,GETSET2,PUTSET2
 

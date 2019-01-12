@@ -133,6 +133,9 @@
 *    3          TAPE9=GSRHUM, TAPE10=GSLNPT, TAPE5=INPUT,  TAPE6=OUTPUT) 
 *     ---------------------------------------------------------------
 *     $Log: gshumh.ptn,v $
+*     Revision 4.16  2019/01/10 17:17  dugas
+*     Utiliser les comdecks toc_gest_1.cdk et toc_gest_formats.cdk
+*
 *     Revision 4.15  2016/10/29 20:54  dugas
 *     - Modification a la documentation concernant GEM4 .
 *     - Modifications syntaxiques de type F77 --> F90.
@@ -197,21 +200,26 @@
 *     FEB 29/88 - R.LAPRISE.
 
 *------------------------------------------------------------------------ 
+      use diag_toc, only: GetTOC, LirTOC, LopTOC
+
       IMPLICIT    none
 
       INTEGER,    PARAMETER :: MAXLEV = 999
       INTEGER,    PARAMETER :: HEAD   = taille_entete
       REAL,       PARAMETER :: PTMIN  = pression_au_toit
 
-      CHARACTER   LIGNE*80,PKTYP*2
+      CHARACTER   LIGNE*80,PKTYP*2,
+     +            VKINDC*16,VERBEX*8,GRTYP
       LOGICAL     OK,SPWH,MODETA,MONOTONH,MONOTONS
-      CHARACTER*4 COORD,MOIST,CSHUM,CRHUM,LNSP,TEMP,NAME
+      CHARACTER(4) COORD,MOIST,CSHUM,CRHUM,LNSP,TEMP,NAME
       INTEGER     LETAT(MAXLEV),LETAS(MAXLEV),KBUF(HEAD),
      +            I,K,L,LBUF(HEAD),MBUF(HEAD),MISSING,NFIL,TIME,
      +            LEN1,LEN2,LEN3,LEN,MAXW1,MAXW2,MAXW3,MAXW,
      +            NWDS,KPAK,LPAK,MPAK,ILEV,LEVS,NRECS,IER,
      +            IO,VKIND1,VKIND2,VKIND,TOP,BOT,INC,
-     +            TOPS,BOTS,INCS,FIRST,LAST
+     +            TOPS,BOTS,INCS,FIRST,LAST,IN1,IN2,
+     +            TOC_NBR,IG10,IG20,R20,R2
+      REAL(8)     PTOIT8,PREF8,R8
       REAL        ADD,PREF,R,ETAH(MAXLEV),ETAS(MAXLEV),
      +            AH(MAXLEV),BH(MAXLEV),PTOIT,SHUMREF,
      +            SMIN,T,ES,TD,E,SHUM,SAT,QMIN,TOPASCL,
@@ -231,9 +239,10 @@
 C***  REAL             A,B,EPS1,EPS2
 C***  COMMON     /EPS/ A,B,EPS1,EPS2
 
-      LOGICAL,    EXTERNAL :: RPBLOC
-      CHARACTER,  EXTERNAL :: GETYP*4
-      INTEGER,    EXTERNAL :: GETSIZ2,GETSIZ,GETKIND
+      LOGICAL,      EXTERNAL :: RPBLOC
+      CHARACTER(16),EXTERNAL :: GETKINDC
+      CHARACTER(4), EXTERNAL :: GETYP,GETHIC
+      INTEGER,      EXTERNAL :: GETSIZ2,GETSIZ,GETKIND,GETHIGH
       EXTERNAL    JCLPNT,GETLIGN,BURNF,XIT,
      +            CONVPR,WRITLEV,CMPLBL,COORDAB,
      +            GETFLD2,NIVCAL,PUTFLD2,LEADBLK,
@@ -253,15 +262,20 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
       NRECS = 0 
       NFIL  = 8 
 
-      CALL JCLPNT( NFIL, 1,2,3, 8,9, 10, 5,6 )
+      IN1 = 2 ; IN1 = 2
+      CALL JCLPNT( NFIL, IN2,IN1,3, 8,9, 10, 5,6 )
       CALL INCTDIA
   
       PKTYP = GETYP( 1 )
 
+      VERBEX = ' Gshumh '
+
       COORD ='DEF'
       PTOIT = PTMIN
       PREF  = 80000.
+      PREF8 =-1.0
       R     = 1.0
+      R0    =-1.0
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
 
@@ -319,11 +333,18 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
           PTOIT = MAX( PTOIT,PTMIN )
       ENDIF 
 
-      IF (PKTYP.EQ.'SQ'   .AND.
-     +   (COORD.EQ.'DEF'  .OR. 
-     +    COORD.EQ.'GEM2' .OR. 
-     +    COORD.EQ.'GEM3'))
-     +    CALL SETPT( PTOIT,PREF,R )
+      IF (PKTYP == 'SQ')                                       THEN
+          IF (COORD == 'GEM2' .OR.
+     +        COORD == 'GEM3')                                 THEN
+              CALL SETPT( PTOIT,PREF,R )
+          END IF
+          IF (COORD /= 'DEF')                                  THEN
+              If (COORD == 'GEM'   .or.
+     +            COORD == 'GEM2') VKINDC = 'ETA'
+              If (COORD == 'PRES') VKINDC = 'PRESSION'
+              If (COORD == 'GEM3') VKINDC = 'HYBRIDE'
+          END IF
+      END IF
 
       IF (SHUMREF.LE.0.) SHUMREF = 10.E-3
 
@@ -332,7 +353,19 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
 ***    ETAH = ETA VALUES OF THE TEMPERATURE LEVELS.
 ***    MISSING MOISTURE LEVELS ARE AT THE TOP (LEVELS 1,2,..ETC).
   
-      MAXW1 = GETSIZ2( 2, KBUF,LEN1,NWDS,KPAK, LETAT,ILEV )
+      MAXW1 = GETSIZ2( IN1, KBUF,LEN1,NWDS,KPAK, LETAT,ILEV )
+
+      IF (PKTYP == 'SQ')                                       THEN
+
+***        ATEMPT TO DEFINE VERTICAL LEVEL INFO FROM HY OR !! RECORDS.
+
+#         define SET_VKINDC
+#         define NO_TOC_GEM4_IN
+#         include "toc_gest_1.cdk"
+
+      ELSE IF (COORD == 'DEF')                                 THEN
+          COORD  = 'ET15'
+      END IF
 
       IF (ILEV.EQ.0       .OR.
      +    ILEV.GT.MAXLEV) CALL                     XIT(' Gshumh ',-1 ) 
@@ -362,32 +395,12 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
           CALL                                     XIT(' Gshumh ',-8 )
       END IF
 
-      IF (PKTYP.EQ.'SQ')                                       THEN
-
-          VKIND = GETKIND()
-
-          IF (VKIND.NE.1 .AND.
-     +        VKIND.NE.5)                                      THEN
-              CALL                                 XIT(' Gshumh ',-16)
-          ELSE IF (VKIND.EQ.1)                                 THEN
-              IF (COORD.EQ.'DEF')  COORD = 'GEM3'
-          ELSE IF (VKIND.EQ.5)                                 THEN
-              IF (COORD.EQ.'DEF')  COORD = 'GEM2'
-              IF (COORD.NE.'GEM2') CALL            XIT(' Gshumh ',-17)
-          END IF
-
-      ELSE IF (COORD.EQ.'DEF')                                 THEN
-
-          COORD  = 'ET15'
-
-      END IF
-
       IF (.NOT.(COORD == 'GEM2' .OR. COORD == 'GEM3'))
      +    WRITE(6,6020) COORD,MOIST,PTOIT,SHUMREF
   
       CALL WRITLEV( ETAH,ILEV,COORD )
 
-      MAXW2 = GETSIZ2( 1, LBUF,LEN2,NWDS,LPAK, LETAS,LEVS )
+      MAXW2 = GETSIZ2( IN2, LBUF,LEN2,NWDS,LPAK, LETAS,LEVS )
 
       IF (LEVS.EQ.0     .OR.
      +    LEVS.GT.ILEV) CALL                       XIT(' Gshumh ',-2 ) 
@@ -492,7 +505,7 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
           END IF
 
           WRITE(6,6020) COORD,MOIST,PTOIT,SHUMREF
-          WRITE(6,6021) PREF,R
+          WRITE(6,6022) PREF,R
 
           CALL GENAB( AH,BH, ETAH, PTOIT,PREF,R, ILEV )
 
@@ -815,8 +828,9 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
   
 ***            PUT SHUM ON FILE 8 AND RHUM ON FILE 9. 
   
-                            IBUF(4) = LETAT(L) 
+                            IBUF(4) = LETAT(L)
               READ(CSHUM,4) IBUF(3)
+              IF (PKTYP == 'SQ') CALL SETKIND( VKINDC )
 
               CALL PUTFLD2( 8, F, IBUF,MAXW )
               IF (NRECS.EQ.0) CALL PRTLAB( IBUF )
@@ -845,10 +859,11 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
  6000 FORMAT(' Water and ice phases are considered.'/)
  6010 FORMAT('0 Gshumh transformed',I6, '  pairs.')
  6015 FORMAT(' Name = ',A4)
+# include "toc_gest_formats.cdk"
  6018 FORMAT('  (P.LID/P.REF)-ETA(TOP)=',E12.4)
  6020 FORMAT(' Coord = ',A4,', moisture variable = ',A4,
      1       ', p.lid (PA)=',F10.3,', reference value=',1PE10.2)
- 6021 FORMAT(' P.REF=',F10.3,', R=',F10.3/)
+ 6022 FORMAT(' P.REF=',F10.3,', R=',F10.3/)
 
       END 
 #     endif

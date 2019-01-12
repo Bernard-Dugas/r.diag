@@ -137,6 +137,10 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gsmslph.ptn,v $
+*     Revision 4.11  2019/01/10 17:17  dugas
+*     Faire appel aux nouveaux comdecks *_formats.cdk
+*     associes aux autres implementes en fin 2016.
+*
 *     Revision 4.10  2016/10/28 18:03  dugas
 *     - Ajouter le support des grilles GEM et du mode AABB.
 *     - Modifications syntaxiques de type F77 --> F90.
@@ -217,9 +221,11 @@
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
 
-      LOGICAL,     EXTERNAL :: RPBLOC
-      CHARACTER(4),EXTERNAL :: GETYP,GETHIC
-      INTEGER,     EXTERNAL :: GETSIZ,GETSIZ2,FNOM,FCLOS,GETKIND,GETHIGH
+      LOGICAL,      EXTERNAL :: RPBLOC
+      CHARACTER(16),EXTERNAL :: GETKINDC
+      CHARACTER(4), EXTERNAL :: GETYP,GETHIC
+      INTEGER,      EXTERNAL :: GETSIZ,GETSIZ2,FNOM
+      INTEGER,      EXTERNAL :: FCLOS,GETKIND,GETHIGH
       EXTERNAL     JCLPNT,GETLIGN,BURNF,CONVPR,LEADBLK,
      +             SIGLOC,GETFLD2,PUTFLD2,XIT,DEFCPHY
 
@@ -667,13 +673,10 @@
  6013 FORMAT('  (P.LID/P.REF)-ETA(TOP)=',E12.4)
  6015 FORMAT(' Wrong number of A,B entries in AABB namelist.',
      +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
- 6016 FORMAT(' Unsupported vertical coordinate in GSTEMP, VKIND =',I9/)
+# include "toc_gest_formats.cdk"
  6020 FORMAT(' Unable to read A,B in aabb.nml namelist file,',
      +       ' error no.',I5/)
- 6021 FORMAT(' More that one input vertical coordinate'/) 
- 6022 FORMAT(' Wrong number of AA,BB entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
-
+# include "set_a_b_formats.cdk"
  6100 FORMAT(' Gam=',E10.3,' temp. level used is ilev -',I2)
  6110 FORMAT(' Using A and B from file aabb.nml'/)
  6120 FORMAT(1X,I5,' fields saved.')

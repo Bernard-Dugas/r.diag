@@ -191,6 +191,10 @@
 *     ----------------------------------------------------------------
 
 *     $Log: gsapzl.ptn,v $
+*     Revision 4.35  2019/01/10 17:17  dugas
+*     Faire appel aux nouveaux comdecks *_formats.cdk
+*     associes aux autres implementes en fin 2016.
+*
 *     Revision 4.34  2018/11/17 22:22  dugas
 *     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
 *
@@ -1195,12 +1199,10 @@
  6011 FORMAT(' Found illegal pressure value for level # ',I3,
      +       ' PR=',E20.10/)
  6014 FORMAT('  (P.LID/P.REF)-ETA(TOP)=',E12.4)
- 6016 FORMAT(' Unsupported vertical coordinate in gsfld, VKIND =',I9/)
+# include "toc_gest_formats.cdk"
  6020 FORMAT(' Unable to read A,B in aabb.nml namelist file,',
      +       ' error no.',I5/)
- 6021 FORMAT(' More that one input vertical coordinate.'/) 
- 6022 FORMAT(' Wrong number of A, B entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+# include "set_a_b_formats.cdk"
  6025 FORMAT(' Unrecognized -def argument value... ',A/)
 
  6035 FORMAT('0 Found ',A,' while expecting ',A)

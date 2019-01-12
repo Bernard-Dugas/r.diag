@@ -182,6 +182,10 @@
 *     ----------------------------------------------------------------
 
 *      $Log: gsathl.ptn,v $
+*     Revision 4.34  2019/01/10 17:17  dugas
+*     Faire appel aux nouveaux comdecks *_formats.cdk
+*     associes aux autres implementes en fin 2016.
+*
 *      Revision 4.33  2018/11/17 22:22  dugas
 *      Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
 *
@@ -351,10 +355,11 @@
       real,       dimension(:,:,:), pointer  :: log_pr =>null()
       real,       dimension(:,:,:), pointer  :: log_prt=>null()
 
-      LOGICAL,     EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
-      CHARACTER(4),EXTERNAL :: GETYP,GETHIC
-      INTEGER,     EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,
-     +                         GETHIGH,FNOM,FCLOS
+      CHARACTER(16),EXTERNAL :: GETKINDC
+      CHARACTER(4), EXTERNAL :: GETYP,GETHIC
+      LOGICAL,      EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
+      INTEGER,      EXTERNAL :: GETSIZ,GETSIZ2,GETKIND
+      INTEGER,      EXTERNAL :: GETHIGH,FNOM,FCLOS
 
       EXTERNAL     MACSPE,JCLPNT,GETLIGN,XIT,
      +             BURNF,CONVPR,CMPLBL,COORDAB,GETSET2,
@@ -1035,14 +1040,10 @@
  6008 FORMAT(' Gsathl reports I/O error number ',I5/)
  6014 FORMAT(' Found illegal THETA value for level # ',I3/
      +       ' TH=',E20.10,' while using free-format input.'/)
- 6016 FORMAT(' Unsupported vertical coordinate in hum, VKIND =',I9/)
+# include "toc_gest_formats.cdk"
  6020 FORMAT(' Unable to read A,B (,AM,BM) in aabb.nml namelist file,',
      +       ' error no.',I5/)
- 6021 FORMAT(' More that one input vertical coordinate.'/) 
- 6022 FORMAT(' Wrong number of A,B entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
- 6029 FORMAT(' Wrong number of AM,BM entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+# include "set_a_b_formats.cdk"
  6030 FORMAT(' Unrecognized -def argument value... ',A/)
 
  6110 FORMAT(' Using A and B from file aabb.nml'/)

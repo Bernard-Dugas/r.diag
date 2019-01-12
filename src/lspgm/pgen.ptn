@@ -129,6 +129,10 @@
 *     --------------------------------------------
 
 *     $Log: pgen.ptn,v $
+*     Revision 4.22  2019/01/10 17:17  dugas
+*     Faire appel aux nouveaux comdecks *_formats.cdk
+*     associes aux autres implementes en fin 2016.
+*
 *     Revision 4.21  2016/10/28 17:40  dugas
 *     - Ajouter le support des coordonnees verticales de
 *       GEM4, et ce aussi pour le mode de traitement AABB.
@@ -279,9 +283,10 @@
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
 
-      LOGICAL,     EXTERNAL :: RPBLOC
-      CHARACTER(4),EXTERNAL :: GETYP,GETHIC
-      INTEGER,     EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,GETHIGH
+      LOGICAL,      EXTERNAL :: RPBLOC
+      CHARACTER(16),EXTERNAL :: GETKINDC
+      CHARACTER(4), EXTERNAL :: GETYP,GETHIC
+      INTEGER,      EXTERNAL :: GETSIZ,GETSIZ2,GETKIND,GETHIGH
       EXTERNAL     MACSPE,JCLPNT,GETSET2,
      +             CMPLBL,XIT,PUTSET2,CONVPR,
      +             GETPT,LIRPT,SETPT,GENAB,COORDAB,
@@ -765,13 +770,10 @@
 
  6002 FORMAT(' Nlev=',I3,', ibuf= ')
  6008 FORMAT(' Pgen reports I/O error number ',I5/)
- 6016 FORMAT(' Unsupported vertical coordinate in XIN, VKIND =',I9/)
+# include "toc_gest_formats.cdk"
  6020 FORMAT(' Unable to read A,B in aabb.nml namelist file,',
      +       ' error no.',I5/)
- 6021 FORMAT(' More that one input vertical coordinate.'/) 
- 6022 FORMAT(' Wrong number of A,B entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
-
+# include "set_a_b_formats.cdk"
  6100 FORMAT('  Pgen read ',I5,' fields.'/)
  6110 FORMAT('  Using A and B from file aabb.nml'/)
  6120 FORMAT('  p.lid (pa)=',F10.3/:'  p.ref (pa)=',F10.3,

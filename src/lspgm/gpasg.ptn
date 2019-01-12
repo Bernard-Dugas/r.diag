@@ -246,6 +246,10 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gpasg.ptn,v $
+*     Revision 4.35  2019/01/10 17:17  dugas
+*     Faire appel aux nouveaux comdecks *_formats.cdk
+*     associes aux autres implementes en fin 2016.
+*
 *     Revision 4.34  2019/01/09 15:15  dugas
 *     - Ajouter un message explicatif pour l'erreur -19.      
 *     - En mode APPEND, tenir compte des niveaux diagnostiques qui
@@ -414,10 +418,11 @@
       REAL        A(MAXLEV+1),B(MAXLEV+1)
       NAMELIST   /AABB_NML/ A,B
 
+      CHARACTER(16),EXTERNAL :: GETKINDC
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
-      INTEGER,    EXTERNAL :: FCLOS,FNOM,GETHIGH
-      INTEGER,    EXTERNAL :: GETSIZ,GETSIZ2,GETKIND
-      LOGICAL,    EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
+      INTEGER,      EXTERNAL :: FCLOS,FNOM,GETHIGH
+      INTEGER,      EXTERNAL :: GETSIZ,GETSIZ2,GETKIND
+      LOGICAL,      EXTERNAL :: RPBLOC,GetFreeFormatLevelIO
       EXTERNAL    MACSPE,JCLPNT,GETLIGN,XIT,BURNF,CONVPR,
      +            CMPLBL,COORDAB,GETSET2,FMMM2,LEADBLK,
      +            SETKIND,MONVERT,GEMVRTL,ELAEL,
@@ -620,7 +625,7 @@
       FFMT = ( FFMT .OR. GetFreeFormatLevelIO() )
 
       IF (APPEND .AND. FFMT)                                   THEN
-          WRITE(6,6029) TRIM( LIGNE )
+          WRITE(6,6129) TRIM( LIGNE )
           CALL                                     XIT( Verbex ,-29)
       END IF
 
@@ -812,8 +817,9 @@
               READ( CLEVS(K),10, ERR=915,END=915,IOSTAT=IO ) LEVS(K)
               CALL CONVPR( LEVS(K), ETA(K), VK, -2 )
               IF (PKTYP.EQ.'SQ')                               THEN
-                  IF (VK /= VKIND)                            THEN
-                      WRITE(6,6019) VK,VKIND
+                  IF (VK /= VKIND)                             THEN
+                      WRITE(6,6019) TRIM( GETKINDC( VK ) ),
+     +                              TRIM( GETKINDC( VKIND ) )
                       CALL                         XIT( VERBEX ,-19 )
                   END IF
                   CALL CONVPR( LEVS(K), ETA(K), VK, +2 )
@@ -911,7 +917,8 @@
               DO  K=1,NSL
                   CALL CONVPR( LEVS(K), ETA(K), VK, -2 )
                   IF (VK /= VKIND)                            THEN
-                      WRITE(6,6019) VK,VKIND
+                      WRITE(6,6019) TRIM( GETKINDC( VK ) ),
+     +                              TRIM( GETKINDC( VKIND ) )
                       CALL                         XIT( VERBEX ,-19 )
                   END IF
               END DO
@@ -1426,17 +1433,15 @@
  6014 FORMAT( A6,' reports I/O error number ',I5/)
  6015 FORMAT(' Found illegal eta value for level # ',I3,
      +       ' ETA=',E20.10/)
- 6016 FORMAT(' Unsupported vertical coordinate in gsfld, VKIND =',I9/)
- 6019 FORMAT(' Found vertical kind ,'I4,' while expecting ',I4/)
+# include "toc_gest_formats.cdk"
+ 6019 FORMAT(" Found vertical kind '",A,"' while expecting '",A,"'"/)
  6020 FORMAT( A6,' Unable to read AI,BI in aabb.nml namelist file,',
      +      ' error no.',I5/)
- 6021 FORMAT(' More that one input vertical coordinate'/) 
- 6022 FORMAT(' Wrong number of A,B entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
+# include "set_a_b_formats.cdk"
  6023 FORMAT(' Unrecognized value of the G4LEV parametre... ',A/)
  6026 FORMAT(' Did not find level ',I3,1X,E15.7,' in !!'/)
  6028 FORMAT(' Unrecognized -def argument value... ',A/)
- 6029 FORMAT(' Options APPEND and FREEFMT are both specified.'/)
+ 6129 FORMAT(' Options APPEND and FREEFMT are both specified.'/)
 
  6000 FORMAT(' COORD=',1X,A4,', PTOIT (PA)=',F10.3)
  6050 FORMAT(' COORD=',1X,A4,', PTOIT array is read')

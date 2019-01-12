@@ -162,6 +162,10 @@
 *     ------------------------------------------------------------------
 *
 *     $Log: vsinth.ptn,v $
+*     Revision 4.31  2019/01/10 17:17  dugas
+*     Faire appel aux nouveaux comdecks *_formats.cdk
+*     associes aux autres implementes en fin 2016.
+*
 *     Revision 4.30  2016/10/28 17:53  dugas
 *     - Ameliorer le support des coordonnees verticales de
 *       GEM4, et ce aussi pour le mode de traitement AABB.
@@ -327,9 +331,10 @@
       REAL,       DIMENSION(:), POINTER            :: PSMBLN
       REAL,       DIMENSION(:), ALLOCATABLE,TARGET :: PRESS
 
-      LOGICAL,    EXTERNAL :: RPBLOC
-      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
-      INTEGER,    EXTERNAL :: GETSIZ2,GETSIZ,GETKIND,GETHIGH
+      LOGICAL,      EXTERNAL :: RPBLOC
+      CHARACTER(16),EXTERNAL :: GETKINDC
+      CHARACTER(4), EXTERNAL :: GETYP,GETHIC
+      INTEGER,      EXTERNAL :: GETSIZ2,GETSIZ,GETKIND,GETHIGH
       EXTERNAL    MACSPE,XIT,LIRPT,GETPT,SETPT,GETSET2,
      +            PUTFLD2,CMPLBL,BASCAL,COORDAB,NIVCAL,
      +            GETLIGN,BURNF,CONVPR,LEADBLK,
@@ -1036,15 +1041,11 @@
 
  6007 FORMAT('0 Found ',A,' while expecting LP or LNSP')
  6010 FORMAT(' Vsinth reports I/O error number ',I5/)
- 6016 FORMAT('  Unsupported vertical coordinate in XIN, VKIND =',I9/)
+# include "toc_gest_formats.cdk"
  6019 FORMAT('  (P.lid/P.ref)-eta(top)=',E12.4)
  6020 FORMAT('  Unable to read A,B in aabb.nml namelist file,',
      +       '  error no.',I5/)
- 6021 FORMAT('  More that one input vertical coordinate.'/) 
- 6022 FORMAT(' Wrong number of A,B entries in AABB namelist.',
-     +       ' Expecting ',I3,' of each, but found ',I3,'.'/)
-!6025 FORMAT(' Vertical levels need to be stored from the TOP to',
-!    +       ' the surface.'/' Please sort XIN with FSTTRI...'/)
+# include "set_a_b_formats.cdk"
 
  6100 FORMAT('  Levtyp = ',A4,', const = ',1P,E12.4,
      +       ', lay = ',0P,I5,', coord=',1X,A4,', sigtop =',F15.10,
