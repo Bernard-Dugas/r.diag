@@ -25,6 +25,11 @@
 !    Ron Mctaggart-Cowan's Vgrid_Descriptors
 
 !    Author: Bernard Dugas, automne 2009/hiver 2010
+!
+!    Revision 3.11 2019/01/16 15:15  dugas
+!    - Verifier l'unicite des enregistrements TocToc
+!      dans les routines LirToc et NewToc
+!
 !    Revision 3.10 2018/11/15 18:18  dugas
 !    - Ajouter la routine CopTOC.
 !
@@ -151,15 +156,15 @@
 
 !    NewTOC I/O declarations.
 
-      integer, intent(in)  :: NFOUT                ! I/O unit associated to new TOC_GD variable
-      integer, intent(in)  :: F_version            ! code specification (only code=6 supported for now)
-      real, dimension(:), intent(in) :: F_hyb      ! user specification for vertical layering hyb
-      real, dimension(:), intent(in) :: F_rcoef    ! user specification for rcoef
-      real*8 , intent(in)  :: F_ptop_8, F_pref_8   ! user specification for lid and reference pressures
-      integer, intent(in)  :: F_ip1,F_ip2          ! IP1,IP2 of the new TocToc record
-      integer, intent(out) :: NBR                  ! the ordinal of the new TocToc records on NFOUT
-      real, optional, intent(in) :: F_dhm,F_dht    ! Diag levels Height for Momentum/Thermo variables
-      real*8, optional, intent(out) :: F_ptop_out_8 ! Top-level pressure (Pa) output if ptop_8 < 0
+      integer, intent(in)               :: NFOUT              ! I/O unit associated to new TOC_GD variable
+      integer, intent(in)               :: F_version          ! code specification (only code=6 supported for now)
+      real,    intent(in), dimension(:) :: F_hyb              ! user specification for vertical layering hyb
+      real,    intent(in), dimension(:) :: F_rcoef            ! user specification for rcoef
+      real(8), intent(in)               :: F_ptop_8, F_pref_8 ! user specification for lid and reference pressures
+      integer, intent(in)               :: F_ip1,F_ip2        ! IP1,IP2 of the new TocToc record
+      integer, intent(out)              :: NBR                ! the ordinal of the new TocToc records on NFOUT
+      real(8), intent(out), optional    :: F_ptop_out_8       ! Top-level pressure (Pa) output if ptop_8 < 0
+      real,    intent(in),  optional    :: F_dhm,F_dht        ! Diag levels Height for Momentum/Thermo variables
 
 !    Local variables
 
@@ -168,7 +173,7 @@
       COMMON     /ZZDEBUG/      debug
 
       character(len=4)   :: mykey
-      integer            :: NF, status,VERS
+      integer            :: NF,I,status,VERS
       integer, parameter :: Kind = 5
 
       NBR = 0 ! Indication que l'enregistrement TocToc n'a pas encore ete cree
@@ -185,7 +190,19 @@
           ALLOCATE( TOC_GD (max_nbr,0:unite_io_maximale) )
       END IF
 
-      IF (TOC_NBR(NF)+1 > max_nbr) RETURN
+      IF (TOC_NBR(NF)+1 > max_nbr)                             THEN
+          NBR = max_nbr ; IF (INFO) WRITE(6,6101) max_nbr
+          RETURN
+      ELSE IF (TOC_NBR(NF) > 1)                                THEN
+         ! Est-ce que ceci est bien un nouvel enregistrement TocToc ?
+          DO I=1,TOC_NBR(NF)
+              IF (F_ip1 == TOC_IP(1,I,NF) .AND. &
+                  F_ip2 == TOC_IP(2,I,NF))                     THEN
+                  NBR = TOC_NBR(NF) ; IF (INFO) WRITE(6,6100) F_ip1,F_ip2,NF,I
+                  RETURN
+              END IF
+          END DO
+      END IF
 
       VERS = Kind*1000+F_version
 
@@ -266,6 +283,9 @@
 
       RETURN
 
+ 6100 FORMAT('*INFO:  NewToc duplicate indicators found, IP1,IP2=',2I6, &
+             ' TocToc #',I2.2,' for file unit ',I3)
+ 6101 FORMAT('*INFO:  NewToc attempt to create more that the maximum number (',I2,') of TocToc records.')
  6104 FORMAT('*INFO:  NewToc VGD_NEW *OK*, I/O unit ',I3)
 
       End SUBROUTINE NewTOC
@@ -293,11 +313,14 @@
 
 !    Local variables
 
+      INTEGER,    PARAMETER :: NbrMaxDeToctoc=1024
+      
       INTEGER     ivalue
       REAL        rvalue
       REAL(8)     rvalue8
+      logical     OLD
       character   blk*16,name*256,mykey*4
-      INTEGER     DUM,status,NF,I,J,CLE(max_nbr), &
+      INTEGER     DUM,status,NF,I,J,K,CLE(NbrMaxDeToctoc), &
                   SWA,LNG,DLTF,UBC,EXTRA1,EXTRA2,EXTRA3
       INTEGER     NI0,NJ0,NK0
 
@@ -327,148 +350,162 @@
 
           status = FSTINL( NF, NI0,NJ0,NK0,          &
                            -1,' ',-1,-1,-1,'X','!!', &
-                           CLE, TOC_NBR(NF),max_nbr )
+                           CLE, TOC_NBR(NF),NbrMaxDeToctoc )
 
-          IF (status < 0)                                      THEN
+          IF (status < 0 .OR. TOC_NBR(NF) == 0)                THEN
               ! status = -TOC_NBR(NF) (le nombre touve * -1)
               IF (INFO) WRITE(STDOUT,6101) trim( NAME )
               TOC_NBR(NF) = 0
               GOTO 100
           END IF
 
-          IF (TOC_NBR(NF) == 0) GOTO 100
+          J = 0 ! Current ordinal of (unique) TocToc record
+          
+          ReadNew: DO  I=1,TOC_NBR(NF)
 
-          DO  I=1,TOC_NBR(NF)
-
-              status = FSTPRM( CLE(I),             &
-                       DUM,DUM,DUM,NI0,NJ0,NK0,    &
-                       DUM,BLK, TOC_IP(1,I,NF),    &
-                       TOC_IP(2,I,NF), DUM, BLK,   &
-                       BLK,BLK,BLK, TOC_VER(I,NF), &
-                       DUM,DUM,DUM,SWA,LNG,DLTF,   &
+              status = FSTPRM( CLE(I),               &
+                       DUM,DUM,DUM,NI0,NJ0,NK0,      &
+                       DUM,BLK, TOC_IP(1,J+1,NF),    &
+                       TOC_IP(2,J+1,NF), DUM, BLK,   &
+                       BLK,BLK,BLK, TOC_VER(J+1,NF), &
+                       DUM,DUM,DUM,SWA,LNG,DLTF,     &
                        UBC,EXTRA1,EXTRA2,EXTRA3 )
 
               IF (status < 0)                                  THEN
                   TOC_NBR(NF) = 0
                   IF (INFO) WRITE(STDERR,6103) status,I
-                  TOC_NBR(NF) = 0 ; EXIT
-                  EXIT
+                  TOC_NBR(NF) = 0 ; EXIT ReadNew
               END IF
+
+!            Check that this TocToc is new.
+ 
+              OLD = .FALSE.
+              CheckNew: DO K=1,J
+                  IF (TOC_IP(1,J+1,NF) == TOC_IP(1,K,NF) .AND. &
+                      TOC_IP(2,J+1,NF) == TOC_IP(2,K,NF))      THEN
+                      OLD = .TRUE.
+                      EXIT CheckNew
+                  END IF
+              END DO CheckNew
+
+              IF (OLD) CYCLE ReadNew
 
 !            Construct a new set of 3D coordinate descriptors
 !            using the last TocToc record record found.
 
-              status = vgd_new( TOC_GD(I,NF),            &
+              J = J+1
+              
+              status = vgd_new( TOC_GD(J,NF),            &
                                 unit=NF,format=myformat, &
-                                ip1=TOC_IP(1,I,NF),      &
-                                ip2=TOC_IP(2,I,NF) )
+                                ip1=TOC_IP(1,J,NF),      &
+                                ip2=TOC_IP(2,J,NF) )
 
               if (status /= VGD_OK)                            THEN
-                  IF (DEBUG) write(STDERR,6100) TOC_IP(1,I,NF),TOC_IP(2,I,NF)
-                  TOC_NBR(NF) = 0 ; EXIT
+                  IF (DEBUG) write(STDERR,6100) TOC_IP(1,J,NF),TOC_IP(2,J,NF)
+                  TOC_NBR(NF) = 0 ; EXIT ReadNew
               else if (INFO)                                   THEN
                   write(STDOUT,6104)
-                  status = vgd_print( TOC_GD(I,NF),stdout )
+                  status = vgd_print( TOC_GD(J,NF),stdout )
               end if
 
 !            Explore the current TocToc vertical grid
 !            descriptor, saving certain of its elements.
 
-              if (TOC_VER(I,NF) == 5001) THEN ! Un-staggered hybrid levels
+              if (TOC_VER(J,NF) == 5001) THEN ! Un-staggered hybrid levels
 
 !                Start by determining the number of levels.
 
-                  mykey='NL_M' ; status = vgd_get( TOC_GD(I,NF), &
+                  mykey='NL_M' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
                                                    value=IVALUE )
 
                   if (status /= VGD_OK)                        THEN
                       if (DEBUG) write(STDERR,6200) 'NL_M'
-                      TOC_NBR(NF) = 0 ; EXIT
+                      TOC_NBR(NF) = 0 ; EXIT ReadNew
                   else
-                      TOC_NK(1,I,NF) = ivalue
+                      TOC_NK(1,J,NF) = ivalue
                       if (INFO) write(stdout,6105) 'NL_M'
                   end if
 
 
 !                Save PTOP the pressure the model top level.
 
-                  mykey='PTOP' ; status = vgd_get( TOC_GD(I,NF), &
+                  mykey='PTOP' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
                                                    value=rvalue8 )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'PTOP'
-                      TOC_NBR(NF) = 0 ; EXIT
+                      TOC_NBR(NF) = 0 ; EXIT ReadNew
                   else
-                      TOC_TOP(I,NF) = rvalue8
+                      TOC_TOP(J,NF) = rvalue8
                       if (INFO) write(stdout,6105) 'PTOP'
                   end if
 
 !                Save PREF the model reference pressure.
 
-                  mykey='PREF' ; status = vgd_get( TOC_GD(I,NF), & 
+                  mykey='PREF' ; status = vgd_get( TOC_GD(J,NF), & 
                                                    key=mykey,    &
                                                    value=rvalue8 )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'PREF'
-                      TOC_NBR(NF) = 0 ; EXIT
+                      TOC_NBR(NF) = 0 ; EXIT ReadNew
                   else
-                      TOC_REF(I,NF) = rvalue8
+                      TOC_REF(J,NF) = rvalue8
                       if (INFO) write(stdout,6105) 'PREF'
                   end if
 
 !                Save RCOEF.
 
-                  mykey='RC_1' ; status = vgd_get( TOC_GD(I,NF), &
+                  mykey='RC_1' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
                                                    value=rvalue8 )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'RC_1'
-                      TOC_NBR(NF) = 0 ; EXIT
+                      TOC_NBR(NF) = 0 ; EXIT ReadNew
                   else
-                      TOC_RC(1,I,NF) = rvalue8
+                      TOC_RC(1,J,NF) = rvalue8
                       if (INFO) write(stdout,6105) 'RC_1'
                   end if
 
-              else if (TOC_VER(I,NF) == 5002 .or.      &
-                       TOC_VER(I,NF) == 5003 .or.      &
-                       TOC_VER(I,NF) == 5004 .or.      &
-                       TOC_VER(I,NF) == 5005 ) THEN ! Staggered hybrid levels (v1,2,3,4)
+              else if (TOC_VER(J,NF) == 5002 .or.      &
+                       TOC_VER(J,NF) == 5003 .or.      &
+                       TOC_VER(J,NF) == 5004 .or.      &
+                       TOC_VER(J,NF) == 5005 ) THEN ! Staggered hybrid levels (v1,2,3,4)
 
 !                Start by determining the number of dynamic levels.
 
-                  mykey='NL_M' ; status = vgd_get( TOC_GD(I,NF), &
+                  mykey='NL_M' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
                                                    value=IVALUE )
 
                   if (status /= VGD_OK)                        THEN
                       if (DEBUG) write(STDERR,6200) 'NL_M'
-                      TOC_NBR(NF) = 0 ; EXIT
+                      TOC_NBR(NF) = 0 ; EXIT ReadNew
                   else
-                      TOC_NK(1,I,NF) = ivalue
+                      TOC_NK(1,J,NF) = ivalue
                       if (INFO) write(stdout,6105) 'NL_M'
                   end if
 
 !                Determine the number of thermodynamic levels.
 
-                  mykey='NL_T' ; status = vgd_get( TOC_GD(I,NF), &
+                  mykey='NL_T' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
                                                    value=IVALUE )
 
                   if (status /= VGD_OK)                        THEN
                       if (DEBUG) write(STDERR,6200) 'NL_T'
-                      TOC_NBR(NF) = 0 ; EXIT
+                      TOC_NBR(NF) = 0 ; EXIT ReadNew
                   else
-                     TOC_NK(2,I,NF) = ivalue
+                     TOC_NK(2,J,NF) = ivalue
                      if (INFO) write(stdout,6105) 'NL_T'
                   end if
 
 !                Save PREF the model reference pressure.
 
-                  mykey='PREF' ; status = vgd_get( TOC_GD(I,NF), &
+                  mykey='PREF' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
                                                    value=rvalue8 )
 
@@ -476,65 +513,65 @@
                       IF (DEBUG) write(STDERR,6200) 'PREF'
                       TOC_NBR(NF) = 0 ; EXIT
                   else
-                      TOC_REF(I,NF) = rvalue8
+                      TOC_REF(J,NF) = rvalue8
                       if (INFO) write(stdout,6105) 'PREF'
                   end if
 
 !                Save the first RCOEF.
 
-                  mykey='RC_1' ; status = vgd_get( TOC_GD(I,NF), &
+                  mykey='RC_1' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
                                                    value=rvalue8 )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'RC_1'
-                      TOC_NBR(NF) = 0 ; EXIT
+                      TOC_NBR(NF) = 0 ; EXIT ReadNew
                   else
-                      TOC_RC(1,I,NF) = rvalue8
+                      TOC_RC(1,J,NF) = rvalue8
                       if (INFO) write(stdout,6105) 'RC_1'
                   end if
 
 !                Save the second RCOEF.
 
-                  mykey='RC_2' ; status = vgd_get( TOC_GD(I,NF), &
+                  mykey='RC_2' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
                                                    value=rvalue8 )
 
                   if (status /= VGD_OK)                        THEN
                       IF (DEBUG) write(STDERR,6200) 'RC_2'
-                      TOC_NBR(NF) = 0 ; EXIT
+                      TOC_NBR(NF) = 0 ; EXIT ReadNew
                   else
-                      TOC_RC(2,I,NF) = rvalue8
+                      TOC_RC(2,J,NF) = rvalue8
                       if (INFO) write(stdout,6105) 'RC_2'
                   end if
 
-                  if (TOC_VER(I,NF) == 5005)                   THEN
+                  if (TOC_VER(J,NF) == 5005)                   THEN
 
 !                    Save the momentum diagnostic level DHM.
                   
-                      mykey='DHM ' ; status = vgd_get( TOC_GD(I,NF), &
+                      mykey='DHM ' ; status = vgd_get( TOC_GD(J,NF), &
                                                        key=mykey,    &
                                                        value=rvalue )
 
                       if (status /= VGD_OK)                    THEN
                           IF (DEBUG) write(STDERR,6200) 'DHM '
-                          TOC_NBR(NF) = 0 ; EXIT
+                          TOC_NBR(NF) = 0 ; EXIT ReadNew
                       else
-                          TOC_DHM(I,NF) = rvalue
+                          TOC_DHM(J,NF) = rvalue
                           if (INFO) write(stdout,6105) 'DHM '
                       end if
 
 !                    Save the thermodynamic diagnostic level DHT.
                   
-                      mykey='DHT ' ; status = vgd_get( TOC_GD(I,NF), &
+                      mykey='DHT ' ; status = vgd_get( TOC_GD(J,NF), &
                                                        key=mykey,    &
                                                        value=rvalue )
 
                       if (status /= VGD_OK)                    THEN
                           IF (DEBUG) write(STDERR,6200) 'DHT '
-                          TOC_NBR(NF) = 0 ; EXIT
+                          TOC_NBR(NF) = 0 ; EXIT ReadNew
                       else
-                          TOC_DHT(I,NF) = rvalue
+                          TOC_DHT(J,NF) = rvalue
                           if (INFO) write(stdout,6105) 'DHT '
                       end if
 
@@ -542,15 +579,15 @@
 
 !                    Save PTOP the pressure the model top level.
 
-                      mykey='PTOP' ; status = vgd_get( TOC_GD(I,NF), &
+                      mykey='PTOP' ; status = vgd_get( TOC_GD(J,NF), &
                                                        key=mykey,    &
                                                        value=rvalue8 )
 
                      if (status /= VGD_OK)                     THEN
                           IF (DEBUG) write(STDERR,6200) 'PTOP'
-                          TOC_NBR(NF) = 0 ; EXIT
+                          TOC_NBR(NF) = 0 ; EXIT ReadNew
                       else
-                          TOC_TOP(I,NF) = rvalue8
+                          TOC_TOP(J,NF) = rvalue8
                           if (INFO) write(stdout,6105) 'PTOP'
                       end if
 
@@ -559,8 +596,10 @@
 
               end if
 
-          END DO
+          END DO ReadNew
 
+          TOC_NBR(NF) = J
+          
 !        Initialize the default values (unit 0).
 
           if (TOC_NBR( 0 ) == 0 .AND.  TOC_NBR(NF) /= 0)       THEN
