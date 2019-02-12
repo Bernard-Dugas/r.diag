@@ -11,7 +11,7 @@ SHELL   = /bin/bash
 CPPT    = r.gppf -chop_bang -gpp -F
 
 DIAGNOSTIQUE = $(CURDIR)/../..
-MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
+MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
 FFLAGS  =  
 
@@ -35,12 +35,12 @@ DIAGWEB =
 default:  document
 
 %.txt : $(LSPGM)/%.ptn
-	cd $(LSPGM) ; $(MAKE) $@
+	cd $(LSPGM) ; $(MYMAKE) $@
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 %.txt : $(LSPGM)/%.ptn90
-	cd  $(LSPGM) ; $(MAKE) $@
+	cd  $(LSPGM) ; $(MYMAKE) $@
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $@ $(HOSTWEB):$(DIAGWEB) ; fi
 
@@ -98,12 +98,12 @@ TXTDECKS = \
 #LISTE DES CIBLES DU FICHIER recettes
 
 lssub.txt	:	$(LSSUB)/lssub.ftn
-	cd  $(LSSUB) ; $(MAKE) $@
+	cd  $(LSSUB) ; $(MYMAKE) $@
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 cdf2ccc.txt	:	$(CDF2C)/cdf2ccc.F90
-	cd  $(CDF2C) ; $(MAKE) $@
+	cd  $(CDF2C) ; $(MYMAKE) $@
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $@ $(HOSTWEB):$(DIAGWEB) ; fi
 

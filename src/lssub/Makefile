@@ -3,6 +3,9 @@
 
 # Description: Makefile principal de LSSUB
 
+# Revision 3.67 2019/02/12 14:14  dugas
+# - Remplacer les instances de MAKE par des MYMAKE
+#
 # revision 3.66 2017/11/02 16:16  dugas
 # - Modifier les recettes associees aux modules
 # - Ajouter un segment "make module" dans la cible "initial"
@@ -28,7 +31,7 @@ ZIP     = $(shell which zip)
 
 LSSDIR  = $(CURDIR)
 DIAGNOSTIQUE = $(LSSDIR)/../..
-MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
+MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
 CFLAGS  =
 FFLAGS  =
@@ -66,9 +69,6 @@ ARCH    = $(BASE_ARCH)
 default: $(ARCH)
 
 .PRECIOUS: $(LIBS)
-
-.DEFAULT:
-	cvs checkout $@
 
 .cdk90.a:
 	/bin/rm -f $*.f90
@@ -369,6 +369,6 @@ $(ARCH): initial
 # 2) Les deux suivant $(MAKE) mettent a jour les sources dans $(SOURCES),
 # tandis que 3) les deux derniers generent les librairies (ver. debug et
 # et ver. ordinaire, respectivement)
-	cd $(MODDIR) ; $(MAKE) ; cd $(LSSDIR) ;\
-	$(MAKE) $(LIBS) ; $(MAKE) clean ; cd $(SOURCES) ; $(MAKE) ; \
-	$(MAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2' OPTIM90='-O 2'
+	cd $(MODDIR) ; $(MYMAKE) ; cd $(LSSDIR) ;\
+	$(MYMAKE) $(LIBS) ; $(MYMAKE) clean ; cd $(SOURCES) ; $(MYMAKE) ; \
+	$(MYMAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2' OPTIM90='-O 2'

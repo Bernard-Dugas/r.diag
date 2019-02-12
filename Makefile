@@ -11,7 +11,7 @@ SHELL   = /bin/bash
 # lib/$(EC_ARCH) and man/pdoc directory trees
 
 DIAGNOSTIQUE = $(CURDIR)
-MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
+MYMAKE    = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
 # Destination that the current working binaries and libraries
 # will be exported to, as well as where to find the EXTRAS
@@ -99,8 +99,8 @@ initial_base:
 #	s.locate --lib $(lNetCDF) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff\"\n" ; false ; }
 #	if [[ ! -f $(EXTLIB)/libnetcdf.a ]]; then cd $(EXTRAS) ; make all ; fi
 	if [[ ! -f $(LIBDIR)/libddfun90.a || -z "$(DDFUN90)" ]]; then \
-	cd $(DIAGNOSTIQUE)/src/extras/ddfun90 ; $(MAKE) RMNLIB=$(RMNLIB) ; fi
-	if [[ ! -x $(BINDIR)/r.echo ]]; then cd $(DIAGNOSTIQUE)/src/extras/tools ; $(MAKE) ; fi
+	cd $(DIAGNOSTIQUE)/src/extras/ddfun90 ; $(MYMAKE) RMNLIB=$(RMNLIB) ; fi
+	if [[ ! -x $(BINDIR)/r.echo ]]; then cd $(DIAGNOSTIQUE)/src/extras/tools ; $(MYMAKE) ; fi
 	if [[ ! -f $(LIBDIR)/program_version.o ]]; then cd $(LIBDIR) ;\
 	s.f77 -g -c ../../program_version.f ; fi
 #	if [[ ! -f $(LIBDIR)/crc32.o ]]; then cd $(LIBDIR) ;\
@@ -114,13 +114,13 @@ initial_cdf:
 # RDIAG Diagnostic toolkit recipe
 
 rdiag: initial_base
-	echo "*** Making the RDIAG modules ***" ; cd $(MODDIR) ; $(MAKE)
+	echo "*** Making the RDIAG modules ***" ; cd $(MODDIR) ; $(MYMAKE)
 	echo "*** Making libdiag_sq98.a and libdiag_sq98_g.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB) ENTETE=$(ENTETE)
+	cd $(DIAGNOSTIQUE)/src/lssub ; $(MYMAKE) VGDLIB=$(VGDLIB) ENTETE=$(ENTETE)
 	echo "Making libprog_sq98.a" ;\
-	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE)
+	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MYMAKE)
 	echo "*** Making executable r.diag ***" ;\
-	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) $(BASE_ARCH) OBJ="$(FIXES)" \
+	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MYMAKE) $(BASE_ARCH) OBJ="$(FIXES)" \
 	NOPLOT=$(NOPLOT) GRAFLIB=$(GRAFLIB) DDFUN90=$(DDFUN90) VGDLIB=$(VGDLIB) \
 	DIAG_VERSION=$(DIAG_VERSION) RMNLIB=$(RMNLIB) ENTETE=$(ENTETE)
 
@@ -128,10 +128,10 @@ rdiag: initial_base
 
 cdf2conv: initial_base initial_cdf
 	echo "*** Making libcdf2ccc.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE)
+	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MYMAKE)
 	echo "*** Making executable cdf2ccc ***" ;\
 	cd $(DIAGNOSTIQUE)/src/cdf2ccc ;\
-	$(MAKE) cdf2rpn CONV_VERSION=$(CONV_VERSION) \
+	$(MYMAKE) cdf2rpn CONV_VERSION=$(CONV_VERSION) \
 	RMNLIB=$(RMNLIB) VGDLIB=$(VGDLIB) OBJ="$(FIXES)" \
 	lNetCDF="$(lNetCDF)" UDUNITS="$(UDUNITS)" \
 	DDFUN90=$(DDFUN90) ENTETE=$(ENTETE)
@@ -141,23 +141,23 @@ cdf2conv: initial_base initial_cdf
 
 libs: initial_base initial_cdf
 	echo "*** Making libdiag_sq98.a and libdiag_sq98_g.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB)
+	cd $(DIAGNOSTIQUE)/src/lssub ; $(MYMAKE) VGDLIB=$(VGDLIB)
 	echo "Making libprog_sq98.a" ;\
-	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) ;\
+	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MYMAKE) ;\
 	echo "*** Making libcdf2ccc.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE)
+	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MYMAKE)
 
 # Online documentation (which was originaly found in $ARMNLIB/man/pdoc) recipe
 
 document:
-	cd $(DIAGNOSTIQUE)/man/pdoc ; $(MAKE) $@
+	cd $(DIAGNOSTIQUE)/man/pdoc ; $(MYMAKE) $@
 
 web_document:
-	cd $(DIAGNOSTIQUE)/man/pdoc ; $(MAKE) $@ \
+	cd $(DIAGNOSTIQUE)/man/pdoc ; $(MYMAKE) $@ \
 	HOSTWEB=$(HOSTWEB) DIAGWEB=$(DIAGWEB)
 
 # Clean
 
 clean:
-	cd $(DIAGNOSTIQUE)/src/lspgm   ; $(MAKE) $@ ;\
-	cd $(DIAGNOSTIQUE)/src/lssub   ; $(MAKE) $@
+	cd $(DIAGNOSTIQUE)/src/lspgm   ; $(MYMAKE) $@ ;\
+	cd $(DIAGNOSTIQUE)/src/lssub   ; $(MYMAKE) $@

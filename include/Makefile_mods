@@ -9,6 +9,9 @@
 # d'un "make" de LSSUB
 
 # Revision 1.0  2017/10/30 13:13  dugas (Version initiale)
+#
+# Revision 1.1  2019/02/12 14:14  dugas
+# - Remplacer les instances de MAKE par des MYMAKE
 
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
@@ -18,7 +21,7 @@ SHELL = /bin/bash
 
 MODDIR  = $(CURDIR)
 DIAGNOSTIQUE = $(MODDIR)/../../..
-MAKE    = make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
+MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 LSSDIR  = $(DIAGNOSTIQUE)/src/lssub
 
 FCOMP   = s.compile -src
@@ -26,7 +29,7 @@ FCOMP   = s.compile -src
 default: mods
 
 %.mod : $(LSSDIR)/%.cdk90
-	cd $(LSSDIR) ; $(MAKE) $@
+	cd $(LSSDIR) ; $(MYMAKE) $@
 
 MODDECKS= \
 	diag_convert_ip123.mod 	diag_toc.mod	stats_signatures.mod

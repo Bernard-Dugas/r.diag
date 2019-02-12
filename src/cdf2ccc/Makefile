@@ -3,6 +3,9 @@
 
 # Description: Makefile de CDF2CCC
 
+# Revision 2019/02/12 14:14  dugas
+# - Remplacer les instances de MAKE par des MYMAKE
+#
 # revision 2018/08/16 16:16  dugas
 # - Passer a la version 2.3.4 du binaire CDF2CCC
 #
@@ -32,7 +35,7 @@ COMPF    =
 
 DIAGNOSTIQUE  = $(CURDIR)/../..
 IGNORE_ERRORS = set -e
-MAKE     = $(IGNORE_ERRORS) ; make DIAGNOSTIQUE=$(DIAGNOSTIQUE)
+MYMAKE   = $(IGNORE_ERRORS) ; $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
 #EXTRAS   = $(DIAGNOSTIQUE)/../extras/NetcdfUdunits/$(EC_ARCH)
 
@@ -75,7 +78,7 @@ VGDLIB   = descrip
 
 # Static (_s) load via symlinks in the netcdff-4.4 SSM package
 lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
-UDUNITS  = udunits2f_s udunits2_s
+UDUNITS  = udunits2f_s udunits2_s expat
 
 LIBPATH  = $(LIBDIR)
 
@@ -94,9 +97,6 @@ LIBPATH  = $(LIBDIR)
 default:  $(LIBP)
 
 .PRECIOUS: $(LIBP)
-
-.DEFAULT:
-	cvs checkout $@
 
 .F90.o:
 	$(FF90) $<
