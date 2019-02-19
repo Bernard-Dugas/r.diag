@@ -8,10 +8,18 @@
 # dans tous le sous-repertoire $(EC_ARCH) a l'execution
 # d'un "make" de LSSUB
 
-# Revision 1.0  2017/10/30 13:13  dugas (Version initiale)
+# Version initiale 1.0  2017/10/30 13:13  dugas
 #
 # Revision 1.1  2019/02/12 14:14  dugas
 # - Remplacer les instances de MAKE par des MYMAKE
+# Revision 1.2 2019/02/19 13:13  dugas
+# - Enlever toutes re-definitions de MAKE qui pourraient inclure
+#   une revision de la valeur de la variable DIAGNOSTIQUE. Cette
+#   variable est deja correctement definie localement
+
+ifeq ($(BASE_ARCH),)
+$(error FATAL: BASE_ARCH is not defined or empty, ABORTING)
+endif
 
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
@@ -21,7 +29,6 @@ SHELL = /bin/bash
 
 MODDIR  = $(CURDIR)
 DIAGNOSTIQUE = $(MODDIR)/../../..
-MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 LSSDIR  = $(DIAGNOSTIQUE)/src/lssub
 
 FCOMP   = s.compile -src
@@ -29,7 +36,7 @@ FCOMP   = s.compile -src
 default: mods
 
 %.mod : $(LSSDIR)/%.cdk90
-	cd $(LSSDIR) ; $(MYMAKE) $@
+	cd $(LSSDIR) ; $(MAKE) $@
 
 MODDECKS= \
 	diag_convert_ip123.mod 	diag_toc.mod	stats_signatures.mod

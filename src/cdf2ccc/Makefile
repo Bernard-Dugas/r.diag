@@ -3,6 +3,11 @@
 
 # Description: Makefile de CDF2CCC
 
+# Revision 2019/02/19 13:13  dugas
+# - Enlever toutes re-definitions de MAKE qui pourraient inclure
+#   une revision de la valeur de la variable DIAGNOSTIQUE. Cette
+#   variable est deja correctement definie localement
+#
 # Revision 2019/02/12 14:14  dugas
 # - Remplacer les instances de MAKE par des MYMAKE
 #
@@ -17,6 +22,10 @@
 #
 # revision 2016/10/27 15:49  dugas
 # - Le macro ENTETE passe de 28 a 32
+
+ifeq ($(BASE_ARCH),)
+$(error FATAL: BASE_ARCH is not defined or empty, ABORTING)
+endif
 
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
@@ -33,11 +42,8 @@ CFLAGS   =
 FCOMPF   =  -debug -O 0
 COMPF    = 
 
-DIAGNOSTIQUE  = $(CURDIR)/../..
 IGNORE_ERRORS = set -e
-MYMAKE   = $(IGNORE_ERRORS) ; $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
-
-#EXTRAS   = $(DIAGNOSTIQUE)/../extras/NetcdfUdunits/$(EC_ARCH)
+DIAGNOSTIQUE  = $(CURDIR)/../..
 
 DIAGS    = $(DIAGNOSTIQUE)
 BINDIR   = $(DIAGS)/bin/$(BASE_ARCH)
@@ -288,8 +294,6 @@ initial:
 	/bin/mkdir -p $(LIBDIR) $(MANDIR) $(MODDIR) $(BINDIR)
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
 	s.locate --lib netcdff_s 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot netcdff-4.4\" \n ; false ; }
-#	s.locate --lib $(lNetCDF) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot netcdff\" \n ; false ; }
-#	if [[ ! -f $(EXTRAS)/lib/libnetcdf.a ]]; then cd $(EXTRAS)/../../.. ; make all ; cd $(DIAGNOSTIQUE)/src ; fi
 
 # Voir "Managing project with make" de O'Reilly & Associates, 1989,
 # pages 51-53, pour les details de ce qui se passe dans ce qui suit
@@ -358,8 +362,6 @@ $(LIBP):	initial	$(FDECKS)	$(HDECKS)	\
 cdf2ccc: initial cdf2ccc.F90
 #	Creation de l'executable cdf2ccc ailleurs que ailleurs que sous AIX
 	$(AR) xv $(LIBP) lire_arg.o
-# Following line is for shared load via the netcdff SSM package
-#	s.f90 -Wl,-rpath,$$(nf-config --runpath) -src $@.F90
 	$(DIAGNOSTIQUE)/bin/command-change-date.sh $@.F90 cdf2ccc2 ; \
 	s.f90 -src cdf2ccc2.F90 \
 	-o $@ $$(s.prefix -L $(LIBPATH)) $$(s.prefix -I "$(INCLUDES) $(MODDIR)") \

@@ -1,17 +1,21 @@
 .SUFFIXES :
 .SUFFIXES : .F90 .ptn90 .ptn .ftn .txt
 
-# Description: Makefile de MAN/PDOC
-ifeq "$(BAtail -f ../../Resultats.make.pgi13xx.ST1SE_ARCH)" "$(EC_ARCH)"
+ifeq ($(BASE_ARCH),)
+$(error FATAL: BASE_ARCH is not defined or empty, ABORTING)
+endif
+
+ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
 endif
+
+# Description: Makefile de MAN/PDOC
 
 SHELL   = /bin/bash
 
 CPPT    = r.gppf -chop_bang -gpp -F
 
 DIAGNOSTIQUE = $(CURDIR)/../..
-MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
 FFLAGS  =  
 
@@ -35,12 +39,12 @@ DIAGWEB =
 default:  document
 
 %.txt : $(LSPGM)/%.ptn
-	cd $(LSPGM) ; $(MYMAKE) $@
+	cd $(LSPGM) ; $(MAKE) $@
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 %.txt : $(LSPGM)/%.ptn90
-	cd  $(LSPGM) ; $(MYMAKE) $@
+	cd  $(LSPGM) ; $(MAKE) $@
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $@ $(HOSTWEB):$(DIAGWEB) ; fi
 
@@ -98,12 +102,12 @@ TXTDECKS = \
 #LISTE DES CIBLES DU FICHIER recettes
 
 lssub.txt	:	$(LSSUB)/lssub.ftn
-	cd  $(LSSUB) ; $(MYMAKE) $@
+	cd  $(LSSUB) ; $(MAKE) $@
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $@ $(HOSTWEB):$(DIAGWEB) ; fi
 
 cdf2ccc.txt	:	$(CDF2C)/cdf2ccc.F90
-	cd  $(CDF2C) ; $(MYMAKE) $@
+	cd  $(CDF2C) ; $(MAKE) $@
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $@ $(HOSTWEB):$(DIAGWEB) ; fi
 

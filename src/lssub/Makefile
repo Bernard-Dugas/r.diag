@@ -3,6 +3,11 @@
 
 # Description: Makefile principal de LSSUB
 
+# Revision 3.68 2019/02/19 13:13  dugas
+# - Enlever toutes re-definitions de MAKE qui pourraient inclure
+#   une revision de la valeur de la variable DIAGNOSTIQUE. Cette
+#   variable est deja correctement definie localement
+#
 # Revision 3.67 2019/02/12 14:14  dugas
 # - Remplacer les instances de MAKE par des MYMAKE
 #
@@ -19,6 +24,10 @@
 # - Modifier les dependances de coord.o, diag_convert_ip123.o, diag_toc.o, get.o et util.o
 # - Modifier le second make de la cible principale (on definit le macro OPTIM90)
 
+ifeq ($(BASE_ARCH),)
+$(error FATAL: BASE_ARCH is not defined or empty, ABORTING)
+endif
+
 ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
 $(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
 endif
@@ -31,7 +40,6 @@ ZIP     = $(shell which zip)
 
 LSSDIR  = $(CURDIR)
 DIAGNOSTIQUE = $(LSSDIR)/../..
-MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
 CFLAGS  =
 FFLAGS  =
@@ -369,6 +377,6 @@ $(ARCH): initial
 # 2) Les deux suivant $(MAKE) mettent a jour les sources dans $(SOURCES),
 # tandis que 3) les deux derniers generent les librairies (ver. debug et
 # et ver. ordinaire, respectivement)
-	cd $(MODDIR) ; $(MYMAKE) ; cd $(LSSDIR) ;\
-	$(MYMAKE) $(LIBS) ; $(MYMAKE) clean ; cd $(SOURCES) ; $(MYMAKE) ; \
-	$(MYMAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2' OPTIM90='-O 2'
+	cd $(MODDIR) ; $(MAKE) ; cd $(LSSDIR) ;\
+	$(MAKE) $(LIBS) ; $(MAKE) clean ; cd $(SOURCES) ; $(MAKE) ; \
+	$(MAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2' OPTIM90='-O 2'
