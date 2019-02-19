@@ -40,10 +40,11 @@ ZIP     = $(shell which zip)
 
 LSSDIR  = $(CURDIR)
 DIAGNOSTIQUE = $(LSSDIR)/../..
+MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
 
 CFLAGS  =
 FFLAGS  =
- 
+
 HOSTWEB = 
 DIAGWEB =
 
@@ -377,6 +378,6 @@ $(ARCH): initial
 # 2) Les deux suivant $(MAKE) mettent a jour les sources dans $(SOURCES),
 # tandis que 3) les deux derniers generent les librairies (ver. debug et
 # et ver. ordinaire, respectivement)
-	cd $(MODDIR) ; $(MAKE) ; cd $(LSSDIR) ;\
-	$(MAKE) $(LIBS) ; $(MAKE) clean ; cd $(SOURCES) ; $(MAKE) ; \
-	$(MAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2' OPTIM90='-O 2'
+	cd $(MODDIR)  ; $(MAKE) ;\
+	cd $(LSSDIR)  ; $(MAKE) $(LIBS) ; $(MAKE) clean ;\
+	cd $(SOURCES) ; $(MYMAKE) ; $(MYMAKE) DIAGLIB=diag_sq$(STD) OPTIM='-O 2' OPTIM90='-O 2'
