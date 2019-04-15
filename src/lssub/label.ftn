@@ -24,9 +24,13 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: label.ftn,v $
+C     Revision 3.33  2019/04/15 07:08  dugas
+C     Definir NPAS via GETHIGH au debut de
+C     PRTLAB3, avant l'appel a PDATE2.
+C
 C     Revision 3.32  2017/12/18 17:18  dugas
 C     Corriger une erreur d'omission d'initialisation
-C      de la variable LOVAL dans la routine PRTLAB3
+C     de la variable LOVAL dans la routine PRTLAB3
 C
 C     Revision 3.31  2017/10/02 20:20  dugas
 C     Tenir compte des differentes signatures d'operations temporelles
@@ -1044,6 +1048,7 @@ CCC           call swapa4( ibuf(1) )
 ***    DECODE IBUF(2).
 
       typvr = GETHIC ('TYPVAR',IBUF )
+      npas  = GETHIGH('NPAS'  ,IBUF )
       rkind = GETHIGH('RKIND' ,IBUF )
 
       is_a_level = diag_is_a_level( rkind )

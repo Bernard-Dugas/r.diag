@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: gemdiag.ftn,v $
+*     Revision 3.34  2019/04/15 07:07  dugas
+*     - Ajouts au format 6001 de GEM4ATH.
+*
 *     Revision 3.33  2018/11/12 17:17  dugas
 *     - Modifier la declaration de F_pr dans D_VT2GZ
 *     - Meme chose pour FST_PR et TEMP_PR dans GEM4ATH
@@ -571,7 +574,7 @@
               ! Check for inversion layers.
 
               IF (MTH(K).NE.0)                                 THEN
-                  IF (INFO) WRITE(6,6001) I,K,TH(N)
+                  IF (INFO) WRITE(6,6001) I,K,TH(N),THS(K),THS(K+INCT)
                   IF (.NOT.NOABORT) CALL           XIT(' Gem4ath',-1 )
               END IF
 
@@ -588,7 +591,8 @@
 
 *-------------------------------------------------------------------- 
  6001 FORMAT(/' Gem4ath: At point ',I6,', level ',I3.3,', THETA =',
-     +            F11.3/10X,'And is at an inversion. '/)
+     +  F11.3,' and is at an inversion on model levels.'/
+     +    10X,'The log(theta) values at these levels are ',2F11.6/)
 
       END
 

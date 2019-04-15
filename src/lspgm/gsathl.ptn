@@ -182,6 +182,11 @@
 *     ----------------------------------------------------------------
 
 *      $Log: gsathl.ptn,v $
+*     Revision 4.35  2019/04/15 08:01  dugas
+*     - Modifier l'initialisation de CLEVTH.
+*     - RLV est vrai lorsque DEFLEVS est vrai.
+*     - Corrections a deux appels du type INDEX(CLEVTH).
+*
 *     Revision 4.34  2019/01/10 17:17  dugas
 *     Faire appel aux nouveaux comdecks *_formats.cdk
 *     associes aux autres implementes en fin 2016.
@@ -368,11 +373,6 @@
 
       DATA        DEF   / .FALSE. /
       DATA        MODETA/ .FALSE. /
-      DATA        CHECK / ' '     /
-
-      DATA      ( CLEVTH(L), L=1,5 ) /
-     +           ' 850.',' 700.',' 550.',' 400.',' 330.'
-     +                              /
 
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG
@@ -386,7 +386,13 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/gsathl.ptn,v $'
 
 *---------------------------------------------------------------------
-***    ACCEDER LES FICHIERS D'E/S.
+***   INITIALISER LES VARIABLES LIEES AU MODE DEFLEVS.
+
+      CLEVTH(1) = ' 850.' ; CLEVTH(3) = ' 550.' ; CLEVTH(5) = ' 330.'
+      CLEVTH(2) = ' 700.' ; CLEVTH(4) = ' 400.' ; NTHL      =   5 
+
+
+***   ACCEDER LES FICHIERS D'E/S.
 
       NFIL = 6 ; IN1 = 1
       CALL JCLPNT( NFIL, IN1,2,3,4, 5,6 )
@@ -412,7 +418,6 @@
 
       IF (RPBLOC( ' ',LIGNE ))                                 THEN
 
-          NTHL  = 5 
           RLUP  = 0.0
           RLDN  = 0.0
 
@@ -476,7 +481,7 @@
       END IF
 
       FFMT = ( FFMT .OR. GetFreeFormatLevelIO() )
-      IF (FFMT) RLV = .TRUE.
+      IF (FFMT .OR. DEF) RLV = .TRUE.
       
 ***    ACCOUNT FOR DEFAULT TREATMENT.
 
@@ -541,7 +546,7 @@
                       READ( LIGNE, 5030,END=909,ERR=909,IOSTAT=IO) 
      +                                  (CLEVTH(L),L=LIM1,LIM2)
                       DO  L=LIM1,LIM2
-                          IF (INDEX( CLEVTH(I),'.') /= 0) RLV = .TRUE.
+                          IF (INDEX( CLEVTH(L),'.') /= 0) RLV = .TRUE.
                       END DO
                   END IF  
 
@@ -558,7 +563,7 @@
                       READ( LIGNE, 5020,END=909,ERR=909,IOSTAT=IO) 
      +                                  (CLEVTH(L),L=LIM1,LIM2)
                       DO  L=LIM1,LIM2
-                          IF (INDEX( CLEVTH(I),'.') /= 0) RLV = .TRUE.
+                          IF (INDEX( CLEVTH(L),'.') /= 0) RLV = .TRUE.
                       END DO
                   END IF  
 
@@ -1057,9 +1062,3 @@
 
       END
 #     endif
-
-
-
-
-
-

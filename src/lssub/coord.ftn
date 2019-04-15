@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: coord.ftn,v $
+*     Revision 3.46  2019/04/15 07:07  dugas
+*     - Correction du format 6001 de GETKINDC.
+*
 *     Revision 3.45  2017/11/19 20:21  dugas
 *     - Renommer a routine GET_IP1_STRING a GET_IP_STRING (+ generique).
 *       GET_IP1_STRING est maintenant un point d'entree a GET_IP_STRING
@@ -1306,7 +1309,7 @@ C
       return
 *------------------------------------------------------------------------------
 
- 6001 format(' In getkindi: vertical coordinate =',I2,
+ 6001 format(' In getkindc: vertical coordinate =',I2,
      +       ' not recognized.')
 
       end

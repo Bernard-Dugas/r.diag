@@ -136,6 +136,9 @@
 *    2               TAPE11=GG, TAPE5=INPUT, TAPE6=OUTPUT) 
  
 *     $Log: rangrd.ptn,v $
+*     Revision 4.20  2019/04/15 09:12  dugas
+*     Modifier l'initialisation de CLEVP.
+*
 *     Revision 4.19  2018/11/17 22:22  dugas
 *     Tenir compte de la variable d'environnement FREE_FORMAT_LEVEL_IO.
 *
@@ -267,19 +270,21 @@
      +           'DATA' /
       DATA        DEF   , OK    /
      +           .FALSE.,.TRUE. /
-
-      DATA      ( CLEVP(L), L=1,16 ) /
-     +            '   10','   20','   30','   50',
-     +            '   70','  100','  150','  200',
-     +            '  250','  300','  400','  500',
-     +            '  700','  850','  925',' 1000'
-     +                               /
 *===================================================================
 
       NOMPRG =
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/rangrd.ptn,v $'
 
 *---------------------------------------------------------------------
+***   INITIALISER LES VARIABLES LIEES AU MODE DEFLEVS.
+
+      CLEVP(1) = '   10' ; CLEVP(7)  = '  150' ; CLEVP(13) = '  700'
+      CLEVP(2) = '   20' ; CLEVP(8)  = '  200' ; CLEVP(14) = '  850' 
+      CLEVP(3) = '   30' ; CLEVP(9)  = '  250' ; CLEVP(15) = '  925'
+      CLEVP(4) = '   50' ; CLEVP(10) = '  300' ; CLEVP(16) = ' 1000'
+      CLEVP(5) = '   70' ; CLEVP(11) = '  400' ; ILEV      =     16
+      CLEVP(6) = '  100' ; CLEVP(12) = '  500'
+
 ***    ACCEDER LES FICHIERS D'E/S.
 
       NF = 3
@@ -295,7 +300,7 @@
       READ(DATA,'(A4)') NAME
       NSETS  =  100
       DEET   =  0
-      ILEV   =  1
+      ILEV   =  0
       ILG    =  32
       ILAT   =  16
       NPACK  = -32

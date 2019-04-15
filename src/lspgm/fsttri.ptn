@@ -102,6 +102,9 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.47 2019/04/04 15:15  dugas
+*      Utiliser la variable REV dans les appels a EXDB.
+*
 *      Revision 4.46 2017/12/12 12:12:12  dugas
 *      Desallouer l'argument -rewrit (qui avait ete introduit pour
 *      traiter les variables de renvois) et plutot utiliser le code
@@ -235,6 +238,8 @@
 
 ***   *****
 
+      character(4)  :: REV='4.47' ! FSTTRI internal revision level
+  
       integer,      parameter :: NBRFICH = nombre_maximal_de_fichiers
       integer,      parameter :: NBRARGS = 19, NBRCLE = NBRFICH+NBRARGS+1
 
@@ -503,7 +508,7 @@ C    +              valnum,kind
 
       if (def1((NBRARGS+1)+1) == blanc .or.
      +   (def1(2)             == blanc .and. .not.Splitd))     then
-          if (box) nil = exdb ( 'FstTRI', 'Rev. 1.0', 'NON' )
+          if (box) nil = exdb ( 'FstTRI', 'Rev. '//REV, 'NON' )
           write(6,6001)
           if (box) nil = exfin( 'FstTRI', 'Erreur 1', 'NON' )
           call quit( ' FstTri ',1 )
@@ -511,7 +516,7 @@ C    +              valnum,kind
 
 ***    Commencer le traitement.
 
-      if (box) idatm = exdb( 'FstTRI', 'Rev. 4.39', 'NON' )
+      if (box) idatm = exdb( 'FstTRI', 'Rev. '//REV, 'NON' )
 
       name1(1:NBRFICH) = def1((NBRARGS+1)+1:(NBRARGS+1)+NBRFICH)
       name2 = def1(2)

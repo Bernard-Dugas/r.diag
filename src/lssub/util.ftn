@@ -18,6 +18,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.127  2019/04/15 07:08  dugas
+C     Corriger l'indice initial de la premiere boucle de QQQDOC
+C
 C     Revision 3.126  2018/11/17 22:20  dugas
 C     Ajouter le traitement de la variable FREE_FORMAT_LEVEL_IO
 C
@@ -3883,7 +3886,7 @@ CCC           ERROR = .FALSE.
 
 ***    isolate the program basename.
 
-      do i=512,1,-1
+      do i=256,1,-1
          if (nom(i:i) .eq. '/' .or. nom(i:i).eq.':') goto 100
       end do
 

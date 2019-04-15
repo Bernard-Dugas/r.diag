@@ -323,6 +323,9 @@
 ***        CCRN a RPN.
 ***   
 *     $Log: convert.ptn,v $
+*      Revision 4.88 2019/04/04 15:15  dugas
+*      Utiliser la variable REV dans les appels a EXDB.
+*
 *     Revision 4.87  2016/10/27 16:02  dugas
 *     - Modifications syntaxiques F77 --> F90.
 *     - Ajouter la cle -append (nouveau mode d'ecriture).
@@ -857,6 +860,8 @@
 *     HELP (appellant) la routine QQQDOC et le bloc AUTO_DOC.
 *     
       implicit none
+
+      character(4)  :: REV='4.88' ! CONVERT internal revision level
 
       integer       MAXBITS
       parameter   ( MAXBITS = 32 )
@@ -1444,7 +1449,7 @@
 
 ***    Commencer le traitement.
 
-      if (box) idatm = exdb ('Convert', 'Rev 4.40', 'NON')
+      if (box) idatm = exdb ('Convert', 'Rev. '//REV, 'NON')
 
       if (is_on( def1(15) ).or.
      +   (def1(1).eq.blanc .and. def1(2).eq.blanc))            then

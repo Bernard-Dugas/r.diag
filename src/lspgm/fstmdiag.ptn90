@@ -88,6 +88,9 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  !  Revision 1.15 2019/04/04 15:15  dugas
+  !  Utiliser la variable REV dans les appels a EXDB.
+  !
   ! Revision 1.14  2018/04/16 14:14  dugas
   ! - Tenir compte des TYPVAR utilises par le programme
   !   de moyennes temporelles de MFV
@@ -175,6 +178,8 @@
 
   ! *****
 
+  character(4)  :: REV='1.15' ! FSTMDIAG internal revision level
+  
   integer,      parameter :: NBRFICH = nombre_maximal_de_fichiers
   integer,      parameter :: NBRARGS = 9, NBRCLE = NBRFICH+NBRARGS+1
 
@@ -440,7 +445,7 @@
   if (Force)             ReWrit  = Vrai
 
   if (def1(NBRARGS+1) == blanc)                            then
-      if (box) nil = exdb ( 'Fstmdiag', 'Rev. 1.0', 'NON' )
+      if (box) nil = exdb ( 'Fstmdiag', 'Rev. '//REV, 'NON' )
       write(6,6001)
       if (box) nil = exfin( 'Fstmdiag', 'Erreur 1', 'NON' )
       call quit( ' Fstmdiag ',1 )
@@ -448,7 +453,7 @@
 
   ! Commencer le traitement.
 
-  if (box) nil = exdb( 'Fstmdiag', 'Rev. 1.0', 'NON' )
+  if (box) nil = exdb( 'Fstmdiag', 'Rev. '//REV, 'NON' )
 
   if (Debug)                                               then
       if (set_dexit) write(6,6201) 'DIAGNOSTIC_EXIT',trim( diagext )
