@@ -40,6 +40,8 @@
 !
 !REVISIONS
 !
+! B.Dugas mai '19
+! - Modification a la documentation de la routine DEF_LON_LAT
 ! B.Dugas aout '18
 ! - Definir NHEM via les parametres 'project' pour les grilles PS
 ! - Grilles 'B' par defaut lorsque xdid=ydid=0 mais alors,
@@ -1311,7 +1313,9 @@
 
 !      1) Est-elle a resolution constante      (dcons); 
 !      2) Valeurs croissantes ou decroissantes (cincreas);
-!      3) Couverture globale ou locale         (glb);
+!      3) Couverture globale (0),
+!                    hemispherique (N=1,S=2)
+!            ou bien locale (-1)               (glb);
 !      4) Grille de type A ou B                (bgrd);
 !      5) Latitudes (donc cid=yid) gaussiennes (gauss).
 

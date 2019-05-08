@@ -34,6 +34,10 @@
 !     a chaque coordonnee.
 !
 ! REVISIONS
+!  B.Dugas mai '19 :
+!  - Ajouter la dimension 'number' avec long_name='ensemble_member'
+!    comme une possible 3e coordonnee (zdid). Ces parametres sont
+!    utilises dans les donnees CERA-20C (land-sea-mask notamment)
 !  B.Dugas decembre '18 :
 !  - Ajouter 'xc' et 'yc' comme noms reconnus des coordonnees
 !    en X et Y, respectivement. Ce sont les noms produits par une
@@ -150,6 +154,7 @@
              cfield          == 'sigma'            .or. &
              cfield          == 'hybrid'           .or. &
              cfield          == 'levelist'         .or. &
+             cfield          == 'number'           .or. &
              cfield          == 'nlevels'          .or. &
              cfield          == 'bottom_top'       .or. &
              cfield          == 'soil_layers_stag' .or. &
@@ -325,6 +330,7 @@
 
                elseif (cfield == 'layers'             .or. &
                        cfield == 'generic'            .or. &
+                       cfield == 'ensemble_member'    .or. &
                        cfield == 'arbitrary levels'   .or. &
                        cfield == 'top of atmosphere'  .or. &
                        cfield == 'model level number' .or. &

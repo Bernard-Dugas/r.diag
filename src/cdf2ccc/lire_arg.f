@@ -40,6 +40,8 @@
 *
 *REVISIONS
 *
+*  B. Dugas mai '19 :
+*   - Permettre la definition de grilles LON/LAT en mode NetCDF --> RPN
 *  B. Dugas decembre '18 :
 *   - Forcer en minuscule certains arguments caracteres plutot que les
 *     laisser tels quels (ce qui est le comportement par defaut). Les
@@ -685,7 +687,8 @@
             call                                   xit('lire_arg',  -11)
          endif
       else if (direction /= 'netcdf') then
-         if (def1(11) == 'polar_stereographic') then
+         if (def1(11) == 'polar_stereographic'
+     +  .or. def1(11) == 'lon/lat') then
             project%name = def1(11)
          else
             project%name = 'unknown'

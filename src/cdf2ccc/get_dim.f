@@ -67,6 +67,10 @@
 *
 * REVISIONS
 *
+*  B.Dugas mai '19 :
+*  - Ajouter 'number' comme nom reconnu de ka coordonnee
+*    en Z. Ce nom est utilise dans les donnees CERA-20C,
+*    et ce, en particulier pour la variable land-sea-mask
 *  B.Dugas decembre '18 :
 *  - Ajouter 'xc' et 'yc' comme noms reconnus des coordonnees
 *    en X et Y, respectivement. Ce sont les noms produits par une
@@ -222,6 +226,7 @@
      .             cfield2 == 'hybrid'           .or.
      .             cfield2 == 'levelist'         .or.
      .             cfield2 == 'nlevels'          .or.
+     .             cfield2 == 'number'           .or.
      .             cfield2 == 'bottom_top'       .or.
      .             cfield2 == 'soil_layers_stag' .or.
      .             cfield  ==  zcoord     )      .and.
