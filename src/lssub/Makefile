@@ -3,6 +3,9 @@
 
 # Description: Makefile principal de LSSUB
 
+# Revision 3.69 2019/05/14 15:15  dugas
+# - Ajouter le module averages_common utilise par le programme AVERAGES
+#
 # Revision 3.68 2019/02/19 13:13  dugas
 # - Enlever toutes re-definitions de MAKE qui pourraient inclure
 #   une revision de la valeur de la variable DIAGNOSTIQUE. Cette
@@ -123,7 +126,8 @@ default: $(ARCH)
 	$(CC) $<
 
 .cdk90.mod:
-	$(COMPILE) -src $<
+	$(FTNC) $<
+	$(FCOMP) $*.f90
 	rsync -a $@ $(MODDIR)
 	/bin/rm -f $@ $*.f90 $*.o
 
@@ -206,8 +210,9 @@ F90DECKS= \
 	gaussg.F90	util2.F90
 
 f90DECKS= \
-	diag_convert_ip123.f90	diag_convip_plus.f90 	diag_toc.f90 \
-	filter.f90
+	diag_convert_ip123.f90	diag_convip_plus.f90 \
+	diag_toc.f90	filter.f90	averages_common.f90 \
+	stats_signatures.f90
 
 FTNDECKS= \
 	alp.ftn		cofg.ftn		convsub.ftn 	coord.ftn 	ddl.ftn \
@@ -227,11 +232,11 @@ FTN90DECKS = \
 
 CDK90DECKS = \
 	diag_convert_ip123.cdk90	diag_toc.cdk90 \
-	stats_signatures.cdk90
+	stats_signatures.cdk90		averages_common.cdk90
 
 MODDECKS= \
 	$(MODDIR)/diag_convert_ip123.mod 	$(MODDIR)/diag_toc.mod \
-	$(MODDIR)/stats_signatures.mod
+	$(MODDIR)/stats_signatures.mod		$(MODDIR)/averages_common.mod
 
 # Dependances
 
@@ -272,9 +277,16 @@ rec.f     : rec.ftn \
 util.f    : util.ftn \
 	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk
 
+averages_common.f90	: averages_common.cdk90 \
+	$(MODDIR)/stats_signatures.mod
 diag_convip_plus.f90 : diag_convip_plus.ftn90 \
 	$(MODDIR)/diag_convert_ip123.mod
 
+averages_common.mod	: averages_common.cdk90 \
+	$(MODDIR)/stats_signatures.mod
+
+$(LIBS)(averages_common.o) : diag_convip_plus.f90 \
+	$(MODDIR)/stats_signatures.mod
 $(LIBS)(convsub.o)  : convsub.ftn \
 	$(INCLUDE)/fstparm.cdk	$(INCLUDE)/highbuf.cdk \
 	$(INCLUDE)/machtype.cdk	$(INCLUDE)/zlabel.cdk \
@@ -313,6 +325,7 @@ $(LIBS):	initial	$(FTNDECKS)	$(FTN90DECKS) \
 	$(F90DECKS)	$(CDECKS)	$(CDK90DECKS) \
 	$(MODDECKS) \
 	$(LIBS)(alp.o)		\
+	$(LIBS)(averages_common.o)		\
 	$(LIBS)(cofg.o)		\
 	$(LIBS)(convsub.o)	\
 	$(LIBS)(coord.o)		\

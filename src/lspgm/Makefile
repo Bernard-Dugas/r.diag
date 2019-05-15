@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# Revision 4.159 2019/05/15 15:15  dugas
+# - Ajouter le programme AVERAGES (de MFV)
+#
 # Revision 4.158 2019/02/19 13:13  dugas
 # - Enlever toutes re-definitions de MAKE qui pourraient inclure
 #   une revision de la valeur de la variable DIAGNOSTIQUE. Cette
@@ -167,7 +170,7 @@ CDECKS =
 HTMLDECKS = Change_Log.html	index.html	Tmpdir.html	Diag_Config.html
 
 PTN90DECKS = \
-	fstmdiag.ptn90
+	averages.ptn90		fstmdiag.ptn90
 
 PTNDECKS = \
 	addf.ptn	addtext.ptn	adjust.ptn	anomali.ptn	barx.ptn	bary.ptn \
@@ -218,8 +221,8 @@ PTNDECKS = \
 	zxprint.ptn	zxpsi.ptn	zxtrig.ptn	zxwave.ptn	zxmav.ptn
 
 TXTDECKS = \
-	addf.txt	addtext.txt	adjust.txt	anomali.txt	barx.txt	bary.txt \
-	beta.txt	betao.txt	binach.txt	binning.txt	bins.txt \
+	addf.txt	addtext.txt	adjust.txt	anomali.txt	averages.txt	barx.txt \
+	bary.txt	beta.txt	betao.txt	binach.txt	binning.txt	bins.txt \
 	calmap.txt	calpres.txt	cdiv.txt	chabin.txt	chklev.txt \
 	cmlt.txt	cofagg.txt	cofaps.txt	complex.txt	condef.txt \
 	conjmlt.txt	constr.txt	convert.txt	corpar.txt	cosf.txt \
@@ -271,6 +274,8 @@ $(LIBP)(addf.o)    : addf.ptn \
 	$(INCLUDE)/diagmacros.cdk
 $(LIBP)(adjust.o)  : adjust.ptn \
 	$(INCLUDE)/machtype.cdk
+$(LIBP)(averages.o) : averages.ptn90 \
+	$(MODDIR)/averages_common.mod
 $(LIBP)(binach.o)  : binach.ptn \
 	$(INCLUDE)/machtype.cdk
 $(LIBP)(chabin.o)  : chabin.ptn \
@@ -435,11 +440,11 @@ initial:
 # Voir "Managing project with make" de O'Reilly & Associates, 1989,
 # pages 51-53, pour les details de ce qui se passe dans ce qui suit
 $(LIBP):	initial	$(PTNDECKS)	$(PTN90DECKS) \
-	$(LIBP)(addf.o) 	$(LIBP)(addtext.o)	$(LIBP)(adjust.o)	$(LIBP)(anomali.o)	$(LIBP)(barx.o) \
-	$(LIBP)(bary.o) 	$(LIBP)(beta.o) 	$(LIBP)(betao.o)	$(LIBP)(binach.o) \
-	$(LIBP)(binning.o)	$(LIBP)(bins.o) 	$(LIBP)(calmap.o)	$(LIBP)(calpres.o) \
-	$(LIBP)(cdiv.o) 	$(LIBP)(chabin.o)	$(LIBP)(chklev.o)	$(LIBP)(cmlt.o) \
-	$(LIBP)(cofagg.o)	$(LIBP)(cofaps.o)	$(LIBP)(complex.o)	$(LIBP)(condef.o) \
+	$(LIBP)(addf.o) 	$(LIBP)(addtext.o)	$(LIBP)(adjust.o)	$(LIBP)(anomali.o)	$(LIBP)(averages.o) \
+	$(LIBP)(barx.o) 	$(LIBP)(bary.o)	 	$(LIBP)(beta.o)	 	$(LIBP)(betao.o)	$(LIBP)(binach.o) \
+	$(LIBP)(binning.o)	$(LIBP)(bins.o) 	$(LIBP)(calmap.o)		$(LIBP)(calpres.o) \
+	$(LIBP)(cdiv.o) 	$(LIBP)(chabin.o)		$(LIBP)(chklev.o)		$(LIBP)(cmlt.o) \
+	$(LIBP)(cofagg.o)	$(LIBP)(cofaps.o)		$(LIBP)(complex.o)	$(LIBP)(condef.o) \
 	$(LIBP)(conjmlt.o)	$(LIBP)(convert.o)	$(LIBP)(corpar.o)	$(LIBP)(cosf.o) \
 	$(LIBP)(critt.o)	$(LIBP)(crvplot.o)	$(LIBP)(ctemps.o)	$(LIBP)(cwinds.o) \
 	$(LIBP)(delhat.o)	$(LIBP)(delhato.o)	$(LIBP)(dertim.o)	$(LIBP)(delx.o) \

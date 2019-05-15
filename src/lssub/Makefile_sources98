@@ -3,6 +3,9 @@
 
 # Description: Makefile secondaire de LSSUB
 
+# Revision 3.11 2019/05/14 15:15  dugas
+# - Ajouter le module averages_common utilise par le programme AVERAGES
+#
 # revision 3.10 2017/11/02 17:17  dugas
 # - Modifier/Completer les dependances aux modules de r.diag
 #
@@ -122,13 +125,14 @@ F90DECKS= \
 	gaussg.F90	util2.F90
 
 f90DECKS= \
-	diag_convert_ip123.f90	diag_convip_plus.f90 	diag_toc.f90 \
-	filter.f90	stats_signatures.f90
+	averages_common.f90	diag_convert_ip123.f90	diag_convip_plus.f90 \
+	diag_toc.f90	      filter.f90					stats_signatures.f90
 
 MODDECKS= \
-	$(MODDIR)/diag_convert_ip123.mod 	$(MODDIR)/diag_toc.mod \
-	$(MODDIR)/stats_signatures.mod
+	$(MODDIR)/averages_common.mod	$(MODDIR)/diag_convert_ip123.mod \
+	$(MODDIR)/diag_toc.mod			$(MODDIR)/stats_signatures.mod
 
+averages_common.o: averages_common.f90 $(MODDIR)/stats_signatures.mod
 convsub.o: convsub.f $(MODDIR)/diag_toc.mod $(MODDIR)/diag_convert_ip123.mod
 diag_convip_plus.o: diag_convip_plus.f90 $(MODDIR)/diag_convert_ip123.mod
 diag_toc.o: diag_toc.f90 vgrid_descriptors.mod
@@ -152,6 +156,7 @@ full: $(FDECKS) $(CDECKS) $(f90DECKS)
 # pages 51-53, pour les details de ce qui se passe dans ce qui suit
 $(LIBS): $(FDECKS) $(CDECKS) $(f90DECKS) $(F90DECKS) $(MODDECKS) \
 	$(LIBS)(alp.o)	 	\
+	$(LIBS)(averages_common.o)	 	\
 	$(LIBS)(cofg.o)	 	\
 	$(LIBS)(convsub.o)	\
 	$(LIBS)(coord.o)		\

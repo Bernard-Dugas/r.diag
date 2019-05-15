@@ -1,0 +1,692 @@
+# if !defined (VERSION)
+#     define   VERSION '1.0_rc22 2019/05/14'
+# endif
+# if defined (AUTO_DOC)
+!
+!  Usage: averages [-h|--help] [-version] [-newtags] [-strict] \ 
+!                  [-novar] [-stddev] [-tag nomvar] \ 
+!                  [-npas0] [-dateo] \ 
+!                  [-mean mean_out] [-var var_out] \ 
+!                  [-weight ip3|time|hours|days|nnn] \ 
+!                  [-ens] [-etiket] [-status path/to/status/file] \ 
+!                  [-test] [-q[q]] [-v[v][v]] [--|-f] \ 
+!                  [mean_out] [var_out] in_1 ... in_n
+!
+!
+! Author: M.Valin, UQAM.
+! Latest revision: $Header: ./averages.ptn90,v 1.0_rc22 2019/05/14 dugas Exp $
+!
+!
+! This program calculates time averages and variances of sets of CMC/RPN
+! files. It can alternatively calculate ensemble means and variances of
+! a set of files that have the same internal structures, for example
+! the output of an ensemble prediction system.
+!
+!
+!  Notes: 1) File var_out  MUST NOT be present if '-novar' or '-var'
+!            are specified. As well, if '-mean' is specified file
+!            mean_out MUST NOT be present if -mean is used
+!         2) The '-var' and '-novar' arguments are mutually
+!            exclusive and may not be used together
+!         3) Options are order independent *** but ***
+!            '--' or '-f' MUST BE THE LAST ONE
+!         4) Default special tag names = '>>  ', '^^  ', '!!  ', 'HY  '"
+!            The -tag option may be used than once to add to this list'
+!         5) The internal etiket is ignored except if '-etiket'
+!            argument is specified on the command line'
+!         6) The '-ens' argument activates the ensemble mode, where
+!            averages/stds are calculated across files. All such
+!            files should then have an identical structure
+!
+!  Example :'
+!          averages -status stat.dot -vv -mean mean.fst -var var.fst \ 
+!                   -tag HY -tag '>>' my_dir/dm*
+!
+!
+!  Error exits
+!   1 Option is too long
+!   2 Missing value after argument -weight
+!   3 Missing value after argument -mean
+!   4 Missing value after argument -status
+!   5 Missing value after argument -tag
+!   6 Arguments -var and -novar are mutually exclusive
+!   7 Missing value after argument -var
+!   8 Unrecognized option         (only in strict mode)
+!   9 Cannot allocate page table
+!  10 Mean output file exists     (only in strict mode)
+!  11 Variance output file exists (only in strict mode)
+!  12 Input file not found        (only in strict mode)
+!  13 Error while processing file
+!  14 Missing sample(s) for some variables (only in strict mode)
+!
+# endif
+# if defined (RDIAG_LICENCE)
+!/* 
+! * Copyright (C) 2017-2019  UQAM centre ESCER
+! *
+! * This software is free software; you can redistribute it and/or
+! * modify it under the terms of the GNU Lesser General Public
+! * License as published by the Free Software Foundation,
+! * version 2.1 of the License.
+! *
+! * This software is distributed in the hope that it will be useful,
+! * but WITHOUT ANY WARRANTY; without even the implied warranty of
+! * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+! * Lesser General Public License for more details.
+! *
+! * You should have received a copy of the GNU Lesser General Public
+! * License along with this software; if not, write to the
+! * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+! * Boston, MA 02111-1307, USA.
+! */
+# endif
+# if !defined (NO_SOURCE)
+  PROGRAM averages
+    use averages_common
+    implicit none
+
+    ! Author Michel Valin, Centre ESCER/UQAM, 2017-2019
+
+    ! Revision history :
+    ! May 2019 by B.Dugas (ESCER/UQAM) - Adapted to the r.diag framework
+
+    integer :: curarg
+    character (len=8) :: option
+    character (len=256) :: progname
+    character (len=2048) :: filename, meanfile, varfile, statusfile
+    integer :: arg_count, arg_len, status, i
+    integer :: first_file
+    logical :: file_exists, test, missing
+    real, dimension(:,:), pointer :: z
+    type(field), pointer :: p
+    integer :: ix, pg, slot, interval, expected, nil
+    integer, external :: process_file, write_stats
+
+    integer :: io
+    integer, external :: exdb, exfin, fnom
+    character (len=2048) :: evalue, diagext
+    logical              dexit,set_dexit,diagext_exist
+    common       /dexit/ dexit,set_dexit,diagext
+    
+    diagext = 'DIAGNOSTIC_EXIT'
+
+  ! First, check for a non-empty DIAGNOSTIC_EXIT file.
+    dexit = .false. ; set_dexit = .false. ; evalue = ' '
+  ! The name of this file should be specified
+  ! via the DIAGNOSTIC_EXIT environment variable.
+    call getenvc( diagext,evalue )
+    if (evalue.ne.' ') then
+       set_dexit = .true. ; diagext = evalue
+       inquire( file=diagext, err=99,iostat=io,exist=diagext_exist )
+       if (diagext_exist) then
+          ! The file exists.
+          status = fnom( 99, trim(diagext), 'FTN+FMT', 0 )
+          ! Any abort code will be written to this file
+          ! rather than generating a physical abort code.
+          dexit = .true. ; 
+          ! Try reading the file's first line to see if it is
+          ! empty or not. If it is not empty, quit immediatly.
+          read( 99,'(a256)',end=99,iostat=io) evalue
+          call fclos( 99 )
+          if (evalue.ne.' ') call qqexit( 0 )
+       endif
+    endif
+   
+ 99 statusfile = "/dev/null"
+    meanfile = "/dev/null"
+    varfile = "/dev/null"
+    curarg = 2                         ! current argument number (starts after 'r.diag averages')
+    first_file = 0                     ! argument number of first input file
+    strict = .false.                   ! do not abort on error (default)
+    test = .false.                     ! internal flag for development purposes
+    arg_count = command_argument_count()
+
+    progname = 'averages.ptn90'
+
+    nil = exdb ( 'Averages', 'Rev. '//VERSION, 'NON' )  ! print version number
+    
+    nspecials = 4
+    specials(1) = ">>  "
+    specials(2) = "^^  "
+    specials(3) = "!!  "
+    specials(4) = "HY  "
+
+    if(arg_count < 3) then             ! no arguments, OUCH !!
+      call qqqdoc( )
+      call qqexit( 0 )
+    endif
+
+    do while(curarg <= arg_count)      ! process options
+      call get_command_argument(curarg,option,arg_len,status)
+      if(option(1:1) .ne. '-') exit      ! does not start with -, must be a file name (NO MORE OPTIONS)
+      if(verbose > 3) print *,"NOTE: option = '"//trim(option)//"'"
+      curarg = curarg + 1
+      if(status .ne. 0) then
+        print *,"FATAL: option is too long :'"//trim(option)//"..."//"'"
+        nil = exfin( 'Averages', 'Error 1', 'NON' )
+        call quit('Averages', 1 )
+      endif
+
+      if( option == '-h' .or. option == '--help' ) then
+        call qqqdoc( )
+        call qqexit( 0 )
+
+      else if( option == '-version' ) then
+        call qqexit( 0 )
+
+      else if( option == '-strict' ) then   ! set strict mode
+        strict = .true.                     ! abort on ERROR 
+
+      else if( option == '-etiket' ) then
+        select_etiket = .true.
+
+      else if( option == '-ens' ) then ! ensemble mode flag (normally false)
+        ensemble = .true.
+
+      else if( option == '-weight' ) then     ! -mean file_for_averages
+        if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -weight'
+          nil = exfin( 'Averages', 'Error 2', 'NON' )
+          call quit('Averages', 2 )
+        endif
+        option = "none"
+        weight_abs = .false.
+        weight_time = .false.
+        weight_ip3 = .false.
+        call get_command_argument(curarg,option,arg_len,status) ! get weight option (ip3 or time)
+        if(trim(option) == 'ip3') then
+          weight_ip3 = .true.
+        else if(trim(option) == 'hours') then
+          weight_time = .true.
+          time_weight = 1
+        else if(trim(option) == 'days' .or. trim(option) == 'time') then
+          weight_time = .true.
+          time_weight = 24
+        else if(trim(option) .ne. 'none') then
+          weight_abs = .true.
+          read(option,*) time_weight
+        endif
+        if(trim(option) .ne. 'none' .and. verbose > 2) print *,"INFO: WEIGHTING active, using '"//trim(option)//"'"
+        curarg = curarg + 1
+
+      else if( option == '-mean' ) then     ! -mean file_for_averages
+        if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -mean'
+          nil = exfin( 'Averages', 'Error 3', 'NON' )
+          call quit('Averages', 3 )
+        endif
+        call get_command_argument(curarg,meanfile,arg_len,status) ! get filename of averages file
+        curarg = curarg + 1
+
+      else if( option == '-status' ) then     ! -status path/to/status/file
+        if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -status'
+          nil = exfin( 'Averages', 'Error 4', 'NON' )
+          call quit('Averages', 4 )
+        endif
+        call get_command_argument(curarg,statusfile,arg_len,status) ! get filename of averages file
+        curarg = curarg + 1
+
+      else if( option == '-tag' ) then     ! -tag
+        if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -tag'
+          nil = exfin( 'Averages', 'Error 5', 'NON' )
+          call quit('Averages', 5 )
+        endif
+        call get_command_argument(curarg,option,arg_len,status) ! get filename of averages file
+        curarg = curarg + 1
+        nspecials = nspecials + 1
+        specials(nspecials) = trim(option)
+        if(verbose > 2) print *,"INFO: adding '"//specials(nspecials)//"' to special variable list"
+
+      else if( option == '-var' ) then      ! -var file_for_variances
+        if(.not. variance) then  ! -var and -novar are mutually exclusive
+          nil = exfin( 'Averages', 'Error 6', 'NON' )
+          call quit('Averages', 6 )
+         endif
+         if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -var'
+          nil = exfin( 'Averages', 'Error 7', 'NON' )
+          call quit('Averages', 7 )
+        endif
+        call get_command_argument(curarg,varfile,arg_len,status) ! get filename of variances/stddevs file
+        curarg = curarg + 1
+
+      else if( option == '-novar' ) then
+        variance = .false.                   ! test mode
+        if(trim(varfile) .ne. "/dev/null") then  ! -var and -novar are mutually exclusive
+          nil = exfin( 'Averages', 'Error 6', 'NON' )
+          call quit('Averages', 6 )
+        endif
+
+      else if( option == '-dateo' ) then
+        check_dateo = .true.                ! check date of origin
+
+      else if( option == '-npas0' ) then
+        skip_npas0 = .false.                ! do not skip timestep 0
+
+      else if( option == '-test' ) then
+        test = .true.                   ! test mode (for development use only)
+
+      else if( option == '-newtags' ) then
+        newtags = .true.                   ! use new ip1/2/3 tagging style (not implemented yet)
+
+      else if( option == '-stddev' ) then
+        std_dev = .true.                   ! output standard deviation rather than variance
+
+      else if( option == '-q' ) then
+        if(.not. strict) verbose = 1    ! ERROR messages only
+
+      else if( option == '-qq' ) then
+        if(.not. strict) verbose = 0    ! NO messages at all
+
+      else if( option == '-v' ) then
+        verbose = 3                     ! + INFO messages
+
+      else if( option == '-vv' ) then
+        verbose = 4                     ! + NOTE messages
+
+      else if( option == '-vvv' ) then
+        verbose = 5                     ! + DEBUG messages
+
+      else if( option == '--' .or. option == '-f' ) then  ! end of options, what follows is file names
+        first_file = curarg
+        if(verbose > 4) print *,'DEBUG: first file is argument',curarg
+        exit
+
+      else
+        if(verbose > 1) print *,"WARNING: unrecognized option = '"//trim(option)//"'"
+        if(strict) nil = exfin( 'Averages', 'Error 8', 'NON' )
+        if(strict) call  quit('Averages', 8 )  ! abort if strict mode
+        cycle
+      endif
+    enddo
+
+    if( trim(statusfile) .ne. '/dev/null' ) call set_status(statusfile,'status="ABORT"')
+
+    if(strict)  verbose = max(2 , verbose)          ! ERROR + WARNING messages at least
+
+    allocate(ptab(0:MAX_PAGES-1),STAT=status)   ! allocate and initialize page table
+    if(status .ne. 0) then
+      print *,'FATAL: cannot allocate page table'
+      nil = exfin( 'Averages', 'Error 9', 'NON' )
+      call quit('Averages', 9 )
+    endif
+    do i = 0 , MAX_PAGES-1          ! nullify all page pointers
+      nullify(ptab(i)%p)
+    enddo
+
+    call create_page(0)
+
+    if(verbose < 4) call fstopi("MSGLVL",4,.false.)  ! unless in debug mode, keep standard file package silent
+
+    if(trim(meanfile) == "/dev/null") then   ! -mean option was not used
+      call get_command_argument(curarg,meanfile,arg_len,status) ! get averages output file name
+      curarg = curarg + 1
+    endif
+    inquire(FILE=trim(meanfile),EXIST=file_exists)
+    if(file_exists) then
+      if(verbose > 1) print *,"WARNING: mean output file '"//trim(meanfile)//" exists"
+      if(strict) then
+         nil = exfin( 'Averages', 'Error 10', 'NON' )
+         call quit('Averages',10 )
+      endif
+    else
+      if(verbose > 2) print *,"INFO: mean output file is '"//trim(meanfile)//"'"
+    endif
+
+    if(variance .and. (trim(varfile) == "/dev/null")) then     ! variance mode on and -var option was not used
+      call get_command_argument(curarg,varfile,arg_len,status) ! get variance/std deviations output file name
+      curarg = curarg + 1
+    endif
+    if(variance .and. (trim(varfile) .ne. "/dev/null")) then   ! a file name was given and -novar was not used
+      inquire(FILE=trim(varfile),EXIST=file_exists)
+      if(file_exists) then
+        if(verbose > 1) print *,"WARNING: variance output file '"//trim(varfile)//" exists"
+        if(strict) then
+           nil = exfin( 'Averages', 'Error 11', 'NON' )
+           call quit('Averages',11 )
+        endif
+      else
+        if(verbose > 2) print *,"INFO: variance output file is '"//trim(varfile)//"'"
+      endif
+    endif
+
+    status = write_stats(meanfile,varfile)   ! first call just opens the files
+
+    do i = curarg, arg_count         ! loop over input files
+      call get_command_argument(i,filename,arg_len,status)   ! get file name
+      inquire(FILE=trim(filename),EXIST=file_exists)         ! check that it exists
+      if(.not. file_exists)then
+        if(verbose > 0) print *,"ERROR: file '"//trim(filename)//"' not found"
+        if(strict) then
+           nil = exfin( 'Averages', 'Error 12', 'NON' )
+           call quit('Averages',12 )  ! strict mode, error is fatal
+        endif
+      else
+        if(verbose > 2) print *,"INFO: processing file '"//trim(filename)//"'"
+        status = process_file(trim(filename))
+        if(status<0 .and. strict) then
+           nil = exfin( 'Averages', 'Error 13', 'NON' )
+           call quit('Averages',13 ) ! strict mode, error is fatal
+        endif
+      endif
+    enddo
+
+    missing = .false.                ! missing samples flag
+    do i = 0 , next                  ! check all valid entries in tables
+      slot = iand(i,ENTRY_MASK)      ! slot from index
+      pg = ishft(i,PAGE_SHIFT)       ! page from index
+      p => ptab(pg)%p(slot)          ! pointer to entry
+      if(p%special) cycle            ! ignore "special" records
+      if(p%nsamples > 1) then        ! what follows is irrelevant if only one sample
+!         interval = (p%npas_max - p%npas_min) / (p%nsamples - 1)  ! interval asssuming constant interval between samples 
+!         expected = 1 + (p%npas_max - p%npas_min) / interval      ! expected number of samples given lowes/highest timestep numbers
+        interval = (p%date_hi - p%date_lo) / (p%nsamples - 1)
+        if(p%sample == 0) p%sample = interval
+        if(interval == 0) then
+	  expected = p%nsamples
+        else
+	  expected = 1 + (p%date_hi - p%date_lo) / interval
+        endif
+!        if(( p%npas_min + (p%nsamples - 1) * interval) .ne. p%npas_max) then
+        if((expected - p%nsamples) .ne.0) then
+          if(verbose > 1) print *,"WARNING:",expected - p%nsamples ," missing sample(s) for variable '"//p%nomvar//"'"
+          missing = .true.
+        endif
+      endif
+    enddo
+
+    if(.not. (missing .and. strict) ) status = write_stats(meanfile,varfile)  ! write into statistics file(s)
+111 continue
+    call fstfrm(fstdmean)    ! close averages file
+    call fclos(fstdmean)
+    if(variance) then
+      call fstfrm(fstdvar)   ! close variance/std deviation file
+      call fclos(fstdvar)
+    endif
+    if(missing .and. strict) then
+       print *,"FATAL: missing sample(s) for some variables"
+       call quit('Averages',14 )
+    endif
+    if( trim(statusfile) .ne. '/dev/null' ) call set_status(statusfile,'status="SUCCESS"')
+    nil = exfin( 'Averages', 'SUCCESS', 'NON' )
+
+  end PROGRAM averages
+
+  subroutine set_status(filename,message)
+    implicit none
+    character (len=*), intent(IN) :: filename,message
+    integer :: iun, status
+    integer, external :: fnom
+
+    iun = 0
+    status = fnom(iun,trim(filename),'FTN+FMT',0)
+    if(iun > 0) then
+      write(iun,1) trim(message)
+1     format(A)
+      call fclos(iun)
+    endif
+    return
+  end subroutine set_status
+
+  function process_file(filename) result(status)   ! process input standard file
+    use averages_common
+    implicit none
+    character(len=*), intent(IN) :: filename
+    integer :: status
+    integer, external :: fnom, fstouv, fstinf, fstsui, process_record
+    integer :: fstdin
+    integer :: ni, nj, nk, key
+
+    fstdin = 0
+    status = fnom(fstdin,trim(filename),'STD+RND+OLD+R/O',0)   ! connect file
+    if(status <0) return
+    status = fstouv(fstdin,'RND')                              ! open file
+    if(status <0) return
+    if(verbose > 3) print *,"NOTE: opened file '"//trim(filename)//"'"
+
+    key = fstinf(fstdin,ni,nj,nk,-1,"",-1,-1,-1,"","")  ! first record
+    do while(key >= 0)                                  ! loop while valid records
+      if(nk > 1)    cycle                               ! xy 2D records only
+      status = process_record(key,ni,nj,nk)             ! process record
+      key = fstsui(fstdin,ni,nj,nk)                     ! next record 
+    enddo
+    call fstfrm(fstdin)                                 ! close file
+    call fclos(fstdin)
+  end function process_file
+
+  function process_record(key,lni,lnj,lnk) result(status)  ! read record data and process it
+    use averages_common
+    use stats_signatures
+    implicit none
+    integer, intent(IN) :: key, lni, lnj, lnk
+    integer :: status
+
+    integer, external :: fstluk
+    real, dimension(lni,lnj,2) :: z      ! in case data type needs 64 bits
+    integer :: ni, nj, nk
+    integer :: nbits,datyp,ip1,ip2,ip3,dateo,deet,npas
+    integer :: ig1,ig2,ig3,ig4,swa,lng,dltf,ubc,extra1,extra2,extra3
+    character(len=1) :: grtyp
+    character(len=4) :: nomvar
+    character(len=2) :: typvar
+    character(len=12) :: etiket
+    integer :: dtyp, ix, slot, pg
+    real, dimension(:,:), pointer :: z8
+    type(field), pointer :: p
+
+    status = 0
+    call fstprm(key,dateo,deet,npas,ni,nj,nk,nbits,datyp,ip1,ip2,ip3, &
+                typvar,nomvar,etiket,grtyp,ig1,ig2,ig3,ig4, &
+                swa,lng,dltf,ubc,extra1,extra2,extra3)
+
+    if(any(nomvar == specials(1:nspecials))) then  ! special record, copy if first time seen, skip otherwise
+      ix = process_entry(z,ni,nj,ip1,ip2,ip3,dateo,deet,npas,etiket,nomvar,typvar,grtyp,ig1,ig2,ig3,ig4)  ! process data
+      slot = iand(ix,ENTRY_MASK)  ! slot from index
+      pg = ishft(ix,PAGE_SHIFT)   ! page from index
+      p => ptab(pg)%p(slot)       ! pointer to data
+      if(p%nsamples > 1) then     ! we have already seen this record
+        if(verbose > 3) print *,"NOTE: skipping non first occurrence of '"//p%nomvar//"'"
+        return
+      endif
+!
+!     first time around, copy to mean (and variance) file(s)
+!
+      status = fstluk(z,key,ni,nj,nk)            ! read record data
+      if(status == -1) return                    ! ERROR
+      if(nbits == 64) call fst_data_length(8)    ! if 64 bit data
+      if(verbose > 4) print *,'DEBUG: special record - dateo', dateo
+      call fstecr(z,z,-nbits,fstdmean,dateo,deet,npas,ni,nj,nk,ip1,ip2,ip3,typvar,nomvar,etiket,grtyp,ig1,ig2,ig3,ig4,datyp,.false.)
+      if(variance) then  ! if there is a variance file, write it there too
+        if(nbits == 64) call fst_data_length(8)    ! 64 bit data
+        call fstecr(z,z,-nbits,fstdvar,dateo,deet,npas,ni,nj,nk,ip1,ip2,ip3,typvar,nomvar,etiket,grtyp,ig1,ig2,ig3,ig4,datyp,.false.)
+      endif
+      return
+    endif   ! end of if special record
+
+    if(datyp .ne. 5 .and. datyp .ne. 1 .and. datyp .ne. 6 .and. datyp .ne. 133 .and. datyp .ne. 134) then
+      if(verbose > 2) print *,"INFO: skipping record '"//nomvar//"' (not floating point)"
+      return
+    endif
+
+    if(typvar(2:2) == variance_signature) then  ! cannot process variance records
+      if(verbose > 2) print *,"INFO: skipping variance record"
+      return
+    endif
+
+    if(typvar(2:2) .ne. " " .and.typvar(2:2) .ne.time_mean_signature ) then  ! typvar(2:2) ignored except time_mean_signature (averages)
+      if(verbose > 3) print *,"NOTE: type '"//typvar//"' processed as type '"//typvar(1:1)//"'"
+      typvar(2:2) = " "
+    endif
+
+    if(nbits > 32) then
+      if(verbose > 3) print *,'NOTE: skipping record (nbits > 32)'
+      return
+    endif
+
+    if(ni == 1 .or. nj== 1) then
+      if(verbose > 3) print *,'NOTE: skipping record (1D record)'
+      return
+    endif
+
+    if((npas == 0) .and. skip_npas0) then
+      if(verbose > 3) print *,'NOTE: skipping record (npas==0)'
+      return
+    endif
+
+    dtyp = mod(datyp,16)
+    if(dtyp == 0 .or. dtyp == 2 .or. dtyp == 3 .or. &
+       dtyp == 4 .or. dtyp == 7 .or. dtyp == 8) then
+      if(verbose > 4) print *,'DEBUG:skipping record dtyp =', dtyp
+      return  ! datatyp must be one of 1, 5, 6 (float)
+    endif
+
+    if(lni .ne. ni .or. lnj .ne. nj .or. lnk .ne. nk) then  ! this should NEVER happen
+      if(verbose > 1) print *,'WARNING:skipping record - dimension mismatch (should never happen)'
+      status = -1
+      return
+    endif
+
+    status = fstluk(z,key,ni,nj,nk)            ! read record data
+    if(status == -1) return                    ! ERROR
+
+    status = process_entry(z,ni,nj,ip1,ip2,ip3,dateo,deet,npas,etiket,nomvar,typvar,grtyp,ig1,ig2,ig3,ig4)  ! process data
+
+  end function process_record
+
+  function write_stats(filename,varfile) result(status)   ! write statistics into statistics output file(s)
+    use averages_common
+    use stats_signatures
+    implicit none
+    character(len=*), intent(IN) :: filename, varfile
+    integer :: status
+
+    integer, external :: fnom, fstouv
+    integer :: i, ii, jj, slot, pg
+    type(field), pointer :: p
+    real *8 :: avg, var
+    real, dimension(:,:), pointer :: z
+    integer :: deet, npas, ip1, ip2, ip3, datev
+    character(len=2) :: vartag
+    real *8 :: hours, hours_min, hours_max, ov_sample
+!    real *8 :: hours2
+    integer, dimension(14) :: date_array
+    integer :: new_dateo
+    character(len=16) :: string
+    real :: r4
+    integer :: my_kind
+    integer :: wtype
+
+    if(fstdmean == 0 .and. fstdvar == 0) then  ! first call just opens the files
+
+      status = fnom(fstdmean,trim(filename),'STD+RND',0) ! open averages file
+      if(status <0) return
+      status = fstouv(fstdmean,'RND')
+      if(status <0) return
+      if(verbose > 2) print *,"INFO: opened mean output file '"//trim(filename)//"'"
+
+      if(variance) then  ! only open variance file if it is required
+        status = fnom(fstdvar,trim(varfile),'STD+RND',0)
+        if(status <0) return
+        status = fstouv(fstdvar,'RND')
+        if(status <0) return
+        if(verbose > 2) print *,"INFO: opened variance output file '"//trim(filename)//"'"
+      endif
+
+      return
+    endif
+
+    status = 0
+    if(verbose > 2) print *,"INFO:",next+1," records will be written into mean/variance files"
+    vartag = 'VA'               ! typvar for variance/std deviation file
+    if(std_dev) vartag = 'ST'
+    do i = 0 , next             ! loop over valid entries
+      slot = iand(i,ENTRY_MASK) ! slot from index
+      pg = ishft(i,PAGE_SHIFT)  ! page from index
+      p => ptab(pg)%p(slot)     ! pointer to data
+      if(p%special) then
+        if(verbose > 2) print *,"INFO: ignoring special record '"//p%nomvar//"'"
+        cycle
+      endif
+      if(verbose > 4) then
+        print 100,"DEBUG: ",p%nsamples,p%nomvar,p%typvar,p%etiket,p%grtyp,p%ip1,associated(p%stats),p%ni,p%nj
+100     format(A,I5,A5,A3,A13,A2,I10,L2,2I5,2I8)
+      endif
+      allocate(z(p%ni,p%nj),STAT=status)   ! allocate space for averages
+      if(status .ne. 0) return
+      ov_sample = 1.0
+      ov_sample = ov_sample / p%nsamples
+      do jj = 1 , p%nj
+      do ii = 1 , p%ni
+        avg = p%stats(ii,jj,1) * ov_sample     ! average = sum / number of samples
+        z(ii,jj) = real(avg)
+        if(variance) then
+          var = p%stats(ii,jj,2) * ov_sample - avg * avg
+          var = max(var,0.0*var)
+          if(std_dev) then   ! output standard deviation
+            p%stats(ii,jj,2) = sqrt(var)
+          else               ! output variance (default)
+            p%stats(ii,jj,2) = var
+          endif
+        endif
+      enddo
+      enddo
+
+      new_dateo = date_stamp_32(p%date_lo)
+      datev = date_stamp_32(p%date_hi)
+      hours = (p%date_hi - p%date_lo)
+      hours = hours / 3600.0
+      deet = 3600                      ! deet of written records forced to 1 hour
+      npas = nint(hours)
+      ip2 = npas                       ! to be adjusted if period does not start at 00Z
+      date_array(14) = new_dateo
+      call datmgp2(date_array)
+      ip2 = ip2 + date_array(5)             ! zulu hour at start of period
+      ip2 = ip2 + 24 * (date_array(3)-1)    ! force back to first day of month
+      if(ensemble) ip2 = p%ip2
+      ip3 = p%nsamples                      ! number of samples
+      ip1 = p%ip1
+
+      if(verbose > 2) print *,'INFO: ',p%nsamples,' '//p%nomvar//' "samples"'
+      if(newtags) then ! new tagging style (work in progress)
+        if(p%sample > 0) then
+          deet = p%sample
+        else
+          deet = (p%date_hi - p%date_lo) / (p%nsamples - 1)
+        endif
+        npas = nint(hours*3600/deet)
+        r4 = ip3       ! force ip3 to new style coding
+        call convip_plus( ip3, r4, 15, 2, string, .false. ) ! ip kind 15,  number of samples
+        if( p%level2 > 0 ) then   ! 2 level data, put level2 in ip2 for output instead of hours since beginning of integration
+          ip2 = p%level2
+        else
+          call difdatr(new_dateo,p%dateo,hours)   ! ip2 = hours from start of model run
+          r4 = hours       ! force ip2 to new style coding
+          call convip_plus( ip2, r4, 10, 2, string, .false. ) ! ip kind 10,  hours
+        endif
+      endif
+      p%typvar(2:2) = time_mean_signature
+      wtype = 5   ! E32
+      if(p%ni > 16 .and. p%nj > 16) wtype = wtype + 128   ! activate E32 compression for averages
+      if(ensemble)then
+        new_dateo = p%dateo
+        deet      = p%deet
+        npas      = p%npas
+      endif
+      call fstecr(z,z,-32,fstdmean, &
+                  new_dateo,deet,npas,p%ni,p%nj,1,ip1,ip2,ip3,p%typvar,p%nomvar,p%etiket, &
+                  p%grtyp,p%ig1,p%ig2,p%ig3,p%ig4,wtype,.false.)
+      if(variance) then            ! use IEEE 64 bit format for variances
+        call fst_data_length(8)    ! 64 bit format
+        p%typvar(2:2) = variance_signature
+        call fstecr(p%stats(1,1,2),p%stats(1,1,2),-64,fstdvar, &
+                    new_dateo,deet,npas,p%ni,p%nj,1,ip1,ip2,ip3,vartag,p%nomvar,p%etiket, &
+                    p%grtyp,p%ig1,p%ig2,p%ig3,p%ig4,wtype,.false.)
+      endif
+
+      deallocate(z)
+    enddo
+    return
+  end function write_stats
+# endif
