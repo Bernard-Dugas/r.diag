@@ -97,7 +97,7 @@ TXTDECKS = \
 	zondev.txt	zonmod.txt	zxaglb.txt	zxdev.txt	zxdevp.txt \
 	zxdlat.txt	zxdlatf.txt	zxgam.txt	zxint.txt	zxplot.txt \
 	zxprint.txt	zxpsi.txt	zxtrig.txt	zxwave.txt	zxmav.txt \
-	lssub.txt	driver.txt	cdf2ccc.txt
+	lssub.txt	driver.txt	cdf2ccc.txt	averages.txt
 
 #LISTE DES CIBLES DU FICHIER recettes
 

@@ -10,6 +10,10 @@
 *     * de processeurs allouables.
 *
 *     $Log: driver.ptn,v $
+*     Revision 4.121  2019/05/16 14:14:14  dugas
+*     - Ajouter le module AVERAGES de MFV (version adaptee)
+*     - Re-ordonner la liste des declaration de modules EXTERNAL
+*     
 *     Revision 4.120  2018/08/16 15:15:15  dugas
 *     Passer a la version 6.4.4 (development) et
 *     legere revision de la documentation.
@@ -525,7 +529,7 @@
 *b  convert  - RPN STANDART TO/FROM CCC FORMAT FILES                      1 1 
 *b  enleve   - REMOVES SELECTED RECORDS FROM A FILE                       1 1 C
 *b  extrac   - ZEROES OUT ALL OF A GRID EXCEPT A WINDOW DEFINED IN INPUT  1 1 C
-*b  fsttri   - SORT A RPN-STANDART FILE ACCORDING TO IT'S INTERNAL KEYS   1 1 
+*b  fsttri   - SORT RPN-STANDART FILEs ACCORDING TO THEIR INTERNAL KEYS   ? 1 
 *b  joiner   - JOINS TWO FILES. RESULT HAS ASCENDING STEP NUMBERS         2 1
 *b  joinup   - JOINS UP TO 78 FILES WITHOUT CHECKING (MINIMUM 1)         78 1
 *b  levrev   - REVERSES THE ORDER OF LEVELS OF EACH SET IN A FILE         1 1
@@ -553,6 +557,7 @@
 *c  accumul  - PERFORMS ACCUMULATIONS                                   1/2 1
 *c  addf     - ADDS UP TO 78 FILES (MINIMUM 2)                           78 1
 *c  addlev   - ADDS/INTERPOLATEs LEVELS IN AN ARRAY                       1 1 C
+*c  averages - DERIVES ENSEMBLE OR TIME MEANS AND VARIANCES OF RPN FILES  ? 2
 *c  barx     - FAIT LA MOYENNE SELON X                                    2 1 C
 *c  bary     - FAIT LA MOYENNE SELON y                                    2 1 C
 *c  calmap   - CALCUL LES FACTEURS MAPSCALE ET DE CORIOLIS                1 2 C
@@ -574,7 +579,7 @@
 *c  fpow     - RAISES A REAL FILE TO A GIVEN POWER                        1 1 C
 *c  flat     - FLATTEN THE LATERAL BOUNDARY IN THE NORMAL DIRECTION       1 1 C
 *c  gadd     - ADDS TO EACH SET IN A FILE THE FIRST SET OF ANOTHER        1 1
-*c  fstmdiag - CALCULATES MEANS, VARIANCES OF AN UNSTRUCTURED (RPN) FILE  1 2
+*c  fstmdiag - CALCULATES MEANS, VARIANCES OF AN UNSTRUCTURED (RPN) FILE  ? 2
 *c  gdiv     - DIVIDES EACH SET IN A FILE BY THE FIRST SET OF ANOTHER     1 1
 *c  globavg  - CALCULATES SURFACE AREA MEANS OF A SET OF FIELDS           1 1
 *c  gmlt     - MULTIPLIES EACH SET IN A FILE BY THE FIRST SET OF ANOTHER  1 1
@@ -817,46 +822,55 @@
       INTEGER   i,j,k, nargs,ier
       CHARACTER nom*256,nomprg*8
 
-      EXTERNAL  qqexit, addf,   adjust,
-     +          addtext,anomali,beta,   betao,  binach, binning,bins,   
-     +                  chabin,         cofagg, cofaps, complex,condef, 
-     +                  convert,corpar, critt,  cosf,   ctemps, cwinds, 
-     +          delhat, delhato,dertim, diftim,         dxdp,   enleve, 
-     +          eofrot, expone, extrac, fcats,  fit,    flat,   fmask,  
-     +          fpow,   fptest, fsttri, ftest,  fullcor,fullmix,gadd,   
-     +          gaussw, gdiv,   gmlt,   ggacof, ggall,  ggaps,  ggatim, 
-     +          ggdlat, ggdlon, gghems, gglob,  ggsign, ggstat, fstmdiag
+      EXTERNAL  addf,   adjust, addtext,anomali,averages,
+     +          beta,   betao,  binach, binning,bins,
+     +          chabin, cofagg, cofaps, complex,condef, convert,
+     +          corpar, cosf,   critt,  ctemps, cwinds, 
+     +          delhat, delhato,dertim, diftim, dxdp,
+     +          enleve, eofrot, expone, extrac, 
+     +          fcats,  fit,    flat,   fmask,  fpow,
+     +          fptest, fstmdiag,fsttri,fullcor,fullmix,
+     +          gadd,   gaussw, gdiv,   gmlt,   ggacof, ggall,  ggaps,
+     +          ggatim, ggdlat, ggdlon, gghems, gglob,  ggsign, ggstat
 
       EXTERNAL  ggtrig, ggvecps,globavg,gpasg,  gpdpd,  gphum,  gpvtat, 
      +          grset,  gsapl,  gsaptp, gsapzl, gsathl, gsathlt,gshumh, 
-     +          gsmslp, gsmslph,gsomgah,gsomega,gwtqd,  ijlook, inttim, 
-     +          invntry,joiner, joinup, lagcor, kef,    laslon, levrev, 
-     +          linepc, linint, llagg,  loge,   lpprint,lspgm,  lssub,  
+     +          gsmslp, gsmslph,gsomgah,gsomega,gwtqd,
+     +          ijlook, inttim, invntry,
+     +          joiner, joinup,
+     +          lagcor, kef,    laslon, levrev, linepc, linint,
+     +          llagg,  loge,   lpprint,lspgm,  lssub,  
      +          makezg, memcoef,mempred,mergef, meofvec,meriavg,minvers,
      +          miroir, mkmask1,mkmask2,mkmask3,mksymm, mkunsy, mmult,  
-     +          modulus,tmmult, mslpr,  mtrace, newnam
+     +          modulus,mslpr,  mtrace,
+     +          newnam
 
 ***   EXTERNAL  nspec
 
-      EXTERNAL  parmsub,pcomp,  pgen,   psdiv,  psmlt,  randeof,rangrd, 
-     +          rcopy,  relabl, repack, rgopr,  rmax,   rmlabl,
+      EXTERNAL  parmsub,pcomp,  pgen,   psdiv,  psmlt,
+     +          randeof,rangrd, rcopy,  relabl,
+     +          repack, rgopr,  rmax,   rmlabl,
      +          select, select2,shiftf, signag, sinf,   slice,  smooth, 
      +          solflux,sortf,  spamp,  spblow, spcalpa,spcdns, spconj, 
      +          spcsum, spdlat, spdlon, spdlsq, spectr, spflux, spgdev, 
      +          splapl, spldiss,splinv, splook
 
       EXTERNAL  spnegm, spreim, spresol,spslope,spsmoo, smspec, spvdgx, 
-     +          spzdev, spzxmlt,sqroot, square, subarea,        stdev,  
+     +          spzdev, spzxmlt,sqroot, square, subarea,stdev,  
      +          t2test, tfilter,timagg, timavg, timcov, timdev, timegen,
-     +          tsafc,  tscheck,tstep,  ttesta, tteste, unbinn, unmask, 
-     +          unseas, varspec,vbasd,  veint,  vertinc,vminmax,vpint,
-     +          vpintl, vpintv, vsint,  vsinth
+     +          tmmult, transpos,tsafc, tscheck,tstep,  ttesta, tteste,
+     +          unbinn, unmask, unseas, 
+     +          varspec,vbasd,  veint,  vertinc,vminmax,vpint,  vpintl,
+     +          vpintv, vsint,  vsinth
 
-      EXTERNAL  w2stat, windowf,xappend,xfind,  xlin,   xsave,  xtrac,  
-     +          xtrac2, xtrac3, xtrac4, xylin,  ytox,   zadlev, zdhdiv,
-     +          zonavg, zoncov, zondev, zonmod, zxaglb, zxdev,  zxdevp,
-     +          zxdlat, zxdlatf,zxgam,  zxint,  zxmav,  zxprint,zxpsi, 
-     +          zxtrig, zxwave, transpos
+      EXTERNAL  w2stat, windowf,
+     +          xappend,xfind,  xlin,   xsave,  xtrac,
+     +          xtrac2, xtrac3, xtrac4, xylin,
+     +          ytox,
+     +          zadlev, zdhdiv, zonavg, zoncov, zondev, zonmod, zxaglb,
+     +          zxdev,  zxdevp, zxdlat, zxdlatf,zxgam,  zxint,  zxmav,
+     +          zxprint,zxpsi,  zxtrig, zxwave
+     +          zxtrig, zxwave
 #     if !defined (NORCM)
       EXTERNAL  barx,   bary,   calmap, calpres,delx,   dely,   plagalc,
      +          psgrid, xpand
@@ -867,7 +881,7 @@
 #     endif
       integer,  external :: nice19
       logical,  external :: is_on,is_off
-      external  getenvc
+      external  getenvc, qqexit
 
       character niceval*5,nicemac*5
       character oui*3,on*2,vrai*4,true*4,yes*3,off*3,no*2,non*3,false*5
@@ -961,7 +975,8 @@
       If ('addlev'.EQ.nomprg) Call zadlev
       LIGNE(adjust )
       LIGNE(addtext)
-      LIGNE(anomali)
+      LIGNE(averages)
+      LIGNE(beta   )
       LIGNE(beta   )
       LIGNE(betao  )
       LIGNE(binach )

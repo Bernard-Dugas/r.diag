@@ -19,9 +19,10 @@
 ! */
 # endif
  module averages_common   ! tables and table management routines
-    use stats_signatures
+    use stats_signatures, only: time_mean_signature, variance_signature
     implicit none
-
+    public
+    
     ! Author Michel Valin, Centre ESCER/UQAM, 2017-2019
 
     ! Revision history :

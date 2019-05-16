@@ -17,6 +17,10 @@
 *Convhour		-1	coord.ftn	IP2 does not represent an hourly value
 *Convip_plus	-4	diag_convip_plus.ftn90	Illegal KIND conversion requested
 *Coordab		-1	coord.ftn	COORD parameter not recognized
+*Create_Page	-1	averages_common.cdk90	Invalid page number (FATAL)
+*Create_Page	-2	averages_common.cdk90	Page is already allocated (FATAL)
+*Create_Page	-3	averages_common.cdk90	Page cannot be allocated (FATAL)
+*Create_Page_Entry	-1	averages_common.cdk90	Entry cannot be allocated (FATAL)
 *Decode_Range	-1	diag_convip_plus.ftn90	Decode error
 *Decodr		-1	lowio.ftn	IEEE-754 real*8 overflow
 *Decodr2 	-1	lowio92.ftn	IEEE-754 real*8 overflow
@@ -105,6 +109,7 @@
 *LoPToc		-1	diag_toc.cdk90	Vertical descriptors unavailable
 *LoPToc		-2	diag_toc.cdk90	Cannot compute local pressures with IP1/2 
 *Memcof		-1	mem.ftn	Allocated workspace NMAX too small
+*New_Page_Entry	-1	averages_common.cdk90	Error creating entry (FATAL)
 *OuvSTD		-1	convsub.ftn	FNOM error
 *OuvSTD		-2	convsub.ftn	This standard file type is not supported
 *OuvSTD		-3	convsub.ftn	FSTOUV error
@@ -131,6 +136,7 @@
 *Precle		-2	convsub.ftn	Requested offset too large
 *Precle		-3	convsub.ftn	Unknown I/O unit number
 *Probf		-1	prob.ftn	Illegal number of degrees of freedom
+*Process_Entry	-1	averages_common.cdk90	Sample interval mismatch (only in STRICT mode)
 *Prtlab3		-1	label.ftn	Decode IP error
 *PushU		-1	convsub.ftn	Too many U reference records
 *Pushyz		-1	convsub.ftn	Too many Y/Z different reference sets
@@ -190,7 +196,7 @@
 *
 *
 *			Contact: Dugas.Benard@uqam.ca
-*			Last Revision: January 2018.
+*			Last Revision: May 2019.
 *
 #endif
 #     if defined (RDIAG_LICENCE)
@@ -222,6 +228,10 @@
 ***    documentation des codes d'erreurs des sous-routines de libdiag.a
 
 *     $Log: lssub.ftn,v $
+*     Revision 3.35  2019/05/16 16:16  dugas
+*     - Ajout des messages d'erreur de averages_common.cdk90
+*     - Quelques corrections orthographiques
+*     
 *     Revision 3.34  2018/08/16 16:16  dugas
 *     Legere revision de la documentation
 *
@@ -399,3 +409,5 @@
       END
 #endif
 
+
+      
