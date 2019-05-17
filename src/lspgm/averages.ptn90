@@ -428,7 +428,8 @@
     endif
     if( trim(statusfile) .ne. '/dev/null' ) call set_status(statusfile,'status="SUCCESS"')
     nil = exfin( 'Averages', 'SUCCESS', 'NON' )
-
+    call quit('Averages', 0 ) 
+    
   end PROGRAM averages
 
   subroutine set_status(filename,message)
