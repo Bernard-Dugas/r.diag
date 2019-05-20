@@ -19,19 +19,22 @@
 !
 ! This program calculates time averages and variances of sets of CMC/RPN
 ! files. It can alternatively calculate ensemble means and variances of
-! a set of files that have the same internal structures, for example
-! the output of an ensemble prediction system.
+! a set of files that all have the same internal structure, which is the
+! case, for example, with an output of an ensemble prediction system.
 !
 !
-!  Notes: 1) File var_out  MUST NOT be present if '-novar' or '-var'
-!            are specified. As well, if '-mean' is specified file
-!            mean_out MUST NOT be present if -mean is used
+!  Notes: 1) File var_out MUST NOT be present if the '-novar' or '-var'
+!            arguments are specified. As well, if the '-mean' argument
+!            is specified, file mean_out MUST NOT be present
 !         2) The '-var' and '-novar' arguments are mutually
 !            exclusive and may not be used together
-!         3) Options are order independent *** but ***
-!            '--' or '-f' MUST BE THE LAST ONE
+!         3) Options are order independent *** BUT *** one
+!            or the other of '--' and '-f' MUST BE THE LAST ONE.
+!            And the list of input files has to follow this.
 !         4) Default special tag names = '>>  ', '^^  ', '!!  ', 'HY  '"
-!            The -tag option may be used than once to add to this list'
+!            The -tag option may be used more than once to add to this list.
+!            These are special records that are only copied to the output
+!            file(s) when seen the first time and skipped afterwards
 !         5) The internal etiket is ignored except if '-etiket'
 !            argument is specified on the command line'
 !         6) The '-ens' argument activates the ensemble mode, where
