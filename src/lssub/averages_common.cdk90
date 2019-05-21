@@ -55,7 +55,7 @@
     integer, parameter :: PAGE_SHIFT = -8   ! right shift count to get page number from index
     type(page), dimension(:), pointer, save :: ptab => NULL()  ! statistics table, MAX_PAGES pages of size PAGE_SIZE
 
-    integer, save :: next = -1             ! index of las valid record in statistics table
+    integer, save :: next = -1             ! index of last valid record in statistics table
     integer, save :: verbose = 2           ! ERROR + WARNING
     logical, save :: variance = .true.     ! variance or standard deviation required [true unless -novar is used]
     integer, save :: fstdmean = 0          ! unit number for standard file into which averages are written
@@ -363,7 +363,7 @@
       do j = 1 , nj
       do i = 1 , ni
          p%stats(i,j,1) = p%stats(i,j,1) + z(i,j)*weight               ! update sum
-         if(variance) p%stats(i,j,2) = p%stats(i,j,2) + z(i,j)*z(i,j)*weight  ! update sum of squares if necessary
+         if(variance) p%stats(i,j,2) = p%stats(i,j,2) + z(i,j)*dble(z(i,j))*weight  ! update sum of squares if necessary
       enddo
       enddo
     end function process_entry
