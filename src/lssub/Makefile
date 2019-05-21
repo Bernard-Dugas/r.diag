@@ -285,7 +285,7 @@ diag_convip_plus.f90 : diag_convip_plus.ftn90 \
 averages_common.mod	: averages_common.cdk90 \
 	$(MODDIR)/stats_signatures.mod
 
-$(LIBS)(averages_common.o) : diag_convip_plus.f90 \
+$(LIBS)(averages_common.o) : averages_common.cdk90 \
 	$(MODDIR)/stats_signatures.mod
 $(LIBS)(convsub.o)  : convsub.ftn \
 	$(INCLUDE)/fstparm.cdk	$(INCLUDE)/highbuf.cdk \
