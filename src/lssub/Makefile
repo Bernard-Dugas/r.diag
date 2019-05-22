@@ -3,6 +3,9 @@
 
 # Description: Makefile principal de LSSUB
 
+# Revision 3.70 2019/05/22 16:16  dugas
+# - Ajouter la variable ARUFLAG (=U, par defaut)
+#
 # Revision 3.69 2019/05/14 15:15  dugas
 # - Ajouter le module averages_common utilise par le programme AVERAGES
 #
@@ -37,13 +40,16 @@ endif
 
 SHELL = /bin/bash
 
+ARUFLAG = U
 AR      = s.ar
+ARR     = $(AR) rv$(ARUFLAG)
+
 CPPT    = r.gppf -chop_bang -gpp -F
 ZIP     = $(shell which zip)
 
 LSSDIR  = $(CURDIR)
 DIAGNOSTIQUE = $(LSSDIR)/../..
-MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE)
+MYMAKE  = $(MAKE) DIAGNOSTIQUE=$(DIAGNOSTIQUE) ARUFLAG=$(ARUFLAG)
 
 CFLAGS  =
 FFLAGS  =
@@ -153,7 +159,7 @@ default: $(ARCH)
 .f.a:
 	$(FCOMP) $<
 	if [ -f $@ ]; then /bin/chmod 644 $@ ; fi
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	/bin/cp -p $*.f $(SOURCES)
 	/bin/rm -f $*.o
 
@@ -163,12 +169,12 @@ default: $(ARCH)
 .f90.a:
 	$(FCOMP) $<
 	if [ -f $@ ]; then /bin/chmod 644 $@ ; fi
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	/bin/cp -p $*.f90 $(SOURCES)
 	/bin/rm -f $*.o
 
 .o.a:
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 
 %.o: %.mod
 

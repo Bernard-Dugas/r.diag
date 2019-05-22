@@ -40,6 +40,10 @@ MANDIR  = $(DIAGNOSTIQUE)/man/pdoc
 MODDIR  = $(INCLUDE)/$(EC_ARCH)
 SUBDIR  = $(DIAGNOSTIQUE)/src/lssub/sources$(STD)/$(EC_ARCH)
 
+# Doit-on ajouter le parametre U a la commande s.ar ? Par defaut, oui !
+
+ARUFLAG = U
+
 # Include (very) old NCAR graphics (default=no) ?
 
 NOPLOT  = -DNOPLOT
@@ -59,18 +63,24 @@ DIAGWEB = public_html
 RMNLIB  = rmn_016.3
 VGDLIB  = descrip
 
+# LAPCK and BLAS libraries
+
+BLAS    = blas
+LAPACK  = lapack
+
 # DDFUN90, NetCDF4 and UdUnits2 library names
 
 DDFUN90  = ddfun90
 
-# Shared load via the netcdff SSM package
-#lNetCDF  = netcdff
-#UDUNITS  = udunits2f udunits2
-
+ifeq ($(SHARED_NETCDF),)
 # Static (_s) load via symlinks in the netcdff-4.4 SSM package
 lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
 UDUNITS  = udunits2f_s udunits2_s expat
-
+else
+# Shared load via the netcdff SSM package
+lNetCDF  = netcdff
+UDUNITS  = udunits2f udunits2
+endif
 
 DIAG_VERSION = 6.4.4
 CONV_VERSION = 2.3.4
@@ -113,19 +123,20 @@ initial_cdf:
 rdiag: initial_base
 	echo "*** Making the RDIAG modules ***" ; cd $(MODDIR) ; $(MAKE)
 	echo "*** Making libdiag_sq98.a and libdiag_sq98_g.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB) ENTETE=$(ENTETE)
+	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB) ENTETE=$(ENTETE) ARUFLAG=$(ARUFLAG)
 	echo "Making libprog_sq98.a" ;\
-	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE)
+	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) ARUFLAG=$(ARUFLAG)
 	echo "*** Making executable r.diag ***" ;\
 	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) $(BASE_ARCH) OBJ="$(FIXES)" \
 	NOPLOT=$(NOPLOT) GRAFLIB=$(GRAFLIB) DDFUN90=$(DDFUN90) VGDLIB=$(VGDLIB) \
-	DIAG_VERSION=$(DIAG_VERSION) RMNLIB=$(RMNLIB) ENTETE=$(ENTETE)
+	DIAG_VERSION=$(DIAG_VERSION) RMNLIB=$(RMNLIB) ENTETE=$(ENTETE) \
+	BLAS=$(BLAS) LAPACK=$(LAPACK)
 
 # NetCDF to/from ( CCCma or CMC/RPN) file format converter recipe
 
 cdf2conv: initial_base initial_cdf
 	echo "*** Making libcdf2ccc.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE)
+	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE) ARUFLAG=$(ARUFLAG)
 	echo "*** Making executable cdf2ccc ***" ;\
 	cd $(DIAGNOSTIQUE)/src/cdf2ccc ;\
 	$(MAKE) cdf2rpn CONV_VERSION=$(CONV_VERSION) \
@@ -137,11 +148,11 @@ cdf2conv: initial_base initial_cdf
 
 libs: initial_base initial_cdf
 	echo "*** Making libdiag_sq98.a and libdiag_sq98_g.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB)
+	cd $(DIAGNOSTIQUE)/src/lssub ; $(MAKE) VGDLIB=$(VGDLIB) ENTETE=$(ENTETE) ARUFLAG=$(ARUFLAG)
 	echo "Making libprog_sq98.a" ;\
-	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) ;\
+	cd $(DIAGNOSTIQUE)/src/lspgm ; $(MAKE) ARUFLAG=$(ARUFLAG) ;\
 	echo "*** Making libcdf2ccc.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE)
+	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE) ARUFLAG=$(ARUFLAG)
 
 # Online documentation (which was originaly found in $ARMNLIB/man/pdoc) recipe
 
@@ -157,3 +168,6 @@ web_document:
 clean:
 	cd $(DIAGNOSTIQUE)/src/lspgm   ; $(MAKE) $@ ;\
 	cd $(DIAGNOSTIQUE)/src/lssub   ; $(MAKE) $@
+
+veryclean: clean
+	/bin/rm -f $(SUBDIR) $(MODDIR) $(LIBDIR) $(BINDIR)

@@ -3,6 +3,9 @@
 
 # Description: Makefile de CDF2CCC
 
+# Revision 2019/05/22 17:17  dugas
+# - Ajouter la variable ARUFLAG (=U, par defaut)
+#
 # Revision 2019/02/19 13:13  dugas
 # - Enlever toutes re-definitions de MAKE qui pourraient inclure
 #   une revision de la valeur de la variable DIAGNOSTIQUE. Cette
@@ -33,7 +36,11 @@ endif
 
 SHELL    = /bin/bash
 
+ARUFLAG  = U
 AR       = s.ar
+ARR      = $(AR) rv$(ARUFLAG)
+ARX      = $(AR) xv
+
 CPPT     = r.gppf -chop_bang -gpp -F
 
 FFLAGS   =  
@@ -115,21 +122,21 @@ default:  $(LIBP)
 
 .f.a:
 	$(FC) $<
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	/bin/rm -f $*.o
 
 .F90.a:
 	$(FF90) $<
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	/bin/rm -f $*.o
 
 .f90.a:
 	$(FC) $<
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	/bin/rm -f $*.o
 
 .o.a:
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 
 .F90.txt:
 	$(FTNT) $< | sed s/'^[!*]'/' '/ > $(MANDIR)/$@ ;\
@@ -285,7 +292,7 @@ obj: $(OBJECTS)
 
 genlib: $(OBJECTS)
 #	Creer une programmatheque ayant pour nom $LIBP et incluant TOUS les fichiers objets
-	$(AR) rUv $(LIBP) $(OBJECTS)
+	$(ARR) $(LIBP) $(OBJECTS)
 
 #Descriptions des recettes personnelles
 
@@ -361,7 +368,7 @@ $(LIBP):	initial	$(FDECKS)	$(HDECKS)	\
 
 cdf2ccc: initial cdf2ccc.F90
 #	Creation de l'executable cdf2ccc ailleurs que ailleurs que sous AIX
-	$(AR) xv $(LIBP) lire_arg.o
+	$(ARX) $(LIBP) lire_arg.o
 	$(DIAGNOSTIQUE)/bin/command-change-date.sh $@.F90 cdf2ccc2 ; \
 	s.f90 -src cdf2ccc2.F90 \
 	-o $@ $$(s.prefix -L $(LIBPATH)) $$(s.prefix -I "$(INCLUDES) $(MODDIR)") \

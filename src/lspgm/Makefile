@@ -3,6 +3,10 @@
 
 # Description: Makefile de LSPGM
 
+# Revision 4.160 2019/05/22 11:11  dugas
+# - Ajouter la dependance a stats_signatures.mod pour AVERAGES
+# - Ajouter la variable ARUFLAG (=U, par default)
+#
 # Revision 4.159 2019/05/15 15:15  dugas
 # - Ajouter le programme AVERAGES (de MFV)
 #
@@ -50,7 +54,10 @@ endif
 
 SHELL   = /bin/bash
 
+ARUFLAG = U
 AR      = s.ar
+ARR     = $(AR) rv$(ARUFLAG)
+
 CPPT    = r.gppf -chop_bang -gpp -F
 ZIP     = $(shell which zip)
 
@@ -112,7 +119,7 @@ default:  $(LIBP)
 	sed s/'      PROGRAM '/'      SUBROUTINE '/ $< > $*.ftn ;\
 	$(FC) $*.ftn
 	if [ -f $@ ]; then chmod 644 $@ ; fi
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	$(ZIP) $(ZIPFILE) $*.f
 	/bin/rm -f $*.o $*.f $*.ftn
 
@@ -120,7 +127,7 @@ default:  $(LIBP)
 	sed s/' PROGRAM $*'/' SUBROUTINE $*'/ $< > $*.ftn90 ;\
 	$(FC) $*.ftn90
 	if [ -f $@ ]; then chmod 644 $@ ; fi
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	$(ZIP) $(ZIPFILE) $*.f90
 	/bin/rm -f $*.o $*.f90 $*.ftn90
 
@@ -275,7 +282,8 @@ $(LIBP)(addf.o)    : addf.ptn \
 $(LIBP)(adjust.o)  : adjust.ptn \
 	$(INCLUDE)/machtype.cdk
 $(LIBP)(averages.o) : averages.ptn90 \
-	$(MODDIR)/averages_common.mod
+	$(MODDIR)/averages_common.mod \
+	$(MODDIR)/stats_signatures.mod
 $(LIBP)(binach.o)  : binach.ptn \
 	$(INCLUDE)/machtype.cdk
 $(LIBP)(chabin.o)  : chabin.ptn \

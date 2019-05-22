@@ -3,6 +3,9 @@
 
 # Description: Makefile secondaire de LSSUB
 
+# Revision 3.12 2019/05/22 16:16  dugas
+# - Ajouter la variable ARUFLAG (=U, par defaut)
+#
 # Revision 3.11 2019/05/14 15:15  dugas
 # - Ajouter le module averages_common utilise par le programme AVERAGES
 #
@@ -20,7 +23,10 @@ endif
 
 SHELL = /bin/sh
 
+ARUFLAG = U
 AR      = s.ar
+ARR     = $(AR) rv$(ARUFLAG)
+
 ZIP     = `which zip`
 UNZIP   = `which unzip`
 
@@ -63,28 +69,28 @@ default: $(LIBS)
 .f.a:
 	$(FCOMP) $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	$(ZIP) $(FICHIZ) $<
 	/bin/rm -f $*.o
 
 .c.a:
 	$(CC) $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	$(ZIP) $(FICHIZ) $<
 	/bin/rm -f $*.o
 
 .F90.a:
 	s.f90 $(F90FLAGS) -c $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	$(ZIP) $(FICHIZ) $<
 	/bin/rm -f $*.o
 
 .f90.a:
 	$(FCOMP) $<
 	if [ -f $@ ] ; then /bin/chmod 644 $@ ; fi
-	$(AR) rUv $@ $*.o
+	$(ARR) $@ $*.o
 	$(ZIP) $(FICHIZ) $<
 	/bin/rm -f $*.o
 
