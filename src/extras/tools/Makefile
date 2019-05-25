@@ -1,4 +1,8 @@
 
+ifeq ($(BASE_ARCH),)
+$(error FATAL: BASE_ARCH is not defined or empty, ABORTING)
+endif
+
 DIAGNOSTIQUE = $(CURDIR)/../../..
 BINDIR       = $(DIAGNOSTIQUE)/bin/$(BASE_ARCH)
 CC           = s.cc

@@ -1,4 +1,12 @@
 
+ifeq ($(BASE_ARCH),)
+$(error FATAL: BASE_ARCH is not defined or empty, ABORTING)
+endif
+
+ifeq "$(BASE_ARCH)" "$(EC_ARCH)"
+$(error FATAL: EC_ARCH is equal to BASE_ARCH, no compiler architecture is defined, ABORTING)
+endif
+
 DIAGNOSTIQUE = $(CURDIR)/../../..
 
 F_SRC = ddfun90.f90  ddmod90.f90

@@ -27,7 +27,9 @@ DESTINATION = $(DIAGNOSTIQUE)/..
 # libraries including MFV's udunits2f FORTRAN wrapper as well
 # as udunits2 itself or 2) use the static versions of these
 # same libraries as provided by the netcdff-4.4 SSM package.
-# As of May 2017, the second option is always used.
+# As of May 2017, the second option is always used. And as
+# of May 2019, the udunits2f package is included in these
+# extras.
 #EXTRAS  = $(DESTINATION)/extras
 #EXTLIB  = $(EXTRAS)/NetcdfUdunits/$(EC_ARCH)/lib
 
@@ -68,7 +70,7 @@ VGDLIB  = descrip
 BLAS    = blas
 LAPACK  = lapack
 
-# DDFUN90, NetCDF4 and UdUnits2 library names
+# DDFUN90 (Substitute Quad-Precision) library name
 
 DDFUN90  = ddfun90
 
@@ -79,7 +81,7 @@ UDUNITS  = udunits2f_s udunits2_s expat
 else
 # Shared load via the netcdff SSM package
 lNetCDF  = netcdff
-UDUNITS  = udunits2f udunits2
+UDUNITS  = udunits2f_s udunits2
 endif
 
 DIAG_VERSION = 6.4.4
@@ -106,14 +108,14 @@ export:
 initial_base:
 	/bin/mkdir -p $(BINDIR) $(LIBDIR) $(MANDIR) $(MODDIR) $(SUBDIR)
 	if [[ `/bin/ls -L $(MODDIR)/Makefile ; echo $?` != 0 ]]; then \
-	/bin/ln -sf $(INCLUDE)/Makefile_mods $(MODDIR)/Makefile ; fi
+		/bin/ln -sf $(INCLUDE)/Makefile_mods $(MODDIR)/Makefile ; fi
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot vgriddesc\"\n" ; false ; }
 	s.locate --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
 	if [[ ! -f $(LIBDIR)/libddfun90.a || -z "$(DDFUN90)" ]]; then \
-	cd $(DIAGNOSTIQUE)/src/extras/ddfun90 ; $(MAKE) RMNLIB=$(RMNLIB) ; fi
+		cd $(DIAGNOSTIQUE)/src/extras/ddfun90 ; $(MAKE) RMNLIB=$(RMNLIB) ; fi
+	if [[ ! -f $(LIBDIR)/libudunits2f_s.a ]]; then cd $(DIAGNOSTIQUE)/src/extras/udunits-f-2.0 ; $(MAKE) ; fi
+	if [[ ! -f $(LIBDIR)/program_version.o ]]; then cd $(LIBDIR) ;	s.f77 -g -c ../../program_version.f ; fi
 	if [[ ! -x $(BINDIR)/r.echo ]]; then cd $(DIAGNOSTIQUE)/src/extras/tools ; $(MAKE) ; fi
-	if [[ ! -f $(LIBDIR)/program_version.o ]]; then cd $(LIBDIR) ;\
-	s.f77 -g -c ../../program_version.f ; fi
 
 initial_cdf:
 	s.locate --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }

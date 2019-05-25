@@ -74,6 +74,7 @@
  of it is still in F77). As a consequnce of this, the conversion tool
  requires a FORTRAN to C wrapper for the UdUnits v2 C routines. This
  is again available on github.com (see mfvalin/wrapper-code/udunits).
+ However, a version of this package is included here for convenience
 
  Some versions of the toolkit may also use the DDFUN90 package as
  produced by  David H. Bailey of the NERSC, Lawrence Berkeley Lab.
@@ -93,5 +94,5 @@
  Foundation, version 2.1 of the License.
 
  Contact : Dugas.Bernard@uqam.ca
- Last revision : July 2018
+ Last revision : May 2019
 
