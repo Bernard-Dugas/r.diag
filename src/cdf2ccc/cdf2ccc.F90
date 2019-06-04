@@ -355,6 +355,8 @@
 !
 !REVISIONS
 !
+!  Bernard Dugas, 4 juin 2019 :
+!  - Passer a la version 2.3.5 (development)
 !  Bernard Dugas, 18 decembre 2018 :
 !  - Mise-a-jour de la documentation automatique
 !  Bernard Dugas, 29 aout 2018 :
@@ -566,8 +568,8 @@
 
 !     Identification de la version
 
-      version = '2.3.4'
-      vdate   = 'August 16, 2018'
+      version = '2.3.5'
+      vdate   = 'June 04, 2019'
 
       AMODE = mode
       CALL LOW2UP( AMODE,AMODE )

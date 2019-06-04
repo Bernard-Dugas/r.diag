@@ -84,8 +84,8 @@ lNetCDF  = netcdff
 UDUNITS  = udunits2f_s udunits2
 endif
 
-DIAG_VERSION = 6.4.4
-CONV_VERSION = 2.3.4
+DIAG_VERSION = 6.4.5
+CONV_VERSION = 2.3.5
 
 ENTETE  = 32
 STD     = 98

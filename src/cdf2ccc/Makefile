@@ -3,6 +3,9 @@
 
 # Description: Makefile de CDF2CCC
 
+# revision 2019/06/04 17:17  dugas
+# - Passer a la version 2.3.5 du binaire CDF2CCC
+#
 # Revision 2019/05/22 17:17  dugas
 # - Ajouter la variable ARUFLAG (=U, par defaut)
 #
@@ -59,7 +62,7 @@ MANDIR   = $(DIAGS)/man/pdoc
 INCLUDES = $(DIAGS)/include
 MODDIR   = $(INCLUDES)/$(EC_ARCH)
 
-CONV_VERSION = 2.3.4
+CONV_VERSION = 2.3.5
 
 HOSTWEB =
 DIAGWEB =

@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.161 2019/06/04 17:17  dugas
+# - Passer a la version 6.4.5 du binaire r.diag (driver.Abs)
+#
 # Revision 4.160 2019/05/22 11:11  dugas
 # - Ajouter la dependance a stats_signatures.mod pour AVERAGES
 # - Ajouter la variable ARUFLAG (=U, par default)
@@ -95,7 +98,7 @@ LIBP    = $(LIBDIR)/lib$(PROGLIB).a
 LIBS    = $(LIBDIR)/lib$(DIAGLIB).a
 ZIPFILE = $(LIBDIR)/lspgm_STD$(STD).f.zip
 
-DIAG_VERSION = 6.4.4
+DIAG_VERSION = 6.4.5
 
 HOSTWEB =
 DIAGWEB =
