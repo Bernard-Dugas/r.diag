@@ -116,6 +116,9 @@ initial_base:
 	if [[ ! -f $(LIBDIR)/libudunits2f_s.a ]]; then cd $(DIAGNOSTIQUE)/src/extras/udunits-f-2.0 ; $(MAKE) ; fi
 	if [[ ! -f $(LIBDIR)/program_version.o ]]; then cd $(LIBDIR) ;	s.f77 -g -c ../../program_version.f ; fi
 	if [[ ! -x $(BINDIR)/r.echo ]]; then cd $(DIAGNOSTIQUE)/src/extras/tools ; $(MAKE) ; fi
+	if [[ `/usr/bin/diff $(DIAGNOSTIQUE)/bin/r.diag_commands \
+		$(BINDIR)/r.diag_commands 1> /dev/null 2>&1 ; echo $?` != 0 ]]; then \
+		rsync -a $(DIAGNOSTIQUE)/bin/r.diag_commands $(BINDIR) ; fi
 
 initial_cdf:
 	s.locate --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
