@@ -567,7 +567,7 @@
 !     Identification de la version
 
       version = '2.3.4'
-      vdate   = 'August 16, 2018'
+      vdate   = 'June 05, 2019'
 
       AMODE = mode
       CALL LOW2UP( AMODE,AMODE )
