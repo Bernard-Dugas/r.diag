@@ -3,6 +3,11 @@
 
 # Description: Makefile de CDF2CCC
 
+# revision 2019/06/06 16:16  dugas
+# - Utiliser s.f77 plutot que s.compile dans les recettes
+# - Dans le cas statique (i.e. NLocate=true), on
+#   utilisera nf-config et le NetCDF du systeme
+#
 # revision 2019/06/04 17:17  dugas
 # - Passer a la version 2.3.5 du binaire CDF2CCC
 #
@@ -43,10 +48,19 @@ ARUFLAG  = U
 AR       = s.ar
 ARR      = $(AR) rv$(ARUFLAG)
 ARX      = $(AR) xv
+NLocate  = s.locate
+
+ifeq ($(NLocate),true)
+NINCLUDE = `nf-config --fflags`
+NFLOAD   = `nf-config --flibs`
+else
+NINCLUDE =
+NFLOAD   =
+endif
 
 CPPT     = r.gppf -chop_bang -gpp -F
 
-FFLAGS   =  
+FFLAGS   =  -g -O0
 CFLAGS   =
 
 FCOMPF   =  -debug -O 0
@@ -74,9 +88,9 @@ TXT      = -DNO_SOURCE -DAUTO_DOC
 DEFINE   = -Dtaille_entete=$(ENTETE)
 
 COMPILE  = s.compile
-FF90     = s.f90 -c $$(s.prefix -I "$(INCLUDES) $(MODDIR)") -g -O0 $(DEFINE)
-FC       = $(COMPILE) -includes "$(INCLUDES) $(MODDIR)" -defines "=$(DEFINE)" -O $(OPTIL) -optf "$(FFLAGS)" -bindir $(LCLPO) $(COMPF) $(FCOMPF) -src
-FTNC     = $(COMPILE) -includes "$(INCLUDES)" -defines "=$(DEFINE)" -P -src
+FF90     = s.f90 -c $$(s.prefix -I "$(INCLUDES) $(MODDIR)") $(NINCLUDE) $(FFLAGS) $(DEFINE)
+FCOLD    = $(COMPILE) -includes "$(INCLUDES) $(MODDIR)" -defines "=$(DEFINE)" -O $(OPTIL) -optf "$(FFLAGS)" -bindir $(LCLPO) $(COMPF) $(FCOMPF) -src
+FC       = s.f77 -c $$(s.prefix -I "$(INCLUDES) $(MODDIR)") $(NINCLUDE) $(FFLAGS) $(DEFINE)
 FTNT     = $(CPPT) $(TXT)
 
 CODEBETA =
@@ -303,7 +317,7 @@ initial:
 #	Setup des repertoires dependants de $(EC_ARCH)
 	/bin/mkdir -p $(LIBDIR) $(MANDIR) $(MODDIR) $(BINDIR)
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
-	s.locate --lib netcdff_s 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot netcdff-4.4\" \n ; false ; }
+	$(NLocate) --lib netcdff_s 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot netcdff-4.4\" \n ; false ; }
 
 # Voir "Managing project with make" de O'Reilly & Associates, 1989,
 # pages 51-53, pour les details de ce qui se passe dans ce qui suit
@@ -375,8 +389,8 @@ cdf2ccc: initial cdf2ccc.F90
 	$(DIAGNOSTIQUE)/bin/command-change-date.sh $@.F90 cdf2ccc2 ; \
 	s.f90 -src cdf2ccc2.F90 \
 	-o $@ $$(s.prefix -L $(LIBPATH)) $$(s.prefix -I "$(INCLUDES) $(MODDIR)") \
-	$$(s.prefix -l $(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB) \
-	$(RMNLIB) $(DDFUN90)) $(DEFINE) lire_arg.o $(OBJ) $(CODEBETA)
+	$$(s.prefix -l $(MALIB) $(lNetCDF) $(UDUNITS) $(DIAGLIB) $(VGDLIB) $(RMNLIB) \
+	$(DDFUN90)) $(NINCLUDE) $(NFLOAD) $(DEFINE) lire_arg.o $(OBJ) $(CODEBETA)
 	if [ -x $@ ] ; then \
 		/bin/rm -f lire_arg.o cdf2ccc2.F90 cdf2ccc2.o ; \
 		/bin/mv $@ $(BINDIR)/$@_$(CONV_VERSION)_$(COMP_ARCH) ;cd $(BINDIR) ; \
