@@ -6,4 +6,22 @@ _r_diag()
  COMPREPLY=( $(compgen -W "$(r.diag_commands)" -- ${cur}) )
  return 0
 }
+_old_r_diag()
+{
+ local cur 
+ COMPREPLY=()
+ cur="${COMP_WORDS[COMP_CWORD]}"
+ COMPREPLY=( $(compgen -W "$(old.r.diag_commands)" -- ${cur}) )
+ return 0
+}
+_latest_r_diag()
+{
+ local cur 
+ COMPREPLY=()
+ cur="${COMP_WORDS[COMP_CWORD]}"
+ COMPREPLY=( $(compgen -W "$(r.diag_commands)" -- ${cur}) )
+ return 0
+}
 complete -F _r_diag r.diag
+complete -F _old_r_diag old.r.diag
+complete -F _latest_r_diag latest.r.diag
