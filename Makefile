@@ -78,14 +78,12 @@ ifeq ($(SHARED_NETCDF),)
 # Static (_s) load via symlinks in the netcdff-4.4 SSM package
 NLocate  = s.locate
 lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
-UDUNITS  = udunits2f_s udunits2_s expat
 else
-# Dynamic (shared-object) load via the system's
-# netcdff package (except for udunits2f_s)
+# Dynamic (shared-object) load via the system's netcdff package
 NLocate  = true
 lNetCDF  =
-UDUNITS  = udunits2f_s udunits2
 endif
+UDUNITS  = udunits2f_s udunits2_s expat
 
 DIAG_VERSION = 6.4.5
 CONV_VERSION = 2.3.5

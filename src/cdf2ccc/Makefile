@@ -3,6 +3,9 @@
 
 # Description: Makefile de CDF2CCC
 
+# revision 2019/06/20 17:17  dugas
+# - Modifier la syntaxe pour les appels a nf-config
+#
 # revision 2019/06/06 16:16  dugas
 # - Utiliser s.f77 plutot que s.compile dans les recettes
 # - Dans le cas statique (i.e. NLocate=true), on
@@ -51,8 +54,8 @@ ARX      = $(AR) xv
 NLocate  = s.locate
 
 ifeq ($(NLocate),true)
-NINCLUDE = `nf-config --fflags`
-NFLOAD   = `nf-config --flibs`
+NINCLUDE = $(shell nf-config --fflags)
+NFLOAD   = $(shell nf-config --flibs)
 else
 NINCLUDE =
 NFLOAD   =
