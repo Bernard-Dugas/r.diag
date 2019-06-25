@@ -76,13 +76,14 @@ DDFUN90  = ddfun90
 
 ifeq ($(SHARED_NETCDF),)
 # Static (_s) load via symlinks in the netcdff-4.4 SSM package
+NLocate  = s.locate
 lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
-UDUNITS  = udunits2f_s udunits2_s expat
 else
-# Shared load via the netcdff SSM package
-lNetCDF  = netcdff
-UDUNITS  = udunits2f_s udunits2
+# Dynamic (shared-object) load via the system's netcdff package
+NLocate  = true
+lNetCDF  =
 endif
+UDUNITS  = udunits2f_s udunits2_s expat
 
 DIAG_VERSION = 6.4.4
 CONV_VERSION = 2.3.4
@@ -110,7 +111,7 @@ initial_base:
 	if [[ `/bin/ls -L $(MODDIR)/Makefile ; echo $?` != 0 ]]; then \
 		/bin/ln -sf $(INCLUDE)/Makefile_mods $(MODDIR)/Makefile ; fi
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot vgriddesc\"\n" ; false ; }
-	s.locate --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
+	$(NLocate) --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
 	if [[ ! -f $(LIBDIR)/libddfun90.a || -z "$(DDFUN90)" ]]; then \
 		cd $(DIAGNOSTIQUE)/src/extras/ddfun90 ; $(MAKE) RMNLIB=$(RMNLIB) ; fi
 	if [[ ! -f $(LIBDIR)/libudunits2f_s.a ]]; then cd $(DIAGNOSTIQUE)/src/extras/udunits-f-2.0 ; $(MAKE) ; fi
@@ -121,7 +122,7 @@ initial_base:
 		rsync -a $(DIAGNOSTIQUE)/bin/r.diag_commands $(BINDIR) ; fi
 
 initial_cdf:
-	s.locate --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
+	$(NLocate) --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
 
 # RDIAG Diagnostic toolkit recipe
 
@@ -141,13 +142,13 @@ rdiag: initial_base
 
 cdf2conv: initial_base initial_cdf
 	echo "*** Making libcdf2ccc.a ***" ;\
-	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE) ARUFLAG=$(ARUFLAG)
+	cd $(DIAGNOSTIQUE)/src/cdf2ccc ; $(MAKE) ARUFLAG=$(ARUFLAG) NLocate=$(NLocate)
 	echo "*** Making executable cdf2ccc ***" ;\
 	cd $(DIAGNOSTIQUE)/src/cdf2ccc ;\
 	$(MAKE) cdf2rpn CONV_VERSION=$(CONV_VERSION) \
 	RMNLIB=$(RMNLIB) VGDLIB=$(VGDLIB) OBJ="$(FIXES)" \
 	lNetCDF="$(lNetCDF)" UDUNITS="$(UDUNITS)" \
-	DDFUN90=$(DDFUN90) ENTETE=$(ENTETE)
+	DDFUN90=$(DDFUN90) ENTETE=$(ENTETE) NLocate=$(NLocate)
 
 # Only generate the LSSUB, LSPM and CDF2CCC libraries
 
@@ -175,4 +176,4 @@ clean:
 	cd $(DIAGNOSTIQUE)/src/lssub   ; $(MAKE) $@
 
 veryclean: clean
-	/bin/rm -f $(SUBDIR) $(MODDIR) $(LIBDIR) $(BINDIR)
+	/bin/rm -rf $(SUBDIR) $(MODDIR) $(LIBDIR) $(BINDIR)
