@@ -67,7 +67,12 @@
  UdUnits v2). The current configuration assumes that the the NetCDF
  v4 package is used and that the FORTRAN interface netcdff library
  is provided via a SSM bundle that also points to the UdUnits2
- necessary components.
+ necessary components. This may provide for a static-linked version
+ of the binary executables. However, if the `SHARED_NETCDF` variable is
+ defined to a non-empty value, the converter will be generated using
+ the NetCDF `nf-config`-supplied system options rather than those
+ associated with a SSM bundle. In this case, the UdUnits2 library
+ components will have to be provided separately.
 
  Most of the code available here is written in FORTRAN (and a lot
  of it is still in F77). As a consequnce of this, the conversion tool
@@ -95,4 +100,4 @@
  
  For more information please contact : Dugas.Bernard@uqam.ca
  
- Last revision : May 2019
+ Last revision : June 2019
