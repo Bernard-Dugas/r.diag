@@ -24,6 +24,15 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: get.ftn,v $
+C     Revision 3.101 2019/07/03 15:15  dugas
+C     Ajouter des appels a MakZref dans GetSiz3 et GetSiz4 lorsqu'on
+C      detecte la presence des grilles de type 'Z'. Ceci complete la
+C      modification introduite en 20161026 au traitement du fichier
+C      ZCROCHETS dans CONVSUB. Sans ces nouvelles modifications, les
+C      TicTacs ne sont jamais rencontres par les modules utilisant
+C      les routines GetSiz(3/4), et le fichier ZCROCHETS n'est donc
+C      jamais ecrit...
+C
 C     Revision 3.100 2018/07/31 14:14  dugas
 C     Deplacer les appels a GETIO64 dans les routines
 C      GETMSET* et GETSET2 hors de la boucle temporelle
@@ -3239,7 +3248,8 @@ C 100 IER = MEMOIRC( 0 )
 
 ***    VARIABLES LOCALES.
 
-      CHARACTER (LEN=4)  KIND,NAME
+      CHARACTER          GRTYP
+      CHARACTER (LEN=4)  KIND,NAME,PKTYP
       CHARACTER (LEN=12) STRING1,STRING2
       LOGICAL     COMPARE,ERROR,OK
       INTEGER     JBUF(HEAD),TIME,I,J,NR,NL,NL0, NIVEAU, MAXLEN
@@ -3251,6 +3261,7 @@ C 100 IER = MEMOIRC( 0 )
       LOGICAL              DEBUG
       COMMON     /ZZDEBUG/ DEBUG
 
+      CHARACTER(4), external :: GETHIC
       EXTERNAL    FILEV,LBLCHK,CMPLBL,
      +            SUIVANT,PRECEDE,XIT
 
@@ -3277,6 +3288,11 @@ C 100 IER = MEMOIRC( 0 )
           RETURN
       END IF
 
+      ! Sauver les enregisrements 'TiTac' de NF
+      PKTYP = GETHIC( 'PKTYP',JBUF ) ; PKTYP = PKTYP(1:2)
+      GRTYP = ' ' ; IF (PKTYP == 'SQ') GRTYP = GETHIC( 'GRTYP',JBUF )
+      IF (GRTYP == 'Z') CALL MakZref( NF,OK )
+      
       DO  I=1,HEAD
           IBUF(I) = JBUF(I)
       END DO
@@ -3513,8 +3529,8 @@ C 100 IER = MEMOIRC( 0 )
 
 ***    VARIABLES LOCALES.
 
-      LOGICAL     COMPARE
-      CHARACTER   NAME*20
+      LOGICAL     COMPARE,OK
+      CHARACTER   GRTYP,NAME*20
       CHARACTER*4 KIND,PKTYP
       INTEGER     JBUF(HEAD),TIME,I,J,NLEV,IER,SKIP,NSKIP,IP1,MAXLEN
 
@@ -3565,6 +3581,11 @@ C 100 IER = MEMOIRC( 0 )
           NSET = 0
           GOTO 400
       END IF
+
+      ! Sauver les enregisrements 'TiTac' de NF
+      PKTYP = GETHIC( 'PKTYP',JBUF ) ; PKTYP = PKTYP(1:2)
+      GRTYP = ' ' ; IF (PKTYP == 'SQ') GRTYP = GETHIC( 'GRTYP',JBUF )
+      IF (GRTYP == 'Z') CALL MakZref( NF,OK )
 
       IBUF(1:HEAD) = JBUF(1:HEAD)
 

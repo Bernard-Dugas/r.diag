@@ -78,12 +78,13 @@ ifeq ($(SHARED_NETCDF),)
 # Static (_s) load via symlinks in the netcdff-4.4 SSM package
 NLocate  = s.locate
 lNetCDF  = netcdff_s netcdf_s hdf5_hl_s hdf5_s dl sz_s z
+UDUNITS  = udunits2f_s udunits2_s expat
 else
 # Dynamic (shared-object) load via the system's netcdff package
 NLocate  = true
 lNetCDF  =
+UDUNITS  = udunits2f_s udunits2 expat
 endif
-UDUNITS  = udunits2f_s udunits2_s expat
 
 DIAG_VERSION = 6.4.4
 CONV_VERSION = 2.3.4
@@ -111,10 +112,8 @@ initial_base:
 	if [[ `/bin/ls -L $(MODDIR)/Makefile ; echo $?` != 0 ]]; then \
 		/bin/ln -sf $(INCLUDE)/Makefile_mods $(MODDIR)/Makefile ; fi
 	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot vgriddesc\"\n" ; false ; }
-	$(NLocate) --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
 	if [[ ! -f $(LIBDIR)/libddfun90.a || -z "$(DDFUN90)" ]]; then \
 		cd $(DIAGNOSTIQUE)/src/extras/ddfun90 ; $(MAKE) RMNLIB=$(RMNLIB) ; fi
-	if [[ ! -f $(LIBDIR)/libudunits2f_s.a ]]; then cd $(DIAGNOSTIQUE)/src/extras/udunits-f-2.0 ; $(MAKE) ; fi
 	if [[ ! -f $(LIBDIR)/program_version.o ]]; then cd $(LIBDIR) ;	s.f77 -g -c ../../program_version.f ; fi
 	if [[ ! -x $(BINDIR)/r.echo ]]; then cd $(DIAGNOSTIQUE)/src/extras/tools ; $(MAKE) ; fi
 	if [[ `/usr/bin/diff $(DIAGNOSTIQUE)/bin/r.diag_commands \
@@ -123,6 +122,7 @@ initial_base:
 
 initial_cdf:
 	$(NLocate) --lib netcdff_s 1> /dev/null || { echo -e "\nPLS execute \". s.ssmuse.dot netcdff-4.4\"\n" ; false ; }
+	if [[ ! -f $(LIBDIR)/libudunits2f_s.a ]]; then cd $(DIAGNOSTIQUE)/src/extras/udunits-f-2.0 ; $(MAKE) ; fi
 
 # RDIAG Diagnostic toolkit recipe
 

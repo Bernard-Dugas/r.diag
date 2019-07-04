@@ -12,13 +12,14 @@
 *     LAST REVISION: $Header: /home/cvs/RMNLIB/utils/rdiag/lspgm/gsmslp.ptn,v 4.8 2014/09/25 20:20:49 dugas Exp $
 *
 *
-*     PURPOSE - FROM A SERIES OF SIGMA LEVEL TEMPERATURES (=GSTEMP) AND
-*               LN(PS) (=GLNSP), COMPUTE  A  SERIES  OF  MEAN-SEA-LEVEL
-*               PRESSURES (=GPMSL), USING THE MOUNTAIN FIELD PHIS (=GPHIS).
-*
+*     PURPOSE - FROM A SERIES OF TEMPERATURES DEFINED ON MODEL LEVELS (=GSTEMP)
+*               AND LN(PS) (=GLNSP), COMPUTE A SERIES OF MEAN-SEA-LEVEL PRESSURES
+*               (=GPMSL), USING THE MOUNTAIN FIELD PHIS (=GPHIS). THE MODEL LEVELS
+*               ARE ASSUMED TO BE ON A TYPE OF TERRAIN-FOLLOWING PRESSURE COORDINATE.
+*     
 *
 *     INPUT FILES...
-*      GSTEMP = SIGMA LEVEL GRID SETS OF TEMPERATURE (DEG K).
+*      GSTEMP = MODEL LEVEL GRID SETS OF TEMPERATURE (DEG K).
 *      GSLNSP = CORRESPONDING GRIDS OF LN(SF.PRES.)
 *      GPHIS  = GRID OF SURFACE GEOPOTENTIAL.
 *
@@ -55,6 +56,7 @@
 *       7 GLNSP NOT THE SAME SIZE AS GSTEMP
 *       8 HAVING PROBLEMS READING DIRECTIVE CARD
 *       9 GSTEMP DOES NOT CONTAIN A KNOWN TEMPERATURE
+*      10 DID NOT FIND AN ACCEPTABLE MODEL COORDINATE      
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -81,6 +83,9 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gsmslp.ptn,v $
+*     Revision 4.9 2019/07/04  15:05  dugas
+*     Ajouter un appel a MakZref si GRTYP='Z'.
+*
 *     Revision 4.8  2014/09/25 20:20:49  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -123,28 +128,26 @@
       PARAMETER ( MAXLEV = 999 )
 
       LOGICAL     OK
-      CHARACTER   LIGNE*80
       CHARACTER*4 CPMSL,CTEMP,CLNSP,CPHIS
-      INTEGER     LEV(MAXLEV),IBUF,KBUF(taille_entete),
+      CHARACTER   LIGNE*80,CKIND*16,PKTYP*2,GRTYP
+      INTEGER     LEV(MAXLEV),KBUF(taille_entete),
      +            IO,IER,NLVLUP,MAXW,LEN,KPAK,VKIND,
      +            NLEV,LOWEST,I,NT,NFF,NRECS,NPTS
-      REAL        PHIS,PMSL,LNSP,T,RGAS,GRAV,RGOCP,
-     +            GAM,SIGLOW,SIGHIGH,TS,TBAR,TCON
+      REAL        RGAS,GRAV,RGOCP,GAM,SIGLOW,
+     +            SIGHIGH,TS,TBAR,TCON
 
-      POINTER   ( PI,IBUF(8) )
-      POINTER   ( PL,LNSP(1) )
-      POINTER   ( PP,PHIS(1) )
-      POINTER   ( PT,PMSL(1) )
-      POINTER   ( PT,T(1) )
+      REAL,       DIMENSION(:), ALLOCATABLE :: LNSP,PHIS,PMSL,T
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
 
-      LOGICAL     RPBLOC
-      INTEGER     GETSIZ2
-      CHARACTER*4 PKTYP,GETYP
-      EXTERNAL    GETSIZ2,JCLPNT,GETLIGN,BURNF,CONVPR,
-     +            HPALLOC,GETFLD2,PUTFLD2,XIT,GETYP,RPBLOC
+      LOGICAL,    EXTERNAL :: RPBLOC
+      INTEGER,    EXTERNAL :: GETSIZ2
+      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
+      CHARACTER*16,EXTERNAL :: GETKINDC
+      EXTERNAL    JCLPNT,GETLIGN,BURNF,CONVPR,
+     +            GETFLD2,PUTFLD2,XIT
 
       DATA        CPMSL / 'PMSL' /
       DATA        CLNSP / 'LNSP' /,CPHIS / 'PHIS' /
@@ -207,13 +210,30 @@
       NLEV = NLEV-NLVLUP
       IF (NLEV.LE.0) CALL                          XIT(' Gsmslp ',-99) 
 
+      IF (NRECS == 0)                                          THEN
+          ! Sauver (possiblement) les enregisrements 'TiTac' de GSTEMP.
+          GRTYP = ' ' ; IF (PKTYP == 'SQ') GRTYP = GETHIC('GRTYP',KBUF )
+          IF (GRTYP == 'Z') CALL MakZref( 1,OK )
+      END IF
+
       LOWEST = LEV(NLEV)
 
       CALL CONVPR( LOWEST, SIGLOW, VKIND, -2 )
 
-      IF (VKIND.EQ.2) SIGLOW = 0.001 * SIGLOW
-
-***    DEFINE A CONSISTENT SET OF VARIABLE NAMES.
+      ! Check for an acceptable vertical level type, i.e.
+      !  sigma(=1), pressure(=2) or hybrid pressure(=5).
+      IF (.NOT.(VKIND == 1 .OR.
+     +          VKIND == 2 .OR.
+     +          VKIND == 5 )  )                                THEN
+          CKIND = GETKINDC( VKIND )
+          WRITE(6,6010) TRIM( CKIND )
+          CALL                                     XIT(' Gsmslp ',-10)
+      ELSE IF (VKIND == 2)                                     THEN
+         ! Account for the CCCma GCM vertical level coding.
+         SIGLOW = 0.001 * SIGLOW
+      END IF
+      
+***    DEFINE A CONSISTANT SET OF VARIABLE NAMES.
 
       WRITE(CTEMP,0004) KBUF(3)
 
@@ -229,10 +249,7 @@
 
 ***    ALLOCATE WORKING MEMORY.
 
-      CALL HPALLOC( PI, LEN ,IER,1 )
-      CALL HPALLOC( PT, NPTS,IER,1 )
-      CALL HPALLOC( PP, NPTS,IER,1 )
-      CALL HPALLOC( PL, NPTS,IER,1 )
+      ALLOCATE( IBUF(LEN), T(NPTS),LNSP(NPTS),PHIS(NPTS),PMSL(NPTS) )
 
 ***    GET THE MOUNTAIN FIELD. 
 
@@ -307,6 +324,7 @@
 
  6000 FORMAT(' Gam=',E10.3,' temp. level used is ilev -',I2)
  6009 FORMAT(' File gstemp holds ',A,' instead of TT or TEMP')
+ 6010 FORMAT(/' Found a ',A,' coordinate. Aborting.'/)
  6025 FORMAT(1X,A4,I12,1X,A4,I10,4I8)
  6030 FORMAT(1X,I5,' fields saved.')
 

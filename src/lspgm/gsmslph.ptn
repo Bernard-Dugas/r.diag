@@ -137,6 +137,9 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gsmslph.ptn,v $
+*     Revision 4.12 2019/07/04 14:04  dugas
+*     Ajouter un appel a MakZref si GRTYP='Z'.
+*
 *     Revision 4.11  2019/01/10 17:17  dugas
 *     Faire appel aux nouveaux comdecks *_formats.cdk
 *     associes aux autres implementes en fin 2016.
@@ -194,12 +197,11 @@
       REAL,        PARAMETER :: PTMIN = pression_au_toit
       INTEGER,     PARAMETER :: HEAD = taille_entete
 
-      REAL(8)      PTOIT8,PREF8,R8,R28, CORR1,CORR2
-      LOGICAL      OK,DEF,MODETA,AABB, MONOTON
-      CHARACTER    GRTYP*1,LIGNE*80,CHECK*2
       CHARACTER(8) VERBEX,COORD
-      CHARACTER(4) CPMSL,CLNPT,CLNSP,
-     +             CPHIS,CTEMP,PKTYP
+      LOGICAL      OK,DEF,MODETA,AABB, MONOTON
+      CHARACTER(4) CPMSL,CLNPT,CLNSP,CPHIS,CTEMP
+      CHARACTER    GRTYP,CHECK*2,PKTYP*2,LIGNE*80
+      REAL(8)      PTOIT8,PREF8,R8,R28, CORR1,CORR2
       INTEGER      LEV(MAXLEV),KBUF(HEAD),LBUF(HEAD),MBUF(HEAD),
      +             VKIND,VKINDI,IO,IER,NLVLUP,LAY,MAXW,MAXW2,MAXW3,
      +             LEN,LEN2,LEN3,NPTS,NLEV,NLEVU,LOWEST,I,L,NT,NFF,
@@ -257,7 +259,6 @@
       CORR2 = LOG( 100000._8 )
 
       PKTYP = GETYP(IN1)
-      PKTYP = PKTYP(1:2)
 
       PTOIT  = PTMIN
       PTOIT8 = -1.0
@@ -375,6 +376,12 @@
      +    MAXW3 == 0       .OR.
      +    NLEV  <  1       .OR.
      +    NLEV  >  MAXLEV) CALL                    XIT( VERBEX ,-1 )
+
+      IF (PKTYP == 'SQ')                                       THEN
+          ! Sauver (possiblement) les enregisrements 'TiTac' de IN1
+          GRTYP = ' ' ; IF (PKTYP == 'SQ') GRTYP = GETHIC('GRTYP',KBUF )
+          IF (GRTYP == 'Z') CALL MakZref( IN1,OK )
+      END IF
 
       NLEVU = NLEV-NLVLUP
       IF (NLEVU <= 0) CALL                         XIT( VERBEX ,-99) 

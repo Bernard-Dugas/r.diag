@@ -117,6 +117,9 @@
 *     -----------------------------------------------------------------
 
 *     $Log: ggvecps.ptn,v $
+*     Revision 4.2019  2019/07/3 17:17  dugas
+*     Ajouter un appel a MakZref en mode ZMODE=Vrai.
+*
 *     Revision 4.19  2018/09/19 15:15  dugas
 *     Utiliser le format 6251 lorsque ZMODE est vrai.
 *
@@ -222,7 +225,7 @@
      +            XG1,XG3,LON0,PIS4,ADEG,DEG,UZ,VZ,
      +            UG,VG,RROT(3,3),FMISS,EPSIL
       INTEGER     NLEV,IER,NFF,LEV,
-     +            I,IJ,K,NLON,NLONM,NLAT,NWDS,NR,MAXW,
+     +            I,IJ,K,NLON,NLONM,NLAT,NWDS,NR,MAXW,NF1,
      +            MAX1,MAX2,LEN1,LEN2,PAK,NLEV2,ZNI,ZNJ,IO,
      +            IG1,IG2,IG3,IG4, KIND,ZIG1,ZIG2,ZIG3,ZIG4,
      +            KBUF(taille_entete),LBUF(taille_entete),NBIN
@@ -257,7 +260,7 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggvecps.ptn,v $'
 
 *---------------------------------------------------------------------
-      NFF = 8
+      NFF = 8 ; NF1 = 1
       CALL JCLPNT( NFF, 1,2, 11,12,13,14, 5,6 )
 
       PIS4 = ATAN( 1.D0 )
@@ -356,6 +359,8 @@
       MAX1 = GETSIZ( 1, KBUF,LEN1,NWDS,PAK )
       MAX2 = GETSIZ( 2, LBUF,LEN2,NWDS,PAK )
 
+      IF (ZMODE) call MakZref( NF1,OK )
+      
       CALL CMPLBL( 0,KBUF, 0,LBUF, OK )
 
       IF (.NOT.OK   .OR.

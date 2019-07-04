@@ -56,6 +56,9 @@
 *     ----------------------------------------------------------
 
 *     $Log: delhato.ptn,v $
+*     Revision 4.11 2019/07/04 13:13  dugas
+*     Ajouter un appel a MakZref si GRTYP='Z'.
+*
 *     Revision 4.10  2014/09/25 20:20:46  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -117,14 +120,12 @@
 *-----------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD = taille_entete )
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
+      INTEGER,    PARAMETER :: HEAD = taille_entete
+      INTEGER,    PARAMETER :: MAXLEV = 999
 
       LOGICAL     OK
-      CHARACTER*4 DELO,CPHI,CPHIS
       REAL        PHI,PHICON,MTCON
+      CHARACTER*4 DELO,CPHI,CPHIS,PKTYP*2,GRTYP*1
       INTEGER     I,J,K,IER,LEV(MAXLEV),NLEV,VKIND,
      +            KBUF(HEAD),LEN1,KPAK,MAXW1,NFF,NR,
      +            JBUF(HEAD),LEN,JPAK,MAXW,NWDS
@@ -132,10 +133,9 @@
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
       REAL,       DIMENSION(:), ALLOCATABLE :: X,PHIS
 
-      CHARACTER*4 PKTYP,GETYP
-      INTEGER     GETSIZ2,GETSIZ,GETKIND
-      EXTERNAL    JCLPNT,GETFLD2,CMPLBL,PUTFLD2,PRECEDE,
-     +            GETSIZ2,GETSIZ,GETYP,GETKIND
+      CHARACTER*4,EXTERNAL :: GETYP,GETHIC
+      INTEGER,    EXTERNAL :: GETSIZ2,GETSIZ,GETKIND
+      EXTERNAL    JCLPNT,GETFLD2,CMPLBL,PUTFLD2,PRECEDE
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -159,10 +159,16 @@
       MAXW  = GETSIZ2( 2, JBUF,LEN ,NWDS,JPAK, LEV,NLEV )
       MAXW1 = GETSIZ ( 1, KBUF,LEN1,NWDS,KPAK )
 
+      IF (NR == 0)                                             THEN
+          ! Sauver (possiblement) les enregisrements 'TiTac' de PHI
+          GRTYP = ' ' ; IF (PKTYP == 'SQ') GRTYP = GETHIC('GRTYP',JBUF )
+          IF (GRTYP == 'Z') CALL MakZref( 2,OK )
+      END IF
+
       WRITE(CPHIS,0004) KBUF(3)
       WRITE(CPHI, 0004) JBUF(3)
 
-      IF (PKTYP.EQ.'SQ89')                                     THEN
+      IF (PKTYP.EQ.'SQ')                                       THEN
 
           IF ((CPHIS.NE.'ME' .AND.
      +         CPHIS.NE.'MT').OR.
@@ -212,7 +218,7 @@
           CALL                                     XIT(' Delhato',-3 )
       END IF
 
-      IF (PKTYP(1:2) == 'SQ')                                  THEN
+      IF (PKTYP == 'SQ')                                       THEN
 
 ***        CHECK THAT WE HAVE A PRESSURE VERTICAL COORDINATE.
 
@@ -227,7 +233,7 @@
 
 ***    ALLOCATE NECESSARY MEMORY.
 
-      ALLOCATE(IBUF(LEN),X(NWDS),PHIS(NWDS) )
+      ALLOCATE( IBUF(LEN),X(NWDS),PHIS(NWDS) )
 
 ***    GET THE MOUNTAINS.
 

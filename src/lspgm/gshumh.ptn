@@ -133,6 +133,9 @@
 *    3          TAPE9=GSRHUM, TAPE10=GSLNPT, TAPE5=INPUT,  TAPE6=OUTPUT) 
 *     ---------------------------------------------------------------
 *     $Log: gshumh.ptn,v $
+*     Revision 4.17 2019/07/04 13:53  dugas
+*     Ajouter un appel a MakZref si GRTYP='Z'.
+*
 *     Revision 4.16  2019/01/10 17:17  dugas
 *     Utiliser les comdecks toc_gest_1.cdk et toc_gest_formats.cdk
 *
@@ -262,7 +265,7 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
       NRECS = 0 
       NFIL  = 8 
 
-      IN1 = 2 ; IN1 = 2
+      IN2 = 1 ; IN1 = 2
       CALL JCLPNT( NFIL, IN2,IN1,3, 8,9, 10, 5,6 )
       CALL INCTDIA
   
@@ -348,7 +351,7 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
 
       IF (SHUMREF.LE.0.) SHUMREF = 10.E-3
 
-***    GET ETA VALUES FROM TEMP FILE. ALSO FROM ES FILE. 
+***    GET ETA VALUES FROM TEMP FILE. AND AFTER, FROM ES FILE. 
 ***    ILEV,LEVS = NUMBER OF TEMP,MOISTURE LEVELS IN THE MODEL.
 ***    ETAH = ETA VALUES OF THE TEMPERATURE LEVELS.
 ***    MISSING MOISTURE LEVELS ARE AT THE TOP (LEVELS 1,2,..ETC).
@@ -357,6 +360,10 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
 
       IF (PKTYP == 'SQ')                                       THEN
 
+          ! Sauver (possiblement) les enregisrements 'TiTac' de IN1
+          GRTYP = ' ' ; IF (PKTYP == 'SQ') GRTYP = GETHIC('GRTYP',KBUF )
+          IF (GRTYP == 'Z') CALL MakZref( IN1,OK )
+         
 ***        ATEMPT TO DEFINE VERTICAL LEVEL INFO FROM HY OR !! RECORDS.
 
 #         define SET_VKINDC
