@@ -1,4 +1,4 @@
-    module f_udunits_2
+ module f_udunits_2
 !    FORTRAN interface to the C library udunits2 
 !        the C library udunits2 (C) is Copyright UCAR/Unidata
 !        this fortran Interface is (C) is Copyright Université du Québec à Montréal
@@ -95,6 +95,17 @@
 	use ISO_C_BINDING
 	implicit none
 	include 'f_udunits_2.inc'
+
+   interface
+     subroutine ut_ignore() bind(C,name='ut_ignore')
+     end subroutine ut_ignore
+     subroutine ut_write_to_stderr() bind(C,name='ut_write_to_stderr')
+     end subroutine ut_write_to_stderr
+     subroutine ut_set_error_message_handler(what) bind(C,name='ut_set_error_message_handler')
+       import :: C_FUNPTR
+       type(C_FUNPTR), value :: what
+     end subroutine ut_set_error_message_handler
+   end interface
 
 	interface UD_is_null
 	  module procedure UT_SYSTEM_PTR_is_null
@@ -1197,4 +1208,4 @@
 !=============================================================================
 !=============================================================================
 !=============================================================================
-	end module f_udunits_2
+ end module f_udunits_2

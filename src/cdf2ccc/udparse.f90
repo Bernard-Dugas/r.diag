@@ -32,6 +32,10 @@
 !
 !REVISIONS 
 !
+!   Bernard Dugas  juillet 2019 :
+!   - Ajouter des appels a ut_set_error_message_handler pour se
+!     debarasser des messages d'avertissements persistants de
+!     UDUNITS2 lors de la lecture de sa banque de donnee XML
 !   Bernard Dugas  fev  2017 :
 !   - Ajouter les arguments "udunits_dat" et "sense". Ce
 !     dernier determine dans quel sens se fait le travail
@@ -94,8 +98,10 @@
          charset      = UT_ASCII
          TimeUnit0    = TimeUnit
          udunits_dat0 = udunits_dat
-         
+
+         call ut_set_error_message_handler( C_FUNLOC(ut_ignore) )
          unitSystem = f_ut_read_xml( trim( udunits_dat0 ) )
+         call ut_set_error_message_handler( C_FUNLOC(ut_write_to_stderr) )
 
          if (UD_is_null( unitSystem ) ) then
             call ud_parse_error( status )

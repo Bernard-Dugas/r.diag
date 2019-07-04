@@ -61,6 +61,9 @@
 *     --------------------------------------------------------------
 
 *     $Log: mslpr.ptn,v $
+*     Revision 4.11 2019/07/04  13:43  dugas
+*     Ajouter un appel a MakZref si GRTYP='Z'.
+*
 *     Revision 4.10  2014/09/25 20:20:51  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -123,31 +126,25 @@
 *-----------------------------------------------------------------------
       IMPLICIT    none
 
-      INTEGER     HEAD
-      PARAMETER ( HEAD   = taille_entete )
-      INTEGER     MAXLEV
-      PARAMETER ( MAXLEV = 999 )
-
+      INTEGER,    PARAMETER :: HEAD   = taille_entete
+      INTEGER,    PARAMETER :: MAXLEV = 999
 
       LOGICAL     OK,INCREAS
-      CHARACTER*4 TT,GZ,PN
-      REAL        PMSL,T,PHI,TCON,TTT,RGOCP,
-     +            RGAS,PRESL,T1000,GZ1000,PHICON,PR(MAXLEV)
-      INTEGER     I,K,IBUF,JBUF,LEV(MAXLEV),NFF,NRECS,LOWEST,NST,
+      CHARACTER*4 TT,GZ,PN,PKTYP*2,GRTYP*1
+      REAL        TCON,TTT,RGOCP,RGAS,PRESL,
+     +            T1000,GZ1000,PHICON,PR(MAXLEV)
+      INTEGER     I,K,LEV(MAXLEV),NFF,NRECS,LOWEST,NST,
      +            MAXW1,MAXW2,LEN1,LEN2,LPAK,MAXW,BOT,L,VKIND,
      +            LEN,NLEV,NLEVB,NWDS,KPAK,IER,
      +            LBUF(HEAD),KBUF(HEAD)
 
-      POINTER   ( IT,T   (1) )
-      POINTER   ( IG,PHI (1) )
-      POINTER   ( IP,PMSL(1) )
-      POINTER   ( IB,IBUF(8) )
-      POINTER   ( JB,JBUF(8) )
+      REAL,       DIMENSION(:), ALLOCATABLE :: T,PHI,PMSL
+      INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF,JBUF
 
-      CHARACTER*4 GETYP,PKTYP
-      INTEGER     GETSIZ2,GETKIND
-      EXTERNAL    MACSPE,JCLPNT,GETYP,GETSIZ2,GETFLD2,HPALLOC,
-     +            PRECEDE,CMPLBL,PUTFLD2,XIT,CONVPR,GETKIND
+      CHARACTER*4,EXTERNAL :: GETHIC,GETYP
+      INTEGER,    EXTERNAL :: GETSIZ2,GETKIND
+      EXTERNAL    MACSPE,JCLPNT,GETFLD2,CONVPR,
+     +            PRECEDE,CMPLBL,PUTFLD2,XIT
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -171,8 +168,7 @@
 
 ***    SETUP I/O VARIABLE NAMES.
 
-      NRECS = 0
-      PKTYP = GETYP( 1 )
+      NRECS = 0 ; PKTYP = GETYP( 1 )
 
 ***    EXAMINE FILES TO DETERMINE THE NUMBER OF LEVELS IN EACH SET.
 ***    STOP IF ANY FILE IS EMPTY.
@@ -185,10 +181,16 @@
       IF (MAXW1.EQ.0 .OR. NLEV .LT.   1  .OR.
      +                    NLEV .GT.MAXLEV) GOTO 901
 
+      IF (NRECS == 0)                                          THEN
+          ! Sauver (possiblement) les enregisrements 'TiTac' de GPTEMP.
+          GRTYP = ' ' ; IF (PKTYP == 'SQ') GRTYP = GETHIC('GRTYP',KBUF )
+          IF (GRTYP == 'Z') CALL MakZref( 1,OK )
+      END IF
+
       WRITE(TT,0004) KBUF(3)
       WRITE(GZ,0004) LBUF(3)
 
-      IF (PKTYP.EQ.'SQ89')                                     THEN
+      IF (PKTYP.EQ.'SQ')                                       THEN
 
           IF (TT.NE.'TT' .OR.
      +        GZ.NE.'GZ' ) CALL                    XIT('  Mslpr ',-7 ) 
@@ -226,11 +228,7 @@
       LEN  = MAX( LEN1, LEN2  )
       MAXW = MAX( MAXW1,MAXW2 )
 
-      CALL HPALLOC( IT,5*LEN,IER,0 )
-      IG = LOC( T  (LEN+1) )
-      IP = LOC(PHI (LEN+1) )
-      IB = LOC(PMSL(LEN+1) )
-      JB = LOC(IBUF(LEN+1) )
+      ALLOCATE( IBUF(LEN),JBUF(LEN), PHI(NWDS),T(NWDS),PMSL(NWDS) )
 
 ***    CHECK THAT THE LEVELS ARE INCREASING OR DECREASING
 ***    AND CHECK THAT WE HAVE A PRESSURE VERTICAL COORDINATE.
@@ -275,7 +273,7 @@
      +                     IBUF,MAXW,OK )
 
           IF (.NOT.OK)                                         THEN
-              CALL                                 HPDEALLC( IT,IER,0 )
+              DEALLOCATE( IBUF,JBUF,PHI,T,PMSL )
               IF (MAXW.EQ.0) GOTO 100
               WRITE(6,6030) NRECS
               CALL                                 XIT('  Mslpr ', 0 )
@@ -289,7 +287,7 @@
      +                           JBUF,MAXW,OK )
 
           IF (.NOT.OK)                                         THEN
-              CALL                                 HPDEALLC( IT,IER,0 )
+              DEALLOCATE( IBUF,JBUF,PHI,T,PMSL )
               IF (MAXW.EQ.0)                                       THEN
                   CALL PRECEDE( 1,1 )
                   GOTO 100

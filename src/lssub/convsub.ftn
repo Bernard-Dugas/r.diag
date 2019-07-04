@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: convsub.ftn,v $
+!     Revision 3.131  2019/07/04 16:16  dugas
+!     - Petites corrections aux formats #6100 et #6200 de PUSHYZ et PUSHU
+!
 !     Revision 3.130  2018/04/16 14:14  dugas
 !     - Petite correction du format DEBUG #6102 de PARFILL
 !
@@ -3868,8 +3871,8 @@
 *-------------------------------------------------------------------
 
  6001 FORMAT('PUSHYZ:  Too many different reference sets.')
- 6100 FORMAT('*DEBUG:pushyz  added nf,ni,nj,ig1,ig2,ig3= ',6I5)
- 6200 FORMAT('*DEBUG:findyz  found nf,ni,nj,ig1,ig2,ig3= ',6I5)
+ 6100 FORMAT('*DEBUG:pushyz  added nf,ni,nj,ig1,ig2,ig3= ',3I5,3I6)
+ 6200 FORMAT('*DEBUG:findyz  found nf,ni,nj,ig1,ig2,ig3= ',3I5,3I6)
 
       end
       subroutine precle( NF,cle,offset )
@@ -4665,8 +4668,8 @@
 *-------------------------------------------------------------------
 
  6001 FORMAT('PUSHU:  Too many different reference sets.')
- 6100 FORMAT('*DEBUG:pushU  added nf,ni,nj,ig1,ig2,ig3= ',6I6)
- 6200 FORMAT('*DEBUG:findU  found nf,ni,nj,ig1,ig2,ig3= ',6I6)
+ 6100 FORMAT('*DEBUG:pushU  added nf,ni,nj,ig1,ig2,ig3= ',3I5,3I6)
+ 6200 FORMAT('*DEBUG:findU  found nf,ni,nj,ig1,ig2,ig3= ',3I5,3I6)
 
       end
       BLOCK DATA DATA_CONVSUB
