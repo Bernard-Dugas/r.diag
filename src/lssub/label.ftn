@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: label.ftn,v $
+C     Revision 3.34  2019/07/12 13:13  dugas
+C     S'assurer que SLEV est toujours defini dans PRTLAB3
+C
 C     Revision 3.33  2019/04/15 07:08  dugas
 C     Definir NPAS via GETHIGH au debut de
 C     PRTLAB3, avant l'appel a PDATE2.
@@ -1066,8 +1069,8 @@ CCC           call swapa4( ibuf(1) )
 
 ***    DECODE IBUF(4).
 
-      CALL GET_IP1_STRING( IBUF(4),SLEV1 )
-
+      CALL GET_IP1_STRING( IBUF(4),SLEV1 ) ; SLEV = SLEV1
+      
       IF (rkind /= -1)                                         THEN
 
           IF (is_a_level)                                      THEN
@@ -1119,10 +1122,7 @@ CCC           call swapa4( ibuf(1) )
      +                                // HICA(J:LEN_TRIM( HICA ))
      +                                // ' H)'
               END IF
-              SLEV = SLEV1
           END IF
-      ELSE
-          SLEV = SLEV1
       END IF
 
       IF (lMeanVar)                                            THEN
