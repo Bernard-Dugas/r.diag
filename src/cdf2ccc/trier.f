@@ -32,6 +32,9 @@
 *
 *REVISIONS
 *
+* B.Dugas juillet 2019 :
+* - Si la variable project%name='unknown' a la fin de cette
+*   routine, tenter de la definir a 'lon/lat'
 * B.Dugas aout 2018 :
 * - Modifier les initialisations dans def_grille_lambert
 * B.Dugas juil 2018 :
@@ -158,12 +161,30 @@
 
       enddo
 
+      ! Tentative ultime de definir project%name si
+      ! cette variable a encore une valeur inconnue
+      if (project%name == 'unknown' .and. xid > 0 .and. yid > 0) then
+
+         ! Les coordonnees en X et Y existent (i.e. les variables
+         ! correspondantes sont definies) et sont unidimensionnelles
+
+         if ((list(xid)%name == 'longitude' .or.
+     .        list(xid)%name == 'lon')      .and.
+     .       (list(yid)%name == 'latitude'  .or.
+     .        list(yid)%name == 'lat'))      then
+            ! Et ces deux coordonnees ont des noms
+            ! associees a des grilles 'lon/lat'
+            project%name = 'lon/lat'
+         endif
+
+      endif
+
       return
 
 *-----------------------------------------------------------------------
  6001 format(/,' TRIER : neglige la variable : ',a)
 *-----------------------------------------------------------------------
-      end
+      end subroutine trier 
       subroutine def_grille_ps( nattrs )
 
       implicit none
@@ -272,7 +293,7 @@
      .        22x,'d60  = ',f10.2/
      .        22x,'nhem = ',f10.2/)
 
-      end
+      end subroutine def_grille_ps
       subroutine def_grille_pt( nattrs )
 
       implicit none
@@ -489,7 +510,7 @@
      .       /' north_pole_grid_longitude = ',f10.4
      .       /' grid_north_pole_latitude  = ',f10.4)
 
-      end
+      end subroutine def_grille_pt
       subroutine def_times (ncid,varid,dim1,dim2)
 
       implicit none
@@ -523,7 +544,8 @@
  1111 format(i4.4,1x,i2.2,1x,i2.2,1x,i2.2,1x,i2.2,1x,i2.2)
       
       return
-      end
+      
+      end subroutine def_times
       subroutine def_grille_lambert( nattrs )
 
       implicit none
@@ -617,4 +639,4 @@
      .        22x,'semajaxis = ',f15.2/
      .        22x,'invflatng = ',f15.2/)
 
-      end
+      end subroutine def_grille_lambert

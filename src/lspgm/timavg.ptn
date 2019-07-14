@@ -156,6 +156,10 @@
 *     ------------------------------------------------
 
 *     $Log: timavg.ptn,v $
+*     Revision 4.46 2019/07/12 17:17  dugas
+*     - Tenter de corriger la detection erronee de donnees
+*       moyennees au tout debut d'un fichier d'entrees.
+*
 *     Revision 4.45 2018/07/31 13:13  dugas
 *     - Description explicite de la structure requise des
 *       fichiers dans une note de la documentation automatique
@@ -1099,14 +1103,35 @@
               IF (MAXVAL( NSAMPB(1:NSET) ) > 1) AVGDATA = Vrai
           ELSE
      +    IF (AVGDATA .NEQV. MAXVAL( NSAMPB(1:NSET) ) > 1)     THEN
-              ! Mixing averages and samples in input data
-              WRITE(6,6012)
-              CALL                                 XIT( VERBE ,-12 )
+              ! Possibly mixing averages and samples in input data
+              IF (ACCOK .OR. NSETS > 1)                        THEN
+                  ! We cannot recover in this case
+                 WRITE(6,6012)
+                  CALL                             XIT( VERBE ,-12 )
+               ELSE
+                  ! We assume that the first sample was NOT an average.
+                  ! Restore AVG (assuming NSAMP should have been == 1)
+                  AVGDATA = .false.
+                  DO  K=1,NSET
+                      M0 = NWDS*SET(K-1)+1
+                      M1 = NWDS*SET(K)
+                      IF (SQUARE)                              THEN
+                          DO  I=M0,M1
+                              AVG(I) = (AVG(I)/NSAMP(K)) + (F(I)*F(I))
+                          END DO
+                      ELSE
+                          DO  I=M0,M1
+                              AVG(I) = (AVG(I)/NSAMP(K)) + F(I)
+                          END DO
+                      END IF
+                  END DO
+                  NSAMP(1:NSET) = 1
+              END IF
           END IF
               
           IPM = GETIPMODE( IBUF )
 
-          IF (IPM /= IPMi)                                     THEN
+          IF (IPM /= IPMi .AND. AVGDATA)                       THEN
               ! Mixing new- and old-mode IP1/2/3 coding in input file
               WRITE(6,6013) IPMi,IPM
               CALL                                 XIT( VERBE ,-13 )
