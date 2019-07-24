@@ -25,8 +25,8 @@
 *      NAME = NEW NAME TO BE GIVEN TO THE OUTPUT RECORDS.
 *      NPG  = (OPTIONAL) OUTPUT PACKING DENSITY
 *
-*      NOTE: IF **ALL OF** A, B AND C ARE LEFT BLANK (AND NOT 0), 
-*            THEY ARE THEN SET TO +1.0,+1.0 AND 0.0, RESPECTIVELY.
+*      NOTE: IF  A, B AND C ARE LEFT BLANK (AND NOT 0), THEY
+*            ARE THEN SET TO +1.0,+1.0 AND 0.0, RESPECTIVELY.
 *
 *      READ( 5,5010 ) A,B,C,NAME,NPG
 *5010  FORMAT(10X,3E10.0.1X.A4,I5)
@@ -77,6 +77,10 @@
 *    +       TAPE1=X, TAPE2=Y, TAPE3=Z, TAPE5=INPUT,TAPE6=OUTPUT)
  
 *     $Log: xylin.ptn,v $
+*     Revision 4.18  2014/09/25 20:20:56  dugas
+*     Modifier l'initialisation des variables CCA, CCB et CCC de telle
+*      sorte que leurs valeurs par defaut sont maintenant independantes.      
+*
 *     Revision 4.17  2014/09/25 20:20:56  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -235,13 +239,14 @@
 
       OK = SETIO64(.TRUE.)
 
+      CCA     = ' '
+      CCB     = ' '
+      CCC     = ' '
+
       IF (RPBLOC( ' ',VALEUR ))                                THEN
 
 ***        CHECK PARAMETRE BLOCK.
 
-          CCA     = ' '
-          CCB     = ' '
-          CCC     = ' '
           CNPG   = ' '
           NEWNAM = ' '
 
@@ -282,15 +287,21 @@
  
 ***    CHECK FOR DEFAULT VALUES.
 
-      IF (CCA.EQ.' ' .AND.
-     +    CCB.EQ.' ' .AND.
-     +    CCC.EQ.' '   )                                       THEN
+      IF (CCA.EQ.' ')                                         THEN
           A = +1.0
-          B = +1.0
-          C =  0.0
       ELSE
           READ( CCA, 20,ERR=900,IOSTAT=IO) A
+      END IF
+
+      IF (CCB.EQ.' ')                                         THEN
+          B = +1.0
+      ELSE
           READ( CCB, 20,ERR=900,IOSTAT=IO) B
+      END IF
+
+      IF (CCC.EQ.' ')                                         THEN
+          C =  0.0
+      ELSE
           READ( CCC, 20,ERR=900,IOSTAT=IO) C
       END IF
 

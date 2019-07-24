@@ -34,7 +34,8 @@
 *
 * B.Dugas juillet 2019 :
 * - Si la variable project%name='unknown' a la fin de cette
-*   routine, tenter de la definir a 'lon/lat'
+*   routine, tenter de la definir a 'lon/lat', mais seulement
+*   dans le cas d'un fichier destination de type RPN
 * B.Dugas aout 2018 :
 * - Modifier les initialisations dans def_grille_lambert
 * B.Dugas juil 2018 :
@@ -161,19 +162,23 @@
 
       enddo
 
-      ! Tentative ultime de definir project%name si
-      ! cette variable a encore une valeur inconnue
-      if (project%name == 'unknown' .and. xid > 0 .and. yid > 0) then
+      ! Tentative ultime de definir project%name si cette
+      ! variable a encore une valeur inconnue, mais alors,
+      ! seulement pour un fichier destination de type RPN
+      if (ccc_pktyp(1:2) == 'SQ'      .and.
+     .    project%name   == 'unknown' .and.
+     .    xid > 0 .and. yid > 0) then
 
          ! Les coordonnees en X et Y existent (i.e. les variables
-         ! correspondantes sont definies) et sont unidimensionnelles
-
+         ! correspondantes sont definies) et sont unidimensionnelles.
+         ! On tente de verifier si leurs noms sont coherents avec
+         ! ceux d'une grille de type 'lon/lat'
          if ((list(xid)%name == 'longitude' .or.
      .        list(xid)%name == 'lon')      .and.
      .       (list(yid)%name == 'latitude'  .or.
      .        list(yid)%name == 'lat'))      then
-            ! Et ces deux coordonnees ont des noms
-            ! associees a des grilles 'lon/lat'
+            ! Ces deux coordonnees ont en effet des
+            ! noms associees a des grilles 'lon/lat'
             project%name = 'lon/lat'
          endif
 
