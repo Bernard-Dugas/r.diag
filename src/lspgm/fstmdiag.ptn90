@@ -7,7 +7,7 @@
 !  fstmdiag -s source1 [source2 [sources3 ... ]] \ 
 !          [-d destination] [-info [valeur]] \ 
 !          [-e] [-f] [-nobox] [-help] [-stats]   \ 
-!          [-noip3] [-novar] [-nomodtyp]
+!          [-noip3] [-novar] [-nomodtyp] [-nomean]
 !        
 !
 !
@@ -39,6 +39,8 @@
 !  novar     Ne pas calculer les variances, seulement les moyennes
 !  info      Niveau des messages retournes (ERRORS/INFORM/DEBUG)
 !  nomodtyp  Ne pas modifier TYPVAR avec des signatures de moyennes/variances
+!  strict    N'utiliser que les signatures TYPVAR connues pour identifier
+!            la presence de moyennes dans les fichiers d'entrees
 !  nobox     Ne pas imprimer de boites d'informations.
 !  stats     Imprimer des statistiques sur les resultats
 !  help      Afficher ce texte sur stdout et quitter.
@@ -88,6 +90,11 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  !  Revision 1.16 2019/07/23 19:19  dugas
+  !  Ajouter l'argument '-strict' pour forcer la detection
+  !  de moyennes seulement par la presence de signatures
+  !  TYPVAR connues dans les fichiers d'entrees (def=faux)
+  !
   !  Revision 1.15 2019/04/04 15:15  dugas
   !  Utiliser la variable REV dans les appels a EXDB.
   !
@@ -178,10 +185,10 @@
 
   ! *****
 
-  character(4)  :: REV='1.15' ! FSTMDIAG internal revision level
+  character(4)  :: REV='1.16' ! FSTMDIAG internal revision level
   
   integer,      parameter :: NBRFICH = nombre_maximal_de_fichiers
-  integer,      parameter :: NBRARGS = 9, NBRCLE = NBRFICH+NBRARGS+1
+  integer,      parameter :: NBRARGS = 10, NBRCLE = NBRFICH+NBRARGS+1
 
   integer ::    NMAX=2000,start
 
@@ -224,7 +231,7 @@
   logical ::    info  ; common /zzverbo/ info
   logical ::    debug ; common /zzdebug/ debug
 
-  logical       Complet, Complet1, Complet2, Sample, NoModT
+  logical       Complet, Complet1, Complet2, Sample, NoModT, StricT
   logical       Vrai,Faux, box, Elim, Forc, NoIP3, NoVar, OldIP3, Stats
   integer ::    i,ii,j,ier,io,iter, ipos,icle, ibuf(1), iu1(NBRFICH), &
                 iu2=0,iu3=0, datevi,datevf,dateosp, ip2tot, key, &
@@ -278,8 +285,9 @@
        cles(06)/'STATS'    /,def1(06)/'NON' /,def2(06)/'OUI'   /, &
        cles(07)/'NOVAR'    /,def1(07)/'NON' /,def2(07)/'OUI'   /, &
        cles(08)/'NOIP3'    /,def1(08)/'NON' /,def2(08)/'OUI'   /, &
-       cles(09)/'NOMODTYP' /,def1(09)/'NON' /,def2(09)/'OUI'   /
-  !    cles(10)/'OLDIP3'   /,def1(10)/'NON' /,def2(10)/'OUI'   /
+       cles(09)/'NOMODTYP' /,def1(09)/'NON' /,def2(09)/'OUI'   /, &
+       cles(10)/'STRICT'   /,def1(10)/'NON' /,def2(10)/'OUI'   /
+  !    cles(11)/'OLDIP3'   /,def1(11)/'NON' /,def2(11)/'OUI'   /
  
   ! Ce qui suit ne fonctionne pas avec IFORT...
   ! data cles(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'S.'   /, &
@@ -293,7 +301,7 @@
        def2(NBRCLE) / ' ' /
 
   data Force, Elim, box, Stats, NoModT /  5*.false. /, &
-       Vrai,Faux, NoIP3,NoVar,OldIP3,ReWrit / .true.,5*.false. /
+       Vrai,Faux, NoIP3,NoVar,StricT,OldIP3,ReWrit / .true.,6*.false. /
 
   !----------------------------------------------------------------
   def2(NBRARGS+1) = 'TAPE1' ; iu1 = 0
@@ -440,7 +448,8 @@
   if (is_on ( def1(7) )) NoVar   = Vrai
   if (is_on ( def1(8) )) NoIP3   = Vrai
   if (is_on ( def1(9) )) NoModT  = Vrai
-! if (is_on ( def1(10))) OldIP3  = Vrai
+  if (is_on ( def1(10))) StricT  = Vrai
+! if (is_on ( def1(11))) OldIP3  = Vrai
 
   if (Force)             ReWrit  = Vrai
 
@@ -1049,10 +1058,11 @@
           time_range   = hiset(ii)-dble( loset(ii) )
           time_range_5 = nint( time_range * 720, 8 ) ! time_range en unites de blocs de 5 secondes
 
-        ! if (pas(ii)*delt(ii) == 0                   &
-        !.or.                                         &
-          if (lMeanVar .or. vMeanVar                  &
-         .or.                                         &
+          if (lMeanVar .or. vMeanVar .or.             &
+              lMeanVar .or. vMeanVar                  & ! StricT = Vrai indique qu'on doit seulemen tutiliser
+         .or.                                         & ! les signatures TYPVAR connues pour identifier la
+             (.not.StricT .and.                       & ! presence de moyennes dans les fichiers d'entrees
+             (                                        & 
              (rkind(ii)        == KIND_HOURS    .and. & ! Tentatives de determiner si cet nouvel
              (npas_deet        == time_range_5  .or.  & ! enregistrement  est le produit de calculs
               npas_deet60      == time_range_5  .or.  & ! prealables de moyennes ou de variances,
@@ -1069,7 +1079,8 @@
          .or.                                         &
              (.not.noIP3                        .and. &
               lip3(ii)         >  1             .and. &
-              rkind(ii)        <  0))                      then
+              rkind(ii)        <  0) )                &
+             ) ) then
 
               ! On suppose que c'est une moyenne
               if (ii == start)                             then

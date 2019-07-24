@@ -41,9 +41,9 @@
 *     Bernard Dugas, janv 2012 :
 *     - Definir ydid, xdid lorsqu'on trouve les coordonnees correspondantes
 *     Bernard Dugas, sept 2008 :
-*     - definir les valeurs par defaut des coordoonnees
+*     - Definir les valeurs par defaut des coordoonnees
 *       temporelle et verticale
-*     - meme si coord(xid) et coord(yid) ne sont pas dans
+*     - Meme si coord(xid) et coord(yid) ne sont pas dans
 *       la liste de variables, on tente de les lire
 *       indirectement
 *

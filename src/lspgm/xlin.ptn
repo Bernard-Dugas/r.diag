@@ -40,8 +40,7 @@
 *               FIELDS VIA A MODIFICATION TO THE REAL PART OF THEIR (0,0)
 *               COEFFICIENT SCALED BY SQRT(2.), THE LEGENDRE NORMALISATION
 *               FACTOR USED IN THE CURRENT SPECTRAL TRANSFORMS.
-*            3) IF *BOTH* A AND B ARE LEFT UNSPECIFIED (AND NOT 0), *AND*
-*               IF THE PROGRAM IS INVOKED IN COMMAND-LINE PARAMETER MODE,
+*            3) IF A AND B ARE *BOTH* LEFT UNSPECIFIED (AND NOT 0),
 *               THEN A AND B ARE SET TO +1.0 AND 0.0, RESPECTIVELY.
 *
 *
@@ -83,6 +82,10 @@
 *    +       TAPE1= XIN, TAPE2= XOUT, TAPE5=INPUT,TAPE6=OUTPUT)
  
 *     $Log: xlin.ptn,v $
+*     Revision 4.19  2019/07/24 08:08  dugas
+*     Le mode 'valeur par defaut' pour A et B s'applique maintenant
+*     aussi a la lecture de ces arguments via STDIN (i.e. GETLIGN).
+*
 *     Revision 4.18  2016/10/28 17:15  dugas
 *     - Modifications syntaxiques de type F77 --> F90.
 *     - Ajouter le mode SPECTRALB pour lequel les champs spectraux
@@ -210,9 +213,10 @@
       PARAMETER ( MAXLEV = 999 )
 
       REAL        ZERO
+      CHARACTER(20) CCA,CCB,VALEUR
+      CHARACTER   CA*10,CB*10,NOM*4
       LOGICAL ::  DEF=.FALSE.,SPECTRALB=.FALSE.
       LOGICAL     OK,COMPLX,MVALUE,SPECTRAL
-      CHARACTER   CA*20,CB*20,VALEUR*20,NOM*4
       REAL*8      A,B,B2,EPSILON,MISFLAG,SQRT2
       CHARACTER   NEWNAM*4,TYPE*4,LIGNE*256,CNPG*5
       INTEGER     HEAD,JBUF(taille_entete),NLEV,NLEVG,
@@ -253,20 +257,21 @@
 
       OK = SETIO64(.TRUE.)
 
+      CCA = ' '
+      CCB = ' '
+      
       IF (RPBLOC( ' ',VALEUR ))                                THEN
 
 ***        CHECK PARAMETRE BLOCK.
 
-          CA     = ' '
-          CB     = ' '
           NEWNAM = ' '
           CNPG   = ' '
 
           OK = RPBLOC('A',VALEUR)
-          IF (OK) CA = VALEUR
+          IF (OK) CCA = VALEUR
 
           OK = RPBLOC('B',VALEUR)
-          IF (OK) CB = VALEUR
+          IF (OK) CCB = VALEUR
 
           OK = RPBLOC('NAME', VALEUR)
           IF (OK) NEWNAM = VALEUR(1:4)
@@ -289,21 +294,6 @@
               END IF
           END IF
           
-***        CHECK FOR DEFAULT VALUES.
-
-          IF (CA.EQ.' ' .AND.
-     +        CB.EQ.' '   )                                    THEN
-              A = +1.0
-              B =  0.0
-          ELSE IF (DEF)                                        THEN
-              A = +1.0 ; B =  0.0
-              IF (CA /= ' ') READ( CA, 20,ERR=900,IOSTAT=IO ) A
-              IF (CB /= ' ') READ( CB, 20,ERR=900,IOSTAT=IO ) B
-          ELSE
-              READ( CA, 20,ERR=900,IOSTAT=IO ) A
-              READ( CB, 20,ERR=900,IOSTAT=IO ) B
-          END IF
-
       ELSE
 
 ***        READ A,B AND NEWNAM FROM UNIT 5 (STDIN).
@@ -314,10 +304,28 @@
               GOTO 903
           ELSE
               READ( LIGNE, 5010,ERR=900,END=903,IOSTAT=IO )
-     +                     A,B, NEWNAM, CNPG
+     +                     CA,CB, NEWNAM, CNPG
               CALL BURNF
           END IF
 
+          CCA = CA
+          CCB = CB
+
+       END IF
+
+***    CHECK FOR DEFAULT VALUES.
+
+      IF (CCA == ' ' .AND.
+     +    CCB == ' '   )                                       THEN
+              A = +1.0
+              B =  0.0
+      ELSE IF (DEF)                                            THEN
+          A = +1.0 ; B =  0.0
+          IF (CCA /= ' ') READ( CCA, 20,ERR=900,IOSTAT=IO ) A
+          IF (CCB /= ' ') READ( CCB, 20,ERR=900,IOSTAT=IO ) B
+      ELSE
+          READ( CCA, 20,ERR=900,IOSTAT=IO ) A
+          READ( CCB, 20,ERR=900,IOSTAT=IO ) B
       END IF
 
       WRITE(6,6007) A,B 
@@ -474,7 +482,7 @@
     5 FORMAT(BN,I5)
    20 FORMAT(BN,E20.0)
 
- 5010 FORMAT(10X,2E10.0,1X,A4,A5)
+ 5010 FORMAT(10X,2A,1X,A4,A5)
 
  6005 FORMAT(' Unrecognized -def argument value... ',A/)
  6007 FORMAT('0 Xlin A,B =',1P2E20.12)

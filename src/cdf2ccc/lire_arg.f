@@ -40,6 +40,8 @@
 *
 *REVISIONS
 *
+*  B. Dugas juillet '19 :
+*   - Valeur de grilles 'LAT/LON' est convertie a 'LON/LAT'
 *  B. Dugas mai '19 :
 *   - Permettre la definition de grilles LON/LAT en mode NetCDF --> RPN
 *  B. Dugas decembre '18 :
@@ -688,7 +690,9 @@
          endif
       else if (direction /= 'netcdf') then
          if (def1(11) == 'polar_stereographic'
-     +  .or. def1(11) == 'lon/lat') then
+     +  .or. def1(11) == 'lon/lat'
+     +  .or. def1(11) == 'lat/lon') then
+            if (def(11) == 'lat/lon') def(11) = 'lon/lat'
             project%name = def1(11)
          else
             project%name = 'unknown'
