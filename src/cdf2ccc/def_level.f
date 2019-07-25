@@ -44,6 +44,9 @@
 *
 * REVISIONS
 *
+* B.Dugas juillet '19 :
+* - Codage "Sea Level" maintenant defini a une valeur
+*   de pression=0 dans la direction 'rpncmc'.
 * B.Dugas aout '12 :
 * - Ajouter le code de support du fichier valeurs_remplacement
 * - Le cas level_desc='model_level_number' est traite comme
@@ -95,14 +98,15 @@
          if (level_desc.eq."Surface"   .or. level_desc.eq."10 m"
      .  .or. level_desc.eq."Sea Level" .or. level_desc.eq."2 m" ) then
             
-            if (ccc_pktyp(1:2).eq.'SQ') then
-               if (level_desc.eq."Surface"
-     .        .or. level_desc.eq."Sea Level") then
-                  rval(1)=1.0 ; kind=1
+            if (direction == 'rpncmc') then
+               if (level_desc.eq."Surface") then
+                  rval(1)=1.0 ; kind=1 ! sigma=1
+               elseif (level_desc.eq."Sea Level") then
+                  rval(1)=0.0 ; kind=2 ! pressure=0
                else
                   kind=0
-                  if (level_desc.eq."10 m") rval(1)=10.0
                   if (level_desc.eq. "2 m") rval(1)= 2.0
+                  if (level_desc.eq."10 m") rval(1)=10.0
                endif
                call convpr( lablvl(1),rval(1),kind,mode )
             else

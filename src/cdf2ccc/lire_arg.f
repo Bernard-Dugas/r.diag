@@ -42,13 +42,18 @@
 *
 *  B. Dugas juillet '19 :
 *   - Valeur de grilles 'LAT/LON' est convertie a 'LON/LAT'
+*   - L'argument cles(8) 'lev' peut etre utilise en direction
+*     'rpncmc' pour '10 m', '2 m', 'Surface' et 'Sea Level'
+*
 *  B. Dugas mai '19 :
 *   - Permettre la definition de grilles LON/LAT en mode NetCDF --> RPN
+*
 *  B. Dugas decembre '18 :
 *   - Forcer en minuscule certains arguments caracteres plutot que les
 *     laisser tels quels (ce qui est le comportement par defaut). Les
 *     exceptions sont "grid" (11), "timedesc" (36). "calendar" (43) et
 *     "cell_method" (45).
+*
 *  B. Dugas aout '18 :
 *   - Remplacer polar-stereographic par polar_stereographic
 *   - Permettre la definition des parametres des grilles PS
@@ -58,19 +63,24 @@
 *     grille PS lors de la lecture d'un fichier NETCDF
 *  B. Dugas janvier '18 :
 *   - Remplacer la commande GETARG par GET_COMMAND_ARGUMENT
+*
 *  B. Dugas janvier '18 :
 *   - Ajouter les arguments -typvar et -etiket
+*
 *  B. Dugas novembre '17 :
 *   - Utiliser ${DIAGNOSTIQUE}/man/pdoc/attribut_netcdf.dat
 *     lorsque l'argument -attr n'est pas specifie ou qu'il
 *     pointe a quelque chose qui n'existe pas
+*
 *  B. Dugas avril '17 :
 *   - Utiliser get_environment_variable pour verifier la valeur de
 *     la variables d'environnement UDUNITS2_XML_PATH. Celle-ci a
 *     pre-seance sur udunits2_def
+*
 *  B. Dugas fevrier '17 :
 *   - Remplacer UDUNITS_PATH par UDUNITS2_XML_PATH
 *   - Remplacer udunits.dat par udunits2.xml
+*
 *  B. Dugas juin '13 :
 *   - Enlever la limitation de juste definir des valeurs manquantes
 *     lorsqu'on lit des fichier NetCDF. L'operation en mode inverse
@@ -605,6 +615,15 @@
                level_desc='Hybrid Levels' 
                if (evalue == 'gem2') gem2 =.true.
                if (evalue == 'gem3') gem3 =.true.
+            endif
+         elseif (direction == 'rpncmc') then
+            if(level_desc /= '10 m'       .and.
+     +         level_desc /= '2 m'        .and.
+     +         level_desc /= 'Surface'    .and.
+     +         level_desc /= 'Sea Level') then
+               write(6,6010)  cles(8)//' = '//trim( def1(8) ),
+     +                        ' non supporte en direction RPNCMC'
+               call                                 xit('lire_arg',  -8)
             endif
          endif
          ok=.false.
