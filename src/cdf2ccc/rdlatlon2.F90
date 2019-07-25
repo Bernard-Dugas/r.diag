@@ -40,6 +40,9 @@
 !
 !REVISIONS
 !
+! B.Dugas juilet '19
+! - Tenir compte de certains cas ou la variable level_desc a
+!   ete definie et ou on n'a pas trouve de coordonnee verticale
 ! B.Dugas mai '19
 ! - Modification a la documentation de la routine DEF_LON_LAT
 ! B.Dugas aout '18
@@ -195,7 +198,7 @@
 
       character(len=4) cccname,type
       integer i,j,ii,iii,nn,k,kk,nlev,indice,nhem
-      integer itime,ccctime, dim1,dim2
+      integer itime,ccctime, dim1,dim2, kind,mode 
 
       logical fill_ccc_def0
       real    bad
@@ -941,8 +944,27 @@
                (nlev == 1  .and. level_value == ' '   .and. &
                 zdid >  0  .and. zdid  <=  ndims    )) then
                call def_level(ilevel,'encode') ! definir les ibuf(4)
-            else
-               nlev=1 ; ilevel(1)=1 ! Valeur par defaut
+            elseif  ( &
+                  direction  == 'rpncmc' .and. &
+                 (level_desc == "Surface"   .or. level_desc == "10 m" .or. &
+                  level_desc == "Sea Level" .or. level_desc == "2 m")) then
+               nlev=1
+               if (level_desc.eq."Surface") then
+                  rval(1)=1.0 ; kind=1 ! sigma=1
+               elseif (level_desc.eq."Sea Level") then
+                  rval(1)=0.0 ; kind=2 ! pressure=0
+               else
+                  kind=0
+                  if (level_desc.eq. "2 m") rval(1)= 2.0
+                  if (level_desc.eq."10 m") rval(1)=10.0
+               endif
+               mode = +2 ; call convpr( ilevel(1),rval(1), kind,mode )
+            else ! Valeur par defaut
+               if (direction == 'rpncmc') then
+                  ilevel(1) = 0
+               else
+                  ilevel(1)=1
+               endif
                if (level_value /= ' ') &
                   call decode_single_level( ilevel(1),level_value )
             endif
