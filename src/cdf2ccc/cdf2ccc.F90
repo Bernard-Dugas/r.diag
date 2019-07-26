@@ -320,7 +320,7 @@
 ! Good luck.
 !
 ! Maintained by: B.Dugas, ESCER/UQAM (Dugas.Bernard@uqam.ca)
-! Latest revision: December 2018
+! Latest revision: $Header: July 2019 $
 !
 !
 #     endif
