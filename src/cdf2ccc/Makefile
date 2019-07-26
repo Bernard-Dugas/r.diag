@@ -3,6 +3,9 @@
 
 # Description: Makefile de CDF2CCC
 
+# revision 2019/07/26 05:05  dugas
+# - Utiliser command-origin-document.sh pour generer la documentation
+#
 # revision 2019/06/20 17:17  dugas
 # - Modifier la syntaxe pour les appels a nf-config
 #
@@ -160,7 +163,7 @@ default:  $(LIBP)
 
 .F90.txt:
 	$(FTNT) $< | sed s/'^[!*]'/' '/ > $(MANDIR)/$@ ;\
-	rsync -a attribut_netcdf.dat $(MANDIR) ;\
+	$(DIAGNOSTIQUE)/bin/command-origin-document.sh $< $(MANDIR)/$@ ;\
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
