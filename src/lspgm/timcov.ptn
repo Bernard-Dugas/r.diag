@@ -80,9 +80,13 @@
 *               used to construct the average. Other R.DIAG modules such as
 *               TIMGEN and the statistical testing modules (FTEST, ...)
 *               can then use this information directly.
-*            7) The NOMODTYP -def optional value, if set, disallows applying
-*               the TYPVAR-specific signatures for covariances and standard
-*               deviations that can be used in RPN/CMC files.
+*            7) The output TYPVAR parametre in RPN/CMC files is by default
+*               modified so as to identify the data type in the new files.
+*               The second TYPVAR character could thus be ...
+*                  '%', indicating the result of a covariance operation or
+*                  '7', indicating the result of a standard deviation operation  or
+*               The NOMODTYP -def optional value, if set, disallows applying
+*               these TYPVAR-specific signatures for all time-wise operations.
 *
 *
 *     EXIT CONDITIONS...

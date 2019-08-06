@@ -103,10 +103,17 @@
 *               contain the number of time samples used to construct the average.
 *               Other R.DIAG modules such as TIMGEN and the statistical testing
 *               modules (FTEST, ...) can then use this information directly.
-*            6) The NOMODTYP -def optional value, if set, disallows applying
-*               the TYPVAR-specific signatures for time averages, minimums and
-*               maximums that can be used in RPN/CMC files. Note that if the
-*               KEEPTIME option is activated, NOMODTYP will also be set.
+*            6) The output TYPVAR parametre in RPN/CMC files is by default
+*               modified so as to identify the data type in the new files.
+*               The second TYPVAR character could thus be ...
+*                  '/', indicating the result of a time mean operation     or
+*                  '%', indicating the result of a time variance operation or
+*                  '1', indicating the result of a time minimum operation  or
+*                  '9', indicating the result of a time maximum operation.
+*               The NOMODTYP -def optional value, if set, disallows applying
+*               these TYPVAR-specific signatures for all time-wise operations.
+*               Note that if the KEEPTIME option is activated, NOMODTYP will
+*               also be set.
 *               
 *
 *    ************************************************************************
