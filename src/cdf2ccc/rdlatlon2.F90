@@ -40,6 +40,9 @@
 !
 !REVISIONS
 !
+! B.Dugas aout '19
+! - Les niveaux "2 m" et "10 m" sont maintenant codes en tant que 2 m
+!   et 10 m au-dessus du sol et non plus au-dessus du niveau de la mer
 ! B.Dugas juilet '19
 ! - Tenir compte de certains cas ou la variable level_desc a
 !   ete definie et ou on n'a pas trouve de coordonnee verticale
@@ -954,7 +957,7 @@
                elseif (level_desc.eq."Sea Level") then
                   rval(1)=0.0 ; kind=2 ! pressure=0
                else
-                  kind=0
+                  kind=4
                   if (level_desc.eq. "2 m") rval(1)= 2.0
                   if (level_desc.eq."10 m") rval(1)=10.0
                endif

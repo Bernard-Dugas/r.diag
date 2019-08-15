@@ -44,6 +44,9 @@
 *
 * REVISIONS
 *
+* B.Dugas aout '19 :
+* - Les niveaux "2 m" et "10 m" sont maintenant codes en tant que 2 m
+*   et 10 m au-dessus du sol et non plus au-dessus du niveau de la mer
 * B.Dugas juillet '19 :
 * - Codage "Sea Level" maintenant defini a une valeur
 *   de pression=0 dans la direction 'rpncmc'.
@@ -104,7 +107,7 @@
                elseif (level_desc.eq."Sea Level") then
                   rval(1)=0.0 ; kind=2 ! pressure=0
                else
-                  kind=0
+                  kind=4
                   if (level_desc.eq. "2 m") rval(1)= 2.0
                   if (level_desc.eq."10 m") rval(1)=10.0
                endif
