@@ -42,8 +42,8 @@
 *                     ARE THEN ASSUMED TO BE ENCODED.
 *      RLUP  (a)    = LAPSE RATE USED TO EXTRAPOLATE UPWARDS (DEF 0.0).
 *      RLDN  (b)    = LAPSE RATE USED TO EXTRAPOLATE DOWNWARDS (DEF 0.0).
-*      COORD (kind) = 'SIG','ETA','GALC' OR 'GEM'/'GEM2'/'GEM3'/'GEM4' FOR
-*                     SIGMA, ETA, GAL-CHEN AND FOUR VARIANTS OF THE GEM VERTICAL
+*      COORD (kind) = 'SIG','ETA','GALC' OR 'GEM'/'GEM2'/'GEM3'/'GEM4'/'GEM5' FOR
+*                     SIGMA, ETA, GAL-CHEN AND FIVE VARIANTS OF THE GEM VERTICAL
 *                     COORDINATES, RESPECTIVELY. THE FILE CONTENTS IS USED TO
 *                     DETERMINE THE RPN DEFAULTS ('GEM2','GEM3' OR 'GEM4').
 *      PTOIT (c)    = PRESSURE (PA) AT THE LID OF MODEL. THIS PARAMETER
@@ -178,6 +178,9 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gsapl.ptn,v $
+*     Revision 4.45  2019/08/12 18:18  dugas
+*     Debut de l'introduction de la coordonnee GEM5.
+*
 *     Revision 4.44  2019/04/15 08:08  dugas
 *     Modifier l'initialisation de CLEVP.
 *
@@ -585,6 +588,7 @@
      +            COORD == 'GEM2') CALL setkind('SIGMA')
               if (COORD == 'GEM3'  .or.
      +            COORD == 'GEM4') CALL setkind('HYBRID')
+              if (COORD == 'GEM5') CALL setkind('HYBRID-HEIGHT')
           END IF
 
       END IF
@@ -717,7 +721,8 @@
 
       IF (COORD /= 'GEM2' .AND.
      +    COORD /= 'GEM3' .AND.
-     +    COORD /= 'GEM4')                                     THEN
+     +    COORD /= 'GEM4' .AND.
+     +    COORD /= 'GEM5')                                     THEN
           WRITE(6,6120) RLUP,RLDN,COORD,PTOIT
       ELSE IF (COORD == 'GEM4')                                THEN
           WRITE(6,6120) RLUP,RLDN,COORD,PTOIT
@@ -1071,6 +1076,8 @@
      +                          log_pressure, OK )
 
               END IF
+
+          ELSE IF (COORD.EQ.'GEM5')                            THEN
 
           ELSE
   

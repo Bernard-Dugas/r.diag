@@ -15,6 +15,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 *     $Log: coord.ftn,v $
+*     Revision 3.47  2019/08/22 07:07  dugas
+*     - Ajouter le support de kind=5100, 5999, 21001
+*       et 21002 dans GETKINDC et SETKIND.
+*
 *     Revision 3.46  2019/04/15 07:07  dugas
 *     - Correction du format 6001 de GETKINDC.
 *
@@ -995,7 +999,7 @@ C
 
 ***    LOCAL ARRAYS.
 
-      CHARACTER*9 LABEL
+      CHARACTER*13 LABEL*13
       CHARACTER*15 STRING(NLEV)
       REAL        PR(NLEV)
       INTEGER     L,KIND,NHI,NMID,NLOW,LL,IP1
@@ -1044,7 +1048,7 @@ C
       ELSE IF (KIND.EQ.6)                                      THEN
           LABEL = 'THETA'   
       ELSE IF (KIND.EQ.21)                                     THEN
-          LABEL = 'GALCHEN' 
+          LABEL = 'HYBRID-HEIGHT'
       END IF
 
       DO  L=1,NLEV
@@ -1241,25 +1245,25 @@ C
 
       character*16 arbitrary,
      +             eta,
-     +             galchen,
      +             height,
      +             heights,
      +             hybrid,
+     +             hybrid_height,
      +             pressure,
      +             theta,
      +             hours,
      +             integers
 
-      data         arbitrary  / 'ARBITRARY'  /,
-     +             eta        / 'ETA'        /,
-     +             galchen    / 'GALCHEN'    /,
-     +             height     / 'HEIGHT'     /,
-     +             heights    / 'HEIGHTS'    /,
-     +             hybrid     / 'HYBRID'     /,
-     +             pressure   / 'PRESSURE'   /,
-     +             theta      / 'THETA'      /,
-     +             hours      / 'HOURS'      /,
-     +             integers   / 'INTEGERS'   /
+      data         arbitrary     / 'ARBITRARY'     /,
+     +             eta           / 'ETA'           /,
+     +             height        / 'HEIGHT'        /,
+     +             heights       / 'HEIGHTS'       /,
+     +             hybrid        / 'HYBRID'        /,
+     +             hybrid_height / 'HYBRID-HEIGHT' /,
+     +             pressure      / 'PRESSURE'      /,
+     +             theta         / 'THETA'         /,
+     +             hours         / 'HOURS'         /,
+     +             integers      / 'INTEGERS'      /
 *------------------------------------------------------------------------------
 
       If (kind.eq.00)                                          Then
@@ -1286,7 +1290,9 @@ C
      +    kind.eq.5002.or.
      +    kind.eq.5003.or.
      +    kind.eq.5004.or.
-     +    kind.eq.5005)                                        Then
+     +    kind.eq.5005.or.
+     +    kind.eq.5100.or.
+     +    kind.eq.5999)                                        Then
           getkindc  = hybrid
       Else
      +If (kind.eq.06)                                          Then
@@ -1299,8 +1305,10 @@ C
      +    kind.eq.31)                                          Then
           getkindc  = integers
       Else
-     +If (kind.eq.21)                                          Then
-          getkindc  = galchen
+     +If (kind.eq.21   .or.
+     +    kind.eq.21001.or.
+     +    kind.eq.21002)                                       Then
+          getkindc  = hybrid_height
       Else
           WRITE(6,6001) kind
           Call                                     Xit('GetkindC',-1 )
@@ -1333,18 +1341,19 @@ C
       if (deftyp.ne.'SQ') return
 
       if (kind.eq.00
-     +.or.kind.eq.01 .or. kind.eq.1001 .or. kind.eq.1002
+     +.or.kind.eq.01 .or. kind.eq.1001  .or. kind.eq.1002
      +               .or. kind.eq.1003
      +.or.kind.eq.02 .or. kind.eq.2001
      +.or.kind.eq.03
      +.or.kind.eq.04
-     +.or.kind.eq.05 .or. kind.eq.5001 .or. kind.eq.5002
-     +               .or. kind.eq.5003 .or. kind.eq.5004
-     +               .or. kind.eq.5005
+     +.or.kind.eq.05 .or. kind.eq.5001  .or. kind.eq.5002
+     +               .or. kind.eq.5003  .or. kind.eq.5004
+     +               .or. kind.eq.5005  .or. kind.eq.5100
+     +               .or. kind.eq.5999
      +.or.kind.eq.06
      +.or.kind.eq.10
      +.or.kind.eq.15
-     +.or.kind.eq.21
+     +.or.kind.eq.21 .or. kind.eq.21001 .or. kind.eq.21002
      +.or.kind.eq.31)                                          then
          vkind = kind
       else
@@ -1384,30 +1393,33 @@ C
      +                  galchen,
      +                  hauteur,height,
      +                  hauteurs,heights,
-     +                  hybrid,hybride,
+     +                  hybride,hauteur_hybride,
+     +                  hybrid,hybrid_height,
      +                  pression,pressure,
      +                  theta,
      +                  heures,hours,
      +                  entiers,integers
 
-      data              arbitraire / 'ARBITRAIRE' /,
-     +                  arbitrary  / 'ARBITRARY'  /,
-     +                  eta        / 'ETA'        /,
-     +                  sigma      / 'SIGMA'      /,
-     +                  galchen    / 'GALCHEN'    /,
-     +                  hauteur    / 'HAUTEUR'    /,
-     +                  height     / 'HEIGHT'     /,
-     +                  hauteurs   / 'HAUTEURS'   /,
-     +                  heights    / 'HEIGHTS'    /,
-     +                  hybrid     / 'HYBRID'     /,
-     +                  hybride    / 'HYBRIDE'    /,
-     +                  pression   / 'PRESSION'   /,
-     +                  pressure   / 'PRESSURE'   /,
-     +                  theta      / 'THETA'      /,
-     +                  heures     / 'HEURES'     /,
-     +                  hours      / 'HOURS'      /,
-     +                  entiers    / 'ENTIERS'    /,
-     +                  integers   / 'INTEGERS'   / 
+      data              arbitraire      / 'ARBITRAIRE'      /,
+     +                  arbitrary       / 'ARBITRARY'       /,
+     +                  eta             / 'ETA'             /,
+     +                  sigma           / 'SIGMA'           /,
+     +                  galchen         / 'GALCHEN'         /,
+     +                  hauteur         / 'HAUTEUR'         /,
+     +                  height          / 'HEIGHT'          /,
+     +                  hauteurs        / 'HAUTEURS'        /,
+     +                  heights         / 'HEIGHTS'         /,
+     +                  hybrid          / 'HYBRID'          /,
+     +                  hybride         / 'HYBRIDE'         /,
+     +                  hauteur_hybride / 'HAUTEUR-HYBRIDE' /,
+     +                  hybrid_height   / 'HYBRID-HEIGHT'   /,
+     +                  pression        / 'PRESSION'        /,
+     +                  pressure        / 'PRESSURE'        /,
+     +                  theta           / 'THETA'           /,
+     +                  heures          / 'HEURES'          /,
+     +                  hours           / 'HOURS'           /,
+     +                  entiers         / 'ENTIERS'         /,
+     +                  integers        / 'INTEGERS'        / 
 
 *------------------------------------------------------------------------------
 
@@ -1424,34 +1436,36 @@ C
           call                                     xit(' Setkind',-1 )
       end if
 
-      if      (index( hauteur   ,nom(1:lon) ).eq.1
-     +   .OR.  index( height    ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 0
-      else if (index( eta       ,nom(1:lon) ).eq.1
-     +   .OR.  index( sigma     ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 1
-      else if (index( pression  ,nom(1:lon) ).eq.1
-     +   .OR.  index( pressure  ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 2
-      else if (index( arbitraire,nom(1:lon) ).eq.1
-     +   .OR.  index( arbitrary ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 3
-      else if (index( hauteurs  ,nom(1:lon) ).eq.1
-     +   .OR.  index( heights   ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 4
-      else if (index( hybrid    ,nom(1:lon) ).eq.1
-     +   .OR.  index( hybride   ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 5
-      else if (index( theta     ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 6
-      else if (index( heures    ,nom(1:lon) ).eq.1
-     +   .OR.  index( hours     ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 10
-      else if (index( entiers   ,nom(1:lon) ).eq.1
-     +   .OR.  index( integers  ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 15
-      else if (index( galchen   ,nom(1:lon) ).eq.1)            then
-                                                    vkind = 21
+      if      (index( hauteur        ,nom(1:lon) ).eq.1
+     +   .OR.  index( height         ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 0
+      else if (index( eta            ,nom(1:lon) ).eq.1
+     +   .OR.  index( sigma          ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 1
+      else if (index( pression       ,nom(1:lon) ).eq.1
+     +   .OR.  index( pressure       ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 2
+      else if (index( arbitraire     ,nom(1:lon) ).eq.1
+     +   .OR.  index( arbitrary      ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 3
+      else if (index( hauteurs       ,nom(1:lon) ).eq.1
+     +   .OR.  index( heights        ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 4
+      else if (index( hybrid         ,nom(1:lon) ).eq.1
+     +   .OR.  index( hybride        ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 5
+      else if (index( theta          ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 6
+      else if (index( heures         ,nom(1:lon) ).eq.1
+     +   .OR.  index( hours          ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 10
+      else if (index( entiers        ,nom(1:lon) ).eq.1
+     +   .OR.  index( integers       ,nom(1:lon) ).eq.1)       then
+                                                        vkind = 15
+      else if (index( galchen        ,nom(1:lon) ).eq.1
+     +   .OR.  index( hybrid_height  ,nom(1:lon) ).eq.1
+     +   .OR.  index( hauteur_hybride,nom(1:lon) ).eq.1)       then
+                                                        vkind = 21
       else
           if (info) write(6,6001) nom
           call                                     xit(' Setkind',-1 )

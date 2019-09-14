@@ -26,6 +26,10 @@
 
 !    Author: Bernard Dugas, automne 2009/hiver 2010
 !
+!    Revision 3.12 2019/08/11 14:14  dugas
+!    - Premiere passe de l'ajout du support
+!      des types 5100, 21001 et 21002
+!
 !    Revision 3.11 2019/01/16 15:15  dugas
 !    - Verifier l'unicite des enregistrements TocToc
 !      dans les routines LirToc et NewToc
@@ -122,15 +126,17 @@
 
 !    Private DATA shared by ECRTOC/LIRP and GETTOC/SETTOC.
 
-      INTEGER, SAVE :: TOC_IP  (2,max_nbr,0:unite_io_maximale), &
+      INTEGER, SAVE :: TOC_IP  (3,max_nbr,0:unite_io_maximale), &
                        TOC_NBR (          0:unite_io_maximale), &
-                       TOC_NK  (2,max_nbr,0:unite_io_maximale), &
+                       TOC_NK  (3,max_nbr,0:unite_io_maximale), &
+                       TOC_KIND(  max_nbr,0:unite_io_maximale), &
                        TOC_VER (  max_nbr,0:unite_io_maximale)
       REAL(8), SAVE :: TOC_TOP (  max_nbr,0:unite_io_maximale), &
                        TOC_REF (  max_nbr,0:unite_io_maximale)
-      REAL,    SAVE :: TOC_RC  (2,max_nbr,0:unite_io_maximale), &
+      REAL,    SAVE :: TOC_RC  (4,max_nbr,0:unite_io_maximale), &
                        TOC_DHM (  max_nbr,0:unite_io_maximale), &
-                       TOC_DHT (  max_nbr,0:unite_io_maximale)
+                       TOC_DHT (  max_nbr,0:unite_io_maximale), &
+                       TOC_DHW (  max_nbr,0:unite_io_maximale)
       LOGICAL, SAVE :: TOC_READ(          0:unite_io_maximale), &
                        TOC_SAVE(            unite_io_maximale)
 
@@ -142,9 +148,8 @@
 !    Allocations/Initializations.
 
       IF (INITIAL_CALL)                                        THEN
-          INITIAL_CALL = .FALSE.
-          TOC_READ(:)  = .FALSE. ; TOC_SAVE(:) = .FALSE.
-          TOC_NBR(:)   =  0      ; TOC_IP(:,:,:) = -1
+          INITIAL_CALL = .FALSE. ; TOC_READ(:)  = .FALSE. ; TOC_SAVE(:) = .FALSE.
+          TOC_NBR(:)   =  0      ; TOC_IP(1:2,:,:) = -1   ; TOC_IP(3,:,:) = 0
           ALLOCATE( TOC_GD (max_nbr,0:unite_io_maximale) )
       END IF
 
@@ -152,19 +157,21 @@
 !-------------------------------------------------------------------
 
       SUBROUTINE NewTOC ( NFOUT, F_version,F_hyb,F_rcoef,F_ptop_8,F_pref_8,F_ip1,F_ip2, &
-                                 NBR, F_ptop_out_8,F_dhm,F_dht )
+                                 NBR, F_ptop_out_8,F_dhm,F_dht,F_dhw,F_kind )
 
 !    NewTOC I/O declarations.
 
       integer, intent(in)               :: NFOUT              ! I/O unit associated to new TOC_GD variable
-      integer, intent(in)               :: F_version          ! code specification (only code=6 supported for now)
-      real,    intent(in), dimension(:) :: F_hyb              ! user specification for vertical layering hyb
-      real,    intent(in), dimension(:) :: F_rcoef            ! user specification for rcoef
-      real(8), intent(in)               :: F_ptop_8, F_pref_8 ! user specification for lid and reference pressures
+      integer, intent(in)               :: F_version          ! Secondary vertical layering version information
+      real,    intent(in), dimension(:) :: F_hyb              ! User specification for vertical layering hyb
+      real,    intent(in), dimension(:) :: F_rcoef            ! User specification for rcoef rectification values
+      real(8), intent(in)               :: F_ptop_8, F_pref_8 ! User specification for lid and reference pressures
       integer, intent(in)               :: F_ip1,F_ip2        ! IP1,IP2 of the new TocToc record
-      integer, intent(out)              :: NBR                ! the ordinal of the new TocToc records on NFOUT
+      integer, intent(out)              :: NBR                ! The ordinal of the new TocToc records on NFOUT
       real(8), intent(out), optional    :: F_ptop_out_8       ! Top-level pressure (Pa) output if ptop_8 < 0
-      real,    intent(in),  optional    :: F_dhm,F_dht        ! Diag levels Height for Momentum/Thermo variables
+      real,    intent(in),  optional    :: F_dhm,F_dht,F_dhw  ! Diag levels Height for Momentum/Thermo/VerticalWind
+      integer, intent(in),  optional    :: F_kind             ! Primary vertical layering version information.
+                                                              ! Its supported values are 5 and 21. Default is 5
 
 !    Local variables
 
@@ -173,20 +180,23 @@
       COMMON     /ZZDEBUG/      debug
 
       character(len=4)   :: mykey
-      integer            :: NF,I,status,VERS
-      integer, parameter :: Kind = 5
+      integer            :: NF,I,status,VERS,Kind
+
+      kind = 5 ; if (present(F_kind)) Kind = F_kind
+      VERS = Kind*1000+F_version
 
       NBR = 0 ! Indication que l'enregistrement TocToc n'a pas encore ete cree
 
-      IF (size(F_rcoef) < 2) RETURN
+      IF ((size(F_rcoef) < 2 .and. VERS <= 5005) &
+     .or. (size(F_rcoef) < 4 .and. VERS >  5005))     RETURN
+
       NF = ABS( NFOUT ) ; IF (NF > unite_io_maximale) RETURN
 
 !    Allocations/Initializations.
 
       IF (INITIAL_CALL)                                        THEN
-          INITIAL_CALL = .FALSE.
-          TOC_READ(:)  = .FALSE. ; TOC_SAVE(:) = .FALSE.
-          TOC_NBR(:)   =  0      ; TOC_IP(:,:,:) = -1
+          INITIAL_CALL = .FALSE. ; TOC_READ(:) = .FALSE. ; TOC_SAVE(:) = .FALSE.
+          TOC_NBR(:)   =  0      ; TOC_IP(1:2,:,:) = -1  ; TOC_IP(3,:,:) = 0
           ALLOCATE( TOC_GD (max_nbr,0:unite_io_maximale) )
       END IF
 
@@ -203,8 +213,6 @@
               END IF
           END DO
       END IF
-
-      VERS = Kind*1000+F_version
 
       IF (5001 < VERS .and. VERS < 5004)                       THEN
 
@@ -232,6 +240,26 @@
                             ptop_out_8=F_ptop_out_8,               &
                             dhm=F_dhm, dht=F_dht )
                             
+      ELSE IF (VERS == 5100  &
+          .or. VERS == 21001)                                  THEN
+
+          status = vgd_new( TOC_GD(TOC_NBR(NF)+1,NF),              &
+                            kind=Kind,version=F_version,hyb=F_hyb, &
+                            rcoef1=F_rcoef(1),rcoef2=F_rcoef(2),   &
+                            rcoef3=F_rcoef(3),rcoef4=F_rcoef(4),   &
+                            pref_8=F_pref_8, ip1=F_ip1, ip2=F_ip2, &
+                            ptop_out_8=F_ptop_out_8,               &
+                            dhm=F_dhm, dht=F_dht )
+
+      ELSE IF (VERS == 21002)                                  THEN
+
+          status = vgd_new( TOC_GD(TOC_NBR(NF)+1,NF),              &
+                            kind=Kind,version=F_version,hyb=F_hyb, &
+                            rcoef1=F_rcoef(1),rcoef2=F_rcoef(2),   &
+                            rcoef3=F_rcoef(3),rcoef4=F_rcoef(4),   &
+                            pref_8=F_pref_8, ip1=F_ip1, ip2=F_ip2, &
+                            dhm=F_dhm, dht=F_dht, dhw=F_dhw,       &
+                            ptop_out_8=F_ptop_out_8 )
 
       END IF
 
@@ -244,16 +272,20 @@
 
           mykey='NL_M' ; status = vgd_get( TOC_GD(NBR,NF), key=mykey, value=TOC_NK(1,NBR,NF) )
           mykey='NL_T' ; status = vgd_get( TOC_GD(NBR,NF), key=mykey, value=TOC_NK(2,NBR,NF) )
+          mykey='NL_W' ; status = vgd_get( TOC_GD(NBR,NF), key=mykey, value=TOC_NK(3,NBR,NF) )
+
+          mykey='IP_3' ; status = vgd_get( TOC_GD(NBR,NF), key=mykey, value=TOC_IP(3,NBR,NF) )
 
           TOC_VER(   NBR,NF) = Kind*1000+F_version ! Un-safe !
           TOC_TOP(   NBR,NF) = F_ptop_8
           TOC_REF(   NBR,NF) = F_pref_8
-          TOC_RC(1:2,NBR,NF) = F_rcoef(1:2)
+          TOC_RC(1:4,NBR,NF) = F_rcoef(1:4)
           TOC_IP(1:2,NBR,NF) = (/ F_ip1, F_ip2 /)
 
-          if (present(F_dhm)) TOC_DHM (NBR,NF) = F_dhm
-          if (present(F_dht)) TOC_DHT (NBR,NF) = F_dht
-          if (present(F_ptop_out_8)) TOC_TOP(   NBR,NF) = F_ptop_out_8
+          if (present(F_dhm))        TOC_DHM (NBR,NF) = F_dhm
+          if (present(F_dht))        TOC_DHT (NBR,NF) = F_dht
+          if (present(F_dhw))        TOC_DHW (NBR,NF) = F_dhw
+          if (present(F_ptop_out_8)) TOC_TOP (NBR,NF) = F_ptop_out_8
 
 !        Initialize the default values (unit 0).
 
@@ -266,11 +298,12 @@
               TOC_VER(    1,0) = TOC_VER(   NBR,NF)
               TOC_TOP(    1,0) = TOC_TOP(   NBR,NF)
               TOC_REF(    1,0) = TOC_REF(   NBR,NF)
-              TOC_RC (1:2,1,0) = TOC_RC(1:2,NBR,NF)
-              TOC_IP (1:2,1,0) = TOC_IP(1:2,NBR,NF)
+              TOC_RC (1:3,1,0) = TOC_RC(1:3,NBR,NF)
+              TOC_IP (1:3,1,0) = TOC_IP(1:3,NBR,NF)
 
               if (present(F_dhm)) TOC_DHM(1,0) = TOC_DHM(NBR,NF)
               if (present(F_dht)) TOC_DHT(1,0) = TOC_DHT(NBR,NF)
+              if (present(F_dhw)) TOC_DHW(1,0) = TOC_DHW(NBR,NF)
 
               if (INFO)                                        THEN
                   write(STDOUT,6104) NF
@@ -326,12 +359,11 @@
 
       NF = ABS( NFIN ) ; IF (NF > unite_io_maximale) RETURN
 
-!    Allocations/Initializations.
+      ! Allocations/Initializations.
 
       IF (INITIAL_CALL)                                        THEN
-          INITIAL_CALL = .FALSE.
-          TOC_READ(:)  = .FALSE. ; TOC_SAVE(:) = .FALSE.
-          TOC_NBR(:)   =  0      ; TOC_IP(:,:,:) = -1
+          INITIAL_CALL = .FALSE. ; TOC_READ(:)  = .FALSE. ; TOC_SAVE(:) = .FALSE.
+          TOC_NBR(:)   =  0      ; TOC_IP(1:2,:,:) = -1   ; TOC_IP(3,:,:) = 0
           ALLOCATE( TOC_GD (max_nbr,0:unite_io_maximale) )
       END IF
 
@@ -344,9 +376,9 @@
               WRITE(STDOUT,6000) TRIM( NAME )
           END IF
 
-!        Attempt (ONCE) to find and all vertical reference
-!        records (TocToc) on unit NF. Please note that this
-!        procedure quits at the first error.
+          ! Attempt (ONCE) to find and all vertical reference
+          ! records (TocToc) on unit NF. Please note that this
+          ! procedure quits at the first error.
 
           status = FSTINL( NF, NI0,NJ0,NK0,          &
                            -1,' ',-1,-1,-1,'X','!!', &
@@ -363,13 +395,12 @@
           
           ReadNew: DO  I=1,TOC_NBR(NF)
 
-              status = FSTPRM( CLE(I),               &
-                       DUM,DUM,DUM,NI0,NJ0,NK0,      &
-                       DUM,BLK, TOC_IP(1,J+1,NF),    &
-                       TOC_IP(2,J+1,NF), DUM, BLK,   &
-                       BLK,BLK,BLK, TOC_VER(J+1,NF), &
-                       DUM,DUM,DUM,SWA,LNG,DLTF,     &
-                       UBC,EXTRA1,EXTRA2,EXTRA3 )
+              status = FSTPRM( CLE(I),                    &
+                       DUM,DUM,DUM,NI0,NJ0,NK0, DUM,BLK,  &
+                       TOC_IP(1,J+1,NF),TOC_IP(2,J+1,NF), &
+                       TOC_IP(3,J+1,NF), BLK,BLK,BLK,BLK, &
+                       TOC_VER(J+1,NF), DUM,DUM,DUM,SWA,  &
+                       LNG,DLTF,UBC,EXTRA1,EXTRA2,EXTRA3 )
 
               IF (status < 0)                                  THEN
                   TOC_NBR(NF) = 0
@@ -377,12 +408,13 @@
                   TOC_NBR(NF) = 0 ; EXIT ReadNew
               END IF
 
-!            Check that this TocToc is new.
+              ! Check that this TocToc is new.
  
               OLD = .FALSE.
               CheckNew: DO K=1,J
                   IF (TOC_IP(1,J+1,NF) == TOC_IP(1,K,NF) .AND. &
-                      TOC_IP(2,J+1,NF) == TOC_IP(2,K,NF))      THEN
+                      TOC_IP(2,J+1,NF) == TOC_IP(2,K,NF) .AND. &
+                      TOC_IP(3,J+1,NF) == TOC_IP(3,K,NF))      THEN
                       OLD = .TRUE.
                       EXIT CheckNew
                   END IF
@@ -390,8 +422,8 @@
 
               IF (OLD) CYCLE ReadNew
 
-!            Construct a new set of 3D coordinate descriptors
-!            using the last TocToc record record found.
+              ! Construct a new set of 3D coordinate descriptors
+              ! using the last TocToc record record found.
 
               J = J+1
               
@@ -408,12 +440,12 @@
                   status = vgd_print( TOC_GD(J,NF),stdout )
               end if
 
-!            Explore the current TocToc vertical grid
-!            descriptor, saving certain of its elements.
+              ! Explore the current TocToc vertical grid
+              ! descriptor, saving certain of its elements.
 
               if (TOC_VER(J,NF) == 5001) THEN ! Un-staggered hybrid levels
 
-!                Start by determining the number of levels.
+                 ! Start by determining the number of levels.
 
                   mykey='NL_M' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
@@ -428,7 +460,7 @@
                   end if
 
 
-!                Save PTOP the pressure the model top level.
+                  ! Save PTOP the pressure the model top level.
 
                   mykey='PTOP' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
@@ -442,7 +474,7 @@
                       if (INFO) write(stdout,6105) 'PTOP'
                   end if
 
-!                Save PREF the model reference pressure.
+                  ! Save PREF the model reference pressure.
 
                   mykey='PREF' ; status = vgd_get( TOC_GD(J,NF), & 
                                                    key=mykey,    &
@@ -456,7 +488,7 @@
                       if (INFO) write(stdout,6105) 'PREF'
                   end if
 
-!                Save RCOEF.
+                  ! Save RCOEF.
 
                   mykey='RC_1' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
@@ -470,12 +502,15 @@
                       if (INFO) write(stdout,6105) 'RC_1'
                   end if
 
-              else if (TOC_VER(J,NF) == 5002 .or.      &
-                       TOC_VER(J,NF) == 5003 .or.      &
-                       TOC_VER(J,NF) == 5004 .or.      &
-                       TOC_VER(J,NF) == 5005 ) THEN ! Staggered hybrid levels (v1,2,3,4)
+              else if (TOC_VER(J,NF) ==  5002  &
+                  .or. TOC_VER(J,NF) ==  5003  &
+                  .or. TOC_VER(J,NF) ==  5004  & ! The first four are staggered hybrid pressure levels (v1,2,3,4)
+                  .or. TOC_VER(J,NF) ==  5005  & !
+                  .or. TOC_VER(J,NF) ==  5100  & ! SLEVE hybrid pressure levels
+                  .or. TOC_VER(J,NF) == 21001  & ! Hybrid heights (Gal-Chen). May be SLEVE.
+                  .or. TOC_VER(J,NF) == 21002  ) THEN !  Hybrid heights (on Lorenz grid). May also be SLEVE.
 
-!                Start by determining the number of dynamic levels.
+                  ! Start by determining the number of dynamic levels.
 
                   mykey='NL_M' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
@@ -489,7 +524,7 @@
                       if (INFO) write(stdout,6105) 'NL_M'
                   end if
 
-!                Determine the number of thermodynamic levels.
+                  ! Determine the number of thermodynamic levels.
 
                   mykey='NL_T' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
@@ -503,21 +538,25 @@
                      if (INFO) write(stdout,6105) 'NL_T'
                   end if
 
-!                Save PREF the model reference pressure.
+                  if (TOC_VER(J,NF)/1000 /= 21)                THEN
 
-                  mykey='PREF' ; status = vgd_get( TOC_GD(J,NF), &
-                                                   key=mykey,    &
-                                                   value=rvalue8 )
+                      ! Save PREF the model reference pressure.
 
-                  if (status /= VGD_OK)                        THEN
-                      IF (DEBUG) write(STDERR,6200) 'PREF'
-                      TOC_NBR(NF) = 0 ; EXIT
-                  else
-                      TOC_REF(J,NF) = rvalue8
-                      if (INFO) write(stdout,6105) 'PREF'
+                      mykey='PREF' ; status = vgd_get( TOC_GD(J,NF), &
+                                                       key=mykey,    &
+                                                       value=rvalue8 )
+
+                      if (status /= VGD_OK)                    THEN
+                          IF (DEBUG) write(STDERR,6200) 'PREF'
+                          TOC_NBR(NF) = 0 ; EXIT
+                      else
+                          TOC_REF(J,NF) = rvalue8
+                          if (INFO) write(stdout,6105) 'PREF'
+                      end if
+
                   end if
 
-!                Save the first RCOEF.
+                  ! Save the first RCOEF.
 
                   mykey='RC_1' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
@@ -531,7 +570,7 @@
                       if (INFO) write(stdout,6105) 'RC_1'
                   end if
 
-!                Save the second RCOEF.
+                  ! Save the second RCOEF.
 
                   mykey='RC_2' ; status = vgd_get( TOC_GD(J,NF), &
                                                    key=mykey,    &
@@ -545,9 +584,12 @@
                       if (INFO) write(stdout,6105) 'RC_2'
                   end if
 
-                  if (TOC_VER(J,NF) == 5005)                   THEN
+                  if (TOC_VER(J,NF) == 5005  &
+                 .or. TOC_VER(J,NF) == 5100  &
+                 .or. TOC_VER(J,NF) == 21001 &
+                 .or. TOC_VER(J,NF) == 21002  )                   THEN
 
-!                    Save the momentum diagnostic level DHM.
+                      ! Save the momentum diagnostic level DHM.
                   
                       mykey='DHM ' ; status = vgd_get( TOC_GD(J,NF), &
                                                        key=mykey,    &
@@ -561,7 +603,7 @@
                           if (INFO) write(stdout,6105) 'DHM '
                       end if
 
-!                    Save the thermodynamic diagnostic level DHT.
+                      ! Save the thermodynamic diagnostic level DHT.
                   
                       mykey='DHT ' ; status = vgd_get( TOC_GD(J,NF), &
                                                        key=mykey,    &
@@ -575,9 +617,61 @@
                           if (INFO) write(stdout,6105) 'DHT '
                       end if
 
+                      if (TOC_VER(J,NF) == 5100  &
+                     .or. TOC_VER(J,NF) == 21001 &
+                     .or. TOC_VER(J,NF) == 21002  )            THEN
+
+                         ! Save the third RCOEF.
+
+                          mykey='RC_3' ; status = vgd_get( TOC_GD(J,NF), &
+                                                   key=mykey,    &
+                                                   value=rvalue8 )
+
+                          if (status /= VGD_OK)                THEN
+                             IF (DEBUG) write(STDERR,6200) 'RC_3'
+                             TOC_NBR(NF) = 0 ; EXIT ReadNew
+                          else
+                             TOC_RC(3,J,NF) = rvalue8
+                             if (INFO) write(stdout,6105) 'RC_3'
+                          end if
+
+                          ! Save the fourth RCOEF.
+
+                          mykey='RC_4' ; status = vgd_get( TOC_GD(J,NF), &
+                                                   key=mykey,    &
+                                                   value=rvalue8 )
+
+                          if (status /= VGD_OK)                THEN
+                             IF (DEBUG) write(STDERR,6200) 'RC_4'
+                             TOC_NBR(NF) = 0 ; EXIT ReadNew
+                          else
+                             TOC_RC(4,J,NF) = rvalue8
+                             if (INFO) write(stdout,6105) 'RC_4'
+                          end if
+
+                          if (TOC_VER(J,NF) == 21002)            THEN
+
+                              ! Save the vertical wind diagnostic level DHW.
+
+                              mykey='DHW ' ; status = vgd_get( TOC_GD(J,NF), &
+                                                               key=mykey,    &
+                                                               value=rvalue )
+
+                              if (status /= VGD_OK)            THEN
+                                 IF (DEBUG) write(STDERR,6200) 'DHM '
+                                 TOC_NBR(NF) = 0 ; EXIT ReadNew
+                              else
+                                 TOC_DHW(J,NF) = rvalue
+                                 if (INFO) write(stdout,6105) 'DHM '
+                              end if
+
+                          end if
+
+                      end if
+
                   else
 
-!                    Save PTOP the pressure the model top level.
+                      ! Save PTOP the pressure the model top level.
 
                       mykey='PTOP' ; status = vgd_get( TOC_GD(J,NF), &
                                                        key=mykey,    &
@@ -600,7 +694,7 @@
 
           TOC_NBR(NF) = J
           
-!        Initialize the default values (unit 0).
+          ! Initialize the default values (unit 0).
 
           if (TOC_NBR( 0 ) == 0 .AND.  TOC_NBR(NF) /= 0)       THEN
               
@@ -613,6 +707,10 @@
               TOC_TOP(       1,0) = TOC_TOP(       1,NF)
               TOC_REF(       1,0) = TOC_REF(       1,NF)
               TOC_RC ( :    ,1,0) = TOC_RC ( :    ,1,NF)
+
+              TOC_DHM(       1,0) = TOC_DHM(       1,NF)
+              TOC_DHT(       1,0) = TOC_DHT(       1,NF)
+              TOC_DHW(       1,0) = TOC_DHW(       1,NF)
 
               if (INFO) write(stdout,6106) TOC_IP(:,1,NF)
 
@@ -728,6 +826,7 @@
           if (NBR > 0 .and. NBR <= TOC_NBR(NF))               THEN
               if (varname == 'IP1') ivalue = TOC_IP(1,NBR,NF)
               if (varname == 'IP2') ivalue = TOC_IP(2,NBR,NF)
+              if (varname == 'IP3') ivalue = TOC_IP(3,NBR,NF)
               RETURN
           end if
       else
@@ -768,6 +867,8 @@
                   ivalue = TOC_NK (1,I,NF)
               case ('NKT')
                   ivalue = TOC_NK (2,I,NF)
+              case ('NKW')
+                  ivalue = TOC_NK (3,I,NF)
               end select
 
           END IF
@@ -833,10 +934,16 @@
                   rvalue8 = TOC_DHM(I,NF)
               case ('DHT' )
                   rvalue8 = TOC_DHT(I,NF)
+              case ('DHW' )
+                  rvalue8 = TOC_DHW(I,NF)
               case ('RC_1')
                   rvalue8 = TOC_RC(1,I,NF)
               case ('RC_2')
                   rvalue8 = TOC_RC(2,I,NF)
+              case ('RC_3')
+                  rvalue8 = TOC_RC(3,I,NF)
+              case ('RC_4')
+                  rvalue8 = TOC_RC(4,I,NF)
               end select
 
           END IF
@@ -916,6 +1023,13 @@
                                     value=ivalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'VIPT'
+              case ('VIPW')
+!                Get the (coded IP1) vertical velocity hybrid levels.
+                  status = vgd_get( TOC_GD(I,NF),      &
+                                    key=local_name,    &
+                                    value=ivalue1d )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'VIPT'
               end select
 
           END IF
@@ -978,57 +1092,99 @@
           IF (LIP1 == TOC_IP(1,I,NF) .AND. &
               LIP2 == TOC_IP(2,I,NF) )                         THEN
 
-!            This is the correct grid_descriptor.
+              ! This is the correct grid_descriptor.
 
               call low2up( varname, local_name )
               select case ( trim( local_name ) )
 
               case ('COFA')
-!                Get A, the first pressure reconstruction vector.
+               ! Get A, the first pressure levels
+               !  reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),      &
                                     key=local_name,    &
                                     value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'COFA'
               case ('COFB')
-!                Get B, the second pressure reconstruction vector.
+               ! Get B, the second pressure levels
+               !  reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),      &
                                     key=local_name,    &
                                     value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'COFB'
               case ('CA_M')
-!                Get AM, the first momemtum pressure
-!                        reconstruction vector.
+               ! Get AM, the first momemtum levels
+               !  reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),      &
                                     key=local_name,    &
                                     value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CA_M'
               case ('CB_M')
-!                Get BM, the second momemtum pressure
-!                        reconstruction vector.
+               ! Get BM, the second momemtum levels
+               !  reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),      &
                                     key=local_name,    &
                                     value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CB_M'
+              case ('CC_M')
+               ! Get CM, the third momemtum levels
+               !  reconstruction vector.
+                  status = vgd_get( TOC_GD(I,NF),      &
+                                    key=local_name,    &
+                                    value=rvalue1d )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CC_M'
               case ('CA_T')
-!                Get AT, the first thermodynamic pressure
-!                        reconstruction vector.
+               ! Get AT, the first thermodynamic levels
+               !  reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),      &
                                     key=local_name,    &
                                     value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CA_T'
               case ('CB_T')
-!                Get BT, the secondthermodynamic pressure
-!                        reconstruction vector.
+               ! Get BT, the second thermodynamic levels
+               !  reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),      &
                                     key=local_name,    &
                                     value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'CB_T'
+              case ('CC_T')
+               ! Get CT, the third thermodynamic levels
+               !  reconstruction vector.
+                  status = vgd_get( TOC_GD(I,NF),      &
+                                    key=local_name,    &
+                                    value=rvalue1d )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CC_T'
+               case ('CA_W')
+                ! Get AW, the first vertical velocity
+                !  levels reconstruction vector.
+                  status = vgd_get( TOC_GD(I,NF),      &
+                                    key=local_name,    &
+                                    value=rvalue1d )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CA_W'
+              case ('CB_W')
+               ! Get BW, the second vertical velocity
+               !  levels reconstruction vector.
+                  status = vgd_get( TOC_GD(I,NF),      &
+                                    key=local_name,    &
+                                    value=rvalue1d )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CB_W'
+              case ('CC_W')
+               ! Get CW, the third vertical velocity
+                 !  levels reconstruction vector.
+                  status = vgd_get( TOC_GD(I,NF),      &
+                                    key=local_name,    &
+                                    value=rvalue1d )
+                  if (DEBUG .and. status /= VGD_OK)    &
+                      write(STDOUT,6201) 'CC_W'
               end select
 
           END IF

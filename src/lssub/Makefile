@@ -3,6 +3,9 @@
 
 # Description: Makefile principal de LSSUB
 
+# Revision 3.71 2019/08/12 18:18  dugas
+# - Utiliser libdescrip qui se trouve dans src/extras
+#
 # Revision 3.70 2019/05/22 16:16  dugas
 # - Ajouter la variable ARUFLAG (=U, par defaut)
 #
@@ -319,7 +322,9 @@ $(LIBS)(util.o)     : util.ftn \
 initial:
 # Setup des repertoires et liens dependants de $(EC_ARCH)
 	/bin/mkdir -p $(SOURCES) $(LIBDIR) $(MANDIR) $(MODDIR)
-	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
+#	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
+	if [[ ! -f $(LIBDIR)/libdescrip.a || -z "$(VGDLIB)" ]]; then \
+		cd $(DIAGNOSTIQUE)/src/extras/descrip ; $(MAKE) ARUFLAG=$(ARUFLAG) ; fi
 	if [[ `/bin/ls -L $(SOURCES)/Makefile ; echo $?` != 0 ]]; then \
 	/bin/ln -sf $(DIAGS)/src/lssub/Makefile_sources$(STD) $(SOURCES)/Makefile ; fi
 	if [[ `/bin/ls -L $(MODDIR)/Makefile ; echo $?` != 0 ]]; then \

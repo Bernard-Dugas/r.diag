@@ -13,6 +13,9 @@
 ! - Ajouter des messages informatifs aux differentes
 !   instances du code d'erreur -17
 !
+! Revision 1.2  2019/01/10 14:14  dugas
+! - Ajouter le support de VKIND=5100,21001,21002
+!
 # endif
           VKIND = GETKIND()
 
@@ -55,10 +58,18 @@
 #         endif
 #         if !defined(NO_TOC_GEM4_IN)
      +  .AND. VKIND /= 5002 .AND. VKIND /= 5003
-     +  .AND. VKIND /= 5004 .and. VKIND /= 5005
+     +  .AND. VKIND /= 5004 .AND. VKIND /= 5005
+     +  .AND. VKIND /= 5100
 #         else
-          !      The COORD = GEM4 coordinates,  i.e       !
-          ! VKIND = 5002,5003,5004,5005 are not supported !     
+          !   The COORD = GEM4 coordinates,  i.e. VKIND = !
+          !    5002,5003,5004,5005,5100 are not supported !
+#         endif
+#         if !defined(NO_TOC_GEM5_IN)
+     +  .AND. VKIND /= 21001
+     +  .AND. VKIND /= 21002
+#         else
+          !     The COORD = GEM5 coordinates,  i.e.  !
+          !    VKIND = 21001,21002 are not supported !
 #         endif
      +  .AND. VKIND /= 5    .AND. VKIND /= 1003 .AND. VKIND /= 5001)
      +                                                         THEN
@@ -124,7 +135,8 @@
 #             endif
 #         if !defined(NO_TOC_GEM4_IN)
           ELSE IF (VKIND == 5002 .OR. VKIND == 5003
-     +        .OR. VKIND == 5004 .OR. VKIND == 5005)           THEN
+     +        .OR. VKIND == 5004 .OR. VKIND == 5005
+     +        .OR. VKIND == 5100)                              THEN
               IF (COORD == 'DEF') COORD = 'GEM4'
               IF (COORD /= 'GEM4')                             THEN
                   WRITE(6,6017) 'GEM4',TRIM( COORD )
@@ -133,14 +145,26 @@
 #             if defined(SET_VKINDC)
               VKINDC = 'HYBRIDE'
 #             endif
+#         endif              
+#         if !defined(NO_TOC_GEM5_IN)
+          ELSE IF (VKIND == 21001
+     +        .OR. VKIND == 21002)                             THEN
+              IF (COORD == 'DEF') COORD = 'GEM5'
+              IF (COORD /= 'GEM5')                             THEN
+                  WRITE(6,6017) 'GEM5',TRIM( COORD )
+                  CALL           XIT( VERBEX ,-17)
+              END IF
+#             if defined(SET_VKINDC)
+              VKINDC = 'HAUTEUR-HYBRIDE'
+#             endif
 #         endif
           END IF
 
           IF (
      +        VKIND == 1002 .OR. VKIND == 1003 .OR. VKIND == 5001
 #         if !defined(NO_TOC_GEM4_IN)
-     +   .OR. VKIND == 5002 .OR. VKIND == 5003
-     +   .OR. VKIND == 5004 .OR. VKIND == 5005
+     +   .OR. VKIND == 5002 .OR. VKIND == 5003 .OR. VKIND == 5004
+     +   .OR. VKIND == 5005 .OR. VKIND == 5100
 #         endif
      +       ) THEN
 

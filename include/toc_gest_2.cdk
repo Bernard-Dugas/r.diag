@@ -4,6 +4,9 @@
 ! Code partage de connaissance du type de
 ! la coordonnee verticale, partie 2
 !
+! Revision 1.1  2019/01/10 14:14  dugas
+! - Ajouter le support de VKIND=5100,21001,21002
+!
 ! Revision 1.0  2016/10/29 21:43  dugas
 ! Version initiale
 !
@@ -23,9 +26,9 @@
 
               CALL GETTOC( IN1, 'VER',VKIND, IG1,IG2 )
 
-              IF (VKIND == 5001 .OR. VKIND == 5002 .OR.
-     +            VKIND == 5003 .OR. VKIND == 5004 .OR.
-     +            VKIND == 5005)                               THEN
+              IF (VKIND == 5001 .OR. VKIND == 5002
+     +       .OR. VKIND == 5003 .OR. VKIND == 5004
+     +       .OR. VKIND == 5005 .OR. VKIND == 5100)            THEN
                   CALL GETTOC( IN1, 'PTOP' ,PTOIT8, IG1,IG2 )
                   CALL GETTOC( IN1, 'PREF' ,PREF8 , IG1,IG2 )
                   CALL GETTOC( IN1, 'RC_1' ,R8    , IG1,IG2 )

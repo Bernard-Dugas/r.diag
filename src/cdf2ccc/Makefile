@@ -3,6 +3,9 @@
 
 # Description: Makefile de CDF2CCC
 
+# revision 2019/08/12 18:18  dugas
+# - Utiliser libdescrip qui se trouve dans src/extras
+#
 # revision 2019/07/26 05:05  dugas
 # - Utiliser command-origin-document.sh pour generer la documentation
 #
@@ -322,7 +325,9 @@ genlib: $(OBJECTS)
 initial:
 #	Setup des repertoires dependants de $(EC_ARCH)
 	/bin/mkdir -p $(LIBDIR) $(MANDIR) $(MODDIR) $(BINDIR)
-	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
+#	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
+	if [[ ! -f $(LIBDIR)/libdescrip.a || -z "$(VGDLIB)" ]]; then \
+		cd $(DIAGNOSTIQUE)/src/extras/descrip ; $(MAKE) ARUFLAG=$(ARUFLAG) ; fi
 	$(NLocate) --lib netcdff_s 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot netcdff-4.4\" \n ; false ; }
 
 # Voir "Managing project with make" de O'Reilly & Associates, 1989,

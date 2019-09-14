@@ -3,6 +3,9 @@
 
 # Description: Makefile secondaire de LSSUB
 
+# Revision 3.13 2019/09/14 17:17  dugas
+# - Utiliser $(MODDIR)/vgrid_descriptors.mod
+#
 # Revision 3.12 2019/05/22 16:16  dugas
 # - Ajouter la variable ARUFLAG (=U, par defaut)
 #
@@ -141,7 +144,7 @@ MODDECKS= \
 averages_common.o: averages_common.f90 $(MODDIR)/stats_signatures.mod
 convsub.o: convsub.f $(MODDIR)/diag_toc.mod $(MODDIR)/diag_convert_ip123.mod
 diag_convip_plus.o: diag_convip_plus.f90 $(MODDIR)/diag_convert_ip123.mod
-diag_toc.o: diag_toc.f90 vgrid_descriptors.mod
+diag_toc.o: diag_toc.f90 $(MODDIR)/vgrid_descriptors.mod
 get.o: get.f $(MODDIR)/diag_convert_ip123.mod $(MODDIR)/stats_signatures.mod
 label.o: lanel.f $(MODDIR)/diag_convert_ip123.mod $(MODDIR)/stats_signatures.mod
 put.o: put.f $(MODDIR)/diag_convert_ip123.mod $(MODDIR)/stats_signatures.mod

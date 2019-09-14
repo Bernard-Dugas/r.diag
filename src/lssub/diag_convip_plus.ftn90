@@ -68,6 +68,9 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !                               diag_conv_kind_15 et diag_value_to_string
 !     Revision 019  B. Dugas  - diag_is_invalid_kind est maintenant une reference externe
 !                               et non plus un element du module diag_convert_ip123
+!     Revision 020  B. Dugas  - Sauver zzvkind lorsque mode=-1 et kind=21
+!                             - Ajouter le support des valeurs kind=21001,21002 (= 21)
+!                               et 5100,5999 (= 5) lorsque MODE > 0
 !
 !     Input:    MODE = -2, de IP -->  P (sans definir zzvkind)
 !               MODE = -1, de IP -->  P
@@ -93,14 +96,17 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
 !               IKIND =15, entiers                                   
 !               IKIND =17, p represente l'indice x de la matrice de conversion (1.0 -> 1.0e10)
 !                                                   (partage avec kind=1 a cause du range exclusif
-!               IKIND =21, p est en metres-pression  (partage avec kind=5 a cause du range exclusif)
-!                                                                             (0 -> 1,000,000) fact=1e4
+!               IKIND =21,21001,21002, ou p est en metres-pression
+!                                                   (partage avec kind=5 a cause du range exclusif)
+!                                                                              (0 -> 1,000,000) fact=1e4
 !               STRING = valeur de P formattee
 !
 !               Notez de plus que ...
-!               IKIND =1001, 1002 et 1003       en input, deviennent IKIND=1 a l'interne
-!               IKIND =2001                     en input, devient    IKIND=2 a l'interne
-!               IKIND =5001,5002,5003,5004,5005 en input, deviennent IKIND=5 a l'interne
+!               IKIND =1001, 1002 et 1003   en input, deviennent IKIND=1  a l'interne
+!               IKIND =2001                 en input, devient    IKIND=2  a l'interne
+!               IKIND =5001,5002,5003,5004,
+!                      5005 ,5100, 5999     en input, deviennent IKIND=5  a l'interne
+!               IKIND =21001,21002          en input, deviennent IKIND=21 a l'interne
 !
 !*********************************************************************
   real *8 TEN
@@ -437,7 +443,7 @@ SUBROUTINE Diag_CONVIP_plus( ip, p, ikind, mode, string, flagv )
       endif IF_ip_GT_32767
 
       if (mode /= -2 .and. .not. (kind == 3 .and. ip == 32767) &
-                     .and.        kind <= 6) call setkindi( kind )
+                     .and.       (kind <= 6 .or.  kind == 21)) call setkindi( kind )
       ikind = kind ! ikind est la variable de sortie
 
   endif  ! ....  Conversion de xx a yy .....

@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.162 2019/08/12 18:18  dugas
+# - Utiliser libdescrip qui se trouve dans src/extras
+#
 # revision 4.161 2019/06/04 17:17  dugas
 # - Passer a la version 6.4.5 du binaire r.diag (driver.Abs)
 #
@@ -446,7 +449,9 @@ $(LIBP)(zxplot.o) : zxplot.ptn \
 initial:
 # Setup des repertoires dependants de $(EC_ARCH) et de $(VGDLIB)
 	/bin/mkdir -p $(LIBDIR) $(MANDIR) $(MODDIR) $(BINDIR)
-	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
+#	s.locate --lib $(VGDLIB) 1> /dev/null || { echo -e \n PLS execute \". s.ssmuse.dot vgriddesc\" \n ; false ; }
+	if [[ ! -f $(LIBDIR)/libdescrip.a || -z "$(VGDLIB)" ]]; then \
+		cd $(DIAGNOSTIQUE)/src/extras/descrip ; $(MAKE) ARUFLAG=$(ARUFLAG) ; fi
 
 # Voir "Managing project with make" de O'Reilly & Associates, 1989,
 # pages 51-53, pour les details de ce qui se passe dans ce qui suit

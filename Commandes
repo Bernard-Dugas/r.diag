@@ -11,7 +11,12 @@ UQAM sans libgraph.a
 
     et ensuite
 
-. s.ssmuse.dot dev/rmn_016 netcdff-4.4 vgriddesc-5.6
+#. s.ssmuse.dot dev/rmn_016 netcdff-4.4 vgriddesc-5.6
+#
+# On a enleve la reference au code SSM de vgrid_5.6 puisque le code source de
+# la v6.4 se trouve maintenant dans le repertoire src/extras/descrip directory
+#
+. s.ssmuse.dot dev/rmn_016 netcdff-4.4
 # FIXES="$PWD/lib/$EC_ARCH/stubs.o $PWD/lib/$EC_ARCH/moduledate.o $PWD/lib/$EC_ARCH/crc32.o"
 FIXES=""
 
