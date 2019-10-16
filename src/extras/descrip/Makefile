@@ -46,9 +46,8 @@ dependencies.mk: *.c *.F90 *.h *.hc
 include dependencies.mk
 
 updatelib:	libdescrip
-	rsync -a vgrid_version.h* $(INCLUDEDIR)
 	rsync -a $(EC_ARCH)/$(LIB) $(LIBDIR)
-	rsync -a $(EC_ARCH)/*.mod $(MODULEDIR)
+	rsync -a vgrid_version.h* $(EC_ARCH)/*.mod $(MODULEDIR)
 	$(MAKE)	clean_all
 
 libdescrip: install	vgrid_version $(OBJECTS) $(MODFILES)
