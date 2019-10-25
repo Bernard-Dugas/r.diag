@@ -40,6 +40,10 @@
 !
 !REVISIONS
 !
+! B.Dugas octobre '19
+! - Recuperer la configuration des valeurs manquantes qui aurait pu
+!   etre definie via la cle -mvalue ou via la variable MISSING_VALUE
+!   et lui accorder une certaine preseance
 ! B.Dugas aout '19
 ! - Les niveaux "2 m" et "10 m" sont maintenant codes en tant que 2 m
 !   et 10 m au-dessus du sol et non plus au-dessus du niveau de la mer
@@ -204,11 +208,17 @@
       integer itime,ccctime, dim1,dim2, kind,mode 
 
       logical fill_ccc_def0
+      real(8) fill_ccc0,fill_toler0
+      real(8) fill_tol0,fill_tol
       real    bad
 
       integer ilevel(maxlev)
 
 !*****RPN/CMC :
+
+      ! Arguments utilises par MISPAR
+      real(8) :: MisFlag, Epsilon
+      logical :: Mvalue
 
       character(len=1)   GRTYP,pGRTYP,NULS,ModTypV
       character(len=128) string,level_value
@@ -232,11 +242,10 @@
       real,save    :: hival=-1.,loval=-1.
 
       real    ::   hold
+      logical ::   duml
       integer ::   xid2d, yid2d
       integer ::   npas,deet,datei,dateo,ip2,ip3
       real(8) ::   tdelta,tim1,tim2,zero8=0.0_8
-      real(8) ::   dum81,dum82 ! Dummies for MISPAR
-
       real, allocatable, dimension(:,:) :: zlon,zlat
 
       CHARACTER(len=4), external :: GETYP
@@ -263,6 +272,16 @@
       ! Initialisations de variables locales
       nn=0 ; nhem = -1 ; xglb = -1 ; yglb = -1
       ii=0 ; iig2 =  0 ; cloche=char(7)
+
+      ! Recuperer la configuration des valeurs manquantes definie
+      ! via la cle -mvalue ou via la variable MISSING_VALUE ...
+      call mispar( Mvalue, MisFlag, Epsilon )
+      ! ... et si c'est actif, lui accorder la preseance
+      if (Mvalue) then
+         fill_ccc_def = .true.
+         fill_toler   = MisFlag*Epsilon
+         fill_ccc     = MIsFlag
+      endif
 
       if (tid > 0 .and. ladate == -1) call decodate( ncid,zero8,ladate )
 
@@ -756,9 +775,13 @@
       endif
 
       pGRTYP=GRTYP ; pIG1=IG1 ; pIG2=IG2 ; pIG3=IG3 ; pIG4=IG4
- 
+
+      fill_ccc0     = fill_ccc
+      fill_toler0   = fill_toler
       fill_ccc_def0 = fill_ccc_def
 
+      fill_tol0     = fill_toler0/abs( fill_ccc0 )
+      
       time_bnds_L = .false.
       if (tid > 0) then
          do id=1,nvars          ! Chercher/Lire time_bnds
@@ -909,9 +932,11 @@
             endif
             
             if (fill_ccc_def0 .neqv. fill_ccc_def) then
+               ! On restaure fill_ccc a sa valeur initiale
+               fill_ccc     = fill_ccc0
+               fill_toler   = fill_toler0
                fill_ccc_def = fill_ccc_def0
                if (.not.fill_ccc_def) call UNSET_MISPAR( )
-
             endif
 
 !           Si les attr 'missing_value' et '_FillValue'
@@ -926,20 +951,20 @@
 !           Si l'attribut '_FillValue' est present dans
 !           le fichier cdf et qu'une cle correspondante
 !           pour les fichiers CCC/RPN n'a pas ete definie,
-!           on force cette cle a .true. et
-!           on s'assure que fill_ccc=fill_cdf
+!           on force cette cle a .true. et on s'assure 
+!           que fill_ccc=fill_cdf
 
             if ( (.NOT. fill_ccc_def) .AND. fill_val_cdf )  then
+               fill_ccc_def = .true.
                if (fill_cdf_nan)                            then
-                  call MISPAR( fill_ccc, dum81,dum82 ) ! Valeur par defaut
-                  fill_toler = abs( fill_cdf ) * 0.001
+                  call MISPAR( duml, fill_ccc, fill_tol ) ! Valeur par defaut
                else
-                  fill_ccc   =      fill_cdf
+                  fill_ccc =         fill_cdf
                endif
-               fill_ccc_def  = .true.
+               fill_toler = abs( fill_ccc ) * fill_tol
             endif
 
-            if (fill_ccc_def) call SET_MISPAR( fill_ccc, 0.001_8 )
+            if (fill_ccc_def) call SET_MISPAR( fill_ccc, fill_tol )
 
 !           Lire les valeurs de la variable :             
 

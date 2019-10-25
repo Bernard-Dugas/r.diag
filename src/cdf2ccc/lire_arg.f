@@ -40,6 +40,9 @@
 *
 *REVISIONS
 *
+*  B. Dugas octobre '19 :
+*   - Ajouter l'argument FILL_TOL (defaut = 0.001)
+*
 *  B. Dugas juillet '19 :
 *   - Valeur de grilles 'LAT/LON' est convertie a 'LON/LAT'
 *   - L'argument cles(8) 'lev' peut etre utilise en direction
@@ -214,7 +217,7 @@
 
 ******les_arg(ccard)
 
-      integer, parameter :: ncle = 48 ! nombre de cles
+      integer, parameter :: ncle = 49 ! nombre de cles
 
       character*16  cles(ncle)    ! nom de la cle
       character*60  def(ncle)     ! defenition de la cle
@@ -273,7 +276,8 @@
      .  cles(45)/'cell_method_'/, def1(45)/'?'   /,  def2(45)/'?'     /,
      .  cles(46)/'title'  /,  def1(46)/' '       /,  def2(46)/' '     /,
      .  cles(47)/'typvar' /,  def1(47)/'NC'      /,  def2(47)/' '     /,
-     .  cles(48)/'etiket' /,  def1(48)/'Netcdf2RPN'/,def2(48)/' '     /
+     .  cles(48)/'etiket' /,  def1(48)/'Netcdf2RPN'/,def2(48)/' '     /,
+     .  cles(49)/'fill_tol'/, def1(49)/'?'       /,  def2(49)/'ERR'   /
 
       data
      .  def(1) /'(C) Nom du fichier netCDF'                           /, 
@@ -323,11 +327,12 @@
      .  def(45)/'(C) Cell Method utilisee dans les calculs temporels' /,
      .  def(46)/'(C) Optional "title" meta-data'                      /,
      .  def(47)/'(C) Optional TYPVAR (default = NC)'                  /,
-     .  def(48)/'(C) Optional ETIKET (default = Netcdf2RPN)'          /
+     .  def(48)/'(C) Optional ETIKET (default = Netcdf2RPN)'          /,
+     .  def(49)/'(R) Tolerance de precision associee a fill_ccc'      /
 
 ******
 
-      integer i,nlen,nis,njs,idate
+      integer i,nlen,nis,njs,idate, fill_tol
       logical ok,defatt
 
 ***    Champs de travail locaux pour les_arg
@@ -1120,6 +1125,19 @@ CCC      Call                                      xit('lire_arg',  -27)
 CCC     endif
       endif
 
+      if (fill_ccc_def) then
+         if(def1(49).eq.'ERR') then
+* dans ce cas, la cle est presente mais il manque la valeur
+            write(6,6001) ' -fill_tol "VALEUR" ?'
+            call                                   xit('lire_arg',  -49)
+         else if (def1(49).ne.'?') then 
+* cle et valeur sont presentes 
+            read(def1(49),9004,err=1000) fill_tol
+         else
+            fill_tol = 0.001
+         endif
+      endif
+
 * Assurer la consistance des options "fill" et "miss",
 * tout en s'assurant que "fill" ait preseance lorsque
 * defini comme argument. Aussi definir fill_toler
@@ -1130,7 +1148,7 @@ CCC     endif
          endif
       endif
 
-      if (fill_ccc_def) fill_toler = abs( fill_ccc ) * 0.001
+      if (fill_ccc_def) fill_toler = abs( fill_ccc ) * fill_tol
 
       if(project%name.eq.'gaussian')then
 

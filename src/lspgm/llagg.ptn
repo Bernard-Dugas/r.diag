@@ -28,14 +28,12 @@
 *               AND POSSIBLY WITH ROTATED POLES) OR POLAR-STEREOGRAPHIC
 *               GRIDS TO A ANOTHER FILE OF GLOBAL GRIDS BY INTERPOLATION.
 *
-*     NOTES   - 1) IF KIND.LT.0, THEN INTERPOLATION IS LINEAR WITH VALUES EQUAL
-*                  TO "SPVAL" ARE CONSIDERED TO BE BAD/MISSING DATA AND THEY
-*                  ARE SKIPPED IN THE COMPUTATION.
-*               3) WILL WORK WITH GEM GRIDS. THE PROGRAM THEN USES
-*                  THE RMNLIB ROUTINE EZ_IGSCINT TO INTERPOLATE.
-*               4) ZONAL ARRAYS CAN ALSO BE INTERPOLATED VIA A CALL
+*     FURTHERMORE...
+*               1) When working with CMC/RPN grids, the EZSCINT
+*                  rmnlib package is used to do the interpolation.
+*               2) ZONAL ARRAYS CAN ALSO BE INTERPOLATED VIA A CALL
 *                  TO LLAGG. THEN, NLG AND ILG BOTH HAVE TO BE ONE.
-*               5) psagg AND psvagg ARE TWO ALIASES FOR llagg AND
+*               3) psagg AND psvagg ARE TWO ALIASES FOR llagg AND
 *                  llvagg, RESPECTIVELY, REQUIRING THE PRESENCE
 *                  OF POLAR-STEREOGRAPHIC (PS) INPUT FIELDS.
 *
@@ -50,33 +48,6 @@
 *      LV   OR POLAR-STEREOGRAPHIC GRID WINDS.
 *
 *                            
-*     NOTES: 1) IF KIND#1 < 0 "SPVAL" VALUES ARE TREATED AS BAD/MISSING DATA
-*                              WITH LAT-LONG DATA POSSIBLY OFF THE POLES,
-*               OTHERWISE,     LAT-LONG DATA ARE CONSIDERED SPANNING THE POLES
-*                              IN THE TOP AND BOTTOM ROWS.
-*            2) THE DEFAULT INPUT GRIDS CAN ALSO BE DESCRIBED AS RPN STANDARD
-*               GRID TYPE B. FURTHERMORE, A (SHIFTED LAT-LONG), G (GAUSSIAN),
-*               L (GENERALIZED LAT-LONG) OR Z (ROTATED, NON-REGULAR LAT-LONG)
-*               GRIDS, AS WELL AS N AND S POLAR-STEREOGRAPHIC RPN GRIDS ARE
-*               SUPPORTED AND ARE INTERPOLATED USING THE EZSCINT PACKAGE.
-*            3) OUTPUT GRID TYPES OTHER THAN GAUSSIAN (I.E. G) CAN ONLY BE
-*               SPECIFIED IN COMMAND-LINE PARAMETRE MODE (WITH KIND#2).
-*            4) DIGITAL FILTERING WILL BE APPLIED BEFORE INTERPOLATION IF THE
-*               DESTINATION GRID IS AT MUCH LOWER RESOLUTION THAN THE INPUT.
-*               AS APPROPRIATE MESSAGE WILL BE PRINTED WHEN THIS IS DONE.
-*            5) IF "-def 1" IS SPECIFIED AND THE INPUT GRID TYPE IS Z (GEM),
-*               THE GRID ORIENTATION IS CONSERVED ON OUTPUT, AND THE RESULTING
-*               Z-GRID HAS UNIFORM RESOLUTION FOLLOWING THE ILG,ILAT VALUES.
-*            6) Missing value treatment is activated by providing a real
-*               number to be used as a missing value flag with the "-mvalue"
-*               global command-line argument. Data that is "close" to this
-*               value will be disregarded by the program.
-*            7) Digital filtering (see note 4) and missing values (see note 6)
-*               treatments are not applied to U-grid input fields (i.e. to
-*               input Ying-Yang GEM4 global grids). Accordingly, it is
-*               suggested to take care when handling these.
-*
-*
 *     OUTPUT FILES...
 *      GG    = GRIDS HAVING ILG EQUALLY SPACED LONGITUDES. Please see
 *              the KIND#2 documentation for the supported grid types.
@@ -123,6 +94,40 @@
 *      DLAT   (i)   = Latitudinal grid length in degrees.  (REQUIRED)
 *      DLON   (j)   = Longitudinal grid length in degrees. (REQUIRED)
 *      
+*
+*     ARGUMENT NOTES:
+*            1) If KIND#1 < 0 "SPVAL" values are treated as bad/missing data
+*                              with LAT-LONG data possibly off the poles
+*               Otherwise,     LAT-LONG data are considered spanning the poles
+*                              in the top and bottom rows.
+*               * THE ABOVE IS ONLY TRUE FOR CCCMA FILES, NOT CMC/RPN FILES *
+*               Indeed, for CMC/RPN FILES, the -mvalue set of arguments should
+*               instead be used to control missing value treatment.
+*            2) THE DEFAULT INPUT GRIDS CAN ALSO BE DESCRIBED AS RPN STANDARD
+*               GRID TYPE B. FURTHERMORE, A (SHIFTED LAT-LONG), G (GAUSSIAN),
+*               L (GENERALIZED LAT-LONG) OR Z (ROTATED, NON-REGULAR LAT-LONG)
+*               GRIDS, AS WELL AS N AND S POLAR-STEREOGRAPHIC RPN GRIDS ARE
+*               SUPPORTED AND ARE INTERPOLATED USING THE EZSCINT PACKAGE.
+*            3) OUTPUT GRID TYPES OTHER THAN GAUSSIAN (I.E. G) CAN ONLY BE
+*               SPECIFIED IN COMMAND-LINE PARAMETRE MODE (WITH KIND#2).
+*            4) Digital filtering will be applied before interpolation if the
+*               destination grid is at much lower resolution than the input.
+*               An appropriate message will be printed when this is done.
+*               Doing so prevents the interpolation from degenerating into
+*               a sampling exercise. However, this digital filtering will
+*               NOT be applied when using nearest neighbor interpolation.
+*            5) IF "-def 1" IS SPECIFIED AND THE INPUT GRID TYPE IS Z (GEM),
+*               THE GRID ORIENTATION IS CONSERVED ON OUTPUT, AND THE RESULTING
+*               Z-GRID HAS UNIFORM RESOLUTION FOLLOWING THE ILG,ILAT VALUES.
+*            6) Missing value treatment is activated by providing a real
+*               number to be used as a missing value flag with the "-mvalue"
+*               global command-line argument. Data that is "close" to this
+*               value will be disregarded by the program.
+*            7) Digital filtering (see note 4) and missing values (see note 6)
+*               treatments are not applied to U-grid input fields (i.e. to
+*               input Ying-Yang GEM4 global grids). Accordingly, it is
+*               suggested to take care when handling these.
+*
 *
 *      READ(5,5010) ILG,ILAT,KIND,NPKGG,SPVAL,SHFTLT,SHFTLG
 *5010  FORMAT(10X,2I5,I2,I3,I5,3E10.0)
@@ -183,6 +188,9 @@
 *    1         TAPE1=LL,TAPE2=GG, TAPE5=INPUT, TAPE6=OUTPUT)
 *     ------------------------------------------------------
 *     $Log: llagg.ptn,v $
+*     Revision 4.50  2019/10/25 14:14  dugas
+*     Modifications a la documentation automatique
+*
 *     Revision 4.49  2016/10/28 17:34  dugas
 *     - Correction au calcul de la resolution
 *       en Y (utilise lors d'un possible lissage)
