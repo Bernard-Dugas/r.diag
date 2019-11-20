@@ -10,6 +10,9 @@
 *     * de processeurs allouables.
 *
 *     $Log: driver.ptn,v $
+*     Revision 4.123 2019/11/20 15:15  dugas
+*     - Ajouter le programme OilFill de MFV
+*
 *     Revision 4.122  2019/06/04 17:17  dugas
 *     - Passer a la version 6.4.5 (development).
 *
@@ -596,6 +599,7 @@
 *c  mltf     - MULTIPLIES TWO REAL FILES                                  2 1
 *c  msfact   - OUTPUT THE SURFACE MAP-SCALE-FACTORS USED BY globavg       1 1
 *c  modulus  - MODULUS OF A FILE                                          1 1
+*c  oilfill  - FILLS AREAS THAT HAVE MISSING VALUES                       2 1 C
 *c  plagalc  - INTERPOLATES GAL-CHAN LEVEL GRIDS FROM P LEVELS FOR RCM    3 1 C
 *c  pgen     - CREATES A FILE OF SAME TYPE AS INPUT WITH PRESSURE VALUES  1 1
 *c  psdiv    - DIVIDES A FILE OF REAL SETS BY A ONE-LEVEL REAL FILE       2 1
@@ -846,7 +850,7 @@
      +          makezg, memcoef,mempred,mergef, meofvec,meriavg,minvers,
      +          miroir, mkmask1,mkmask2,mkmask3,mksymm, mkunsy, mmult,  
      +          modulus,mslpr,  mtrace,
-     +          newnam
+     +          newnam, oilfill
 
 ***   EXTERNAL  nspec
 
@@ -1107,6 +1111,7 @@
       LIGNE(mslpr  )
       LIGNE(mtrace )
       LIGNE(newnam )
+      LIGNE(oilfill)
       If ('nhall'.EQ.nomprg) Call ggall
 ***   LIGNE(nspec  )
       LIGNE(parmsub)

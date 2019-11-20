@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.163 2019/11/20 15:15  dugas
+# - Ajouter le programme OilFill de MFV
+#
 # revision 4.162 2019/08/12 18:18  dugas
 # - Utiliser libdescrip qui se trouve dans src/extras
 #
@@ -183,7 +186,7 @@ CDECKS =
 HTMLDECKS = Change_Log.html	index.html	Tmpdir.html	Diag_Config.html
 
 PTN90DECKS = \
-	averages.ptn90		fstmdiag.ptn90
+	averages.ptn90		fstmdiag.ptn90		oilfill.ptn90
 
 PTNDECKS = \
 	addf.ptn	addtext.ptn	adjust.ptn	anomali.ptn	barx.ptn	bary.ptn \
@@ -485,7 +488,7 @@ $(LIBP):	initial	$(PTNDECKS)	$(PTN90DECKS) \
 	$(LIBP)(meofvec.o)	$(LIBP)(meriavg.o)	$(LIBP)(minvers.o)	$(LIBP)(miroir.o)	$(LIBP)(mkmask.o) \
 	$(LIBP)(mksymm.o)	$(LIBP)(mkunsy.o)	$(LIBP)(mltf.o) 	$(LIBP)(mmult.o) \
 	$(LIBP)(modulus.o)	$(LIBP)(tmmult.o)	$(LIBP)(mslpr.o)	$(LIBP)(mtrace.o) \
-	$(LIBP)(newnam.o)	$(LIBP)(nspec.o)	$(LIBP)(parmsub.o)	$(LIBP)(pcomp.o) \
+	$(LIBP)(newnam.o)	$(LIBP)(nspec.o)	$(LIBP)(oilfill.o)	$(LIBP)(parmsub.o)	$(LIBP)(pcomp.o) \
 	$(LIBP)(pgen.o) 	$(LIBP)(plagalc.o)	$(LIBP)(psdiv.o)	$(LIBP)(psgrid.o) \
 	$(LIBP)(psmlt.o)	$(LIBP)(randeof.o)	$(LIBP)(rangrd.o)	$(LIBP)(rcopy.o) \
 	$(LIBP)(relabl.o)	$(LIBP)(repack.o)	$(LIBP)(rgopr.o)	$(LIBP)(rmax.o) \

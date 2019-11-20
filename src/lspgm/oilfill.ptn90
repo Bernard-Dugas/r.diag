@@ -1,0 +1,431 @@
+# if !defined (VERSION)
+#     define   VERSION '1.0 2019/11/19'
+# endif
+# if defined (AUTO_DOC)
+!
+!  Usage: oilfill   -s source-file  -d destination-file  [-r RVAL] \ 
+!                  [-mask mask-file] [-h|--help] [-version] 
+!
+!
+! Author: M.Valin, UQAM Centre ESCER.
+! Latest revision: $Header: ./oilfill.ptn90,v 1.0 2019/11/19 dugas Exp $
+!
+!
+! This program will fill a datafield array that has holes (missing values)
+! using the valid values. The  mask array tells whether data points are valid
+! or missing mask(i,J)==0 means datafield(i,j) is missing (a hole).
+!
+! Missing values are filled using adjacent data points. In order to fill
+! missing value datafield(i,j), it is necessary to have at least TWO valid 
+! (non missing) adjacent datapoints. The number of adjacent point is usually
+! 8, except if point (i,j) lies on the boundary (first/last row or first/last
+! column). This means that multiple filling passes will have to be performed
+! in order to fill all missing values. Values filled during pass N can be
+! used to compute fill values during subsequent passes (but not
+! during pass N)
+!
+! The program returns the number of points it has not been able to fill.
+! If a pass was unable to fill any point while there were still holes in the 
+! array, the program quits before entering an endless loop.
+!
+!         (i-1,j+1)        (i  ,J+1)      (i+1,j+1)
+!
+!
+!         (i-1,j  )        (i  ,J  )      (i+1,j  )
+!                        point to fill
+!
+!         (i-1,j-1)        (i  ,J-1)      (i+1,j-1)
+!
+!
+!  Error exits
+!   1 Option is too long
+!   2 Missing value after argument -s
+!   3 Missing value after argument -d
+!   4 Missing value after argument -mask
+!   5 Missing or bad value after argument -r
+!   6 Inconsistent dimensions
+# endif
+# if defined (RDIAG_LICENCE)
+!/* 
+! * Copyright (C) 2017-2019  UQAM centre ESCER
+! *
+! * This software is free software; you can redistribute it and/or
+! * modify it under the terms of the GNU Lesser General Public
+! * License as published by the Free Software Foundation,
+! * version 2.1 of the License.
+! *
+! * This software is distributed in the hope that it will be useful,
+! * but WITHOUT ANY WARRANTY; without even the implied warranty of
+! * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+! * Lesser General Public License for more details.
+! *
+! * You should have received a copy of the GNU Lesser General Public
+! * License along with this software; if not, write to the
+! * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+! * Boston, MA 02111-1307, USA.
+! */
+# endif
+# if !defined (NO_SOURCE)
+  PROGRAM oilfill
+
+    implicit none
+
+  ! Author Michel Valin, Centre ESCER/UQAM, 2012-2019
+
+  ! Revision history :
+  ! Nov 19, 2019 by B.Dugas (ESCER/UQAM) - Adapted to the r.diag framework
+
+  ! Declarations for arguments
+    integer, parameter  :: nkey = 7
+    CHARACTER (len=8)   :: cles(nkey)
+    character (len=128) :: nam(nkey),def(nkey), dummy
+
+  ! Include external functions
+    integer, external :: fnom, fstouv, fclos, fstfrm, wkoffit, longueur
+    integer, external :: fstinf, fstinfx, fstluk, fstprm, fstecr, fstinl
+
+  ! Variables needed to read field descriptions (fstprm)
+    integer h, handle, ni, nj, nk, dgid
+    integer dateo,deet,npas,nbits,datyp
+    integer ip1,ip2,ip3,swa,lng,dltf,ubc
+    integer ig1,ig2,ig3,ig4,extra1,extra2,extra3
+    character*1  grtyp
+    character*2  typvar
+    character*4 nomvar
+    character*12 etiket
+   
+    character (len=8) :: option
+    character (len=2048) :: ifile, mfile, ofile, rval
+
+    integer iun, mun, oun, ier, ftyp, nim, njm, nkm
+
+    real, dimension (:,:), allocatable :: field, mask
+
+    integer holes_left, oil_spill_fill
+    integer i,j, nr, r
+
+    character (len=256) :: progname
+    common   /PROGNAM/ progname
+
+    integer :: curarg, arg_count, arg_len, status, io, nil
+    integer, external :: exdb, exfin
+    character (len=512) :: evalue, diagext
+    logical              dexit,set_dexit,diagext_exist
+    common       /dexit/ dexit,set_dexit,diagext
+    
+    DATA cles /'S.' ,'D.' ,'MASK.','R'  ,'H'  ,'HELP','VERSION'/
+    DATA def  /'   ','   ','   '  ,'   ','   ','   ' ,'   '    /
+    DATA nam  /'   ','   ','   '  ,'   ','   ','   ' ,'   '    /
+
+    ! -------------------------------------------------------------------
+
+    diagext = 'DIAGNOSTIC_EXIT'
+    progname = 'oilfill.ptn90' ! Pour documentation automatique
+
+  ! First, check for a non-empty DIAGNOSTIC_EXIT file.
+    dexit = .false. ; set_dexit = .false. ; evalue = ' '
+  ! The name of this file should be specified
+  ! via the DIAGNOSTIC_EXIT environment variable.
+    call getenvc( diagext,evalue )
+    if (evalue.ne.' ') then
+       set_dexit = .true. ; diagext = evalue
+       inquire( file=diagext, err=98,iostat=io,exist=diagext_exist )
+       if (diagext_exist) then
+          ! The file exists.
+          status = fnom( 99, trim(diagext), 'FTN+FMT', 0 )
+          ! Any abort code will be written to this file
+          ! rather than generating a physical abort code.
+          dexit = .true. ; 
+          ! Try reading the file's first line to see if it is
+          ! empty or not. If it is not empty, quit immediatly.
+          read( 99,'(a256)',end=98,iostat=io) evalue
+          ier = fclos( 99 )
+          if (evalue.ne.' ') call qqexit( 0 )
+       endif
+    endif
+
+ 98 ifile = '/dev/null' ; ofile = '/dev/null'
+    mfile = '/dev/null' ; r = 1 ; nr = 0
+
+    curarg    = 2                         ! current argument number (starts after 'r.diag averages')
+    arg_count = command_argument_count()
+
+    if(arg_count < 3) then      ! no arguments, OUCH !! GoTo Help mode
+       if (arg_count == 2) then
+          call get_command_argument(curarg,option,arg_len,status)
+          if (trim(option) == '-version') then
+             print *,'Program version = ',VERSION
+          else if (trim(option) /= '-h' .and. trim(option) /= '-help') then
+             print *,'Unknow argument ... ', trim(option)
+          else
+             call qqqdoc( )
+          endif
+       else
+          call qqqdoc( )
+       end if
+       call qqexit( 0 )
+    endif
+
+    nil = exdb ( 'OilFill', 'Rev. '//VERSION, 'NON' )  ! print version number
+    
+    do while(curarg <= arg_count)      ! process options
+
+      call get_command_argument(curarg,option,arg_len,status)
+      if(option(1:1) .ne. '-') exit      ! does not start with -, must be a file name (NO MORE OPTIONS)
+      print *,"NOTE: option = '"//trim(option)//"'"
+      curarg = curarg + 1
+      
+      if(status .ne. 0) then
+        print *,"FATAL: option is too long :'"//trim(option)//"..."//"'"
+        nil = exfin( 'OilFill', 'Error 1', 'NON' )
+        call quit('OillFill', 1 )
+      endif
+
+      if( option == '-h' .or. option == '--help' ) then
+        call qqqdoc( )
+        call qqexit( 0 )
+
+      else if( option == '-version' ) then
+        print *,'Program version = ',VERSION
+        call qqexit( 0 )
+
+      else if( option == '-s' ) then       ! -s  file_for_oilfill
+        if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -s'
+          nil = exfin( 'OillFill', 'Error 2', 'NON' )
+          call quit('OillFill', 2 )
+        endif
+        call get_command_argument(curarg,ifile,arg_len,status) ! get filename of input file
+        curarg = curarg + 1
+
+      else if( option == '-d'  ) then      ! -d file_for_oilfill
+        if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -d'
+          nil = exfin( 'OillFill', 'Error 3', 'NON' )
+          call quit('OillFill', 3 )
+        endif
+        call get_command_argument(curarg,ofile,arg_len,status) ! get filename of input file
+        curarg = curarg + 1
+
+      else if( option == '-mask' ) then     ! -mask file_for_oilfill
+        if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -mask'
+          nil = exfin( 'OillFill', 'Error 4', 'NON' )
+          call quit('OillFill', 4 )
+        endif
+        call get_command_argument(curarg,mfile,arg_len,status) ! get name of mask file
+        curarg = curarg + 1
+
+      else if( option == '-r' ) then     ! -r value_for_oilfill
+        if(curarg > arg_count) then
+          print *,'FATAL: missing argument after -r'
+          nil = exfin( 'OillFill', 'Error 5', 'NON' )
+          call quit('OillFill', 5 )
+        endif
+        call get_command_argument(curarg,rval,arg_len,status) ! get r value
+        if (rval /= ' ') read(rval,'(I10)',err=99) r
+        curarg = curarg + 1
+
+      endif
+    enddo
+
+    goto 100
+99  print *,'FATAL: problem reading -r value ',trim( rval )
+    nil = exfin( 'OillFill', 'Error 5', 'NON' )
+    call quit('OillFill', 5 )
+    
+    ! Open input file
+100 iun   = 0 
+    ier   = fnom(iun, ifile, 'STD+RND+R/O', 0)
+    
+    ! Check file type of input file
+    ftyp  = WKOFFIT(ifile)
+    if (ftyp.ne.1.and.ftyp.ne.2.and.ftyp.ne.33.and.ftyp.ne.34) then
+       print *,'Wrong input file type, ABORT!'
+       stop
+    end if
+    ier = fstouv(iun,'STD+RND')
+    print *,' input file  = ', trim( ifile )
+
+    ! Open output file
+    oun   = 0
+    ier   = fnom(oun, ofile, 'STD+RND', 0)
+    ier   = fstouv(oun,'STD+RND')
+    print *,' output file = ', trim( ofile )
+
+    if (mfile /= '/dev/null') then
+    ! Open mask
+       mun   = 0
+       ier   = fnom(mun, mfile, 'STD+RND+R/O', 0)
+       ! Check file type of input file
+       ftyp  = WKOFFIT(mfile)
+       if (ftyp.ne.1.and.ftyp.ne.2.and.ftyp.ne.33.and.ftyp.ne.34) then
+          print *,'Wrong mask file type, ABORT!'
+          print *,' expecting one of types 1,2,33,34, found ',ftyp
+          print *,' see the WKOFFIT documentation for more details'
+          stop
+       end if
+       ier = fstouv(mun,'STD+RND')
+       print *,' mask file = ', trim( mfile )
+    endif
+
+    ! -------------------------------------------------------------------
+
+    if (mfile /= '/dev/null') then
+       ! Read mask
+       handle = fstinf( mun, nim,njm,nkm, -1,' ',-1,-1,-1,' ', ' ' )
+       allocate (mask(nim,njm))
+       ier = fstluk( mask, handle, nim, njm, nkm )
+    endif
+ 
+    handle = 0
+    
+    ! Loop over all records in source-file
+101 continue
+       ! Get handle of next record 
+       handle = fstinfx( handle, iun, ni,nj,nk, -1, ' ', &
+                                      -1,-1,-1, ' ', ' ' )
+
+       ! If no record is found leave loop
+       if ( handle .lt. 0 ) goto 102
+
+       allocate( field(ni,nj) )
+       ier = fstprm( handle,dateo,deet,npas,ni,nj,nk,nbits,  &
+                     datyp,ip1,ip2,ip3,typvar,nomvar,etiket, &
+                     grtyp,ig1,ig2,ig3,ig4,swa,lng,dltf,     &
+                     ubc,extra1,extra2,extra3 )
+
+       if ( nomvar .ne. '^^' .and. &
+            nomvar .ne. '>>' .and. &
+            nomvar .ne. 'HY' ) then
+
+          if ((mfile /= '/dev/null') .and. &
+              (ni /= nim .or. nj /= njm .or. nk /= nkm)) then
+             print *,'FATAL: Inconsistent dimensions'
+             print *,'  mask dimensions are ',nim,njm,nkm
+             print *,' field dimensions are ',ni, nj, nk
+             nil = exfin( 'OillFill', 'Error 6', 'NON' )
+             call quit('OillFill', 6 )
+          endif
+       
+          ! Read field
+          ier = fstluk(field, handle, ni, nj, nk)
+
+          holes_left = oil_spill_fill( field,ni,nj,mask,r )
+
+          if (holes_left > 0) &
+             print *,'There are',holes_left,' holes left in array no. ',nr+1
+
+          nbits = max( 16, nbits ) ; datyp=134
+
+       end if
+
+       ! Write record into RPN Standard output file
+       ier = fstecr( field,field, &
+                     -nbits,oun,dateo,deet,npas,ni,nj,nk, &
+                     ip1,ip2,ip3,typvar,nomvar,etiket,    &
+                     grtyp,ig1,ig2,ig3,ig4,datyp,.false. )
+       deallocate( field )
+
+       nr = nr + 1
+       
+    goto 101
+
+102 continue
+
+    ! Close RPN Standard files
+    ier = fstfrm( iun )
+    ier = fclos ( iun )
+    ier = fstfrm( oun )
+    ier = fclos ( oun )
+    if (mfile /= '/dev/null') then
+       ier = fstfrm( mun )
+       ier = fclos ( mun )
+    endif
+
+  END PROGRAM oilfill
+
+! ====================================================================
+
+  INTEGER function oil_spill_fill( datafield,ni,nj,mask,r )
+
+    Implicit none
+
+    ! Arguments
+    integer ni,nj,r
+    real, dimension(ni,nj) :: datafield
+    real, dimension(ni,nj) :: mask
+
+    ! Local variables
+    integer, dimension(ni,nj,0:1) :: tempmask
+    integer inmask,outmask
+    integer i,j,ii,jj,iii,jjj
+    integer not_filled, neighbors, not_filled_on_last_pass
+    real(8) sum, sumweight, weight
+
+    tempmask(:,:,0)=0
+    do j=1,nj  ! loop over input grid
+       do i=1,ni
+          if ( mask(i,j) .gt. 0.5 ) tempmask(i,j,0)=1
+       end do
+    end do
+
+    ! tempmask(:,:,0)=mask
+    inmask = 0 ; outmask = 1-inmask  ! if inmask is 0, then outmask is 1 and vice versa
+    not_filled = ni*nj-1 ; not_filled_on_last_pass = ni*nj
+
+    do while( not_filled /= 0)   ! loop until there are no missing values left
+       not_filled_on_last_pass = not_filled ; not_filled = 0
+       do j=1,nj  ! loop over input grid
+          do i=1,ni
+             tempmask(i,j,outmask) = tempmask(i,j,inmask)
+
+             if (tempmask(i,j,inmask).ne.0) cycle ! this point exists, no need to fill
+             if (tempmask(i,j,inmask).eq.1) print *,'point',i,j,' exists'
+
+             sum = 0.0 ; sumweight = 0.0 ; neighbors = 0
+
+             do jj=max(1,j-R),min(nj,j+R)  ! scan neighbors (with protection for border)
+                do ii=i-R,i+R              ! scan neighbors (going over the border)
+
+                   iii = ii ; jjj=jj
+                   if (ii <= 0) iii=ni-ii
+                   if (ii > ni) iii=ii-ni
+
+                   if (iii /= i .or. jjj /= j) then  ! ignore the point itself
+                      if (tempmask(iii,jjj,inmask) /= 0) then  !  point is not missing in grid
+                         ! weight is inverse of distance in grid points
+                         weight = 1.0/sqrt( 1.0*((ii-i)*(ii-i) + (jj-j)*(jj-j)) )
+                         sumweight = sumweight+weight          ! sum of weights
+                         sum = sum+weight*datafield(iii,jjj)   ! weighted sum
+                         neighbors = neighbors+1
+                      endif
+                   endif
+                enddo
+             enddo
+
+             if (neighbors > 1) then ! we need at least two existing neighboring points
+                datafield(i,j) = sum/sumweight  ! weighted average of existing neighbors
+                tempmask(i,j,outmask) = 1       ! this point now exists (for next pass)
+             else
+                not_filled = not_filled+1       ! this point could not be filled
+             endif
+
+          enddo
+       enddo
+
+       inmask  = outmask   ! swap inmask and outmask (this output is the input for next pass)
+       outmask = 1-inmask  ! if inmask is 0, then outmask is 1 and vice versa
+
+       ! we are stuck, no missing values got filled on this pass
+       if (not_filled == not_filled_on_last_pass) exit
+
+    enddo
+
+    oil_spill_fill = not_filled ! return number of holes left
+
+101 format(8f6.3)
+    return
+     
+  END FUNCTION oil_spill_fill
+# endif
