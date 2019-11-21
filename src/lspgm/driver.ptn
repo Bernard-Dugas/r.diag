@@ -1267,7 +1267,9 @@
       Call qqexit( 3 )
 
       Stop
-      End
+
+      End Program driver
+
       Subroutine lspgm
 
 #     if defined (AUTO_DOC)
@@ -1583,7 +1585,7 @@
      +  ' programs with the -help specifier, as in ...'
      +   //20X,'Program_Name -help' //)
 
-      END
+      END SUBROUTINE lspgm
       SUBROUTINE PROGRAM_VERSION ( mode )
 
       IMPLICIT      none
@@ -1631,5 +1633,5 @@
  6000 format(/' The current R.DIAG is : ',A/
      +        ' And it is linked with ',A/)
 
-      END
+      END SUBROUTINE program_version
 #     endif

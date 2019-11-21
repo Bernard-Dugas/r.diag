@@ -43,7 +43,9 @@
 !   3 Missing value after argument -d
 !   4 Missing value after argument -mask
 !   5 Missing or bad value after argument -r
-!   6 Inconsistent dimensions
+!   6 Unsupported source file type
+!   7 Unsupported mask file type
+!   8 Inconsistent dimensions
 # endif
 # if defined (RDIAG_LICENCE)
 !/* 
@@ -94,9 +96,10 @@
     character*4 nomvar
     character*12 etiket
    
-    character (len=8) :: option
     character (len=2048) :: ifile, mfile, ofile, rval
+    character (len=8) :: option
 
+    logical :: strict
     integer iun, mun, oun, ier, ftyp, nim, njm, nkm
 
     real, dimension (:,:), allocatable :: field, mask
@@ -107,6 +110,7 @@
     character (len=256) :: progname
     common   /PROGNAM/ progname
 
+    integer, save :: verbose = 2 ! ERROR + WARNING
     integer :: curarg, arg_count, arg_len, status, io, nil
     integer, external :: exdb, exfin
     character (len=512) :: evalue, diagext
@@ -144,7 +148,7 @@
        endif
     endif
 
- 98 ifile = '/dev/null' ; ofile = '/dev/null'
+ 98 ifile = '/dev/null' ; ofile = '/dev/null' ; strict = .false.
     mfile = '/dev/null' ; r = 1 ; nr = 0
 
     curarg    = 2                         ! current argument number (starts after 'r.diag averages')
@@ -166,19 +170,18 @@
        call qqexit( 0 )
     endif
 
-    nil = exdb ( 'OilFill', 'Rev. '//VERSION, 'NON' )  ! print version number
+    nil = exdb( 'OilFill', 'V '//VERSION, 'NON' )  ! print version number
     
     do while(curarg <= arg_count)      ! process options
 
       call get_command_argument(curarg,option,arg_len,status)
       if(option(1:1) .ne. '-') exit      ! does not start with -, must be a file name (NO MORE OPTIONS)
-      print *,"NOTE: option = '"//trim(option)//"'"
       curarg = curarg + 1
       
       if(status .ne. 0) then
         print *,"FATAL: option is too long :'"//trim(option)//"..."//"'"
         nil = exfin( 'OilFill', 'Error 1', 'NON' )
-        call quit('OillFill', 1 )
+        call quit( 'OillFill', 1 )
       endif
 
       if( option == '-h' .or. option == '--help' ) then
@@ -193,7 +196,7 @@
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -s'
           nil = exfin( 'OillFill', 'Error 2', 'NON' )
-          call quit('OillFill', 2 )
+          call quit( 'OillFill', 2 )
         endif
         call get_command_argument(curarg,ifile,arg_len,status) ! get filename of input file
         curarg = curarg + 1
@@ -202,7 +205,7 @@
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -d'
           nil = exfin( 'OillFill', 'Error 3', 'NON' )
-          call quit('OillFill', 3 )
+          call quit( 'OillFill', 3 )
         endif
         call get_command_argument(curarg,ofile,arg_len,status) ! get filename of input file
         curarg = curarg + 1
@@ -211,7 +214,7 @@
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -mask'
           nil = exfin( 'OillFill', 'Error 4', 'NON' )
-          call quit('OillFill', 4 )
+          call quit( 'OillFill', 4 )
         endif
         call get_command_argument(curarg,mfile,arg_len,status) ! get name of mask file
         curarg = curarg + 1
@@ -220,11 +223,30 @@
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -r'
           nil = exfin( 'OillFill', 'Error 5', 'NON' )
-          call quit('OillFill', 5 )
+          call quit( 'OillFill', 5 )
         endif
         call get_command_argument(curarg,rval,arg_len,status) ! get r value
         if (rval /= ' ') read(rval,'(I10)',err=99) r
         curarg = curarg + 1
+
+      else if( option == '-strict' ) then   ! set strict mode
+        strict = .true.                     ! abort on ERROR 
+
+      else if( option == '-q' ) then
+        if(.not. strict) verbose = 1    ! ERROR messages only
+
+      else if( option == '-qq' ) then
+        if(.not. strict) verbose = 0    ! NO messages at all
+
+      else if( option == '-v' ) then
+        verbose = 3                     ! + INFO messages
+
+      else if( option == '-vv' ) then
+        verbose = 4                     ! + NOTE messages
+
+      else if( option == '-vvv' ) then
+        verbose = 5                     ! + DEBUG messages
+
 
       endif
     enddo
@@ -232,26 +254,26 @@
     goto 100
 99  print *,'FATAL: problem reading -r value ',trim( rval )
     nil = exfin( 'OillFill', 'Error 5', 'NON' )
-    call quit('OillFill', 5 )
+    call quit( 'OillFill', 5 )
     
     ! Open input file
 100 iun   = 0 
     ier   = fnom(iun, ifile, 'STD+RND+R/O', 0)
-    
+
+    ! unless in debug mode, keep standard file package silent
+    if(verbose < 4) call fstopi("MSGLVL",4,.false.)
+
     ! Check file type of input file
     ftyp  = WKOFFIT(ifile)
     if (ftyp.ne.1.and.ftyp.ne.2.and.ftyp.ne.33.and.ftyp.ne.34) then
-       print *,'Wrong input file type, ABORT!'
-       stop
+       print *,'Wrong source file type, ABORT!'
+       print *,' expecting one of types 1,2,33,34, found ',ftyp
+       print *,' see the WKOFFIT documentation for more details'
+       nil = exfin( 'OillFill', 'Error 6', 'NON' )
+       call quit( 'OillFill', 6 )
     end if
     ier = fstouv(iun,'STD+RND')
-    print *,' input file  = ', trim( ifile )
-
-    ! Open output file
-    oun   = 0
-    ier   = fnom(oun, ofile, 'STD+RND', 0)
-    ier   = fstouv(oun,'STD+RND')
-    print *,' output file = ', trim( ofile )
+    write(*,'(/"  input file  = ",A)') trim( ifile )
 
     if (mfile /= '/dev/null') then
     ! Open mask
@@ -263,11 +285,19 @@
           print *,'Wrong mask file type, ABORT!'
           print *,' expecting one of types 1,2,33,34, found ',ftyp
           print *,' see the WKOFFIT documentation for more details'
-          stop
+          nil = exfin( 'OillFill', 'Error 7', 'NON' )
+          call quit( 'OillFill', 7 )
        end if
        ier = fstouv(mun,'STD+RND')
-       print *,' mask file = ', trim( mfile )
+       write(*,'("   mask file  = ",A)') trim( mfile )
     endif
+
+    ! Open output file
+    oun   = 0
+    ier   = fnom(oun, ofile, 'STD+RND', 0)
+    ier   = fstouv(oun,'STD+RND')
+    print *,' output file = ', trim( ofile )
+    write(*,'(" output file  = ",A/)') trim( ofile )
 
     ! -------------------------------------------------------------------
 
@@ -287,7 +317,7 @@
                                       -1,-1,-1, ' ', ' ' )
 
        ! If no record is found leave loop
-       if ( handle .lt. 0 ) goto 102
+       if ( handle < 0 ) goto 102
 
        allocate( field(ni,nj) )
        ier = fstprm( handle,dateo,deet,npas,ni,nj,nk,nbits,  &
@@ -297,15 +327,16 @@
 
        if ( nomvar .ne. '^^' .and. &
             nomvar .ne. '>>' .and. &
+            nomvar .ne. '!!' .and. &
             nomvar .ne. 'HY' ) then
 
           if ((mfile /= '/dev/null') .and. &
               (ni /= nim .or. nj /= njm .or. nk /= nkm)) then
              print *,'FATAL: Inconsistent dimensions'
-             print *,'  mask dimensions are ',nim,njm,nkm
-             print *,' field dimensions are ',ni, nj, nk
-             nil = exfin( 'OillFill', 'Error 6', 'NON' )
-             call quit('OillFill', 6 )
+             print *,' source file dimensions are ',ni, nj, nk
+             print *,'   mask file dimensions are ',nim,njm,nkm
+             nil = exfin( 'OillFill', 'Error 8', 'NON' )
+             call quit( 'OillFill', 8 )
           endif
        
           ! Read field
@@ -318,17 +349,17 @@
 
           nbits = max( 16, nbits ) ; datyp=134
 
+          nr = nr + 1
+       
        end if
 
        ! Write record into RPN Standard output file
        ier = fstecr( field,field, &
                      -nbits,oun,dateo,deet,npas,ni,nj,nk, &
                      ip1,ip2,ip3,typvar,nomvar,etiket,    &
-                     grtyp,ig1,ig2,ig3,ig4,datyp,.false. )
+                     grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
        deallocate( field )
 
-       nr = nr + 1
-       
     goto 101
 
 102 continue
@@ -343,16 +374,21 @@
        ier = fclos ( mun )
     endif
 
+    write(*,'(/" Treated ",I4," record(s)"/)') nr
+    
+    nil = exfin( 'OilFill', 'SUCCESS', 'NON' )
+    call quit( 'OillFill', 0 )
+    
   END PROGRAM oilfill
 
 ! ====================================================================
 
-  INTEGER function oil_spill_fill( datafield,ni,nj,mask,r )
+  INTEGER function oil_spill_fill( datafield,ni,nj,mask,R )
 
     Implicit none
 
     ! Arguments
-    integer ni,nj,r
+    integer ni,nj,R
     real, dimension(ni,nj) :: datafield
     real, dimension(ni,nj) :: mask
 
@@ -363,10 +399,10 @@
     integer not_filled, neighbors, not_filled_on_last_pass
     real(8) sum, sumweight, weight
 
-    tempmask(:,:,0)=0
+    tempmask(:,:,0) = 0
     do j=1,nj  ! loop over input grid
        do i=1,ni
-          if ( mask(i,j) .gt. 0.5 ) tempmask(i,j,0)=1
+          if ( mask(i,j) > 0.5 ) tempmask(i,j,0) = 1
        end do
     end do
 
@@ -424,7 +460,6 @@
 
     oil_spill_fill = not_filled ! return number of holes left
 
-101 format(8f6.3)
     return
      
   END FUNCTION oil_spill_fill

@@ -95,8 +95,9 @@
     ! Author Michel Valin, Centre ESCER/UQAM, 2017-2019
 
     ! Revision history :
-    ! May 15, 2019 by B.Dugas (ESCER/UQAM) - Adapted to the r.diag framework
+    ! Nov 21, 2019 by B.Dugas (ESCER/UQAM) - Cosmetic code mods
     ! May 22, 2019 by B.Dugas (ESCER/UQAM) - Corrections for the output TYPVARS
+    ! May 15, 2019 by B.Dugas (ESCER/UQAM) - Adapted to the r.diag framework
 
     integer :: curarg
     character (len=8) :: option
@@ -174,7 +175,7 @@
        call qqexit( 0 )
     endif
 
-    nil = exdb ( 'Averages', 'Rev. '//VERSION, 'NON' )  ! print version number
+    nil = exdb( 'Averages', 'V '//VERSION, 'NON' )  ! print version number
     
     do while(curarg <= arg_count)      ! process options
       call get_command_argument(curarg,option,arg_len,status)
@@ -184,7 +185,7 @@
       if(status .ne. 0) then
         print *,"FATAL: option is too long :'"//trim(option)//"..."//"'"
         nil = exfin( 'Averages', 'Error 1', 'NON' )
-        call quit('Averages', 1 )
+        call quit( 'Averages', 1 )
       endif
 
       if( option == '-h' .or. option == '--help' ) then
@@ -208,7 +209,7 @@
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -weight'
           nil = exfin( 'Averages', 'Error 2', 'NON' )
-          call quit('Averages', 2 )
+          call quit( 'Averages', 2 )
         endif
         option = "none"
         weight_abs = .false.
@@ -234,7 +235,7 @@
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -mean'
           nil = exfin( 'Averages', 'Error 3', 'NON' )
-          call quit('Averages', 3 )
+          call quit( 'Averages', 3 )
         endif
         call get_command_argument(curarg,meanfile,arg_len,status) ! get filename of averages file
         curarg = curarg + 1
@@ -243,7 +244,7 @@
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -status'
           nil = exfin( 'Averages', 'Error 4', 'NON' )
-          call quit('Averages', 4 )
+          call quit( 'Averages', 4 )
         endif
         call get_command_argument(curarg,statusfile,arg_len,status) ! get filename of averages file
         curarg = curarg + 1
@@ -252,7 +253,7 @@
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -tag'
           nil = exfin( 'Averages', 'Error 5', 'NON' )
-          call quit('Averages', 5 )
+          call quit( 'Averages', 5 )
         endif
         call get_command_argument(curarg,option,arg_len,status) ! get filename of averages file
         curarg = curarg + 1
@@ -263,12 +264,12 @@
       else if( option == '-var' ) then      ! -var file_for_variances
         if(.not. variance) then  ! -var and -novar are mutually exclusive
           nil = exfin( 'Averages', 'Error 6', 'NON' )
-          call quit('Averages', 6 )
+          call quit( 'Averages', 6 )
          endif
          if(curarg > arg_count) then
           print *,'FATAL: missing argument after -var'
           nil = exfin( 'Averages', 'Error 7', 'NON' )
-          call quit('Averages', 7 )
+          call quit( 'Averages', 7 )
         endif
         call get_command_argument(curarg,varfile,arg_len,status) ! get filename of variances/stddevs file
         curarg = curarg + 1
@@ -277,7 +278,7 @@
         variance = .false.                   ! test mode
         if(trim(varfile) .ne. "/dev/null") then  ! -var and -novar are mutually exclusive
           nil = exfin( 'Averages', 'Error 6', 'NON' )
-          call quit('Averages', 6 )
+          call quit( 'Averages', 6 )
         endif
 
       else if( option == '-dateo' ) then
@@ -318,7 +319,7 @@
       else
         if(verbose > 1) print *,"WARNING: unrecognized option = '"//trim(option)//"'"
         if(strict) nil = exfin( 'Averages', 'Error 8', 'NON' )
-        if(strict) call  quit('Averages', 8 )  ! abort if strict mode
+        if(strict) call  quit( 'Averages', 8 )  ! abort if strict mode
         cycle
       endif
     enddo
@@ -331,7 +332,7 @@
     if(status .ne. 0) then
       print *,'FATAL: cannot allocate page table'
       nil = exfin( 'Averages', 'Error 9', 'NON' )
-      call quit('Averages', 9 )
+      call quit( 'Averages', 9 )
     endif
     do i = 0 , MAX_PAGES-1          ! nullify all page pointers
       nullify(ptab(i)%p)
@@ -350,7 +351,7 @@
       if(verbose > 1) print *,"WARNING: mean output file '"//trim(meanfile)//" exists"
       if(strict) then
          nil = exfin( 'Averages', 'Error 10', 'NON' )
-         call quit('Averages',10 )
+         call quit( 'Averages',10 )
       endif
     else
       if(verbose > 2) print *,"INFO: mean output file is '"//trim(meanfile)//"'"
@@ -366,7 +367,7 @@
         if(verbose > 1) print *,"WARNING: variance output file '"//trim(varfile)//" exists"
         if(strict) then
            nil = exfin( 'Averages', 'Error 11', 'NON' )
-           call quit('Averages',11 )
+           call quit( 'Averages',11 )
         endif
       else
         if(verbose > 2) print *,"INFO: variance output file is '"//trim(varfile)//"'"
@@ -382,14 +383,14 @@
         if(verbose > 0) print *,"ERROR: file '"//trim(filename)//"' not found"
         if(strict) then
            nil = exfin( 'Averages', 'Error 12', 'NON' )
-           call quit('Averages',12 )  ! strict mode, error is fatal
+           call quit( 'Averages',12 )  ! strict mode, error is fatal
         endif
       else
         if(verbose > 2) print *,"INFO: processing file '"//trim(filename)//"'"
         status = process_file(trim(filename))
         if(status<0 .and. strict) then
            nil = exfin( 'Averages', 'Error 13', 'NON' )
-           call quit('Averages',13 ) ! strict mode, error is fatal
+           call quit( 'Averages',13 ) ! strict mode, error is fatal
         endif
       endif
     enddo
@@ -428,11 +429,11 @@
     endif
     if(missing .and. strict) then
        print *,"FATAL: missing sample(s) for some variables"
-       call quit('Averages',14 )
+       call quit( 'Averages',14 )
     endif
     if( trim(statusfile) .ne. '/dev/null' ) call set_status(statusfile,'status="SUCCESS"')
     nil = exfin( 'Averages', 'SUCCESS', 'NON' )
-    call quit('Averages', 0 ) 
+    call quit( 'Averages', 0 ) 
     
   end PROGRAM averages
 
