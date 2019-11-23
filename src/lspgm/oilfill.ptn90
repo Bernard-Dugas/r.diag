@@ -12,8 +12,12 @@
 !
 !
 ! This program will fill a datafield array that has holes (missing values)
-! using the valid values. The  mask array tells whether data points are valid
-! or missing mask(i,J)==0 means datafield(i,j) is missing (a hole).
+! using the valid values. The optional mask array tells whether data points
+! are valid or missing mask(i,J)==0 means datafield(i,j) is missing (a hole).
+!
+! If a mask file is not provided, the program will attempt to determine if
+! the source-file data contains any "CMC/RPN standard file"-coded missing
+! values. In the case it does, these missing values will provide the mask.
 !
 ! Missing values are filled using adjacent data points. In order to fill
 ! missing value datafield(i,j), it is necessary to have at least TWO valid 
@@ -76,6 +80,8 @@
 
   ! Revision history :
   ! Nov 19, 2019 by B.Dugas (ESCER/UQAM) - Adapted to the r.diag framework
+  ! Nov 22, 2019 by B.Dugas (ESCER/UQAM) - (Optional) Mask values determined from
+  !                                        any missing values in the source file
 
   ! Declarations for arguments
     integer, parameter  :: nkey = 7
@@ -96,19 +102,31 @@
     character*4 nomvar
     character*12 etiket
    
+    logical :: MaskFile
     character (len=2048) :: ifile, mfile, ofile, rval
     character (len=8) :: option
 
     logical :: strict
     integer iun, mun, oun, ier, ftyp, nim, njm, nkm
 
-    real, dimension (:,:), allocatable :: field, mask
+    real,    dimension (:,:), allocatable :: field4, mask
+    real(8), dimension (:,:), allocatable :: field
 
     integer holes_left, oil_spill_fill
     integer i,j, nr, r
 
     character (len=256) :: progname
     common   /PROGNAM/ progname
+
+    real,       save :: misf=9.96921e+36                ! a very large float
+    real   (8), save :: misd=9.96921e+36                ! very large double
+    integer,    save :: misi =transfer(Z'80000000',1_4) ! largest negative 32 bit integer
+    integer,    save :: misui=transfer(Z'FFFFFFFF',1_4) ! largest 32 bit unsigned integer
+    integer(2), save :: misa =transfer(Z'8000'    ,1_2) ! largest negative 16 bit integer
+    integer(2), save :: misus=transfer(Z'FFFF'    ,1_2) ! largest 16 bit unsigned integer
+    integer(1), save :: misb =transfer(Z'80'      ,1_1) ! largest negative 8 bit integer
+    integer(1), save :: misub=transfer(Z'FF'      ,1_1) ! largest  8 bit unsigned integer
+    external :: set_missing_value_flags
 
     integer, save :: verbose = 2 ! ERROR + WARNING
     integer :: curarg, arg_count, arg_len, status, io, nil
@@ -273,13 +291,13 @@
        call quit( 'OillFill', 6 )
     end if
     ier = fstouv(iun,'STD+RND')
-    write(*,'(/"  input file  = ",A)') trim( ifile )
+    write(*,'(/"  input file = ",A)') trim( ifile )
 
     if (mfile /= '/dev/null') then
-    ! Open mask
-       mun   = 0
+       ! Open mask file
+       mun   = 0 ; MaskFile = .true.
        ier   = fnom(mun, mfile, 'STD+RND+R/O', 0)
-       ! Check file type of input file
+       ! Check file type of mask file
        ftyp  = WKOFFIT(mfile)
        if (ftyp.ne.1.and.ftyp.ne.2.and.ftyp.ne.33.and.ftyp.ne.34) then
           print *,'Wrong mask file type, ABORT!'
@@ -289,23 +307,27 @@
           call quit( 'OillFill', 7 )
        end if
        ier = fstouv(mun,'STD+RND')
-       write(*,'("   mask file  = ",A)') trim( mfile )
+       write(*,'("   mask file = ",A)') trim( mfile )
+    else
+       MaskFile = .false.
     endif
 
     ! Open output file
     oun   = 0
     ier   = fnom(oun, ofile, 'STD+RND', 0)
     ier   = fstouv(oun,'STD+RND')
-    print *,' output file = ', trim( ofile )
-    write(*,'(" output file  = ",A/)') trim( ofile )
+    write(*,'(" output file = ",A/)') trim( ofile )
 
     ! -------------------------------------------------------------------
 
-    if (mfile /= '/dev/null') then
+    if (MaskFile) then
        ! Read mask
        handle = fstinf( mun, nim,njm,nkm, -1,' ',-1,-1,-1,' ', ' ' )
        allocate (mask(nim,njm))
        ier = fstluk( mask, handle, nim, njm, nkm )
+    else
+       call set_missing_value_flags( &
+            misf, misi, misui, misd, misa, misus, misb, misub )
     endif
  
     handle = 0
@@ -319,7 +341,7 @@
        ! If no record is found leave loop
        if ( handle < 0 ) goto 102
 
-       allocate( field(ni,nj) )
+       allocate( field4(ni,nj),field(ni,nj) )
        ier = fstprm( handle,dateo,deet,npas,ni,nj,nk,nbits,  &
                      datyp,ip1,ip2,ip3,typvar,nomvar,etiket, &
                      grtyp,ig1,ig2,ig3,ig4,swa,lng,dltf,     &
@@ -330,35 +352,80 @@
             nomvar .ne. '!!' .and. &
             nomvar .ne. 'HY' ) then
 
-          if ((mfile /= '/dev/null') .and. &
-              (ni /= nim .or. nj /= njm .or. nk /= nkm)) then
+          if (MaskFile    .and. &
+             (ni /= nim   .or.  &
+              nj /= njm   .or.  &
+              nk /= nkm))  then
              print *,'FATAL: Inconsistent dimensions'
              print *,' source file dimensions are ',ni, nj, nk
              print *,'   mask file dimensions are ',nim,njm,nkm
              nil = exfin( 'OillFill', 'Error 8', 'NON' )
              call quit( 'OillFill', 8 )
+          else if (.not.MaskFile) then
+             allocate( mask(ni,nj) )
+
           endif
        
           ! Read field
-          ier = fstluk(field, handle, ni, nj, nk)
+          if (nbits <= 32) then
+             ier = fstluk(field4, handle, ni, nj, nk)
+             field = field4
+          else
+             ier = fstluk(field, handle, ni, nj, nk)
+          endif
 
-          holes_left = oil_spill_fill( field,ni,nj,mask,r )
+          if (MaskFile .or. IAND( datyp,64 ) > 0) then          
 
-          if (holes_left > 0) &
-             print *,'There are',holes_left,' holes left in array no. ',nr+1
+             if (.not.MaskFile) then
+                !Build the missing value mask from the data itself
+                do j=1,nj
+                   do i=1,ni
+                      if (field(i,j) == misd) then
+                         mask(i,j) = 0.0
+                      else
+                         mask(i,j) = 1.0
+                      endif
+                   enddo
+                enddo
+             endif
 
-          nbits = max( 16, nbits ) ; datyp=134
+             holes_left = oil_spill_fill( field,ni,nj,mask,r )
+
+             ! In what follows, setting datyp = 134 assumes that
+             ! there are no more misd-valued missing values...
+             
+             if (holes_left > 0) then
+                print *,'There are',holes_left,' holes left in array no. ',nr+1
+                if (IAND( datyp,64 ) > 0) datyp = 134 
+             else
+                datyp = 134
+             endif
+
+             nbits = max( 16, nbits )
+
+          endif
 
           nr = nr + 1
        
+          if (.not.MaskFile) deallocate( mask )
+
        end if
 
-       ! Write record into RPN Standard output file
-       ier = fstecr( field,field, &
+       ! Write the appropriate record into CMC/RPN Standard output file
+       if (nbits <= 32) then
+          field4 = field
+          ier = fstecr( field4,field4, &
                      -nbits,oun,dateo,deet,npas,ni,nj,nk, &
                      ip1,ip2,ip3,typvar,nomvar,etiket,    &
                      grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
-       deallocate( field )
+       else
+          ier = fstecr( field,field, &
+                     -nbits,oun,dateo,deet,npas,ni,nj,nk, &
+                     ip1,ip2,ip3,typvar,nomvar,etiket,    &
+                     grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
+       endif
+       
+       deallocate( field,field4 )
 
     goto 101
 
@@ -389,8 +456,8 @@
 
     ! Arguments
     integer ni,nj,R
-    real, dimension(ni,nj) :: datafield
-    real, dimension(ni,nj) :: mask
+    real(8), dimension(ni,nj) :: datafield
+    real,    dimension(ni,nj) :: mask
 
     ! Local variables
     integer, dimension(ni,nj,0:1) :: tempmask
