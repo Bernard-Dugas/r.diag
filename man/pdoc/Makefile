@@ -74,7 +74,7 @@ TXTDECKS = \
 	loge.txt	lpprint.txt	makezg.txt	memcoef.txt	mempred.txt	mergef.txt \
 	meofvec.txt	meriavg.txt	minvers.txt	miroir.txt	mkmask.txt	mksymm.txt \
 	mkunsy.txt	mltf.txt	mmult.txt	modulus.txt	tmmult.txt \
-	mslpr.txt	mtrace.txt	newnam.txt	nspec.txt 	parmsub.txt \
+	mslpr.txt	mtrace.txt	newnam.txt	nspec.txt 	oilfill.txt 	parmsub.txt \
 	pcomp.txt	pgen.txt	plagalc.txt	psdiv.txt	psgrid.txt \
 	psmlt.txt	randeof.txt	rangrd.txt	rcopy.txt	relabl.txt \
 	repack.txt	rgopr.txt	rmax.txt	rmlabl.txt	rzonavg.txt \
