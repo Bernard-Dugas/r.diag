@@ -109,8 +109,8 @@
     logical :: strict
     integer iun, mun, oun, ier, ftyp, nim, njm, nkm
 
-    real,    dimension (:,:), allocatable :: field4, mask
     real(8), dimension (:,:), allocatable :: field
+    real,    dimension (:,:), allocatable :: field4,mask
 
     integer holes_left, oil_spill_fill
     integer i,j, nr, r
@@ -190,13 +190,13 @@
 
     nil = exdb( 'OilFill', 'V '//VERSION, 'NON' )  ! print version number
     
-    do while(curarg <= arg_count)      ! process options
+    do while(curarg <= arg_count)   ! process options
 
       call get_command_argument(curarg,option,arg_len,status)
-      if(option(1:1) .ne. '-') exit      ! does not start with -, must be a file name (NO MORE OPTIONS)
+      if(option(1:1) /= '-') exit ! does not start with -, NO MORE OPTIONS
       curarg = curarg + 1
       
-      if(status .ne. 0) then
+      if(status /= 0) then
         print *,"FATAL: option is too long :'"//trim(option)//"..."//"'"
         nil = exfin( 'OilFill', 'Error 1', 'NON' )
         call quit( 'OillFill', 1 )
@@ -341,16 +341,25 @@
        ! If no record is found leave loop
        if ( handle < 0 ) goto 102
 
-       allocate( field4(ni,nj),field(ni,nj) )
+       allocate( field(ni,nj) )
        ier = fstprm( handle,dateo,deet,npas,ni,nj,nk,nbits,  &
                      datyp,ip1,ip2,ip3,typvar,nomvar,etiket, &
                      grtyp,ig1,ig2,ig3,ig4,swa,lng,dltf,     &
                      ubc,extra1,extra2,extra3 )
 
-       if ( nomvar .ne. '^^' .and. &
-            nomvar .ne. '>>' .and. &
-            nomvar .ne. '!!' .and. &
-            nomvar .ne. 'HY' ) then
+       ! Read field
+       if (nbits <= 32) then
+          allocate( field4(ni,nj) )
+          ier = fstluk( field4, handle, ni, nj, nk )
+          field = field4
+       else
+          ier = fstluk( field,  handle, ni, nj, nk )
+       endif
+
+       if ( nomvar /= '^^'  .and. &
+            nomvar /= '>>'  .and. &
+            nomvar /= '!!'  .and. &
+            nomvar /= 'HY' ) then
 
           if (MaskFile    .and. &
              (ni /= nim   .or.  &
@@ -363,17 +372,9 @@
              call quit( 'OillFill', 8 )
           else if (.not.MaskFile) then
              allocate( mask(ni,nj) )
-
           endif
        
-          ! Read field
-          if (nbits <= 32) then
-             ier = fstluk(field4, handle, ni, nj, nk)
-             field = field4
-          else
-             ier = fstluk(field, handle, ni, nj, nk)
-          endif
-
+          ! Missing values datyp ==> datyp+64 ...
           if (MaskFile .or. IAND( datyp,64 ) > 0) then          
 
              if (.not.MaskFile) then
@@ -396,7 +397,7 @@
              
              if (holes_left > 0) then
                 print *,'There are',holes_left,' holes left in array no. ',nr+1
-                if (IAND( datyp,64 ) > 0) datyp = 134 
+                if (IAND( datyp,64 ) == 0) datyp = 134
              else
                 datyp = 134
              endif
@@ -415,17 +416,18 @@
        if (nbits <= 32) then
           field4 = field
           ier = fstecr( field4,field4, &
-                     -nbits,oun,dateo,deet,npas,ni,nj,nk, &
-                     ip1,ip2,ip3,typvar,nomvar,etiket,    &
-                     grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
+                       -nbits,oun,dateo,deet,npas,ni,nj,nk,  &
+                        ip1,ip2,ip3,typvar,nomvar,etiket,    &
+                        grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
        else
           ier = fstecr( field,field, &
-                     -nbits,oun,dateo,deet,npas,ni,nj,nk, &
-                     ip1,ip2,ip3,typvar,nomvar,etiket,    &
-                     grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
+                       -nbits,oun,dateo,deet,npas,ni,nj,nk,  &
+                        ip1,ip2,ip3,typvar,nomvar,etiket,    &
+                        grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
        endif
        
-       deallocate( field,field4 )
+       deallocate( field )
+       if (allocated( field4 )) deallocate( field4 )
 
     goto 101
 
@@ -457,7 +459,7 @@
     ! Arguments
     integer ni,nj,R
     real(8), dimension(ni,nj) :: datafield
-    real,    dimension(ni,nj) :: mask
+    real   , dimension(ni,nj) :: mask
 
     ! Local variables
     integer, dimension(ni,nj,0:1) :: tempmask
@@ -483,8 +485,8 @@
           do i=1,ni
              tempmask(i,j,outmask) = tempmask(i,j,inmask)
 
-             if (tempmask(i,j,inmask).ne.0) cycle ! this point exists, no need to fill
-             if (tempmask(i,j,inmask).eq.1) print *,'point',i,j,' exists'
+             if (tempmask(i,j,inmask) /= 0) cycle ! this point exists, no need to fill
+             if (tempmask(i,j,inmask) == 1) print *,'point',i,j,' exists'
 
              sum = 0.0 ; sumweight = 0.0 ; neighbors = 0
 
