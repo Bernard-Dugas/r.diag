@@ -3,8 +3,9 @@
 # endif
 # if defined (AUTO_DOC)
 !
+!
 !  Usage: oilfill   -s source-file  -d destination-file  [-r RVAL] \ 
-!                  [-mask mask-file] [-h|--help] [-version] 
+!                  [-mask mask-file] [-global] [-h|--help] [-version] 
 !
 !
 ! Author: M.Valin, UQAM Centre ESCER.
@@ -40,13 +41,24 @@
 !
 !         (i-1,j-1)        (i  ,J-1)      (i+1,j-1)
 !
+! The above schema only looks at immediate neighbouring points. Specifying
+! the argument '-r 2' will extend this to next outlying points. The default
+! R-value is thus '1'. The optimal R-value (execution time-wise) will be
+! case dependant. But values of 1 or 2 are still expected to be optimal.
+! The maximum supported value of R is 99.
+!
+! Note that with 'A', 'B' and 'G' type input grids, continuity in longitude
+! is assumed when searching for nearby valid points, as these grids are either
+! hemispheric or global. For other type of grids, this is not the case by
+! default. However, even then, continuity in longitude can still be
+! activated by specifying the '-global' command-line argument.
 !
 !  Error exits
 !   1 Option is too long
 !   2 Missing value after argument -s
 !   3 Missing value after argument -d
 !   4 Missing value after argument -mask
-!   5 Missing or bad value after argument -r
+!   5 Missing or bad numerical value associated to argument -r
 !   6 Unsupported source file type
 !   7 Unsupported mask file type
 !   8 Inconsistent dimensions
@@ -82,6 +94,10 @@
   ! Nov 19, 2019 by B.Dugas (ESCER/UQAM) - Adapted to the r.diag framework
   ! Nov 22, 2019 by B.Dugas (ESCER/UQAM) - (Optional) Mask values determined from
   !                                        any missing values in the source file
+  ! Nov 27, 2019 by B.Dugas (ESCER/UQAM) - Border protection in ii for non-global
+  !                                        input data in main oil_spill_fill loop
+  ! Nov 28, 2019 by B.Dugas (ESCER/UQAM) - Optimize the border protection code in
+  !                                        ii for non-global input data
 
   ! Declarations for arguments
     integer, parameter  :: nkey = 7
@@ -102,9 +118,9 @@
     character*4 nomvar
     character*12 etiket
    
-    logical :: MaskFile
+    logical :: MaskFile, Global
     character (len=2048) :: ifile, mfile, ofile, rval
-    character (len=8) :: option
+    character (len=8) :: option, Globalc
 
     logical :: strict
     integer iun, mun, oun, ier, ftyp, nim, njm, nkm
@@ -113,7 +129,7 @@
     real,    dimension (:,:), allocatable :: field4,mask
 
     integer holes_left, oil_spill_fill
-    integer i,j, nr, r
+    integer i,j, nr,nw, r
 
     character (len=256) :: progname
     common   /PROGNAM/ progname
@@ -141,6 +157,7 @@
 
     ! -------------------------------------------------------------------
 
+    Globalc = 'False'
     diagext = 'DIAGNOSTIC_EXIT'
     progname = 'oilfill.ptn90' ! Pour documentation automatique
 
@@ -167,7 +184,7 @@
     endif
 
  98 ifile = '/dev/null' ; ofile = '/dev/null' ; strict = .false.
-    mfile = '/dev/null' ; r = 1 ; nr = 0
+    mfile = '/dev/null' ; r = 1 ; nr = 0 ; nw = 0
 
     curarg    = 2                         ! current argument number (starts after 'r.diag averages')
     arg_count = command_argument_count()
@@ -210,6 +227,10 @@
         print *,'Program version = ',VERSION
         call qqexit( 0 )
 
+      else if( option == '-global' ) then
+        print *,'Assuming global field in x direction...'
+        Globalc = 'True'
+
       else if( option == '-s' ) then       ! -s  file_for_oilfill
         if(curarg > arg_count) then
           print *,'FATAL: missing argument after -s'
@@ -244,7 +265,7 @@
           call quit( 'OillFill', 5 )
         endif
         call get_command_argument(curarg,rval,arg_len,status) ! get r value
-        if (rval /= ' ') read(rval,'(I10)',err=99) r
+        if (rval /= ' ') read(rval,'(I2)',err=99) r
         curarg = curarg + 1
 
       else if( option == '-strict' ) then   ! set strict mode
@@ -286,7 +307,7 @@
     if (ftyp.ne.1.and.ftyp.ne.2.and.ftyp.ne.33.and.ftyp.ne.34) then
        print *,'Wrong source file type, ABORT!'
        print *,' expecting one of types 1,2,33,34, found ',ftyp
-       print *,' see the WKOFFIT documentation for more details'
+       print *,' see the WKOFFIT subroutine documentation for more details'
        nil = exfin( 'OillFill', 'Error 6', 'NON' )
        call quit( 'OillFill', 6 )
     end if
@@ -347,6 +368,15 @@
                      grtyp,ig1,ig2,ig3,ig4,swa,lng,dltf,     &
                      ubc,extra1,extra2,extra3 )
 
+       if (Globalc == 'True' .or. & ! Force global treatment
+           grtyp   == 'A'    .or. &
+           grtyp   == 'B'    .or. &
+           grtyp   == 'G' )  then
+          Global = .true.
+       else
+          Global = .false.
+       endif
+       
        ! Read field
        if (nbits <= 32) then
           allocate( field4(ni,nj) )
@@ -390,7 +420,7 @@
                 enddo
              endif
 
-             holes_left = oil_spill_fill( field,ni,nj,mask,r )
+             holes_left = oil_spill_fill( field,ni,nj,mask,r,Global )
 
              ! In what follows, setting datyp = 134 assumes that
              ! there are no more misd-valued missing values...
@@ -404,15 +434,15 @@
 
              nbits = max( 16, nbits )
 
+             nr = nr + 1
+       
           endif
 
-          nr = nr + 1
-       
           if (.not.MaskFile) deallocate( mask )
 
        end if
 
-       ! Write the appropriate record into CMC/RPN Standard output file
+       ! Write the appropriate record into destination-file
        if (nbits <= 32) then
           field4 = field
           ier = fstecr( field4,field4, &
@@ -426,6 +456,8 @@
                         grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
        endif
        
+       nw = nw + 1
+       
        deallocate( field )
        if (allocated( field4 )) deallocate( field4 )
 
@@ -433,17 +465,15 @@
 
 102 continue
 
-    ! Close RPN Standard files
-    ier = fstfrm( iun )
-    ier = fclos ( iun )
-    ier = fstfrm( oun )
-    ier = fclos ( oun )
+    ! Close all open CMC/RPN Standard files
+    ier = fstfrm( iun ) ; ier = fclos ( iun )
+    ier = fstfrm( oun ) ; ier = fclos ( oun )
     if (mfile /= '/dev/null') then
-       ier = fstfrm( mun )
-       ier = fclos ( mun )
+       ier = fstfrm( mun ) ; ier = fclos ( mun )
     endif
 
-    write(*,'(/" Treated ",I4," record(s)"/)') nr
+    write(*,'(/" Treated ",I4," record(s)" )') nr
+    write(*,'( "   Wrote ",I4," record(s)"/)') nw
     
     nil = exfin( 'OilFill', 'SUCCESS', 'NON' )
     call quit( 'OillFill', 0 )
@@ -452,11 +482,12 @@
 
 ! ====================================================================
 
-  INTEGER function oil_spill_fill( datafield,ni,nj,mask,R )
+  INTEGER function oil_spill_fill( datafield,ni,nj,mask,R,Global )
 
     Implicit none
 
     ! Arguments
+    logical Global
     integer ni,nj,R
     real(8), dimension(ni,nj) :: datafield
     real   , dimension(ni,nj) :: mask
@@ -464,7 +495,7 @@
     ! Local variables
     integer, dimension(ni,nj,0:1) :: tempmask
     integer inmask,outmask
-    integer i,j,ii,jj,iii,jjj
+    integer i,j,ii,jj,iii,jjj,iimin,iimax
     integer not_filled, neighbors, not_filled_on_last_pass
     real(8) sum, sumweight, weight
 
@@ -480,9 +511,12 @@
     not_filled = ni*nj-1 ; not_filled_on_last_pass = ni*nj
 
     do while( not_filled /= 0)   ! loop until there are no missing values left
+
        not_filled_on_last_pass = not_filled ; not_filled = 0
+
        do j=1,nj  ! loop over input grid
           do i=1,ni
+
              tempmask(i,j,outmask) = tempmask(i,j,inmask)
 
              if (tempmask(i,j,inmask) /= 0) cycle ! this point exists, no need to fill
@@ -490,24 +524,49 @@
 
              sum = 0.0 ; sumweight = 0.0 ; neighbors = 0
 
-             do jj=max(1,j-R),min(nj,j+R)  ! scan neighbors (with protection for border)
-                do ii=i-R,i+R              ! scan neighbors (going over the border)
+             if (Global) then
 
-                   iii = ii ; jjj=jj
-                   if (ii <= 0) iii=ni-ii
-                   if (ii > ni) iii=ii-ni
+                do jj=max(1,j-R),min(nj,j+R) ! scan neighbors (with protection for border)
+                   do ii=i-R,i+R             ! scan neighbors (possibly going over the border)
 
-                   if (iii /= i .or. jjj /= j) then  ! ignore the point itself
-                      if (tempmask(iii,jjj,inmask) /= 0) then  !  point is not missing in grid
+                      iii = ii ; jjj=jj
+                      if (ii <= 0) iii=ni-ii
+                      if (ii > ni) iii=ii-ni
+
+                      if (iii /= i .or. jjj /= j) then  ! ignore the point itself
+                         if (tempmask(iii,jjj,inmask) /= 0) then  !  point is not missing in grid
                          ! weight is inverse of distance in grid points
-                         weight = 1.0/sqrt( 1.0*((ii-i)*(ii-i) + (jj-j)*(jj-j)) )
-                         sumweight = sumweight+weight          ! sum of weights
-                         sum = sum+weight*datafield(iii,jjj)   ! weighted sum
-                         neighbors = neighbors+1
+                            weight = 1.0/sqrt( 1.0*((ii-i)*(ii-i) + (jj-j)*(jj-j)) )
+                            sumweight = sumweight+weight          ! sum of weights
+                            sum = sum+weight*datafield(iii,jjj)   ! weighted sum
+                            neighbors = neighbors+1
+                         endif
                       endif
-                   endif
+
+                   enddo
                 enddo
-             enddo
+
+             else
+
+                do jj=max(1,j-R),min(nj,j+R)     ! scan neighbors (with protection for border)
+                   do ii= max(1,i-R),min(ni,i+R) ! scan neighbors (also with protection for border)
+
+                      iii = ii ; jjj=jj
+
+                      if (iii /= i .or. jjj /= j) then  ! ignore the point itself
+                         if (tempmask(iii,jjj,inmask) /= 0) then  !  point is not missing in grid
+                            ! weight is inverse of distance in grid points
+                            weight = 1.0/sqrt( 1.0*((ii-i)*(ii-i) + (jj-j)*(jj-j)) )
+                            sumweight = sumweight+weight          ! sum of weights
+                            sum = sum+weight*datafield(iii,jjj)   ! weighted sum
+                            neighbors = neighbors+1
+                         endif
+                      endif
+
+                   enddo
+                enddo
+
+             endif
 
              if (neighbors > 1) then ! we need at least two existing neighboring points
                 datafield(i,j) = sum/sumweight  ! weighted average of existing neighbors
