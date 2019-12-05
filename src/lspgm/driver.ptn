@@ -10,8 +10,11 @@
 *     * de processeurs allouables.
 *
 *     $Log: driver.ptn,v $
+*     Revision 4.124 2019/12/05 16:16  dugas
+*     - Faire appel a DIAG_CCARD plutot qu'a la routine CCARD dans LSPGM.
+*
 *     Revision 4.123 2019/11/20 15:15  dugas
-*     - Ajouter le programme OilFill de MFV
+*     - Ajouter le programme OilFill de MFV.
 *
 *     Revision 4.122  2019/06/04 17:17  dugas
 *     - Passer a la version 6.4.5 (development).
@@ -507,9 +510,9 @@
 *a  crvplot  - PLOT CURVES IN THE X - Y PLANE                             1 0 C
 *a  ggplot   - CREATES NCAR PLOT MAP AND/OR VECTOR FROM FILE(S)           3 0 C
 *a  ggsign   - MAPS THE SIGN (-,0,+) OF EACH POINT IN A GRID              1 0 C
-*a  ggstat   - PRINTS STATISTICS FOR EACH FIELD IN A GRID FILE            9 0
+*a  ggstat   - PRINTS STATISTICS FOR EACH FIELD IN A GRID FILE           79 0
 *a  hovplot  - HOVMULLER PLOT UTILITY FOR SLICES AT A SINGLE LEVEL        1 0 C
-*a  invntry  - LISTS FIELD LABELS FROM A DIAGNOSTICS FILE                 9 0
+*a  invntry  - LISTS FIELD LABELS FROM A DIAGNOSTICS FILE                79 0
 *a  ijlook   - PRINTS TIME SERIES OF A WINDOW IN A GRID FILE              1 0 C
 *a  lpprint  - PRINTS VALUES OF ANY SIZE (MAX 361x180) GRID               1 0 C
 *a  splook   - PRINTS REQUESTED SPECTRAL FIELDS FROM A FILE               1 0 C
@@ -532,7 +535,7 @@
 *b  adjust   - ADJUST LABEL FORMAT BETWEEN (MTL) AND (TOR) FILES          1 1
 *b  binach   - CONVERT A STANDARD CCRN FILE TO CHARACTER FORM             1 1
 *b  chabin   - RESTORE A CHARACTER CODED FILE BACH TO BINARY              1 1
-*b  convert  - RPN STANDART TO/FROM CCC FORMAT FILES                      1 1 
+*b  convert  - CMC/RPN STANDART TO/FROM CCC FORMAT FILES                  1 1 
 *b  enleve   - REMOVES SELECTED RECORDS FROM A FILE                       1 1 C
 *b  extrac   - ZEROES OUT ALL OF A GRID EXCEPT A WINDOW DEFINED IN INPUT  1 1 C
 *b  fsttri   - SORT RPN-STANDART FILEs ACCORDING TO THEIR INTERNAL KEYS   ? 1 
@@ -560,7 +563,7 @@
 *c  C) GENERAL COMPUTATION PROGRAMS
 *c  -------------------------------
 *c    
-*c  accumul  - PERFORMS ACCUMULATIONS                                   1/2 1
+*c  accumul  - PERFORMS TIMEWISE ACCUMULATIONS FILE PER FILE            1/2 1
 *c  addf     - ADDS UP TO 78 FILES (MINIMUM 2)                           78 1
 *c  addlev   - ADDS/INTERPOLATEs LEVELS IN AN ARRAY                       1 1 C
 *c  averages - DERIVES ENSEMBLE OR TIME MEANS AND VARIANCES OF RPN FILES  ? 2
@@ -585,7 +588,7 @@
 *c  fpow     - RAISES A REAL FILE TO A GIVEN POWER                        1 1 C
 *c  flat     - FLATTEN THE LATERAL BOUNDARY IN THE NORMAL DIRECTION       1 1 C
 *c  gadd     - ADDS TO EACH SET IN A FILE THE FIRST SET OF ANOTHER        1 1
-*c  fstmdiag - CALCULATES MEANS, VARIANCES OF AN UNSTRUCTURED (RPN) FILE  ? 2
+*c  fstmdiag - CALCULATES MEANS, VARIANCES OF AN UNSTRUCTURED (RPN) FILES ? 2
 *c  gdiv     - DIVIDES EACH SET IN A FILE BY THE FIRST SET OF ANOTHER     1 1
 *c  globavg  - CALCULATES SURFACE AREA MEANS OF A SET OF FIELDS           1 1
 *c  gmlt     - MULTIPLIES EACH SET IN A FILE BY THE FIRST SET OF ANOTHER  1 1
@@ -674,7 +677,7 @@
 *d  gsomgah  - CONVERTS ETA (SIGMA/HYBRID) Q,D FILES TO VERTICAL MOTION   4 1 C G
 *d  gsomega  - CONVERTS Q,D FILES TO VERTICAL MOTION                      3 1 C G
 *d  gwtqd    - COMPUTES SPECTRAL Q,D FROM GRID WINDS                      2 2 C
-*d  laslon   - ADD/REMOVE LAST LONGITUDE COLUMN                           1 1 C 
+*d  laslon   - ADD/REMOVE LAST LONGITUDE COLUMN                           1 1 C
 *d  llagg    - CONVERT LAT-LONG GRID FILE TO GAUSSIAN FILE                1 1 C
 *d  llvagg   - CONVERT LAT-LONG WINDS FILE TO GAUSSIAN FILE               2 2 C
 *d  makeyy   - INTERPOLATE SCALAR FIELDS ONTO A GEM/DM YY-GRID            1 1 C
@@ -684,14 +687,15 @@
 *d  meriavg  - COMPUTES MULTI-LEVEL MERIDIONAL AVERAGE OF A SET OF GRIDS  1 1
 *d  mslpr    - COMPUTES MEAN-SEA-LEVEL-PRESSURE FROM T,PHI PRESSURE FILES 2 1
 *d  nhall    - CONVERT NH GAUSSIAN GRID FILE TO LAT-LONG FILE             1 1 C
+*d  oilfill  - FILLS MISSING VALUE POINTS FROM NEARBY VALUES              2 1
 *d  psagg    - CONVERT POLAR-STEREOGRAPHIC SCALAR GRIDS                   1 1 C
 *d  psvagg   - CONVERTS POLAR-STEREOGRAPHIC WINDS                         2 2 C
 *d  psgrid   - CALCUL LES PARAMETRES POUR UNE GRILLE POLAIRE STEREO       1 1
 *d  rangrd   - CREATES MULTI-LEVEL SETS OF RANDOM VALUE GRIDS             0 1 C
 *d  rzonavg  - TAKES THE REPRESENTATIVE ZONAL AVERAGE OF A SCALAR FIELD   2 1
 *d  rzonvavg - TAKES THE REPRESENTATIVE ZONAL AVERAGE OF A VECTOR FIELD   3 2
-*d  signag   - PRODUCES A GRID OF (-1,0,1) FROM (-,0,+) INPUT CARDS       0 1 C
 *d  shall    - CONVERT SH GAUSSIAN GRID FILE TO LAT-LONG FILE             1 1 C
+*d  signag   - PRODUCES A GRID OF (-1,0,1) FROM (-,0,+) INPUT CARDS       0 1 C
 *d  smooth   - SIMPLE MINDED GEOGRAPHICAL SMOOTHER                        1 1
 *d  solflux  - RE-COMPUTE THE INCIDENT SOLAR FLUX AT THE TOP OF THE MODEL 1 1 C
 *d  subarea  - COMPUTES SUB-AREAS (EITHER PS OR LL) OF GG GRIDS           1 1 C
@@ -1436,7 +1440,7 @@
 *     
 #     endif
 
-      EXTERNAL    QQQDOC,XIT,CCARD,GETLIGN,UP2LOW,
+      EXTERNAL    QQQDOC,XIT,DIAG_CCARD,GETLIGN,UP2LOW,
      +            PROGRAM_VERSION
 
       LOGICAL     OK,LOPEN(99)
@@ -1485,14 +1489,14 @@
       PASS = 0
 
       IPOS = 1
-      CALL CCARD( CLES,DEF2,NAM,4, IPOS )
+      CALL DIAG_CCARD( CLES,DEF2,NAM,4, IPOS )
 
-      IF (NAM(4).NE.'NON') CALL PROGRAM_VERSION( nam(4) )
+      IF (NAM(4) /= 'NON') CALL PROGRAM_VERSION( nam(4) )
 
-      IF (NAM(2).EQ.'OUI')                                     THEN
+      IF (NAM(2) == 'OUI')                                     THEN
           CALL QQQDOC( )
           CALL QUIT('  Help  ', 0 )
-      ELSE IF (NAM(3).EQ.'OUI')                                THEN
+      ELSE IF (NAM(3) == 'OUI')                                THEN
           NOMFIC = 'lspgm_a.doc'
           CALL QQQDOC( )
           NOMFIC = 'lspgm_b.doc'
@@ -1526,7 +1530,7 @@
           CALL UP2LOW( CHOIX,CHOIX )
       END IF  
 
-  100 IF (CHOIX.NE.' ' .OR. PASS.GT.1)                         THEN
+  100 IF (CHOIX /= ' ' .OR. PASS > 1)                          THEN
           IF (CHOIX.EQ.'a' .OR.
      +        CHOIX.EQ.'b' .OR.
      +        CHOIX.EQ.'c' .OR.

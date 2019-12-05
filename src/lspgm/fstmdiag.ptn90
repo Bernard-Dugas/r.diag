@@ -98,6 +98,9 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  !  Revision 1.17 2019/12/05 13:13  dugas
+  !  Corriger la declaration EXTERNAL pour CCARD
+  !
   !  Revision 1.16 2019/07/23 19:19  dugas
   !  Ajouter l'argument '-strict' pour forcer la detection
   !  de moyennes seulement par la presence de signatures
@@ -272,7 +275,7 @@
                         fstunl, fstopc, xdfopt, fstopl, wkoffit,fclos,  &
                         fnom,   exfin,  exdb
 
-  external  ccard,  incdatr, getenvc,convpr, quit
+  external  diag_ccard,  incdatr, getenvc,convpr, quit
 
   logical, external :: is_off, is_on, diag_is_a_level
 

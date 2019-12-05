@@ -18,6 +18,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.128  2019/12/03 17:17  dugas
+C     Ajouter l'argument general '-h' (equivalent a '-help')
+C
 C     Revision 3.127  2019/04/15 07:08  dugas
 C     Corriger l'indice initial de la premiere boucle de QQQDOC
 C
@@ -918,7 +921,7 @@ C
 
       IMPLICIT        none
 
-      INTEGER,        PARAMETER :: NBRGEN = 17 , NBRUNT = 80
+      INTEGER,        PARAMETER :: NBRGEN = 18 , NBRUNT = 80
       INTEGER,        PARAMETER :: MAXUNIT = unite_io_maximale
 
       INTEGER         LISTE(NBRUNT)
@@ -1064,7 +1067,8 @@ C
      +     cles(14)/ 'MVALUE' /,nam(14)/ 'NONE' /,def(14)/ '  -1' /,
      +     cles(15)/ 'BISECT' /,nam(15)/ 'OUI'  /,def(15)/ 'NON'  /,
      +     cles(16)/ 'CENDIAN'/,nam(16)/ 'BIG'  /,def(16)/ 'SMALL'/,
-     +     cles(17)/ 'VERSION'/,nam(17)/ 'NON'  /,def(17)/ 'OUI'  /
+     +     cles(17)/ 'VERSION'/,nam(17)/ 'NON'  /,def(17)/ 'OUI'  /,
+     +     cles(18)/ 'H'      /,nam(18)/ 'NON'  /,def(17)/ 'OUI'  /
 
 *----------------------------------------------------------------------
 ***    GET INITIAL SYSTEM TIME AND SAVE IT.
@@ -1219,7 +1223,9 @@ C
 
       IF (NAM(2).EQ.'DEBUGS')       NAM(2)  = 'DEBUG'
 
-      IF (     IS_ON ( NAM(1) ))    HELP    = Vrai
+      IF (     IS_ON ( NAM(1) ) ! "-HELP" OR "-H" arguments found ?
+     +    .OR. IS_ON ( NAM(18)))    HELP    = Vrai
+
       IF (.not.IS_OFF( NAM(2) ))                               THEN
                                     INFO    = Vrai
           IF (NAM(2).EQ.'CATAST')   INFMODI = MAX(-1,INFMODI ) ! CATAST

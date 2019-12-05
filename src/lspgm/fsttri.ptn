@@ -102,6 +102,9 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.48 2019/12/05 15:15  dugas
+*      Faire appel a DIAG_CCARD plutot qu'a la routine CCARD.
+*
 *      Revision 4.47 2019/04/04 15:15  dugas
 *      Utiliser la variable REV dans les appels a EXDB.
 *
@@ -327,7 +330,7 @@ C    +              valnum,kind
      +          fstluk, fstinl, fstouv, fstlnk,
      +          fnom,   fclos,  wkoffit,newdate
       external  csortc, csorte, exfin,  exdb,
-     +          csortd, csortr, csortl, ccard,
+     +          csortd, csortr, csortl,
      +          getenvc,convpr, incdatr,quit
 
       integer :: ifrm,  iecr,  iprm,  iopt,  ilnk,
@@ -439,7 +442,7 @@ C    +              valnum,kind
 ***    traiter les differents parametres d'entrees.
 
   025 ipos = -1  ; icle = NBRCLE
-      call ccard( cles,def2,def1,NBRCLE,ipos )
+      call diag_ccard( cles,def2,def1,NBRCLE,ipos )
 
       if (is_on( def1(12) ) .or.
      +   (def1((NBRARGS+1)+1).eq.' ' .and. def1(2).eq.' ' ))    then

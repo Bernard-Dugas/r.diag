@@ -323,7 +323,10 @@
 ***        CCRN a RPN.
 ***   
 *     $Log: convert.ptn,v $
-*      Revision 4.88 2019/04/04 15:15  dugas
+*     Revision 4.89 2019/12/05 15:15  dugas
+*      Faire appel a DIAG_CCARD plutot qu'a la routine CCARD.
+*
+*     Revision 4.88 2019/04/04 15:15  dugas
 *      Utiliser la variable REV dans les appels a EXDB.
 *
 *     Revision 4.87  2016/10/27 16:02  dugas
@@ -939,8 +942,7 @@
 
       integer   datchek, dtpr,tmpr, complex,complex0
 
-      external  ccard,  cigaxg,
-     +          cxgaig, exfin,  exdb,
+      external  cigaxg, cxgaig, exfin,  exdb,
      +          iopdatm,fixninj,convpr, difdatr
 
       real(8)   :: MisFlag, Epsilon = 0.01
@@ -1162,7 +1164,7 @@
 ***    traiter les differents parametres d'entrees.
 
       ipos = -1
-      call ccard( cles,def2,def1,NBRCLE,ipos )
+      call diag_ccard( cles,def2,def1,NBRCLE,ipos )
 
       esnam = def1(3) ; call low2up( esnam,esnam )
 
