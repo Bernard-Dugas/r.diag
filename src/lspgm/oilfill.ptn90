@@ -4,8 +4,9 @@
 # if defined (AUTO_DOC)
 !
 !
-!  Usage: oilfill   -s source-file  -d destination-file  [-r RVAL] \ 
-!                  [-mask mask-file] [-global] [-h|--help] [-version] 
+!  Usage: oilfill -s source-file -d destination-file \ 
+!                [-r RVAL] [-mask mask-file] [-stats] \ 
+!                [-global] [-h|--help] [-version]
 !
 !
 ! Author: M.Valin, UQAM Centre ESCER.
@@ -52,6 +53,12 @@
 ! hemispheric or global. For other type of grids, this is not the case by
 ! default. However, even then, continuity in longitude can still be
 ! activated by specifying the '-global' command-line argument.
+!
+! Specifying the argument '-stats' will output a record describing how many
+! passes were required to fill each missing value point, up to a maximun
+! of 15. Point with a stat value of 0 did not have missing values. The
+! greater its value, the further it was from any valid data.
+!
 !
 !  Error exits
 !   1 Option is too long
@@ -118,15 +125,15 @@
     character*4 nomvar
     character*12 etiket
    
-    logical :: MaskFile, Global
+    logical :: MaskFile, Global, Stats
     character (len=2048) :: ifile, mfile, ofile, rval
     character (len=8) :: option, Globalc
 
     logical :: strict
     integer iun, mun, oun, ier, ftyp, nim, njm, nkm
 
-    real(8), dimension (:,:), allocatable :: field
-    real,    dimension (:,:), allocatable :: field4,mask
+    real(8), dimension (:,:), allocatable :: Field
+    real,    dimension (:,:), allocatable :: Field4,mask,StatsOut
 
     integer holes_left, oil_spill_fill
     integer i,j, nr,nw, r
@@ -157,6 +164,7 @@
 
     ! -------------------------------------------------------------------
 
+    Stats   = .False.
     Globalc = 'False'
     diagext = 'DIAGNOSTIC_EXIT'
     progname = 'oilfill.ptn90' ! Pour documentation automatique
@@ -230,6 +238,10 @@
       else if( option == '-global' ) then
         print *,'Assuming global field in x direction...'
         Globalc = 'True'
+
+      else if( option == '-stats' ) then
+        print *,'Requesting statistics output...'
+        Stats = .True.
 
       else if( option == '-s' ) then       ! -s  file_for_oilfill
         if(curarg > arg_count) then
@@ -362,7 +374,9 @@
        ! If no record is found leave loop
        if ( handle < 0 ) goto 102
 
-       allocate( field(ni,nj) )
+       if (Stats) allocate( StatsOut(ni,nj) )
+       
+       allocate( Field(ni,nj) )
        ier = fstprm( handle,dateo,deet,npas,ni,nj,nk,nbits,  &
                      datyp,ip1,ip2,ip3,typvar,nomvar,etiket, &
                      grtyp,ig1,ig2,ig3,ig4,swa,lng,dltf,     &
@@ -377,15 +391,17 @@
           Global = .false.
        endif
        
-       ! Read field
+       ! Read Field
        if (nbits <= 32) then
-          allocate( field4(ni,nj) )
-          ier = fstluk( field4, handle, ni, nj, nk )
-          field = field4
+          allocate( Field4(ni,nj) )
+          ier = fstluk( Field4, handle, ni, nj, nk )
+          Field = Field4
        else
-          ier = fstluk( field,  handle, ni, nj, nk )
+          ier = fstluk( Field,  handle, ni, nj, nk )
        endif
 
+       holes_left = -1 ! Flag that says nothing was done
+       
        if ( nomvar /= '^^'  .and. &
             nomvar /= '>>'  .and. &
             nomvar /= '!!'  .and. &
@@ -411,7 +427,7 @@
                 !Build the missing value mask from the data itself
                 do j=1,nj
                    do i=1,ni
-                      if (field(i,j) == misd) then
+                      if (Field(i,j) == misd) then
                          mask(i,j) = 0.0
                       else
                          mask(i,j) = 1.0
@@ -420,7 +436,7 @@
                 enddo
              endif
 
-             holes_left = oil_spill_fill( field,ni,nj,mask,r,Global )
+             holes_left = oil_spill_fill( Field,StatsOut,ni,nj,mask,r, Global,Stats )
 
              ! In what follows, setting datyp = 134 assumes that
              ! there are no more misd-valued missing values...
@@ -444,22 +460,32 @@
 
        ! Write the appropriate record into destination-file
        if (nbits <= 32) then
-          field4 = field
-          ier = fstecr( field4,field4, &
+          Field4 = Field
+          ier = fstecr( Field4,Field4, &
                        -nbits,oun,dateo,deet,npas,ni,nj,nk,  &
                         ip1,ip2,ip3,typvar,nomvar,etiket,    &
                         grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
        else
-          ier = fstecr( field,field, &
+          ier = fstecr( Field,Field, &
                        -nbits,oun,dateo,deet,npas,ni,nj,nk,  &
                         ip1,ip2,ip3,typvar,nomvar,etiket,    &
                         grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
        endif
-       
+
        nw = nw + 1
-       
-       deallocate( field )
-       if (allocated( field4 )) deallocate( field4 )
+
+       if (Stats .and. holes_left >= 0) then
+          StatsOut = min( StatsOut, 15. )
+          nbits = 16 ; nomvar = 'STAT' ; nw = nw + 1
+          ier = fstecr( StatsOut,StatsOut, &
+                       -nbits,oun,dateo,deet,npas,ni,nj,nk,  &
+                        ip1,ip2,ip3,typvar,nomvar,etiket,    &
+                        grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
+       endif
+
+       deallocate( Field )
+       if (Stats) deallocate( StatsOut )
+       if (allocated( Field4 )) deallocate( Field4 )
 
     goto 101
 
@@ -482,21 +508,21 @@
 
 ! ====================================================================
 
-  INTEGER function oil_spill_fill( datafield,ni,nj,mask,R,Global )
+  INTEGER function oil_spill_fill( datafield,StatsOut,ni,nj,mask,R, Global,Stats )
 
     Implicit none
 
     ! Arguments
-    logical Global
     integer ni,nj,R
+    logical Global,Stats
     real(8), dimension(ni,nj) :: datafield
-    real   , dimension(ni,nj) :: mask
+    real   , dimension(ni,nj) :: mask,StatsOut
 
     ! Local variables
     integer, dimension(ni,nj,0:1) :: tempmask
     integer inmask,outmask
     integer i,j,ii,jj,iii,jjj,iimin,iimax
-    integer not_filled, neighbors, not_filled_on_last_pass
+    integer not_filled, neighbors, not_filled_on_last_pass, nbpass
     real(8) sum, sumweight, weight
 
     tempmask(:,:,0) = 0
@@ -510,9 +536,11 @@
     inmask = 0 ; outmask = 1-inmask  ! if inmask is 0, then outmask is 1 and vice versa
     not_filled = ni*nj-1 ; not_filled_on_last_pass = ni*nj
 
+    if (Stats) StatsOut = 0 ; nbpass = 0
+
     do while( not_filled /= 0)   ! loop until there are no missing values left
 
-       not_filled_on_last_pass = not_filled ; not_filled = 0
+       not_filled_on_last_pass = not_filled ; not_filled = 0 ; nbpass = nbpass+1
 
        do j=1,nj  ! loop over input grid
           do i=1,ni
@@ -571,6 +599,7 @@
              if (neighbors > 1) then ! we need at least two existing neighboring points
                 datafield(i,j) = sum/sumweight  ! weighted average of existing neighbors
                 tempmask(i,j,outmask) = 1       ! this point now exists (for next pass)
+                if (Stats) StatsOut(i,j) = nbpass
              else
                 not_filled = not_filled+1       ! this point could not be filled
              endif
