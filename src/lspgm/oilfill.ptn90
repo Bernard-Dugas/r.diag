@@ -46,7 +46,7 @@
 ! the argument '-r 2' will extend this to next outlying points. The default
 ! R-value is thus '1'. The optimal R-value (execution time-wise) will be
 ! case dependant. But values of 1 or 2 are still expected to be optimal.
-! The maximum supported value of R is 99.
+! The maximum supported value of R is 10.
 !
 ! Note that with 'A', 'B' and 'G' type input grids, continuity in longitude
 ! is assumed when searching for nearby valid points, as these grids are either
@@ -105,7 +105,8 @@
   !                                        input data in main oil_spill_fill loop
   ! Nov 28, 2019 by B.Dugas (ESCER/UQAM) - Optimize the border protection code in
   !                                        ii for non-global input data
-
+  ! Dec 09, 2019 by B.Dugas (ESCER/UQAM) - Add some 'STAT'istics output
+    
   ! Declarations for arguments
     integer, parameter  :: nkey = 7
     CHARACTER (len=8)   :: cles(nkey)
@@ -278,6 +279,7 @@
         endif
         call get_command_argument(curarg,rval,arg_len,status) ! get r value
         if (rval /= ' ') read(rval,'(I2)',err=99) r
+        if (r > 10) goto 99
         curarg = curarg + 1
 
       else if( option == '-strict' ) then   ! set strict mode
@@ -303,7 +305,7 @@
     enddo
 
     goto 100
-99  print *,'FATAL: problem reading -r value ',trim( rval )
+99  print *,'FATAL: problem with -r value ',trim( rval )
     nil = exfin( 'OillFill', 'Error 5', 'NON' )
     call quit( 'OillFill', 5 )
     
@@ -375,7 +377,7 @@
        if ( handle < 0 ) goto 102
 
        if (Stats) allocate( StatsOut(ni,nj) )
-       
+
        allocate( Field(ni,nj) )
        ier = fstprm( handle,dateo,deet,npas,ni,nj,nk,nbits,  &
                      datyp,ip1,ip2,ip3,typvar,nomvar,etiket, &
@@ -401,7 +403,7 @@
        endif
 
        holes_left = -1 ! Flag that says nothing was done
-       
+
        if ( nomvar /= '^^'  .and. &
             nomvar /= '>>'  .and. &
             nomvar /= '!!'  .and. &
@@ -474,7 +476,9 @@
 
        nw = nw + 1
 
+       ! Save statistics on the number of passes ?
        if (Stats .and. holes_left >= 0) then
+          ! Of no interest beyond 15 passes
           StatsOut = min( StatsOut, 15. )
           nbits = 16 ; nomvar = 'STAT' ; nw = nw + 1
           ier = fstecr( StatsOut,StatsOut, &
