@@ -31,7 +31,7 @@
 !         3) Options are order independent *** BUT *** one
 !            or the other of '--' and '-f' MUST BE THE LAST ONE.
 !            And the list of input files has to follow this.
-!         4) Default special tag names = '>>  ', '^^  ', '!!  ', 'HY  '"
+!         4) Default special tag names = '>>  ', '^^  ', '^>  ', '!!  ', 'HY  '"
 !            The -tag option may be used more than once to add to this list.
 !            These are special records that are only copied to the output
 !            file(s) when seen the first time and skipped afterwards
@@ -98,6 +98,7 @@
     ! Nov 21, 2019 by B.Dugas (ESCER/UQAM) - Cosmetic code mods
     ! May 22, 2019 by B.Dugas (ESCER/UQAM) - Corrections for the output TYPVARS
     ! May 15, 2019 by B.Dugas (ESCER/UQAM) - Adapted to the r.diag framework
+    ! Dec 10, 2019 by B.Dugas (ESCER/UQAM) - Add '^>' to the list of special variables
 
     integer :: curarg
     character (len=8) :: option
@@ -153,11 +154,12 @@
     test = .false.                     ! internal flag for development purposes
     arg_count = command_argument_count()
 
-    nspecials = 4
+    nspecials = 5
     specials(1) = ">>  "
     specials(2) = "^^  "
-    specials(3) = "!!  "
-    specials(4) = "HY  "
+    specials(3) = "^>  "
+    specials(4) = "!!  "
+    specials(5) = "HY  "
 
     if(arg_count < 3) then      ! no arguments, OUCH !! GoTo Help mode
        if (arg_count == 2) then

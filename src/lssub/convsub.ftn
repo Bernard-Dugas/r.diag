@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: convsub.ftn,v $
+!     Revision 3.132  2019/12/12 17:17  dugas
+!     - Ajouter DecrireU a la collection de routines SavUref (-info)
+!
 !     Revision 3.131  2019/07/04 16:16  dugas
 !     - Petites corrections aux formats #6100 et #6200 de PUSHYZ et PUSHU
 !
@@ -1044,7 +1047,7 @@
      +       '*DEBUG:IBUFILL (2) IP2=',I9,' ( ',A,' ) ',
      +       ', IG1,IG2,IG3,IG4=',4I6)
 
-      END
+      END SUBROUTINE ibufill
       SUBROUTINE parfill( IBUF )
 
 ***    This routine fills the FSTPRM parametre block with
@@ -1665,7 +1668,7 @@
  6004 FORMAT('Parfill cannot code IHEM=',I10,' into IG3,IG4 ',
      +       'for GRTYP=',A,', IG3,IG4=',2I6,' already in use.')
 
-      END
+      END SUBROUTINE parfill
       INTEGER FUNCTION getpari( NAME )
 
       implicit          none
@@ -2042,7 +2045,7 @@
      +       ' nbits = ',I3)
  6200 FORMAT('*DEBUG:READSTD',5X,'RENVOIS IGNORES =',I3)
 
-      END
+      END SUBROUTINE readstd
       SUBROUTINE writstd( NF, IBUF,LEN, OK )
 
       use DIAG_TOC, only: SavTOC
@@ -3518,7 +3521,7 @@
      +       ' attempting to close ZCROCHETS'/)
  6270 format('CLOZREF:  ZCROCHETS file was closed.')
 
-      end
+      end SUBROUTINE getzref
       SUBROUTINE ouvzref2 (io,EXISTE,OK,nr,rem)
 
       IMPLICIT      none
@@ -3739,8 +3742,8 @@
  6105 FORMAT('*DEBUG:Ouvzref (6) EXISTE=',L1,' and OK=',L1)
  6106 FORMAT('*DEBUG:Rmzref  (1) Removing ZCROCHETS file ',A/)
 
-      end
-      subroutine makzref2 (nf, OK, rem)
+      end SUBROUTINE ouvzref2
+      SUBROUTINE makzref2 (nf, OK, rem)
 
       IMPLICIT    none
 
@@ -3792,8 +3795,8 @@
       return
 *-------------------------------------------------------------------
 
-      end
-      subroutine pushyz( NF, NI,NJ, IG1,IG2,IG3 )
+      end SUBROUTINE makzref2
+      SUBROUTINE pushyz( NF, NI,NJ, IG1,IG2,IG3 )
 
       implicit    none
 
@@ -3874,8 +3877,8 @@
  6100 FORMAT('*DEBUG:pushyz  added nf,ni,nj,ig1,ig2,ig3= ',3I5,3I6)
  6200 FORMAT('*DEBUG:findyz  found nf,ni,nj,ig1,ig2,ig3= ',3I5,3I6)
 
-      end
-      subroutine precle( NF,cle,offset )
+      end SUBROUTINE pushyz
+      SUBROUTINE precle( NF,cle,offset )
 
       implicit    none
 
@@ -4046,7 +4049,7 @@
  6022 FORMAT('CLESUI: I/O Unit number ',I3,' unknown...'/)
  6031 FORMAT('INICLE: I/O Unit number ',I3,' too large...'/)
 
-      end
+      END SUBROUTINE precle
       SUBROUTINE lirpt (NFIN)
 
 ***    Reads the parametres defining the GEM/DM vertical
@@ -4340,7 +4343,7 @@
 
  6600 FORMAT(' SetPT:   PTop, PRef and RCoef = ',3F14.6)
 
-      END
+      END SUBROUTINE lirpt
       SUBROUTINE savUref( nf,OK )
 
       implicit    none
@@ -4370,6 +4373,10 @@
       CHARACTER   U_GTYP,U_NOMV*4,U_TYPV*2,U_ETIK*12,BLK
       INTEGER     SWA,LNG,DLTF,UBC,EXTRA1,EXTRA2,EXTRA3
       INTEGER     mlt,ni1,nj1
+
+      INTEGER     sindx, nis,njs
+      REAL        Rot(8), Posx(4), Posy(4)
+      REAL(8)     DeltaX, DeltaY
 
       LOGICAL,    save :: U_READ(unite_io_maximale),U_WRIT(unite_io_maximale)
 
@@ -4476,6 +4483,8 @@
               descu(i)%dateo = U_DATEO
               descu(i)%etik  = U_ETIK
 
+              if (info) call decrireU( )
+
           end if
 
           GOTO 100
@@ -4577,7 +4586,6 @@
 
       return
 
-*-------------------------------------------------------------------
  6001 format('WRITUREF: For set ',i2,', descripancy between ',
      + 'internal descriptor words'/11x,I6,' not equal 5 +',I2,
      + ' * ( 10 + ',I4,' + ',I4,' )'/)
@@ -4591,7 +4599,118 @@
  6105 FORMAT('*DEBUG: SavUref too many descriptor records.')  
  6140 format('*DEBUG: WRITUREF ',A,' written to unit ',I3)
  
-      END
+      CONTAINS
+
+        SUBROUTINE decrireU ()
+
+      ! Imprimer les elements principaux du dernier descripteur U '>^'
+
+          ! La routine out_href.F90 de gem 4.8+ decrit le contenu
+          ! des U_NI*U_NJ*U_NK mots de cet enregistrment. Les dims
+          ! nis et njs de la premiere sous-grille sont aux mots 6
+          ! et 7. Ainsi ...
+          !
+          ! version_uencode    = 1
+          ! familly_uencode_S = 'F'
+          !
+          ! niyy=5+2*(10+nis+njs)
+          !
+          ! yy(1 ) = iachar(familly_uencode_S)
+          ! yy(2 ) = vesion_uencode
+          ! yy(3 ) = 2          ! 2 grids (Yin & Yang)
+          ! yy(4 ) = 1          ! the 2 grids have same resolution
+          ! yy(5 ) = 1          ! the 2 grids have same area extension
+          !
+          ! YIN
+          ! sindx  = 6
+          ! yy(sindx  ) = nis
+          ! yy(sindx+1) = njs
+          ! yy(sindx+2) = posx(Out_gridi0)
+          ! yy(sindx+3) = posx(Out_gridi0+nis-1)
+          ! yy(sindx+4) = posy(Out_gridj0)
+          ! yy(sindx+5) = posy(Out_gridj0+njs-1)
+          ! yy(sindx+6) = Out_rot(1)
+          ! yy(sindx+7) = Out_rot(2)
+          ! yy(sindx+8) = Out_rot(3)
+          ! yy(sindx+9) = Out_rot(4)
+          ! yy(sindx+10    :sindx+9+nis    )= &
+          ! posx(Out_gridi0:Out_gridi0+nis-1)
+          ! yy(sindx+10+nis:sindx+9+nis+njs)= &
+          ! posy(Out_gridj0:Out_gridj0+njs-1)
+          !
+          ! YAN
+          ! sindx  = sindx+10+nis+njs
+          ! yy(sindx  ) = nis
+          ! yy(sindx+1) = njs
+          ! yy(sindx+2) = posx(Out_gridi0)
+          ! yy(sindx+3) = posx(Out_gridi0+nis-1)
+          ! yy(sindx+4) = posy(Out_gridj0)
+          ! yy(sindx+5) = posy(Out_gridj0+njs-1)
+          ! yy(sindx+6) = Out_rot(5)
+          ! yy(sindx+7) = Out_rot(6)
+          ! yy(sindx+8) = Out_rot(7)
+          ! yy(sindx+9) = Out_rot(8)
+          ! yy(sindx+10    :sindx+9+nis    )= &
+          ! posx(Out_gridi0:Out_gridi0+nis-1)
+          ! yy(sindx+10+nis:sindx+9+nis+njs)= &
+          ! posy(Out_gridj0:Out_gridj0+njs-1)
+
+          sindx = 6
+
+          nis = nint(  descu(lastdesc)%data(sindx  ) )
+          njs = nint(  descu(lastdesc)%data(sindx+1) )
+
+          Posx(1) = descu(lastdesc)%data(sindx+2)
+          Posx(2) = descu(lastdesc)%data(sindx+3)
+          Posy(1) = descu(lastdesc)%data(sindx+4)
+          Posy(2) = descu(lastdesc)%data(sindx+5)
+
+          DeltaX  = DBLE(Posx(2)-Posx(1))/(nis-1)
+          DeltaY  = DBLE(Posy(2)-Posy(1))/(njs-1)
+
+          Rot(1)  = descu(lastdesc)%data(sindx+6)
+          Rot(2)  = descu(lastdesc)%data(sindx+7)
+          Rot(3)  = descu(lastdesc)%data(sindx+8)
+          Rot(4)  = descu(lastdesc)%data(sindx+9)
+
+          sindx   = sindx+10+nis+njs
+
+          Posx(3) = descu(lastdesc)%data(sindx+2)
+          Posx(4) = descu(lastdesc)%data(sindx+3)
+          Posy(3) = descu(lastdesc)%data(sindx+4)
+          Posy(4) = descu(lastdesc)%data(sindx+5)
+
+          Rot(5)  = descu(lastdesc)%data(sindx+6)
+          Rot(6)  = descu(lastdesc)%data(sindx+7)
+          Rot(7)  = descu(lastdesc)%data(sindx+8)
+          Rot(8)  = descu(lastdesc)%data(sindx+9)
+
+          write(6,1000) DeltaX,DeltaY,
+     +                  nis,2*njs, U_IP1,U_IP2,U_IP3,
+     +                  U_IG1,U_IG2,U_IG3,U_IG4,
+     +                  nis,njs
+
+          write(6,'(/"YIN grid description...")')
+          write(6,1001) Posx(1),Posy(1),Posx(2),Posy(2)
+          write(6,1002) Rot(1:4)
+
+          write(6,'("YAN grid description...")')
+          write(6,1001) Posx(3),Posy(3),Posx(4),Posy(4)
+          write(6,1002) Rot(5:8)
+
+          return
+
+ 1000     format(/'Yin/Yan grid DeltaX, DeltaY= ',2F13.9/
+     +           ' Full grid ni,nj = ',2I5/
+     +           ' Full grid IPi = ',3I6/
+     +           ' Full grid IGi = ',4I6/
+     +           ' Sub grids ni,nj = ',2I5)
+ 1001     format(' Lon/Lat From (',2F8.3,' ) to (',2F8.3,' )')
+ 1002     format(' Xgi (Lat/Lon pairs) = (',2F8.3,' ),(',2F8.3,' )'/)
+
+        END SUBROUTINE decrireU
+*-------------------------------------------------------------------
+      END SUBROUTINE savUref
       subroutine pushU( NF, NI,NJ, IG1,IG2,IG3 )
 
       implicit    none
@@ -4671,7 +4790,7 @@
  6100 FORMAT('*DEBUG:pushU  added nf,ni,nj,ig1,ig2,ig3= ',3I5,3I6)
  6200 FORMAT('*DEBUG:findU  found nf,ni,nj,ig1,ig2,ig3= ',3I5,3I6)
 
-      end
+      end subroutine pushU
       BLOCK DATA DATA_CONVSUB
 
 *     Initialise variables of CONVSUB's COMMONs that need to be.

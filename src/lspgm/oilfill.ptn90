@@ -55,9 +55,13 @@
 ! activated by specifying the '-global' command-line argument.
 !
 ! Specifying the argument '-stats' will output a record describing how many
-! passes were required to fill each missing value point, up to a maximun
-! of 15. Point with a stat value of 0 did not have missing values. The
-! greater its value, the further it was from any valid data.
+! passes were required to fill each missing value point. Point with a stat
+! value of 0 did not have missing values. For display purposes, the field
+! that is actually saved is the log-base-3 of the number of passes + 1. So,
+! a stats value of 0 will still mean that no filling was required, while a
+! value of "1" will correspond to "2" passes (3**(log-base-3 "1")-1). A
+! stats value of "2" will correspond to "8" passes, "3" to "26", etc.
+! The greater the stats value, the further it was from any valid data.
 !
 !
 !  Error exits
@@ -106,7 +110,9 @@
   ! Nov 28, 2019 by B.Dugas (ESCER/UQAM) - Optimize the border protection code in
   !                                        ii for non-global input data
   ! Dec 09, 2019 by B.Dugas (ESCER/UQAM) - Add some 'STAT'istics output
-    
+  ! Dec 10, 2019 by B.Dugas (ESCER/UQAM) - Change the 'STAT'istics output and add
+  !                                        '^>' to the list of special variables
+ 
   ! Declarations for arguments
     integer, parameter  :: nkey = 7
     CHARACTER (len=8)   :: cles(nkey)
@@ -130,6 +136,7 @@
     character (len=2048) :: ifile, mfile, ofile, rval
     character (len=8) :: option, Globalc
 
+    real    :: Log3
     logical :: strict
     integer iun, mun, oun, ier, ftyp, nim, njm, nkm
 
@@ -165,6 +172,7 @@
 
     ! -------------------------------------------------------------------
 
+    Log3    = log( 3.0 )
     Stats   = .False.
     Globalc = 'False'
     diagext = 'DIAGNOSTIC_EXIT'
@@ -406,6 +414,7 @@
 
        if ( nomvar /= '^^'  .and. &
             nomvar /= '>>'  .and. &
+            nomvar /= '^>'  .and. &
             nomvar /= '!!'  .and. &
             nomvar /= 'HY' ) then
 
@@ -479,7 +488,8 @@
        ! Save statistics on the number of passes ?
        if (Stats .and. holes_left >= 0) then
           ! Of no interest beyond 15 passes
-          StatsOut = min( StatsOut, 15. )
+          ! StatsOut = min( StatsOut, 15. )
+          StatsOut = log( StatsOut+1.0 ) / Log3
           nbits = 16 ; nomvar = 'STAT' ; nw = nw + 1
           ier = fstecr( StatsOut,StatsOut, &
                        -nbits,oun,dateo,deet,npas,ni,nj,nk,  &

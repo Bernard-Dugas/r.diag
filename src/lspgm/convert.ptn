@@ -323,6 +323,9 @@
 ***        CCRN a RPN.
 ***   
 *     $Log: convert.ptn,v $
+*     Revision 4.90 2019/12/10 14:14  dugas
+*      Ajouter '^>' a la liste des enregistrements de renvoi
+*
 *     Revision 4.89 2019/12/05 15:15  dugas
 *      Faire appel a DIAG_CCARD plutot qu'a la routine CCARD.
 *
@@ -1863,7 +1866,8 @@
      +          type.ne.'TIME')
      +    .or.((nom .le.'    ' .or.  nom .gt.'ZZZZ') .and.
      +          nom .ne.'>>'   .and. nom .ne.'^^'    .and.
-     +          nom .ne.'HY'   .and. nom .ne.'!!'  )
+     +          nom .ne.'^>'   .and. nom .ne.'!!'    .and.
+     +          nom .ne.'HY')
      +    .or. (ilg .lt.  1    .or.  ilat.lt.   1  )
      +    .or. (lev .gt. 1500  .and. levtyp /= 999 ))          then
               write(6,6004) type,nom,lev,ilg,ilat,pack
@@ -2389,6 +2393,7 @@
 
               if (nom == '>>' .or.
      +            nom == '^^' .or.
+     +            nom == '^>' .or.
      +            nom == '!!' )                                then
                   ip1 = lev
                   goto 1250
@@ -2879,10 +2884,11 @@
 
                   if (nomvar /= '>>' .and.
      +                nomvar /= '^^' .and.
+     +                nomvar /= '^>' .and.
      +                nomvar /= '!!')                          then
                       call convpr( ip1, press(infon), kind, -1 )
                   else
-                      press(infon) = mod( ip1,32768 )
+                      press(infon) = ip1
                   end if
 
 ***                Extraire l'annee, le mois, le
@@ -3061,10 +3067,11 @@
 
                   if (nomvar /= '>>' .and.
      +                nomvar /= '^^' .and.
+     +                nomvar /= '^>' .and.
      +                nomvar /= '!!')                          then
                       call convpr( ip1, press(i), vkind, -1 )
                   else
-                      press(i) = mod( ip1,32678 )
+                      press(i) = ip1
                   end if
 
 ***                Extraire l'annee, le mois, le
@@ -3214,10 +3221,11 @@
 
           if (nomvar /= '>>' .and.
      +        nomvar /= '^^' .and.
+     +        nomvar /= '^>' .and.
      +        nomvar /= '!!' )                                 then
               call convpr( ip1, pr, vkind, -1 )
           else
-              pr = mod( ip1,32768 )
+              pr = ip1
           end if
 
 ***        Si l'etiket est autre chose que 'CCRN SEQ',le nom du fichier
@@ -3628,8 +3636,9 @@
 
               if (nomvar == '>>' .or.
      +            nomvar == '^^' .or.
+     +            nomvar == '^>' .or.
      +            nomvar == '!!' )                             then
-                  lev = mod( ip1,32768 )
+                  lev = ip1
                   goto 2250
               else if (.not.ip1conv) then
                   call convpr( ip1, pr, vkind, -2 ) ! Ces deux appels forcent le
@@ -3925,10 +3934,11 @@
 
                   if (nomvar /= '>>' .and.
      +                nomvar /= '^^' .and.
+     +                nomvar /= '^>' .and.
      +                nomvar /= '!!')                          then
                       call convpr( ip1, pr, vkind, -1 )
                   else
-                      pr = mod( ip1,32768 )
+                      pr = ip1
                   end if
 
                   if (deeti.ge. 0) deet  = deeti

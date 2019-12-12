@@ -102,6 +102,9 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.49 2019/12/12 17:17  dugas
+*      Ajouter '^>' a la liste des enregistrements de renvoi.
+*
 *      Revision 4.48 2019/12/05 15:15  dugas
 *      Faire appel a DIAG_CCARD plutot qu'a la routine CCARD.
 *
@@ -739,6 +742,7 @@ C    +              valnum,kind
           if (Desc  .and.
      +       (nomvar.eq.'>>' .or.
      +        nomvar.eq.'^^' .or.
+     +        nomvar.eq.'^>' .or.
      +        nomvar.eq.'!!' .or.
      +        nomvar.eq.'HY' )  )                              then
 
