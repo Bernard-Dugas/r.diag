@@ -1,5 +1,5 @@
 .SUFFIXES :
-.SUFFIXES : .cdk90 .ftn .ftn90 .txt .c .F90 .f .f90 .mod .o .a
+.SUFFIXES : .F90 .cdk90 .ftn90 .ftn .txt .c .f .f90 .mod .o .a
 
 # Description: Makefile principal de LSSUB
 
@@ -72,6 +72,10 @@ INCLUDE = $(DIAGS)/include
 MODDIR  = $(INCLUDE)/$(EC_ARCH)
 SOURCES = $(DIAGS)/src/lssub/sources$(STD)/$(EC_ARCH)
 
+OPTIM90  = -O 0 -g
+DEBUG90  = $(OPTIM90)
+F90FLAGS = $(DEBUG90) -I$(MODDIR)
+
 DIAGLIB = diag_sq$(STD)
 LIBS    = $(LIBDIR)/lib$(DIAGLIB).a
 VGDLIB  = descrip
@@ -112,8 +116,25 @@ default: $(ARCH)
 	/bin/mkdir -p $(SOURCES)
 	/bin/mv -f $*.f90 $(SOURCES)
 
+.f.a:
+	$(FCOMP) $<
+	if [ -f $@ ]; then /bin/chmod 644 $@ ; fi
+	$(ARR) $@ $*.o
+	/bin/cp -p $*.f $(SOURCES)
+	/bin/rm -f $*.o
+
+.f90.a:
+	$(FCOMP) $<
+	if [ -f $@ ]; then /bin/chmod 644 $@ ; fi
+	$(ARR) $@ $*.o
+	/bin/cp -p $*.f90 $(SOURCES)
+	/bin/rm -f $*.o
+
 .c.a:
 	/bin/cp -p $< $(SOURCES)
+
+.F90.o:
+	s.f90 $(F90FLAGS) -c $<
 
 .ftn.o:
 	$(FCOMP) $<
@@ -159,23 +180,6 @@ default: $(ARCH)
 	if ( test "$(HOSTWEB):$(DIAGWEB)" != ":" ) then \
 	rsync -av $(MANDIR)/$@ $(HOSTWEB):$(DIAGWEB) ; fi
 
-.f.a:
-	$(FCOMP) $<
-	if [ -f $@ ]; then /bin/chmod 644 $@ ; fi
-	$(ARR) $@ $*.o
-	/bin/cp -p $*.f $(SOURCES)
-	/bin/rm -f $*.o
-
-.F90.o:
-	s.f90 -c $<
-
-.f90.a:
-	$(FCOMP) $<
-	if [ -f $@ ]; then /bin/chmod 644 $@ ; fi
-	$(ARR) $@ $*.o
-	/bin/cp -p $*.f90 $(SOURCES)
-	/bin/rm -f $*.o
-
 .o.a:
 	$(ARR) $@ $*.o
 
@@ -203,20 +207,19 @@ CDECKS= \
 HTMLDECKS = Error_messages.html
 
 FDECKS= \
-	alp.f		cofg.f		convsub.f 	coord.f		ddl.f \
-	dimgt.f		eapl.f		eof.f		fastaf.f \
-	fastaf2.f 	ffgfw2.f 	fftcray.f 	fftini.f		ffwfg2.f \
-	filev.f	 	four2.f		gcof.f \
-	gemdiag.f 	get.f		ggd.f		gobits.f		inctdia.f \
-	interp.f		ism.f		label.f		lgtst.f		lire_arg.f \
+	alp.f			cofg.f		convsub.f 	coord.f		ddl.f \
+	dimgt.f		eapl.f		eof.f			fastaf.f		fastaf2.f \
+	ffgfw2.f 	fftcray.f 	fftini.f		ffwfg2.f		filev.f \
+	four2.f		gcof.f 		get.f			ggd.f			gobits.f		inctdia.f \
+	interp.f		ism.f			label.f		lgtst.f		lire_arg.f \
 	lowio.f		lowio92.f	lssub.f		lwbw.f		mem.f \
 	mrcdiag.f	newtim.f  	paccrn.f 	pacc92.f		pael.f \
-	pfa.f		precon.f	prob.f 	prob.o		put.f		rec.f \
-	sfft.f		spectra.f 	temperton.f	trans1d.f	util.f \
-	vfft.f
+	pfa.f			precon.f		prob.f 		prob.o		put.f \
+	rec.f 		sfft.f		spectra.f 	temperton.f	trans1d.f \
+	util.f 		vfft.f
 
 F90DECKS= \
-	gaussg.F90	util2.F90
+	gaussg.F90	gemdiag.F90		util2.F90
 
 f90DECKS= \
 	diag_convert_ip123.f90	diag_convip_plus.f90 \
@@ -224,17 +227,16 @@ f90DECKS= \
 	stats_signatures.f90
 
 FTNDECKS= \
-	alp.ftn		cofg.ftn		convsub.ftn 	coord.ftn 	ddl.ftn \
-	dimgt.ftn 			eapl.ftn		eof.ftn		fastaf.ftn \
-	fastaf2.ftn 	ffgfw2.ftn	fftcray.ftn 	fftini.ftn	ffwfg2.ftn \
-	filev.ftn 	four2.ftn	gcof.ftn \
-	gemdiag.ftn	get.ftn		ggd.ftn		gobits.ftn	inctdia.ftn \
-	interp.ftn	ism.ftn		label.ftn 	lgtst.ftn 	lire_arg.ftn \
-	lowio.ftn	lowio92.ftn	lssub.ftn 	lwbw.ftn 	mem.ftn \
-	mrcdiag.ftn	newtim.ftn  	paccrn.ftn 	pacc92.ftn	pael.ftn \
-	pfa.ftn		precon.ftn	prob.ftn 	put.ftn  	rec.ftn \
-	sfft.ftn		spectra.ftn 	temperton.ftn	trans1d.ftn	util.ftn \
-	vfft.ftn
+	alp.ftn		cofg.ftn			convsub.ftn 	coord.ftn 	ddl.ftn \
+	dimgt.ftn 	eapl.ftn			eof.ftn			fastaf.ftn	fastaf2.ftn \
+	ffgfw2.ftn	fftcray.ftn 	fftini.ftn		ffwfg2.ftn	filev.ftn \
+	four2.ftn	gcof.ftn			get.ftn			ggd.ftn		gobits.ftn \
+	inctdia.ftn	interp.ftn		ism.ftn			label.ftn	lgtst.ftn \
+	lire_arg.ftn	lowio.ftn	lowio92.ftn		lssub.ftn 	lwbw.ftn \
+	mem.ftn		mrcdiag.ftn		newtim.ftn  	paccrn.ftn	pacc92.ftn \
+	pael.ftn		pfa.ftn			precon.ftn		prob.ftn 	put.ftn \
+	rec.ftn		sfft.ftn			spectra.ftn 	temperton.ftn \
+	trans1d.ftn	util.ftn			vfft.ftn
 
 FTN90DECKS = \
 	filter.ftn90	diag_convip_plus.ftn90
@@ -303,7 +305,9 @@ $(LIBS)(convsub.o)  : convsub.ftn \
 	$(MODDIR)/diag_toc.mod
 $(LIBS)(diag_convip_plus.o) : diag_convip_plus.ftn90 \
 	$(MODDIR)/diag_convert_ip123.mod
-$(LIBS)(get.o)      : get.ftn \
+$(LIBS)(gemdiag.o) : gemdiag.F90 \
+	$(MODDIR)/diag_toc.mod
+$(LIBS)(get.o)     : get.ftn \
 	$(INCLUDE)/machtype.cdk $(INCLUDE)/zlabel.cdk \
 	$(MODDIR)/diag_convert_ip123.mod \
 	$(MODDIR)/stats_signatures.mod
