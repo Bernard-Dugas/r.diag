@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: gemdiag.F90,v $
+!     Revision 3.36  2020/01/07 17:17  dugas
+!     - Enlever (commenter) le code dependant du macro i386
+!
 !     Revision 3.35  2019/12/17 14:14  dugas
 !     - Convertir du format .ftn au format .F90
 !
@@ -3638,11 +3641,7 @@
 
 !*
       integer i,j,k 
-#     if defined (i386)
-      real*8, parameter :: deg2rad_8 = 0.01745329251994329576923690768488609D0
-#     else
-      real*8, parameter :: deg2rad_8 = 0.01745329251994329576923690768488609Q0
-#     endif
+      real(8), parameter :: deg2rad_8 = 0.01745329251994329576923690768488609D0
 !----------------------------------------------------------------
 
 !CC      deg2rad_8 = acos(-1Q0)/180.
