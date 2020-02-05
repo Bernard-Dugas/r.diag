@@ -28,11 +28,11 @@ endif
 include version.dot
 
 %.o: %.F90
-	s.f90 -c -openmp -I$(EC_ARCH) -O2 $(MY_FFLAGS)  $(FFLAGS)$(LEFENCE) $<
+	s.f90 -c -openmp -I$(EC_ARCH) -O0 -g $(MY_FFLAGS)  $(FFLAGS)$(LEFENCE) $<
 	/bin/mv $*.o $*.mod $(EC_ARCH)
 
 %.o: %.c
-	s.cc -c -openmp -I$(EC_ARCH) -O2 $(MY_CFLAGS) $(CFLAGS) $(LEFENCE) $<
+	s.cc -c -openmp -I$(EC_ARCH) -O0 -g $(MY_CFLAGS) $(CFLAGS) $(LEFENCE) $<
 	/bin/mv $*.o $(EC_ARCH)
 
 default: updatelib

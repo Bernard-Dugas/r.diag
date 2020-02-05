@@ -32,6 +32,8 @@
 *
 *REVISIONS
 *
+* B.Dugas fevrier 2020 :
+* - Accepter les variables coordonnes de type nf_float.
 * B.Dugas juillet 2019 :
 * - Si la variable project%name='unknown' a la fin de cette
 *   routine, tenter de la definir a 'lon/lat', mais seulement
@@ -123,9 +125,10 @@
             call get_vard(ncid,id,list(id)%type,len,scale_fact)
 
 
-*     Nous traitons immediatement les variables caracteres connues:
+*     Nous traitons immediatement les variables connues (char ou float):
 
-         else if (list(id)%type.eq.nf_char) then
+         else if (list(id)%type == nf_char   .or.
+     .            list(id)%type == nf_float) then
 
             if (cfield.eq.'polar_stereographic'        .or.
      .          cfield.eq.'rotated_latitude_longitude' .or.
@@ -140,8 +143,10 @@
      .          dim(list(id)%dimid(1))%name == 'DateStrLen') then
                call def_times( ncid,id, dim(list(id)%dimid(1))%len,
      .                                  dim(list(id)%dimid(2))%len )
-            else
+            else if (list(id)%type == nf_char) then
                write(6,6001)trim( cfield )
+            else
+               list(id)%var_ok=.true.
             endif
 
 *     Cas particulier de la coordonnees Lambert Conforme qui pourrait

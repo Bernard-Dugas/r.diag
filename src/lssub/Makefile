@@ -3,6 +3,9 @@
 
 # Description: Makefile principal de LSSUB
 
+# Revision 3.72 2020/02/05 15:15  dugas
+# - Ajouter la dependance de diag_toc.o au module vgrid_descriptors
+#
 # Revision 3.71 2019/08/12 18:18  dugas
 # - Utiliser libdescrip qui se trouve dans src/extras
 #
@@ -305,6 +308,8 @@ $(LIBS)(convsub.o)  : convsub.ftn \
 	$(MODDIR)/diag_toc.mod
 $(LIBS)(diag_convip_plus.o) : diag_convip_plus.ftn90 \
 	$(MODDIR)/diag_convert_ip123.mod
+$(LIBS)(diag_toc.o) : diag_toc.cdk90 \
+	$(MODDIR)/vgrid_descriptors.mod
 $(LIBS)(gemdiag.o) : gemdiag.F90 \
 	$(MODDIR)/diag_toc.mod
 $(LIBS)(get.o)     : get.ftn \

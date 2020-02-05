@@ -42,7 +42,7 @@
 *                     ARE THEN ASSUMED TO BE ENCODED.
 *      RLUP  (a)    = LAPSE RATE USED TO EXTRAPOLATE UPWARDS (DEF 0.0).
 *      RLDN  (b)    = LAPSE RATE USED TO EXTRAPOLATE DOWNWARDS (DEF 0.0).
-*      COORD (kind) = 'SIG','ETA','GALC' OR 'GEM'/'GEM2'/'GEM3'/'GEM4'/'GEM5' FOR
+*      COORD (kind) = 'SIG','ETA','GALC' OR 'GEM'/'GEM2'/'GEM3'/'GEM4' FOR
 *                     SIGMA, ETA, GAL-CHEN AND FIVE VARIANTS OF THE GEM VERTICAL
 *                     COORDINATES, RESPECTIVELY. THE FILE CONTENTS IS USED TO
 *                     DETERMINE THE RPN DEFAULTS ('GEM2','GEM3' OR 'GEM4').
@@ -692,7 +692,8 @@
       IF (PKTYP.EQ.'SQ' .AND. .NOT.AABB)                       THEN
 
 ***        ATTEMPT TO DEFINE VERTICAL LEVEL INFO FROM HY OR !! RECORDS.
- 
+
+#         define NO_TOC_GEM5_IN
 #         include "toc_gest_1.cdk"
 
       ELSE IF (.NOT.AABB)                                      THEN
@@ -704,7 +705,6 @@
 
       CORR1 = LOG( 100. )
       IF (COORD == 'GEM4') CORR2 = LOG( PREF8 ) ! Used in AABB-mode
-
       NI = KBUF(5) ; NJ = KBUF(6)
       
       MAXW2 = GETSIZ(  2, LBUF,LEN2,NWDS,LPAK )
@@ -721,8 +721,7 @@
 
       IF (COORD /= 'GEM2' .AND.
      +    COORD /= 'GEM3' .AND.
-     +    COORD /= 'GEM4' .AND.
-     +    COORD /= 'GEM5')                                     THEN
+     +    COORD /= 'GEM4')                                     THEN
           WRITE(6,6120) RLUP,RLDN,COORD,PTOIT
       ELSE IF (COORD == 'GEM4')                                THEN
           WRITE(6,6120) RLUP,RLDN,COORD,PTOIT
@@ -994,7 +993,7 @@
      +                   LNSP, RLUP,RLDN,
      +                         NSL+1,FSIG, DFLNSIG,DLNSIG )
 
-          ELSE IF (COORD(1:3).EQ.'GEM' .and. COORD /= 'GEM4')  THEN
+          ELSE IF (COORD(1:3) == 'GEM' .and. COORD /= 'GEM4')  THEN
 
 ***            CALCULATE LOG OF LOCAL PRESSURE. NOTE THAT THE
 ***            UPCOMING HYDROSTATIC VERSION OF GEM WILL HAVE TO
@@ -1016,7 +1015,7 @@
      +                     NWDS,NPL,NSL,
      +                     TOP,BOT,INC )
 
-          ELSE IF (COORD.EQ.'GEM4')                            THEN
+          ELSE IF (COORD == 'GEM4')                            THEN
  
 ***            DO INTERPOLATION FROM GEM4 TO PRESSURE.
 
@@ -1076,8 +1075,6 @@
      +                          log_pressure, OK )
 
               END IF
-
-          ELSE IF (COORD.EQ.'GEM5')                            THEN
 
           ELSE
   

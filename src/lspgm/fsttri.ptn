@@ -102,6 +102,9 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.50 2020/02/05 16:16  dugas
+*      Initialiser DATEO8 lorsque DATEO=0.
+*
 *      Revision 4.49 2019/12/12 17:17  dugas
 *      Ajouter '^>' a la liste des enregistrements de renvoi.
 *
@@ -854,6 +857,10 @@ C    +              valnum,kind
               if (mod( HHMMSShh/100,10000 ) /= 0) Minutes = Vrai
 
               dateo8 = (YYYYMMDD*1000000_8)+(HHMMSShh/100)
+
+          else
+
+              dateo8 = dateo
 
           end if
 

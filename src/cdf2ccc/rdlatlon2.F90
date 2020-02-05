@@ -40,6 +40,8 @@
 !
 !REVISIONS
 !
+! B.Dugas fevrier '20
+! - Ne plus utiliser la variable fill_tol0 (commenter)
 ! B.Dugas octobre '19
 ! - Recuperer la configuration des valeurs manquantes qui aurait pu
 !   etre definie via la cle -mvalue ou via la variable MISSING_VALUE
@@ -208,8 +210,8 @@
       integer itime,ccctime, dim1,dim2, kind,mode 
 
       logical fill_ccc_def0
-      real(8) fill_ccc0,fill_toler0
-      real(8) fill_tol0,fill_tol
+      real(8) fill_ccc0,fill_toler0,fill_tol
+    ! real(8) fill_tol0
       real    bad
 
       integer ilevel(maxlev)
@@ -780,7 +782,7 @@
       fill_toler0   = fill_toler
       fill_ccc_def0 = fill_ccc_def
 
-      fill_tol0     = fill_toler0/abs( fill_ccc0 )
+      ! fill_tol0  = fill_toler0/abs( fill_ccc0 )
       
       time_bnds_L = .false.
       if (tid > 0) then

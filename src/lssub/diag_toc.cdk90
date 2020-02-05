@@ -26,6 +26,10 @@
 
 !    Author: Bernard Dugas, automne 2009/hiver 2010
 !
+!    Revision 3.13 2020/01/29 16:16  dugas
+!    - Seconde phase de l'ajout du support
+!      des types 5100, 21001 et 21002
+!
 !    Revision 3.12 2019/08/11 14:14  dugas
 !    - Premiere passe de l'ajout du support
 !      des types 5100, 21001 et 21002
@@ -88,6 +92,8 @@
                                    vgd_put,          &
                                    vgd_print,        &
                                    vgd_write
+
+!     use iso_c_binding, only : c_ptr, C_NULL_PTR, C_CHAR, C_NULL_CHAR, c_int, c_associated, c_loc
 
       IMPLICIT    NONE
       private
@@ -347,17 +353,19 @@
 !    Local variables
 
       INTEGER,    PARAMETER :: NbrMaxDeToctoc=1024
-      
-      INTEGER     ivalue
-      REAL        rvalue
-      REAL(8)     rvalue8
-      logical     OLD
-      character   blk*16,name*256,mykey*4
+
+      INTEGER     ivalue,mode,kind
+      REAL        rvalue,hyb1,hyb2
+      REAL(8)     rvalue8,zsrf,zetau,zeta2,ztop
+      logical     OLD,flag,sauvPT
+      character   blk*16,name*256,mykey*4,string
       INTEGER     DUM,status,NF,I,J,K,CLE(NbrMaxDeToctoc), &
                   SWA,LNG,DLTF,UBC,EXTRA1,EXTRA2,EXTRA3
       INTEGER     NI0,NJ0,NK0
 
-      NF = ABS( NFIN ) ; IF (NF > unite_io_maximale) RETURN
+      integer,    dimension(:), pointer :: IPM ! Pour le calcul de PTOP
+
+      NF = ABS( NFIN ) ; IF (NF > unite_io_maximale) RETURN ; sauvPT = .false.
 
       ! Allocations/Initializations.
 
@@ -458,7 +466,6 @@
                       TOC_NK(1,J,NF) = ivalue
                       if (INFO) write(stdout,6105) 'NL_M'
                   end if
-
 
                   ! Save PTOP the pressure the model top level.
 
@@ -649,7 +656,7 @@
                              if (INFO) write(stdout,6105) 'RC_4'
                           end if
 
-                          if (TOC_VER(J,NF) == 21002)            THEN
+                          if (TOC_VER(J,NF) == 21002)          THEN
 
                               ! Save the vertical wind diagnostic level DHW.
 
@@ -685,10 +692,11 @@
                           if (INFO) write(stdout,6105) 'PTOP'
                       end if
 
-
                   end if
 
               end if
+
+              exit ReadNew
 
           END DO ReadNew
 
@@ -704,6 +712,7 @@
               TOC_GD (       1,0) = TOC_GD (       1,NF)
               TOC_VER(       1,0) = TOC_VER(       1,NF)
               TOC_IP ( :    ,1,0) = TOC_IP ( :    ,1,NF)
+              if (TOC_VER(J,NF) /= 5005 .and. TOC_VER(J,NF) /= 5100) &
               TOC_TOP(       1,0) = TOC_TOP(       1,NF)
               TOC_REF(       1,0) = TOC_REF(       1,NF)
               TOC_RC ( :    ,1,0) = TOC_RC ( :    ,1,NF)
@@ -714,7 +723,36 @@
 
               if (INFO) write(stdout,6106) TOC_IP(:,1,NF)
 
+              sauvPT = .true.
+
           end if
+
+      END IF
+
+      IF (sauvPT .and. (TOC_VER(J,NF) == 5005 .OR. TOC_VER(J,NF) == 5100)) THEN
+
+          ! Save calculated PTOP, the pressure at the model top level.
+
+          mykey='VIPM' ; call GetTOC_iv (NF, mykey,IPM,TOC_IP(1,J,NF),TOC_IP(2,J,NF) )
+
+          mode = -2 ; flag = .false.
+          call Diag_CONVIP_plus( IPM(1),hyb1, kind,mode,string,flag )
+          call Diag_CONVIP_plus( IPM(2),hyb2, kind,mode,string,flag )
+
+          ! How to Auto-Compute effective ptop_out for modes
+          ! 5005/5100 as found in the vgrid.c (v 6.4) code
+          ! zsrf_8  = log(pref8)
+          ! zetau_8 = zsrf_8 + log( dble( hybuser(1) ) )
+          ! zeta2_8 = zsrf_8 + log( dble( hybuser(2) ) )
+          ! ztop_8  = 0.5 * ( 3. * zetau_8 - zeta2_8)
+          ! ptop_out_8 = exp( ztop_8 )
+          zsrf = log( TOC_REF(J,NF) )
+          zetau = zsrf + log( dble( hyb1) )
+          zeta2 = zsrf + log( dble( hyb1) )
+          ztop  = 0.5 * ( 3. * zetau - zeta2 )
+          TOC_TOP(J,NF) = exp( ztop )
+
+          TOC_TOP(1,0) = TOC_TOP(1,NF)
 
       END IF
 
@@ -1009,7 +1047,7 @@
               call low2up( varname, local_name )
               select case ( trim( local_name ) )
 
-              case ('VIPM')
+              case ('VIPM','VIP1')
 !                Get the (coded IP1) hybrid levels.
                   status = vgd_get( TOC_GD(I,NF),      &
                                     key=local_name,    &
@@ -1097,7 +1135,7 @@
               call low2up( varname, local_name )
               select case ( trim( local_name ) )
 
-              case ('COFA')
+              case ('COFA','CA_M')
                ! Get A, the first pressure levels
                !  reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),      &
@@ -1105,7 +1143,7 @@
                                     value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'COFA'
-              case ('COFB')
+              case ('COFB','CB_M')
                ! Get B, the second pressure levels
                !  reconstruction vector.
                   status = vgd_get( TOC_GD(I,NF),      &
@@ -1113,22 +1151,6 @@
                                     value=rvalue1d )
                   if (DEBUG .and. status /= VGD_OK)    &
                       write(STDOUT,6201) 'COFB'
-              case ('CA_M')
-               ! Get AM, the first momemtum levels
-               !  reconstruction vector.
-                  status = vgd_get( TOC_GD(I,NF),      &
-                                    key=local_name,    &
-                                    value=rvalue1d )
-                  if (DEBUG .and. status /= VGD_OK)    &
-                      write(STDOUT,6201) 'CA_M'
-              case ('CB_M')
-               ! Get BM, the second momemtum levels
-               !  reconstruction vector.
-                  status = vgd_get( TOC_GD(I,NF),      &
-                                    key=local_name,    &
-                                    value=rvalue1d )
-                  if (DEBUG .and. status /= VGD_OK)    &
-                      write(STDOUT,6201) 'CB_M'
               case ('CC_M')
                ! Get CM, the third momemtum levels
                !  reconstruction vector.
