@@ -134,6 +134,10 @@
 *     -------------------------------------------------------------
 
 *     $Log: gpdpd.ptn,v $
+*     Revision 4.29  2020/02/10 11:11  dugas
+*     Declarer les variables R38,R48 utilisees dans toc_gest_1.cdk
+*     avec les coordoonnes hauteurs-hybride et sleve-hybride.
+*
 *     Revision 4.28  2019/01/10 17:17  dugas
 *     Faire appel aux nouveaux comdecks *_formats.cdk
 *     associes aux autres implementes en fin 2016.
@@ -268,11 +272,11 @@
       REAL,       PARAMETER :: PTMIN = pression_au_toit
       INTEGER,    PARAMETER :: HEAD = taille_entete
 
-      REAL(8)     PTOIT8,PREF8,R8,R28, E,C,TD
       LOGICAL     OK,OK2,SHUM,SPWH,MODETA,AABB
       REAL        PRES,T,Q,SATQ,VT,PREF,PREF0,
      +            CORR1,CORR2,R,R2,R0,R20,PTOIT,
      +            PTOIT0,AMIN,AMAX,AMEAN, BIGBIN
+      REAL(8)     PTOIT8,PREF8, R8,R28,R38,R48, E,C,TD
       INTEGER     I,L,L0,LL,IER,TYPE,NFF,NRECS,NWDS,IO,IUN, NI,NJ,
      +            LEV(MAXLEV),NLEV,NLEV2,MAX1,MAX2,MAX3,LEN1,I0,J0,
      +            LEN2,LEN3,HUM,MAXW,KBUF(HEAD),LBUF(HEAD),IN1,

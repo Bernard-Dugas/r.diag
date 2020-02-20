@@ -182,6 +182,10 @@
 *     ----------------------------------------------------------------
 
 *      $Log: gsathl.ptn,v $
+*     Revision 4.36  2020/02/10 11:11  dugas
+*     Declarer les variables R38,R48 utilisees dans toc_gest_1.cdk
+*     avec les coordoonnes hauteurs-hybride et sleve-hybride.
+*
 *     Revision 4.35  2019/04/15 08:01  dugas
 *     - Modifier l'initialisation de CLEVTH.
 *     - RLV est vrai lorsque DEFLEVS est vrai.
@@ -328,8 +332,8 @@
       REAL         AMIN,AMAX,AMEAN
       LOGICAL      OK,OK1,OK2,MONOTON,OTHER,RLV,
      +             MODETA,BIGF,AABB,DEF,FFMT
-      REAL(8)      PTOIT8,PREF8,R8,R28
       CHARACTER    GRTYP,LIGNE*80,VERBEX*8
+      REAL(8)      PTOIT8,PREF8, R8,R28,R38,R48
       CHARACTER(4) COORD,TYPE,NAME,NOM,CTEMP,CLNSP
       REAL         PTOIT,RLUP,RLDN,CORR1,CORR2,BIGBIN,LOCAL,
      +             PREF,R,R2,TCON, PTOIT0,PREF0,R0,R20

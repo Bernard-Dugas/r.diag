@@ -105,9 +105,9 @@
 *               instead be used to control missing value treatment.
 *            2) THE DEFAULT INPUT GRIDS CAN ALSO BE DESCRIBED AS RPN STANDARD
 *               GRID TYPE B. FURTHERMORE, A (SHIFTED LAT-LONG), G (GAUSSIAN),
-*               L (GENERALIZED LAT-LONG) OR Z (ROTATED, NON-REGULAR LAT-LONG)
-*               GRIDS, AS WELL AS N AND S POLAR-STEREOGRAPHIC RPN GRIDS ARE
-*               SUPPORTED AND ARE INTERPOLATED USING THE EZSCINT PACKAGE.
+*               L (GENERALIZED LAT-LONG), U (Yin-Yan) OR Z (ROTATED, NON-REGULAR
+*               LAT-LONG) GRIDS, AS WELL AS N AND S POLAR-STEREOGRAPHIC RPN GRIDS
+*               ARE SUPPORTED AND ARE INTERPOLATED USING THE EZSCINT PACKAGE.
 *            3) OUTPUT GRID TYPES OTHER THAN GAUSSIAN (I.E. G) CAN ONLY BE
 *               SPECIFIED IN COMMAND-LINE PARAMETRE MODE (WITH KIND#2).
 *            4) Digital filtering will be applied before interpolation if the
@@ -164,6 +164,7 @@
 *       9 ONLY GAUSSIAN OUTPUT FOR CCC INPUT FILES
 *      10 PS INPUT NOT SUPPORTED FOR CCC FILES
 *      11 MISSING GRID DESCRIPTOR PARAMETRE
+*      13 NO SUPPORT FOR MISSING VALUES WITH TYPE U GRIDS
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -188,6 +189,9 @@
 *    1         TAPE1=LL,TAPE2=GG, TAPE5=INPUT, TAPE6=OUTPUT)
 *     ------------------------------------------------------
 *     $Log: llagg.ptn,v $
+*     Revision 4.51  2020/02/13 17:17  dugas
+*     Correction au traitement des grilles de type U
+*
 *     Revision 4.50  2019/10/25 14:14  dugas
 *     Modifications a la documentation automatique
 *
@@ -1780,7 +1784,7 @@ CCC   END IF
      +                                  GRTYP,IG1R,IG2R,IG3R,IG4R )
                           if (XGLST(8)/= NLG1 .or.
      +                        XGLST(9)/= NLAT )                THEN
-                              WRITE(6,6012)
+                              WRITE(6,6012) GRTYP,IG1R,IG2R,IG3R,IG4R
                               CALL                 XIT( VERBE, -12 )
                           END IF
                           XRESI = 360. * XGLST(3) / (6.37122D3*PI)
@@ -1828,6 +1832,14 @@ CCC   END IF
                   IF (MDONE1 .AND. .NOT.MDONE2) GOTO 300
 
               ELSE IF (PKTYP == 'SQ' .AND. GRTYP == 'U')       THEN
+
+                  IF (MVALUE)                                  THEN
+                    ! No support for missing values with type U grids
+                      WRITE(6,6013)
+                      CALL                         XIT( verbe,-13 )
+                  END IF
+
+                  MDONE1 =.FALSE. ; MDONE2 =.FALSE.
 
                   IF (NR.EQ.0) CALL PRTLAB( IBUF )
 
@@ -2056,7 +2068,9 @@ CCC   END IF
  6010 FORMAT(' Polar-stereographic fields are only',
      +       ' supported in RPN/CMC files.')
  6011 FORMAT(' Missing parametre ',A,' for L-type output grid.')
- 6012 FORMAT(' Problem reading file "gribtable" for GRTYP="!" data.')
+ 6012 FORMAT(' Problem reading file "gribtable" for GRTYP="!" data.'/
+     +       ' IG1,IG2,IG3,IG4 =',4I10)
+ 6013 FORMAT(' No support for missing values with type U grids.')
 
  6100 FORMAT(1X,I6,' records processed.')
  6150 FORMAT(1X,I6,' records pairs processed.')

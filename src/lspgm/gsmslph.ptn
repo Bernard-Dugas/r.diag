@@ -137,6 +137,10 @@
 *     ---------------------------------------------------------------
 
 *     $Log: gsmslph.ptn,v $
+*     Revision 4.13  2020/02/10 11:11  dugas
+*     Declarer les variables R38,R48 utilisees dans toc_gest_1.cdk
+*     avec les coordoonnes hauteurs-hybride et sleve-hybride.
+*
 *     Revision 4.12 2019/07/04 14:04  dugas
 *     Ajouter un appel a MakZref si GRTYP='Z'.
 *
@@ -201,7 +205,7 @@
       LOGICAL      OK,DEF,MODETA,AABB, MONOTON
       CHARACTER(4) CPMSL,CLNPT,CLNSP,CPHIS,CTEMP
       CHARACTER    GRTYP,CHECK*2,PKTYP*2,LIGNE*80
-      REAL(8)      PTOIT8,PREF8,R8,R28, CORR1,CORR2
+      REAL(8)      PTOIT8,PREF8, R8,R28,R38,R48, CORR1,CORR2
       INTEGER      LEV(MAXLEV),KBUF(HEAD),LBUF(HEAD),MBUF(HEAD),
      +             VKIND,VKINDI,IO,IER,NLVLUP,LAY,MAXW,MAXW2,MAXW3,
      +             LEN,LEN2,LEN3,NPTS,NLEV,NLEVU,LOWEST,I,L,NT,NFF,

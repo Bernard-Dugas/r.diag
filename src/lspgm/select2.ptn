@@ -76,17 +76,23 @@
 *                  AND WHEN LV1 AND LV2 CONTAIN DECODED VALUES. FURTHERMORE,
 *                  THIS PARAMETRE CAN ONLY BE SPECIFIED IN COMMAND-LINE MODE.
 *                  THE CURRENTLY SUPPORTED VALUES ARE:
-*                  'HAUTEUR'   , heights (m) with respect to sea level
-*                  'SIGMA'     , classical terrain following (0.0 -> 1.0)
-*                  'ETA'       , first version of the GEM ETA coordinate
-*                  'PRESSION'  , pressure (mb)
-*                  'ARBITRAIRE', arbitrary level (no units apply)
-*                  'HAUTEURS'  , heights (M) with respect to the surface
-*                  'HYBRIDE'   , hybrid GEM coordinate
-*                  'THETA'     , potential temperature coordinate
-*                  'GALCHEN'   , GalChen generalized coordinate
-*                  'MOMENTUM'  , GEM4 momentum levels
-*                  'THERMODYN' , GEM4 thermodynamic levels
+*                  'HAUTEUR',           heights (m) with respect to sea level
+*                  'SIGMA',             classical terrain following (0.0 -> 1.0)
+*                  'ETA',               first version of the GEM ETA coordinate
+*                  'PRESSION',          pressure (mb)
+*                  'ARBITRAIRE',        arbitrary level (no units apply)
+*                  'HAUTEURS',          heights (M) with respect to the surface
+*                  'HYBRIDE',           hybrid GEM coordinate
+*                  'THETA',             potential temperature coordinate
+*                  'GALCHEN',           GalChen generalized coordinate
+*                  'MOMENTUM',          GEM4 momentum levels
+*                  'THERMODYN',         GEM4 thermodynamic levels
+*                  '(M/T)HAUTEURS-HYBRIDE', GEM5 hybrid heights (mp) with respect
+*                                       to the surface on thermodynamic (T; default)
+*                                       or momentum (M) levels
+*                  Note that the above (optional) 'M' or 'T' prefix modifiers
+*                  imply that the momentum or thermodynamic set of levels are
+*                  requested, respectively.
 *
 *      KIND(3)   = OUTPUT FILE MODE. KNOWN VALUES ARE "APPEND", "OVER".
 *                  THE DEFAULT IS TO OVERWRITE ALL OUTPUT FILES.
@@ -182,6 +188,11 @@
 *     -----------------------------------------------------------------
 
 *     $Log: select2.ptn,v $
+*     Revision 4.25  2020/02/20 14:14  dugas
+*     - Ajouter le support de recherche de niveaux thermodynamiques
+*       ou dynamiques pour un champs en coordonnee verticale GEM5
+*       hauteurs-hybride
+*
 *     Revision 4.24  2016/10/28 17:28  dugas
 *     Ajouter le support de recherche de niveaux thermodynamiques
 *     ou bien de niveaux dynamiques pour un champs GEM4.
@@ -340,7 +351,8 @@
       CHARACTER    ANT1*5,ANT2*5,
      +             ALV1*15,ALV2*15,NUM(10)
       LOGICAL      FIRST1,FIRST2,NA,ALLEV,INDEXL(MAXLEV),
-     +             OK,RLV,ALTIM,NEGINT,ZSETN,GEM4M,GEM4T,TOCLU
+     +             GEM4M,GEM4T,GEM5M,GEM5T,TOCLU,
+     +             OK,RLV,ALTIM,NEGINT,ZSETN
       INTEGER*8 :: N,NT1,NT2,NT3,IT1,IT2
       INTEGER*8 :: ZERO=0,MUN=-1,INT8,LAST1
       INTEGER*8 :: TIME,TIME1,TIME2,LAST2
@@ -389,6 +401,8 @@
      +             NA     / .FALSE. /,
      +             GEM4M  / .FALSE. /,
      +             GEM4T  / .FALSE. /,
+     +             GEM5M / .FALSE. /,
+     +             GEM5T / .FALSE. /,
      +             TOCLU  / .FALSE. /
 *===================================================================
 
@@ -468,6 +482,11 @@
               IF (CKIND(1:3) == 'MOM')  GEM4M = .TRUE.
               IF (CKIND(1:4) == 'THER') GEM4T = .TRUE.
               IF (GEM4M .OR. GEM4T) CKIND = 'HYBRIDE'
+
+              IF (CKIND == 'HAUTEURS-HYBRIDE'
+     +       .OR. CKIND == 'THAUTEURS-HYBRIDE') GEM5T = .TRUE.
+              IF (CKIND == 'MHAUTEURS-HYBRIDE') GEM5M = .TRUE.
+              IF (GEM5M .OR. GEM5T) CKIND = 'HAUTEURS-HYBRIDE'
 
               CALL SETKIND( CKIND )
               VKIND = GETKIND( )
@@ -697,7 +716,7 @@
               WRITE(6,6009)
           END IF
 
-      ELSE IF (.NOT.(GEM4M .OR. GEM4T))                        THEN
+      ELSE IF (.NOT.(GEM4M .OR. GEM4T .OR. GEM5M .OR. GEM5T))  THEN
           WRITE(6,6201)
       END IF
 
@@ -767,7 +786,8 @@
   250 MAXW = GETSIZ2( 1, JBUF,LEN,NWDS,JPAK, LEV,NLEV )
       IF (MAXW.EQ.0) GOTO 904
 
-      IF (.NOT.TOCLU .AND. (GEM4M .OR. GEM4T))                 THEN
+      IF (.NOT.TOCLU .AND.
+     +   (GEM4M .OR. GEM4T .OR. GEM5M .OR. GEM5T))             THEN
 
           ! Retreive !! GEM4 vertical information record.
 
@@ -780,9 +800,9 @@
 
               ! Read relevant set of GEM4 levels.
 
-              IF (GEM4M)                                       THEN
+              IF (GEM4M .OR. GEM5M)                            THEN
                  CALL GetTOC( 1,'VIPM',LEVS,IP1,IP2 )
-              ELSE IF (GEM4T)                                  THEN
+              ELSE IF (GEM4T .OR. GEM5T)                       THEN
                  CALL GetTOC( 1,'VIPT',LEVS,IP1,IP2 )
               END IF
 
@@ -794,8 +814,8 @@
 
           ALLEV = .FALSE.
 
-          IF (GEM4M) WRITE(6,6202) 'momentum'
-          IF (GEM4T) WRITE(6,6202) 'thermodynamic'
+          IF (GEM4M .OR. GEM5M) WRITE(6,6202) 'momentum'
+          IF (GEM4T .OR. GEM5T) WRITE(6,6202) 'thermodynamic'
 
           TOCLU = .TRUE. ! Do this only once.
 
@@ -875,7 +895,7 @@
               IF (KIND.NE.VKIND) GOTO 300
 
 
-              IF (GEM4T .OR. GEM4M)                            THEN
+              IF (GEM4T .OR. GEM4M .OR. GEM5M .OR. GEM5T)      THEN
                   INDEXL(1:NLEVG) = .FALSE.
                   FIND_LEVELS : DO  L=1,NLEVG
                       DO  IL=1,NLEVS
@@ -1073,7 +1093,7 @@
  6151 FORMAT('0Select times  ... ALL TIMES.')
  6200 FORMAT(' Select levels ',A,' to ',A)
  6201 FORMAT(' Select levels ... ALL LEVELS.')
- 6202 FORMAT(' Select GEM4 ',A,' levels.')
+ 6202 FORMAT(' Select GEM4/5 ',A,' levels.')
  6250 FORMAT(' Variable names =',2(2X,A)) 
  6300 FORMAT('0Records in =',I6,', records out =',2I6)
  6350 FORMAT(' Negative T3 reset, T1 reset to ',I14) 
