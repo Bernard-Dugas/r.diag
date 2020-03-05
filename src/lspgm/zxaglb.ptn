@@ -53,6 +53,9 @@
 *     -----------------------------------------------
 
 *     $Log: zxaglb.ptn,v $
+*     Revision 4.4  2020/02/26 15:15  dugas
+*     Petites corrections dans les declarations.
+*
 *     Revision 4.3  2014/09/25 20:20:57  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -84,11 +87,10 @@
       REAL*8,     DIMENSION(:), ALLOCATABLE :: X,ZX
       INTEGER,    DIMENSION(:), ALLOCATABLE :: IBUF
 
-      INTEGER     GETSIZ2
-      LOGICAL     RPBLOC,SETIO64
-      EXTERNAL    GETSIZ2,MACSPE,JCLPNT,XIT,GETSET2,
-     +            PUTSET2,GETVERB,CMPLBL,LBLCHK,
-     +            GETYP,SETIO64
+      INTEGER,    EXTERNAL :: GETSIZ2
+      LOGICAL,    EXTERNAL :: RPBLOC,SETIO64
+      EXTERNAL    MACSPE,JCLPNT,XIT,PUTSET2,
+     +            CMPLBL,LBLCHK
 
       CHARACTER            NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG

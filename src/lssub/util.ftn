@@ -18,6 +18,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: util.ftn,v $
+C     Revision 3.129  2020/02/26 15:15  dugas
+C     Ajouter le point d'entree PUTVERB et modifier
+C     le point d'entree GETVERB dans JCLPNT
+C     
 C     Revision 3.128  2019/12/03 17:17  dugas
 C     Ajouter l'argument general '-h' (equivalent a '-help')
 C
@@ -939,7 +943,7 @@ C
       CHARACTER(16)   INFMOD,INFMODX
       CHARACTER(32)   COMMAND,FTYPC*2
       CHARACTER(512)  NAME,EVALUE
-      CHARACTER(512), SAVE :: PROGRAM_NAME,TMPDIRN
+      CHARACTER(512), SAVE :: PROGRAM_NAME=' ',TMPDIRN
 
       CHARACTER*(*)   NAMEQ,NAMEV,POSITQ,STATQ,TMPVAL ! Entry arguments
       REAL            FVORT,PI ! SPWCON7 arguments
@@ -1115,7 +1119,7 @@ C
 
       END IF
 
-***    DEFINING ZZZJCL ASSURES US JCLPNT HAS BEEN CALLED.
+***    CLEARING ZZZJCL ASSURES US JCLPNT HAS BEEN CALLED.
 
   099 ZZZJCL = ' '
 
@@ -2305,6 +2309,22 @@ CCC           END IF
       NF = NFOUT
 
       RETURN
+
+***    I/O ERRORS OTHER THAN INQUIRE/OPEN.
+
+  916 IF (INFO) WRITE(6,6016) IO
+      CALL MESSYS( 'In Jclpnt...' )
+      CALL                                         XIT(' Jclpnt ',-16)
+
+      RETURN
+
+***    INQUIRE/OPEN ERROR PROCESSING.
+
+  999 IF (INFO) WRITE(6,6004) IU,IO,COMMAND,TRIM( NAME )
+      CALL MESSYS( 'In Jclpnt...' )
+      CALL                                         XIT(' Jclpnt ',-4 )
+
+      RETURN
 *----------------------------------------------------------------------
 
 ***    GETNAM ENTRY POINT
@@ -2446,47 +2466,62 @@ CCC           END IF
       RETURN
 *----------------------------------------------------------------------
 
-***    GETVERB ENTRY POINT
+***    GETVERB/PUTVERB ENTRY POINTS
 
       ENTRY GETVERB( NAMEV )
 
-***   PARAMETERS...
+***   PARAMETER...
 ***    NAMEV = THE RETURNING VERB GETNAM WILL RETURN
 ***            A BLANK VALUE IF NOT SUCCESSFULL.
 
-      IF (ZZZJCL.NE.' ')                                       THEN
-          IF (INFO) WRITE(6,6011) 'GetVerb'
-          CALL                                     XIT(' Jclpnt ',-11 )
-      END IF
-
-      IF (IPOS.GE.1)                                           THEN
-
-          NAMEV = PROGRAM_NAME
-          GOTO 550
-
-      END IF
-
-***    EITHER JCLPNT HAS NOT BEEN CALLED OR 
-***    NO POSITIONAL PARAMETERS WHERE FOUND.
-
-      IF (INFO) WRITE(6,6250)
       NAMEV = ' '
 
-  550 RETURN
+      IF (PROGRAM_NAME == ' ')                                 THEN
 
-***    I/O ERRORS OTHER THAN INQUIRE/OPEN.
+         ! EITHER JCLPNT HAS NOT BEEN CALLED OR 
+         ! NO POSITIONAL PARAMETERS WHERE FOUND.
+         ! USE GET_COMMAND_ARGUMENT TO FIND THE
+         ! ACTUAL COMMAND NAME.
 
-  916 IF (INFO) WRITE(6,6016) IO
-      CALL MESSYS( 'In Jclpnt...' )
-      CALL                                         XIT(' Jclpnt ',-16)
+          CALL GET_COMMAND_ARGUMENT( 0, PROGRAM_NAME )
+
+          J = LEN( PROGRAM_NAME ) ; EVALUE = PROGRAM_NAME
+
+          ! Strip any (leading) directory info
+          DO  I=J,1,-1
+              IF (PROGRAM_NAME(I:I) == '/') EXIT
+          END DO
+
+          PROGRAM_NAME = PROGRAM_NAME(I+1:J) ; J = J-I
+
+          ! Strip any name extensions (starting with
+          !   a period). Stop at the first blank
+          DO  I=1,J
+             IF (PROGRAM_NAME(I:I) == '.'   .OR.
+     +           PROGRAM_NAME(I:I) == ' ' ) EXIT
+          END DO
+
+          PROGRAM_NAME = PROGRAM_NAME(1:I-1)
+
+          IF (PROGRAM_NAME == ' ')                             THEN
+              WRITE(6,6250) TRIM( EVALUE )
+              CALL                                 XIT(' Jclpnt ',-11 )
+          ELSE IF (INFO)                                       THEN
+              WRITE(6,6251) TRIM( PROGRAM_NAME )
+          END IF
+
+      END IF
+
+      NAMEV = PROGRAM_NAME
 
       RETURN
 
-***    INQUIRE/OPEN ERROR PROCESSING.
+      ENTRY PUTVERB( NAMEV )
 
-  999 IF (INFO) WRITE(6,6004) IU,IO,COMMAND,TRIM( NAME )
-      CALL MESSYS( 'In Jclpnt...' )
-      CALL                                         XIT(' Jclpnt ',-4 )
+***   PARAMETER...
+***    NAMEV = THE CALLING VERB NAME. CANNOT BE EMPTY.
+
+      IF (NAMEV /= ' ') PROGRAM_NAME = NAMEV
 
       RETURN
 
@@ -2884,8 +2919,9 @@ CCC           END IF
      +       ' (PK84).')
  6202 format(' Unit ',I2,', file ',A,' is open as type FTN binary.')
  6203 format(' Unit ',I2,', file ',A,' is open as type FTN formatted.')
- 6250 format(' GETVERB: Either JCLPNT has not yet been called or'/
-     +       '          no positional file names where found.')
+ 6250 format(' GETVERB: Unable to identify the command name in'/
+     +             10X,'the following string...'/10X,A/)
+ 6251 format(' GETVERB: Found command name ',A/)
  6300 format(' JCLPNT: In program ',A,
      +       ' the following file names were not assigned: ')
  6350 format(' JCLPNT: Will not reset unit ',I1,' positioning.')
@@ -5137,9 +5173,13 @@ CCC           ERROR = .FALSE.
       LOGICAL                  FORTB(unite_io_maximale)
       COMMON         /ZZFORTB/ FORTB
 
+      LOGICAL                  INFO            
+      COMMON         /ZZVERBO/ INFO
+
       DATA            INFMOT /  unite_io_maximale * -1 , -1 /
       DATA            DIAGEXT/ 'DIAGNOSTIC_EXIT' /
       DATA            FORTB  /  unite_io_maximale * .FALSE. /
+      DATA            INFO   / .FALSE. /
 
       END BLOCK DATA DATA_UTIL
 

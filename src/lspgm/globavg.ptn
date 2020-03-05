@@ -98,6 +98,9 @@
 *     ------------------------------------------------- 
 
 *     $Log: globavg.ptn,v $
+*     Revision 4.25  2020/02/26 15:15  dugas
+*     On appelle GETVERB avant JCLPNT.
+*
 *     Revision 4.24  2014/09/25 20:20:49  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -290,19 +293,22 @@
       CALL MACSPE( HEAD,ZERO )
       CALL SETRABT( '&NON' )
 
-***    ACCEDER LES FICHIERS D'E/S.
-
-      NF = 3 
-      CALL JCLPNT( NF, 1,2, 6 )
-
-                   LISTCV = .TRUE. 
-      IF (NF.GE.2) LISTCV = .FALSE. 
-
 ***    CHECK OPERATING MODE.
 
       CALL GETVERB( VERBE )
       CALL LOW2UP( VERBE,VERBE )
       IF (VERBE == 'MSFACT') MSFL = .TRUE.
+
+***    ACCEDER LES FICHIERS D'E/S.
+
+      IF (MSFL)                                                THEN
+          NF = 2 ; CALL JCLPNT( NF, 1,2 )
+      ELSE
+          NF = 3 ; CALL JCLPNT( NF, 1,2, 6 )
+      END IF
+
+                   LISTCV = .TRUE. 
+      IF (NF.GE.2) LISTCV = .FALSE. 
 
       IF (MSFL .AND. LISTCV) CALL                  XIT( Verbe ,-4 ) 
 

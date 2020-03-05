@@ -106,6 +106,9 @@
 *    +               TAPE1=GGIN, TAPE2=ZMOUT, TAPE6=OUTPUT ) 
 
 *     $Log: zonavg.ptn,v $
+*     Revision 4.18  2020/02/26 15:15  dugas
+*     On appelle GETVERB avant JCLPNT.
+*
 *     Revision 4.17  2014/09/25 20:20:56  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -265,18 +268,11 @@
       CALL MACSPE( HEAD,ZERO )
       CALL SETRABT( '&NON' )
 
-***    ACCEDER LES FICHIERS D'E/S.
-
-      NR = 0
-      NF = 6
-
-      CALL JCLPNT( NF, 1,2,3,4,7, 6 )
-
-***    WHAT OPERATING MODE: STANDARD OR WINDS ?
+***    WHAT OPERATING MODE ? STANDARD OR WINDS ?
 
       CALL GETVERB( verbe ) ; CALL up2low( VERBE,VERBE )
 
-***    DEFINE I/O UNIT NUMBERS...
+***    DEFINE I/O UNIT NUMBERS ACCORDING TO OPERATING MODE...
 ***    in1 and in2 and the usual inputs for scalars or vectors
 ***    out1 and out2 and the usual outputs for scalars or vectors
 ***    din is the input for the RZONAVG delta field
@@ -287,17 +283,29 @@
 
       WINDS = .FALSE.
 
+***   ACCEDER LES FICHIERS D'E/S.
+
       IF (verbe == 'zonvavg'  .OR.
      +    verbe == 'rzonvavg')                                 THEN
           WINDS = .TRUE.
-          IF (verbe == 'zonvavg')                              THEN
-              in2 = 2 ; out1 = 3 ; out2 = 4
+          IF (verbe == 'rzonvavg')                             THEN
+              NF = 6 ; in2 = 2 ; din = 3 ; out1 = 4 ; out2 = 7
+              CALL JCLPNT( NF, in1,in2,din,out1,out2, 6 )
           ELSE
-              in2 = 2 ; din = 3 ; out1 = 4 ; out2 = 7
+              NF = 5 ; in2 = 2 ;           out1 = 3 ; out2 = 4
+              CALL JCLPNT( NF, in1,in2,    out1,out2, 6 )
           END IF
-      ELSE IF (verbe == 'rzonavg')                             THEN
-          din = 2 ; out1 = 3
+      ELSE
+          IF (verbe == 'rzonavg')                             THEN
+              NF = 4 ;           din = 2 ; out1 = 3
+              CALL JCLPNT( NF, in1,    din,out1,      6 )
+          ELSE
+              NF = 3
+              CALL JCLPNT( NF, in1,        out1,      6 )
+          END IF
       END IF
+
+      NR = 0
 
       IF (MVALUE .AND. din > 0) call               xit( verbe, -10)
 

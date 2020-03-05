@@ -23,7 +23,7 @@
 *                -a     VAL23 -def     VAL24   ] 
 *
 *      makeyy  GIN YYOUT OUTPUT -i VAL1 -j VAL2 -def [VAL3]
-*      makezgv UIN VIN YYUOUT YYVOUT OUTPUT -i VAL1 -j VAL2 -def [VAL3]
+*      makeyyv UIN VIN YYUOUT YYVOUT OUTPUT -i VAL1 -j VAL2 -def [VAL3]
 *
 *
 *     DESCRIPTION...
@@ -178,6 +178,9 @@
 *    2         TAPE1=GIN, TAPE2=GOUT, TAPE6=OUTPUT)
   
 *     $Log: makezg.ptn,v $
+*     Revision 4.28  2020/02/26 15:15  dugas
+*     On appelle GETVERB avant JCLPNT.
+*
 *     Revision 4.27  2019/01/10 11:11  dugas
 *     Corrections de la documentation automatique
 *     concernant les enregistrements TocToc
@@ -325,11 +328,6 @@
 *---------------------------------------------------------------------
       CALL SETRABT( '&NON' )
 
-***    ACCEDER LES FICHIERS D'E/S.
-
-      NFIL = 5 ; NFIN = 1 ; NFOUT = 2
-      CALL JCLPNT( NFIL, 1,2,3,4, 6 )
-
 ***    VERIFIER LE MODE DE FONCTIONNEMENT.
 
       CALL GETVERB( VERBE ) ; CALL up2low( VERBE,VERBE )
@@ -338,11 +336,18 @@
       IF (VERBE == 'makezgv' .or.
      +    VERBE == 'makeyyv') WIND = .TRUE.
 
+***    ACCEDER LES FICHIERS D'E/S.
+
       IF (WIND)                                                THEN
+          NFIL = 5
+          CALL JCLPNT( NFIL, 1,2,3,4, 6 )
           IF (NFIL /= 4) CALL                      XIT( VERBE,-13)
-          NFIN2 = 2 ; NFOUT = 3 ; NFOUT2 = 4
+          NFIN = 1 ; NFIN2 = 2 ; NFOUT = 3 ; NFOUT2 = 4
       ELSE
+          NFIL = 3
+          CALL JCLPNT( NFIL, 1,2, 6 )
           IF (NFIL /= 2) CALL                      XIT( VERBE,-13)
+          NFIN = 1 ; NFOUT = 2
       END IF
 
       NR = 0

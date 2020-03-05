@@ -117,7 +117,10 @@
 *     -----------------------------------------------------------------
 
 *     $Log: ggvecps.ptn,v $
-*     Revision 4.2019  2019/07/3 17:17  dugas
+*     Revision 4.21  2020/02/26 15:15  dugas
+*     On appelle GETVERB avant JCLPNT.
+*
+*     Revision 4.20  2019/07/3 17:17  dugas
 *     Ajouter un appel a MakZref en mode ZMODE=Vrai.
 *
 *     Revision 4.19  2018/09/19 15:15  dugas
@@ -253,28 +256,30 @@
      +            NBIN  /  0  /
 
       DATA        ATHETA/ 'ROTA'  /
-      DATA        SAVET / .FALSE. /
+      DATA        SAVET / .FALSE. /, ZMODE / .FALSE. /
 *===================================================================
 
       NOMPRG =
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/ggvecps.ptn,v $'
 
 *---------------------------------------------------------------------
-      NFF = 8 ; NF1 = 1
-      CALL JCLPNT( NFF, 1,2, 11,12,13,14, 5,6 )
+***    WHAT OPERATING MODE: POLAR STEREOGRAPHIC OR Z-GRID ?
+
+      CALL GETVERB( verbe ) ; CALL up2low( VERBE,VERBE )
+
+      NF1 = 1 ; IF (verbe == 'ggvecz') ZMODE = .TRUE.
+
+      IF (ZMODE)                                               THEN
+          NFF = 8 ; CALL JCLPNT( NFF, 1,2, 11,12,13,14, 5,6 )
+      ELSE
+          NFF = 6 ; CALL JCLPNT( NFF, 1,2, 11,12,13,      6 )
+      END IF
 
       PIS4 = ATAN( 1.D0 )
       IO   = 0
 
       PKTYP = GETYP( 1 )
       PKTYP = PKTYP(1:2)
-
-***    WHAT OPERATING MODE: POLAR STEREOGRAPHIC OR Z-GRID ?
-
-      CALL GETVERB( verbe ) ; CALL up2low( VERBE,VERBE )
-
-                             ZMODE = .FALSE.
-      IF (verbe.EQ.'ggvecz') ZMODE = .TRUE.
 
                  verbe = ' GgVecPs'
       IF (ZMODE) verbe = ' GgVecZ '

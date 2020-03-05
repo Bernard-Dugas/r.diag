@@ -97,6 +97,9 @@
 *    +        TAPE1=GGIN, TAPE2=ZMIN, TAPE3=GGDEV, TAPE6=OUTPUT )
 
 *     $Log: zondev.ptn,v $
+*     Revision 4.15  2020/02/26 15:15  dugas
+*     On appelle GETVERB avant JCLPNT.
+*
 *     Revision 4.14  2014/09/25 20:20:57  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -243,19 +246,22 @@
 
       CALL SETRABT( '&NON' )
 
-***    ACCEDER LES FICHIERS D'E/S.
-
-      NF = 7
-      CALL JCLPNT( NF, 1,2,3,4,8,9, 6 )
-
 ***    WHAT OPERATING MODE: STANDARD OR WINDS ?
 
       CALL GETVERB( verbe ) ; CALL up2low( VERBE,VERBE )
 
                               WINDS = .FALSE.
-      IF (verbe.EQ.'zonvdev') WINDS = .TRUE.
+      IF (verbe == 'zonvdev') WINDS = .TRUE.
 
-      IF ((     WINDS .AND. NF.NE.6) .OR.
+***    ACCEDER LES FICHIERS D'E/S.
+
+      IF (WINDS)                                               THEN
+          NF = 7 ; CALL JCLPNT( NF, 1,2,3,4,8,9, 6 )
+      ELSE
+          NF = 4 ; CALL JCLPNT( NF, 1,2,3, 6 )
+      END IF
+
+      IF ((     WINDS .AND. NF.NE.6)   .OR.
      +    (.NOT.WINDS .AND. NF.NE.3) ) CALL        XIT( verbe, -8 )
 
       PKTYP = GETYP( 1 )

@@ -10,6 +10,9 @@
 *     * de processeurs allouables.
 *
 *     $Log: driver.ptn,v $
+*     Revision 4.125 2020/02/25 17:17  dugas
+*     - Sauver nomprg via 'CALL PUTVERB'.
+*
 *     Revision 4.124 2019/12/05 16:16  dugas
 *     - Faire appel a DIAG_CCARD plutot qu'a la routine CCARD dans LSPGM.
 *
@@ -980,7 +983,9 @@
 
 ***    Comparer nomprg avec tous les nom connus.
 
-  200 If ('accumul'.EQ.nomprg) Call timavg
+  200 Call PUTVERB( nomprg ) ! Sauver le nom de la commande
+
+      If ('accumul'.EQ.nomprg) Call timavg
       LIGNE(addf   )
       If ('add'.EQ.nomprg) Call addf
       If ('addlev'.EQ.nomprg) Call zadlev
