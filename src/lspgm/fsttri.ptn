@@ -102,6 +102,9 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.51 2020/04/02 14:14  dugas
+*      Corrections du traitement des enregistrements de renvois.
+*
 *      Revision 4.50 2020/02/05 16:16  dugas
 *      Initialiser DATEO8 lorsque DATEO=0.
 *
@@ -820,6 +823,7 @@ C    +              valnum,kind
 
           if (nomvar /= '>>' .and.
      +        nomvar /= '^^' .and.
+     +        nomvar /= '^>' .and.
      +        nomvar /= '!!') then
               call convpr(  ip1,press,kind,-1 )
               if (press > 0. .and. (kind == 0 .or. kind == 4))
@@ -1117,10 +1121,11 @@ C    +              valnum,kind
 ***        crochets ont deja ete sauves.
 
           if (Desc  .and.
-     +       (nomvar.eq.'>>' .or.
-     +        nomvar.eq.'^^' .or.
-     +        nomvar.eq.'!!' .or.
-     +        nomvar.eq.'HY' )  ) cycle
+     +       (nomvar == '>>' .or.
+     +        nomvar == '^^' .or.
+     +        nomvar == '^>' .or.
+     +        nomvar == '!!' .or.
+     +        nomvar == 'HY' )  ) cycle
 
 ***        Trouver l'heure de validite la plus proche.
 
