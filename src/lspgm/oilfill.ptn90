@@ -112,6 +112,8 @@
   ! Dec 09, 2019 by B.Dugas (ESCER/UQAM) - Add some 'STAT'istics output
   ! Dec 10, 2019 by B.Dugas (ESCER/UQAM) - Change the 'STAT'istics output and add
   !                                        '^>' to the list of special variables
+  ! Apr 17, 2020 by B.Dugas (ESCER/UQAM) - Set the ReWrite flag to .False. in all
+  !                                        of the FSTECR calls
  
   ! Declarations for arguments
     integer, parameter  :: nkey = 7
@@ -475,12 +477,12 @@
           ier = fstecr( Field4,Field4, &
                        -nbits,oun,dateo,deet,npas,ni,nj,nk,  &
                         ip1,ip2,ip3,typvar,nomvar,etiket,    &
-                        grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
+                        grtyp,ig1,ig2,ig3,ig4,datyp,.false. )
        else
           ier = fstecr( Field,Field, &
                        -nbits,oun,dateo,deet,npas,ni,nj,nk,  &
                         ip1,ip2,ip3,typvar,nomvar,etiket,    &
-                        grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
+                        grtyp,ig1,ig2,ig3,ig4,datyp,.false. )
        endif
 
        nw = nw + 1
@@ -494,7 +496,7 @@
           ier = fstecr( StatsOut,StatsOut, &
                        -nbits,oun,dateo,deet,npas,ni,nj,nk,  &
                         ip1,ip2,ip3,typvar,nomvar,etiket,    &
-                        grtyp,ig1,ig2,ig3,ig4,datyp,.true. )
+                        grtyp,ig1,ig2,ig3,ig4,datyp,.false. )
        endif
 
        deallocate( Field )
