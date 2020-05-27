@@ -696,7 +696,7 @@
       IF (PKTYP.EQ.'SQ')
      +    GRTYP = GETHIC('GRTYP',OBUF )
 
-      IF (GRTYP.EQ.'Z' .AND.DEF.EQ.1)                          THEN
+      IF (GRTYP == 'Z' .AND. DEF == 1)                         THEN
           OGRTYP = 'Z'
       ELSE
           OGRTYP = BGRTYP

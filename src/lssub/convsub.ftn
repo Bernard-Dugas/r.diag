@@ -24,6 +24,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: convsub.ftn,v $
+!     Revision 3.133  2020/05/27 14:14  dugas
+!     - Modifier les formats de sorties de DecrireU
+!       (en leur ajoutant des separateurs appropries)
+!
 !     Revision 3.132  2019/12/12 17:17  dugas
 !     - Ajouter DecrireU a la collection de routines SavUref (-info)
 !
@@ -4700,13 +4704,15 @@
 
           return
 
- 1000     format(/'Yin/Yan grid DeltaX, DeltaY= ',2F13.9/
-     +           ' Full grid ni,nj = ',2I5/
-     +           ' Full grid IPi = ',3I6/
-     +           ' Full grid IGi = ',4I6/
-     +           ' Sub grids ni,nj = ',2I5)
- 1001     format(' Lon/Lat From (',2F8.3,' ) to (',2F8.3,' )')
- 1002     format(' Xgi (Lat/Lon pairs) = (',2F8.3,' ),(',2F8.3,' )'/)
+ 1000     format(/'Yin/Yan grid DeltaX, DeltaY= ',2(F13.9,',')/
+     +           ' Full grid ni,nj = ',2(I5,',')/
+     +           ' Full grid IPi = ',3(I6,',')/
+     +           ' Full grid IGi = ',4(I6,',')/
+     +           ' Sub grids ni,nj = ',I5,',',I5)
+ 1001     format(' Lon/Lat From (',F8.3,' /',F8.3,' )',
+     +                     ' to (',F8.3,' /',F8.3,' )')
+ 1002     format(' Xgi (Lat/Lon pairs) = (',F8.3,' /',F8.3,' ),',
+     +                                  '(',F8.3,' /',F8.3,' )'/)
 
         END SUBROUTINE decrireU
 *-------------------------------------------------------------------
