@@ -24,7 +24,7 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: convsub.ftn,v $
-!     Revision 3.133  2020/05/27 14:14  dugas
+!     Revision 3.133  2020/05/27 et 28 14:14  dugas
 !     - Modifier les formats de sorties de DecrireU
 !       (en leur ajoutant des separateurs appropries)
 !
@@ -4689,30 +4689,31 @@
           Rot(7)  = descu(lastdesc)%data(sindx+8)
           Rot(8)  = descu(lastdesc)%data(sindx+9)
 
-          write(6,1000) DeltaX,DeltaY,
+          write(6,1000) lastdesc, DeltaX,DeltaY,
      +                  nis,2*njs, U_IP1,U_IP2,U_IP3,
      +                  U_IG1,U_IG2,U_IG3,U_IG4,
      +                  nis,njs
 
-          write(6,'(/"YIN grid description...")')
+          write(6,'(/"  Yin grid description...")')
           write(6,1001) Posx(1),Posy(1),Posx(2),Posy(2)
           write(6,1002) Rot(1:4)
 
-          write(6,'("YAN grid description...")')
+          write(6,'( "  Yan grid description...")')
           write(6,1001) Posx(3),Posy(3),Posx(4),Posy(4)
           write(6,1002) Rot(5:8)
 
           return
 
- 1000     format(/'Yin/Yan grid DeltaX, DeltaY= ',2(F13.9,',')/
-     +           ' Full grid ni,nj = ',2(I5,',')/
-     +           ' Full grid IPi = ',3(I6,',')/
-     +           ' Full grid IGi = ',4(I6,',')/
-     +           ' Sub grids ni,nj = ',I5,',',I5)
- 1001     format(' Lon/Lat From (',F8.3,' /',F8.3,' )',
-     +                     ' to (',F8.3,' /',F8.3,' )')
- 1002     format(' Xgi (Lat/Lon pairs) = (',F8.3,' /',F8.3,' ),',
-     +                                  '(',F8.3,' /',F8.3,' )'/)
+ 1000     format(/' U-grid descriptor ',I2,' contents ...'//
+     +           '  Yin/Yan grid DeltaX, DeltaY= ',2(F13.9,',')/
+     +           '   Full grid ni,nj = ',2(I5,',')/
+     +           '   Full grid IPi = ',3(I6,',')/
+     +           '   Full grid IGi = ',4(I6,',')/
+     +           '   Sub grids ni,nj = ',I5,',',I5)
+ 1001     format('   Lon/Lat From (',F8.3,' /',F8.3,' )',
+     +                       ' to (',F8.3,' /',F8.3,' )')
+ 1002     format('   Xgi (Lat/Lon pairs) = (',F8.3,' /',F8.3,' ),',
+     +                                    '(',F8.3,' /',F8.3,' )'/)
 
         END SUBROUTINE decrireU
 *-------------------------------------------------------------------
