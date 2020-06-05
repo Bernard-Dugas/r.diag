@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: convsub.ftn,v $
+!     Revision 3.134  2020/06/01  dugas
+!     - Ajouter le point d'entree getUres a savUref
+!
 !     Revision 3.133  2020/05/27 et 28 14:14  dugas
 !     - Modifier les formats de sorties de DecrireU
 !       (en leur ajoutant des separateurs appropries)
@@ -4356,6 +4359,7 @@
       logical, intent(out) :: ok
       integer, intent(inout) :: ni,nj
       integer, intent(out) :: refip1,refip2,refip3
+      real(8), intent(out) :: DeltaX, DeltaY
 
       type :: U_descriptor
          character        :: gtyp='F'
@@ -4378,9 +4382,9 @@
       INTEGER     SWA,LNG,DLTF,UBC,EXTRA1,EXTRA2,EXTRA3
       INTEGER     mlt,ni1,nj1
 
-      INTEGER     sindx, nis,njs
+      INTEGER,    save :: sindx=6
+      INTEGER     nis,njs
       REAL        Rot(8), Posx(4), Posy(4)
-      REAL(8)     DeltaX, DeltaY
 
       LOGICAL,    save :: U_READ(unite_io_maximale),U_WRIT(unite_io_maximale)
 
@@ -4517,16 +4521,17 @@
 
       if (ni > 0 .and. nj > 0)                                 THEN
          do  i=1,lastdesc
-            if (nint( descu(i)%data(6) ) == ni .and. 
-     +          nint( descu(i)%data(7) ) == nj) exit
+             nis = nint( descu(i)%data(sindx  ) )
+             njs = nint( descu(i)%data(sindx+1) )
+             if ( nis+4 == ni .and. 2*(njs+4) == nj) exit
          end do
       end if
 
       if (i > lastdesc) return
 
       if (ni <= 0 .or. nj <= 0)                                THEN
-         ni = nint( descu(i)%data(6) )
-         nj = 2*nint( descu(i)%data(7) )
+         ni = nint(    descu(i)%data(sindx  )+4  )
+         nj = nint( 2*(descu(i)%data(sindx+1)+4) )
       end if
 
       refip1 = descu(i)%ip1
@@ -4536,6 +4541,32 @@
       return
 *-------------------------------------------------------------------
 
+      entry getUres( DeltaX,DeltaY, ni,nj )
+
+      ! Recuperer la resolution associee
+      ! a une grille U de taille ni x nj
+
+      DeltaX = -1.0 ; DeltaY = -1.0
+
+      do  i=1,lastdesc
+          nis = nint( descu(i)%data(sindx  ) )
+          njs = nint( descu(i)%data(sindx+1) )
+          if ( nis+4 == ni .and. 2*(njs+4) == nj) exit
+      end do
+
+      if (i > lastdesc) return
+
+      Posx(1) = descu(i)%data(sindx+2)
+      Posx(2) = descu(i)%data(sindx+3)
+      Posy(1) = descu(i)%data(sindx+4)
+      Posy(2) = descu(i)%data(sindx+5)
+
+      DeltaX  = DBLE(Posx(2)-Posx(1))/(nis-1)
+      DeltaY  = DBLE(Posy(2)-Posy(1))/(njs-1)
+
+      return
+
+*-------------------------------------------------------------------
       entry writUref( nf )
 
       nfa = abs( nf )
@@ -4589,6 +4620,7 @@
       End Do
 
       return
+*-------------------------------------------------------------------
 
  6001 format('WRITUREF: For set ',i2,', descripancy between ',
      + 'internal descriptor words'/11x,I6,' not equal 5 +',I2,
@@ -4643,64 +4675,66 @@
           ! posy(Out_gridj0:Out_gridj0+njs-1)
           !
           ! YAN
-          ! sindx  = sindx+10+nis+njs
-          ! yy(sindx  ) = nis
-          ! yy(sindx+1) = njs
-          ! yy(sindx+2) = posx(Out_gridi0)
-          ! yy(sindx+3) = posx(Out_gridi0+nis-1)
-          ! yy(sindx+4) = posy(Out_gridj0)
-          ! yy(sindx+5) = posy(Out_gridj0+njs-1)
-          ! yy(sindx+6) = Out_rot(5)
-          ! yy(sindx+7) = Out_rot(6)
-          ! yy(sindx+8) = Out_rot(7)
-          ! yy(sindx+9) = Out_rot(8)
-          ! yy(sindx+10    :sindx+9+nis    )= &
+          ! sindx2 = sindx+10+nis+njs
+          ! yy(sindx2  ) = nis
+          ! yy(sindx2+1) = njs
+          ! yy(sindx2+2) = posx(Out_gridi0)
+          ! yy(sindx2+3) = posx(Out_gridi0+nis-1)
+          ! yy(sindx2+4) = posy(Out_gridj0)
+          ! yy(sindx2+5) = posy(Out_gridj0+njs-1)
+          ! yy(sindx2+6) = Out_rot(5)
+          ! yy(sindx2+7) = Out_rot(6)
+          ! yy(sindx2+8) = Out_rot(7)
+          ! yy(sindx2+9) = Out_rot(8)
+          ! yy(sindx2+10    :sindx2+9+nis    )= &
           ! posx(Out_gridi0:Out_gridi0+nis-1)
-          ! yy(sindx+10+nis:sindx+9+nis+njs)= &
+          ! yy(sindx2+10+nis:sindx2+9+nis+njs)= &
           ! posy(Out_gridj0:Out_gridj0+njs-1)
 
-          sindx = 6
+          integer sindx2,niso,njso
+          REAL    Roto(8), Posxo(4), Posyo(4)
+          REAL(8) DeltaXo, DeltaYo
 
-          nis = nint(  descu(lastdesc)%data(sindx  ) )
-          njs = nint(  descu(lastdesc)%data(sindx+1) )
+          niso = nint(  descu(lastdesc)%data(sindx  ) )
+          njso = nint(  descu(lastdesc)%data(sindx+1) )
 
-          Posx(1) = descu(lastdesc)%data(sindx+2)
-          Posx(2) = descu(lastdesc)%data(sindx+3)
-          Posy(1) = descu(lastdesc)%data(sindx+4)
-          Posy(2) = descu(lastdesc)%data(sindx+5)
+          Posxo(1) = descu(lastdesc)%data(sindx+2)
+          Posxo(2) = descu(lastdesc)%data(sindx+3)
+          Posyo(1) = descu(lastdesc)%data(sindx+4)
+          Posyo(2) = descu(lastdesc)%data(sindx+5)
 
-          DeltaX  = DBLE(Posx(2)-Posx(1))/(nis-1)
-          DeltaY  = DBLE(Posy(2)-Posy(1))/(njs-1)
+          DeltaXo  = DBLE(Posxo(2)-Posxo(1))/(niso-1)
+          DeltaYo  = DBLE(Posyo(2)-Posyo(1))/(njso-1)
 
-          Rot(1)  = descu(lastdesc)%data(sindx+6)
-          Rot(2)  = descu(lastdesc)%data(sindx+7)
-          Rot(3)  = descu(lastdesc)%data(sindx+8)
-          Rot(4)  = descu(lastdesc)%data(sindx+9)
+          Roto(1)  = descu(lastdesc)%data(sindx+6)
+          Roto(2)  = descu(lastdesc)%data(sindx+7)
+          Roto(3)  = descu(lastdesc)%data(sindx+8)
+          Roto(4)  = descu(lastdesc)%data(sindx+9)
 
-          sindx   = sindx+10+nis+njs
+          sindx2  = sindx+10+niso+njso
 
-          Posx(3) = descu(lastdesc)%data(sindx+2)
-          Posx(4) = descu(lastdesc)%data(sindx+3)
-          Posy(3) = descu(lastdesc)%data(sindx+4)
-          Posy(4) = descu(lastdesc)%data(sindx+5)
+          Posxo(3) = descu(lastdesc)%data(sindx2+2)
+          Posxo(4) = descu(lastdesc)%data(sindx2+3)
+          Posyo(3) = descu(lastdesc)%data(sindx2+4)
+          Posyo(4) = descu(lastdesc)%data(sindx2+5)
 
-          Rot(5)  = descu(lastdesc)%data(sindx+6)
-          Rot(6)  = descu(lastdesc)%data(sindx+7)
-          Rot(7)  = descu(lastdesc)%data(sindx+8)
-          Rot(8)  = descu(lastdesc)%data(sindx+9)
+          Roto(5)  = descu(lastdesc)%data(sindx2+6)
+          Roto(6)  = descu(lastdesc)%data(sindx2+7)
+          Roto(7)  = descu(lastdesc)%data(sindx2+8)
+          Roto(8)  = descu(lastdesc)%data(sindx2+9)
 
-          write(6,1000) lastdesc, DeltaX,DeltaY,
-     +                  nis,2*njs, U_IP1,U_IP2,U_IP3,
+          write(6,1000) lastdesc, DeltaXo,DeltaYo,
+     +                  niso,2*njso, U_IP1,U_IP2,U_IP3,
      +                  U_IG1,U_IG2,U_IG3,U_IG4,
-     +                  nis,njs
+     +                  niso,njso
 
           write(6,'(/"  Yin grid description...")')
-          write(6,1001) Posx(1),Posy(1),Posx(2),Posy(2)
-          write(6,1002) Rot(1:4)
+          write(6,1001) Posxo(1),Posyo(1),Posxo(2),Posyo(2)
+          write(6,1002) Roto(1:4)
 
           write(6,'( "  Yan grid description...")')
-          write(6,1001) Posx(3),Posy(3),Posx(4),Posy(4)
-          write(6,1002) Rot(5:8)
+          write(6,1001) Posxo(3),Posyo(3),Posxo(4),Posyo(4)
+          write(6,1002) Roto(5:8)
 
           return
 
