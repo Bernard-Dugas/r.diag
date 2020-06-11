@@ -22,7 +22,7 @@
 *                -pi    VAL21 -pj      VAL22   \ 
 *                -a     VAL23 -def     VAL24   ] 
 *
-*      makeyy  GIN YYOUT OUTPUT -i VAL1 -j VAL2 -def [VAL3]
+*      makeyy  GIN     YYOUT         OUTPUT -i VAL1 -j VAL2 -def [VAL3]
 *      makeyyv UIN VIN YYUOUT YYVOUT OUTPUT -i VAL1 -j VAL2 -def [VAL3]
 *
 *
@@ -178,6 +178,9 @@
 *    2         TAPE1=GIN, TAPE2=GOUT, TAPE6=OUTPUT)
   
 *     $Log: makezg.ptn,v $
+*     Revision 4.29  2020/06/11 11:11  dugas
+*     Correction a la definition de la variable YY
+*
 *     Revision 4.28  2020/02/26 15:15  dugas
 *     On appelle GETVERB avant JCLPNT.
 *
@@ -332,9 +335,9 @@
 
       CALL GETVERB( VERBE ) ; CALL up2low( VERBE,VERBE )
 
-      IF (VERBE == 'makeyy')  YY   = .TRUE.
-      IF (VERBE == 'makezgv' .or.
-     +    VERBE == 'makeyyv') WIND = .TRUE.
+      IF (VERBE(1:6) == 'makeyy')  YY   = .TRUE.
+      IF (VERBE      == 'makezgv' .or.
+     +    VERBE      == 'makeyyv') WIND = .TRUE.
 
 ***    ACCEDER LES FICHIERS D'E/S.
 
