@@ -4355,6 +4355,9 @@
 
       implicit    none
 
+      ! Routines de gestion des enregistrements '^>'
+      ! decrivant les grilles de type U (Yin/Yan)
+
       integer, intent(in)  :: nf
       logical, intent(out) :: ok
       integer, intent(out) :: refip1,refip2,refip3
@@ -4362,14 +4365,14 @@
       integer, intent(inout) :: ni,nj
 
       type :: U_descriptor
-         character         :: gtyp='F'
-         character(2)      :: typv='X'
-         character(4)      :: nomv='^>'
-         character(12)     :: etik=' '
-         integer           :: ni,nj,nk,dateo
-         integer           :: ip1,ip2,ip3,ig1,ig2,ig3,ig4
-         real,allocatable  :: data(:)
-      end type
+          character         :: gtyp='F'
+          character(2)      :: typv='X'
+          character(4)      :: nomv='^>'
+          character(12)     :: etik=' '
+          integer           :: ni,nj,nk,dateo
+          integer           :: ip1,ip2,ip3,ig1,ig2,ig3,ig4
+          real,allocatable  :: data(:)
+      End type
 
       integer,  parameter  :: extras = 0 ! option extras = 4 ?
       integer,  parameter  :: un = 1, cinq = 5
@@ -4408,7 +4411,7 @@
 
       OK = .true. ; nfa = abs( nf ) ; ll = 0 ; FoundIt = 0
 
-      if (.not. U_READ(nfa))                                   THEN
+      If (.not. U_READ(nfa))                                   THEN
 
           U_READ(nfa) = .TRUE. ; U_CLE = 0
 
@@ -4417,13 +4420,13 @@
   100     U_ERR = FSTINFX( U_CLE, NFA, U_NI,U_NJ,U_NK,
      +                   -1,' ',-1,-1,-1,' ','^>' )
 
-          IF (U_ERR < 0)                                       THEN
+          If (U_ERR < 0)                                       THEN
               ! Il n'y a plus de descripteurs.
-              IF (ll == 0 .and. DEBUG) WRITE(6,6101) U_ERR
-              RETURN
-          ELSE
+              If (ll == 0 .and. DEBUG) write(6,6101) U_ERR
+              Return
+          Else
               ll = ll+1
-          END IF
+          End If
 
           ! Verifier le contenu de ce descripteur ^>.
 
@@ -4434,51 +4437,53 @@
      +                U_GTYP,U_IG1,U_IG2,U_IG3,U_IG4,
      +                SWA,LNG,DLTF,UBC,EXTRA1,EXTRA2,EXTRA3 )
 
-          IF (U_ERR < 0)                                       THEN
-              IF (DEBUG) WRITE(6,6102) U_ERR
-              return
-          END IF
+          If (U_ERR < 0)                                       THEN
+              If (DEBUG) write(6,6102) U_ERR
+              Return
+          End If
 
           ! Est-ce qu'on l'a deja sauve...
 
-          do i=1,min(lastdesc,maxdesc)
-             if (U_NI    == descu(i)%ni    .and.
-     +           U_NJ    == descu(i)%nj    .and.
-     +           U_NK    == descu(i)%nk    .and.
-     +           U_IP1   == descu(i)%ip1   .and.
-     +           U_IP2   == descu(i)%ip2   .and.
-     +           U_IP3   == descu(i)%ip3   .and.
-     +           U_IG1   == descu(i)%ig1   .and.
-     +           U_IG2   == descu(i)%ig2   .and.
-     +           U_IG3   == descu(i)%ig3   .and.
-     +           U_IG4   == descu(i)%ig4   .and.
-!CC  +           U_DATEO == descu(i)%dateo .and.
-     +           U_GTYP  == descu(i)%gtyp  .and.
-     +           U_TYPV  == descu(i)%typv  .and.
-     +           U_NOMV  == descu(i)%nomv)                     THEN
+          Do  i=1,min(lastdesc,maxdesc)
+              If (U_NI    == descu(i)%ni    .and.
+     +            U_NJ    == descu(i)%nj    .and.
+     +            U_NK    == descu(i)%nk    .and.
+     +            U_IP1   == descu(i)%ip1   .and.
+     +            U_IP2   == descu(i)%ip2   .and.
+     +            U_IP3   == descu(i)%ip3   .and.
+     +            U_IG1   == descu(i)%ig1   .and.
+     +            U_IG2   == descu(i)%ig2   .and.
+     +            U_IG3   == descu(i)%ig3   .and.
+     +            U_IG4   == descu(i)%ig4   .and.
+!CC  +            U_DATEO == descu(i)%dateo .and.
+     +            U_GTYP  == descu(i)%gtyp  .and.
+     +            U_TYPV  == descu(i)%typv  .and.
+     +            U_NOMV  == descu(i)%nomv)                    THEN
 
-                 FoundIt = i ; exit
+                  FoundIt = i ; exit
 
-             end if
-          end do
+              End If
+          End Do
 
-          if (FoundIt == 0 .and. lastdesc < maxdesc)           THEN
+          If (FoundIt == 0 .and. lastdesc < maxdesc)           THEN
 
               ! Sauver ce nouveau descripteur ^>.
 
               lastdesc = lastdesc+1
 
-              if (.not.allocated( descu(lastdesc)%data ))
+              If (.not.allocated( descu(lastdesc)%data ))
      +             allocate( descu(lastdesc)%data(U_NI*U_NJ) )
 
               U_ERR = FSTLUK( descu(lastdesc)%data, U_CLE, U_NI, U_NJ, U_NK )
 
-              IF (U_ERR < 0)                                   THEN
-                  IF (DEBUG) WRITE(6,6103) U_ERR
-                  GOTO 100
-              ELSE IF (DEBUG)                                  THEN
-                  WRITE(6,6104) lastdesc 
-              END IF
+              If (U_ERR < 0)                                   THEN
+                  If (DEBUG) write(6,6103) U_ERR
+                  Goto 100
+              Else If (INFO)                                   THEN
+                  write(6,6104) lastdesc 
+                  If (nint( descu(i)%data(3) ) /= 2)
+     +                write(6,6106) descu(i)%data(3)
+              End If
 
               descu(i)%ni    = U_NI
               descu(i)%nj    = U_NJ
@@ -4493,24 +4498,24 @@
               descu(i)%dateo = U_DATEO
               descu(i)%etik  = U_ETIK
 
-              if (info) call decrireU( )
+              If (info) Call decrireU( )
 
-          end if
+          End If
 
           GOTO 100
           
-      else if (FoundIt == 0 .and. lastdesc == maxdesc)         THEN
+      Else If (FoundIt == 0 .and. lastdesc == maxdesc)         THEN
  
           ! Trop de descripteurs ^>.
 
-          IF (DEBUG) WRITE(6,6105) U_ERR
+          If (DEBUG) WRITE(6,6105) U_ERR
  
-      end if
+      End If
     
-      return
+      Return
 
 *-------------------------------------------------------------------
-      entry getUdesc( refip1,refip2,refip3, ni,nj )
+      Entry getUdesc( refip1,refip2,refip3, ni,nj )
 
       ! Recuperer les ip1,ip2,ip3 associe a une grille U.
 
@@ -4521,42 +4526,45 @@
 
       refip1 = -1 ; refip2 = -1 ; refip3 = -1 ; i = 1
 
-      if (ni > 0 .and. nj > 0)                                 THEN
-         do  i=1,lastdesc
-             nis = nint( descu(i)%data(sindx  ) )
-             njs = nint( descu(i)%data(sindx+1) )
-             if ( nis+extras == ni .and. 2*(njs+extras) == nj) exit
-         end do
-      end if
+      If (ni > 0 .and. nj > 0)                                 THEN
+          Do  i=1,lastdesc
+              mlt = nint( descu(i)%data(3) )
+              nis = nint( descu(i)%data(sindx  ) )
+              njs = nint( descu(i)%data(sindx+1) )
+              If ( nis+extras == ni .and. mlt*(njs+extras) == nj) exit
+          End Do
+      End If
 
-      if (i > lastdesc) return
+      If (i > lastdesc) return
 
-      if (ni <= 0 .or. nj <= 0)                                THEN
-         ni = nint(    descu(i)%data(sindx  )+extras  )
-         nj = nint( 2*(descu(i)%data(sindx+1)+extras) )
-      end if
+      If (ni <= 0 .or. nj <= 0)                                THEN
+          mlt = nint(      descu(i)%data(3) )
+          ni  = nint(      descu(i)%data(sindx  )+extras  )
+          nj  = nint( mlt*(descu(i)%data(sindx+1)+extras) )
+      End If
 
       refip1 = descu(i)%ip1
       refip2 = descu(i)%ip2
       refip3 = descu(i)%ip3
 
-      return
+      Return
 *-------------------------------------------------------------------
 
-      entry getUres( DeltaX,DeltaY, ni,nj )
+      Entry getUres( DeltaX,DeltaY, ni,nj )
 
       ! Recuperer la resolution associee
       ! a une grille U de taille ni x nj
 
       DeltaX = -1.0 ; DeltaY = -1.0
 
-      do  i=1,lastdesc
+      Do  i=1,lastdesc
+          mlt = nint( descu(i)%data(3) )
           nis = nint( descu(i)%data(sindx  ) )
           njs = nint( descu(i)%data(sindx+1) )
-          if ( nis+extras == ni .and. 2*(njs+extras) == nj) exit
-      end do
+          If ( nis+extras == ni .and. mlt*(njs+extras) == nj) exit
+      End Do
 
-      if (i > lastdesc) return
+      If (i > lastdesc) return
 
       Posx(1) = descu(i)%data(sindx+2)
       Posx(2) = descu(i)%data(sindx+3)
@@ -4566,10 +4574,10 @@
       DeltaX  = DBLE(Posx(2)-Posx(1))/(nis-1)
       DeltaY  = DBLE(Posy(2)-Posy(1))/(njs-1)
 
-      return
+      Return
 
 *-------------------------------------------------------------------
-      entry writUref( nf )
+      Entry writUref( nf )
 
       nfa = abs( nf )
 
@@ -4583,9 +4591,9 @@
           nj1 = nint( descu(i)%data(7) ) ! NJ de la premiere sous-grille
 
           If (5+mlt*(10+ni1+nj1) /= descu(i)%ni)               THEN
-              if (info) write(6,6001) i, descu(i)%ni,
+              If (info) write(6,6001) i, descu(i)%ni,
      +            descu(i)%data(3), descu(i)%data(6),descu(i)%data(7)
-              call                                 xit('writUref',-1 )
+              Call                                 xit('writUref',-1 )
           End If
 
           Call findU( nfa,
@@ -4597,13 +4605,13 @@
 
           If (Found)                                           THEN
 
-             U_cle = fstecr( descu(i)%data,tempU ,
-     +                     -32, NFA, descu(i)%dateo,0,0,
-     +                     descu(i)%ni,descu(i)%nj,un,
-     +                     descu(i)%ip1,descu(i)%ip2,descu(i)%ip3,
-     +                     descu(i)%typv,descu(i)%nomv,descu(i)%etik,
-     +                     descu(i)%gtyp,descu(i)%ig1,descu(i)%ig2,
-     +                     descu(i)%ig3,descu(i)%ig4,cinq, .true. )
+              U_cle = fstecr( descu(i)%data, tempU,-32,NFA,
+     +                        descu(i)%dateo, 0, 0,
+     +                        descu(i)%ni,descu(i)%nj, un,
+     +                        descu(i)%ip1,descu(i)%ip2,descu(i)%ip3,
+     +                        descu(i)%typv,descu(i)%nomv,descu(i)%etik,
+     +                        descu(i)%gtyp,descu(i)%ig1,descu(i)%ig2,
+     +                        descu(i)%ig3,descu(i)%ig4,cinq, .true. )
 
               If (debug) write(6,6140) '^>',NF
 
@@ -4614,14 +4622,14 @@
      +                     descu(i)%typv,descu(i)%etik,descu(i)%gtyp,
      +                     descu(i)%ig1,descu(i)%ig2,
      +                     descu(i)%ig3,descu(i)%ig4
-                  return
+                  Return
               End If
 
           End If
 
       End Do
 
-      return
+      Return
 *-------------------------------------------------------------------
 
  6001 format('WRITUREF: For set ',i2,', descripancy between ',
@@ -4633,13 +4641,15 @@
  6101 FORMAT('*DEBUG: SavUref error ',I3,' in FSTINFX')
  6102 FORMAT('*DEBUG: SavUref error ',I3,' in FSTPRM')
  6103 FORMAT('*DEBUG: SavUref error ',I3,' in FSTLUK')  
- 6104 FORMAT('*DEBUG: SavUref saved ^> no. ',I2)
+ 6104 FORMAT('*INFO:  SavUref saved ^> no. ',I2)
  6105 FORMAT('*DEBUG: SavUref too many descriptor records.')  
+ 6106 FORMAT('*INFO:  SavUref number of subgrids is ',I1,
+     +       ' rather than 2...')
  6140 format('*DEBUG: WRITUREF ',A,' written to unit ',I3)
  
       CONTAINS
 
-        SUBROUTINE decrireU ()
+        Subroutine decrireU ()
 
       ! Imprimer les elements principaux du dernier descripteur U '>^'
 
@@ -4655,7 +4665,7 @@
           !
           ! yy(1 ) = iachar(familly_uencode_S)
           ! yy(2 ) = vesion_uencode
-          ! yy(3 ) = 2          ! 2 grids (Yin & Yang)
+          ! yy(3 ) = 2          ! 2 grids (Yin & Yang), as assumed above for niyy
           ! yy(4 ) = 1          ! the 2 grids have same resolution
           ! yy(5 ) = 1          ! the 2 grids have same area extension
           !
@@ -4694,8 +4704,8 @@
           ! posy(Out_gridj0:Out_gridj0+njs-1)
 
           integer sindx2,niso,njso
-          REAL    Roto(8), Posxo(4), Posyo(4)
-          REAL(8) DeltaXo, DeltaYo
+          real    Roto(8), Posxo(4), Posyo(4)
+          real(8) DeltaXo, DeltaYo
 
           niso = nint(  descu(lastdesc)%data(sindx  ) )
           njso = nint(  descu(lastdesc)%data(sindx+1) )
@@ -4738,22 +4748,23 @@
           write(6,1001) Posxo(3),Posyo(3),Posxo(4),Posyo(4)
           write(6,1002) Roto(5:8)
 
-          return
+          Return
 
- 1000     format(/' U-grid descriptor ',I2,' contents ...'//
+ 1000     Format(/' U-grid descriptor ',I2,' contents ...'//
      +           '  Yin/Yan grid DeltaX, DeltaY= ',2(F13.9,',')/
      +           '   Full grid ni,nj = ',2(I5,',')/
      +           '   Full grid IPi = ',3(I6,',')/
      +           '   Full grid IGi = ',4(I6,',')/
      +           '   Sub grids ni,nj = ',I5,',',I5)
- 1001     format('   Lon/Lat From (',F8.3,' /',F8.3,' )',
+ 1001     Format('   Lon/Lat From (',F8.3,' /',F8.3,' )',
      +                       ' to (',F8.3,' /',F8.3,' )')
- 1002     format('   Xgi (Lat/Lon pairs) = (',F8.3,' /',F8.3,' ),',
+ 1002     Format('   Xgi (Lat/Lon pairs) = (',F8.3,' /',F8.3,' ),',
      +                                    '(',F8.3,' /',F8.3,' )'/)
 
-        END SUBROUTINE decrireU
+        End Subroutine decrireU
 *-------------------------------------------------------------------
-      END SUBROUTINE savUref
+      End Subroutine savUref
+
       subroutine pushU( NF, NI,NJ, IG1,IG2,IG3 )
 
       implicit    none
