@@ -4357,24 +4357,26 @@
 
       integer, intent(in)  :: nf
       logical, intent(out) :: ok
-      integer, intent(inout) :: ni,nj
       integer, intent(out) :: refip1,refip2,refip3
       real(8), intent(out) :: DeltaX, DeltaY
+      integer, intent(inout) :: ni,nj
 
       type :: U_descriptor
-         character        :: gtyp='F'
-         character(2)     :: typv='X'
-         character(4)     :: nomv='^>'
-         character(12)    :: etik=' '
-         integer          :: ni,nj,nk,dateo
-         integer          :: ip1,ip2,ip3,ig1,ig2,ig3,ig4
-         real,allocatable :: data(:)
+         character         :: gtyp='F'
+         character(2)      :: typv='X'
+         character(4)      :: nomv='^>'
+         character(12)     :: etik=' '
+         integer           :: ni,nj,nk,dateo
+         integer           :: ip1,ip2,ip3,ig1,ig2,ig3,ig4
+         real,allocatable  :: data(:)
       end type
 
-      integer,       parameter :: maxdesc = 20
+      integer,  parameter  :: extras = 0 ! option extras = 4 ?
+      integer,  parameter  :: un = 1, cinq = 5
+      integer,  parameter  :: maxdesc = 20
+
       type(U_descriptor), save :: descu(maxdesc)
 
-      integer,    parameter :: un = 1, cinq = 5
       INTEGER     U_NI,U_NJ,U_NK, U_ERR,U_CLE
       INTEGER     U_IP1,U_IP2,U_IP3,U_SIZE,U_NBITS, DUM
       INTEGER     U_IG1,U_IG2,U_IG3,U_IG4,U_DATYP,U_DATEO
@@ -4523,15 +4525,15 @@
          do  i=1,lastdesc
              nis = nint( descu(i)%data(sindx  ) )
              njs = nint( descu(i)%data(sindx+1) )
-             if ( nis+4 == ni .and. 2*(njs+4) == nj) exit
+             if ( nis+extras == ni .and. 2*(njs+extras) == nj) exit
          end do
       end if
 
       if (i > lastdesc) return
 
       if (ni <= 0 .or. nj <= 0)                                THEN
-         ni = nint(    descu(i)%data(sindx  )+4  )
-         nj = nint( 2*(descu(i)%data(sindx+1)+4) )
+         ni = nint(    descu(i)%data(sindx  )+extras  )
+         nj = nint( 2*(descu(i)%data(sindx+1)+extras) )
       end if
 
       refip1 = descu(i)%ip1
@@ -4551,7 +4553,7 @@
       do  i=1,lastdesc
           nis = nint( descu(i)%data(sindx  ) )
           njs = nint( descu(i)%data(sindx+1) )
-          if ( nis+4 == ni .and. 2*(njs+4) == nj) exit
+          if ( nis+extras == ni .and. 2*(njs+extras) == nj) exit
       end do
 
       if (i > lastdesc) return
@@ -4595,7 +4597,7 @@
 
           If (Found)                                           THEN
 
-             U_cle = fstecr( descu(lastdesc)%data,tempU ,
+             U_cle = fstecr( descu(i)%data,tempU ,
      +                     -32, NFA, descu(i)%dateo,0,0,
      +                     descu(i)%ni,descu(i)%nj,un,
      +                     descu(i)%ip1,descu(i)%ip2,descu(i)%ip3,
