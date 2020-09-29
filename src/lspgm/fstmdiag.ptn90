@@ -98,6 +98,10 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  !  Revision 1.19 2020/09/29 16:16  dugas
+  !  S'assurer de bien restorer les champs initiaux
+  !  lorsqu'il y a un seul echantillon temporel
+  !
   !  Revision 1.18 2019/12/10 14:14  dugas
   !  Ajouter '^>' a la liste des enregistrements de renvoi
   !
@@ -1443,8 +1447,6 @@
       ! Finaliser les calculs si on a un seule enregistrements,
       ! sauf si on a trouve un ancien format de moyenne temporelle
 
-      if (nr == 1 .and. .not.OldIP3) goto 200 ! Sauver le champs d'entree tel quel !
-
       moyenne  = moyenne/ns
 
       if (.not.NoVar)                                      then
@@ -1453,6 +1455,8 @@
           ! Eliminer les erreurs d'arrondissement
           variance = max( 0.0_8,variance )
       end if
+
+      if (nr == 1 .and. .not.OldIP3) goto 200 ! Sauver le champs d'entree tel quel !
 
       ! Mettre a jour les descripteurs temporels.
 
