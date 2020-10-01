@@ -4,11 +4,10 @@
 # if defined (AUTO_DOC)
 !
 ! Sequence d'appel...
-!  fstmdiag -s source1 [source2 [sources3 ... ]] \ 
-!          [-d destination] [-info [valeur]] \ 
-!          [-e] [-f] [-nobox] [-help] [-stats]   \ 
-!          [-noip3] [-novar] [-nomodtyp] [-nomean]
-!        
+!  fstmdiag -s source1 [source2 [sources3 ... ]]  \ 
+!          [-d destination] [-info [valeur]] [-f] \ 
+!          [-nobox] [-help] [-stats] [-noip3]     \ 
+!          [-novar] [-nomodtyp] [-strict] 
 !
 !
 ! Auteur: B.Dugas, RPN - juillet 2011.
@@ -20,7 +19,7 @@
 !  FSTMDIAG  Calcule les moyennes simples et variances des
 !            variables contenues dans une collection de fichiers.
 !            Aucune contrainte commune n'est imposee, et ce meme
-!            sur les grilles horizontales.
+!            pour les grilles horizontales.
 !
 !            Les variables 1) ayant les memes noms, 2) valides
 !            au meme niveau (i.e. IP1 identiques), 3) ayant les
@@ -36,16 +35,25 @@
 !            fichiers (*_moyenne et *_variance) ne doivent pas
 !            exister a l'entree, sauf si la cle -f est egalement
 !            specifiee. Par defaut, d = s.
-!  novar     Ne pas calculer les variances, seulement les moyennes
 !  info      Niveau des messages retournes (ERRORS/INFORM/DEBUG)
+!  f         Forcer la re-ecriture du (ou des) fichier(s) de sortie. 
+!  nobox     Ne pas imprimer de boites d'informations.
+!  help      Afficher ce texte sur stdout et quitter.
+!  stats     Imprimer des statistiques sur les resultats
+!
+!  noip3     Ne pas utiliser IP3 pour lire et/ou sauver le nombre d'echantillons.
+!  novar     Ne pas calculer les variances, seulement les moyennes
 !  nomodtyp  Ne pas modifier TYPVAR avec des signatures de moyennes/variances
 !  strict    N'utiliser que les signatures TYPVAR connues pour identifier
 !            la presence de moyennes dans les fichiers d'entrees
-!  nobox     Ne pas imprimer de boites d'informations.
-!  stats     Imprimer des statistiques sur les resultats
-!  help      Afficher ce texte sur stdout et quitter.
-!  noip3     Ignorer IP3 pour lire et/ou sauver le nombre d'echantillons.
-!  f         Forcer la re-ecriture du (ou des) fichier(s) de sortie. 
+!
+!
+!       Notons que les valeurs TYPVAR de sorties seront par defaut
+!       modifiees afin d'identifier le type de donnees dans les nouveaux
+!       fichiers de sortie. Ces signatures reconnues sont placees dans
+!       le second caractere du parametre TYPVAR et pourront ainsi etre
+!         ...   '/', indicant que ce sont des moyennes temporelles
+!       ou bien '%', indicant que ce sont des variances temporelles.
 !
 !
 ! Codes de sortie:
@@ -90,6 +98,16 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  !  Revision 1.19 2020/09/29 16:16  dugas
+  !  S'assurer de bien restorer les champs initiaux
+  !  lorsqu'il y a un seul echantillon temporel
+  !
+  !  Revision 1.18 2019/12/10 14:14  dugas
+  !  Ajouter '^>' a la liste des enregistrements de renvoi
+  !
+  !  Revision 1.17 2019/12/05 13:13  dugas
+  !  Corriger la declaration EXTERNAL pour CCARD
+  !
   !  Revision 1.16 2019/07/23 19:19  dugas
   !  Ajouter l'argument '-strict' pour forcer la detection
   !  de moyennes seulement par la presence de signatures
@@ -264,7 +282,7 @@
                         fstunl, fstopc, xdfopt, fstopl, wkoffit,fclos,  &
                         fnom,   exfin,  exdb
 
-  external  ccard,  incdatr, getenvc,convpr, quit
+  external  diag_ccard,  incdatr, getenvc,convpr, quit
 
   logical, external :: is_off, is_on, diag_is_a_level
 
@@ -276,7 +294,7 @@
   ! Parametres d'appel:
   ! ------------------
 
-  ! NBRARGS=8 Arguments generaux
+  ! NBRARGS Arguments generaux
   data cles(01)/'D.'       /,def1(01)/' '   /,def2(01)/'TAPE2' /, &
        cles(02)/'INFO'     /,def1(02)/'NON' /,def2(02)/'OUI'   /, &
        cles(03)/'NOBOX'    /,def1(03)/'NON' /,def2(03)/'OUI'   /, &
@@ -700,6 +718,7 @@
 
       if (nomvar == '>>'   .or. &
           nomvar == '^^'   .or. &
+          nomvar == '^>'   .or. &
           nomvar == '!!'   .or. &
           nomvar == 'HY'   .or. &
           nomvar == 'CONF' .or. &
@@ -1428,8 +1447,6 @@
       ! Finaliser les calculs si on a un seule enregistrements,
       ! sauf si on a trouve un ancien format de moyenne temporelle
 
-      if (nr == 1 .and. .not.OldIP3) goto 200 ! Sauver le champs d'entree tel quel !
-
       moyenne  = moyenne/ns
 
       if (.not.NoVar)                                      then
@@ -1438,6 +1455,8 @@
           ! Eliminer les erreurs d'arrondissement
           variance = max( 0.0_8,variance )
       end if
+
+      if (nr == 1 .and. .not.OldIP3) goto 200 ! Sauver le champs d'entree tel quel !
 
       ! Mettre a jour les descripteurs temporels.
 
