@@ -40,6 +40,12 @@
 !
 !REVISIONS
 !
+! B.Dugas octobre '20
+! - Renommer petit a epsilon1 dans def_lon_lat
+!   et faire passer sa valeur de 0.0001 a 0.001
+! - Encore dans def_lon_lat, utiliser une nouvelle
+!   variable epsilon2 valant 0.0001 afin d'identifier
+!   que les latitudes des grilles gaussiennes
 ! B.Dugas fevrier '20
 ! - Ne plus utiliser la variable fill_tol0 (commenter)
 ! B.Dugas octobre '19
@@ -495,8 +501,8 @@
                alat(1:nj) = dcoordonne(1:nj,yid)
             endif
                      
-            do j=1,nj ; zlon(:,j) = alon(:) ; enddo
-            do i=1,ni ; zlat(i,:) = alat(:) ; enddo
+            do j=1,nj ; zlon(1:ni,j) = alon(1:ni) ; enddo
+            do i=1,ni ; zlat(i,1:nj) = alat(1:nj) ; enddo
           
             ZIP3 = 0 ; call dset_igs( ZIP1,ZIP2,zlon,zlat, &
                                       ZTYP,ZIG1,ZIG2,ZIG3,ZIG4, &
@@ -1385,12 +1391,13 @@
       integer i,j,nlen,ilath
       real*8, dimension(:), allocatable :: sl,wl,cl,rad,wossl,cvaleur
       real*8  dcoordmax,dcoordmin, deltcoord, sum,sum2, hold, &
-              coordmax,coordmin, petit,rad2deg
+              coordmax,coordmin, epsilon1,epsilon2,rad2deg
 
 !-----------------------------------------------------------------------
 
       rad2deg  = 90./asin(1d0)
-      petit    = 0.0001 ! = 0.001 (autre valeur possible)
+      epsilon1 = 0.001
+      epsilon2 = 0.0001
 
       nijla    =  2
 
@@ -1436,9 +1443,9 @@
          sum = sum+deltcoord
          sum2 = sum2 + (deltcoord*deltcoord)
 
-         if (deltcoord.lt.(dcoordmin-petit)) then
+         if (deltcoord.lt.(dcoordmin-epsilon1)) then
             nijla = 2
-         else if (deltcoord.lt.(dcoordmin+petit)) then
+         else if (deltcoord.lt.(dcoordmin+epsilon1)) then
             nijla = nijla+1
          endif
 
@@ -1457,7 +1464,8 @@
       dcoord = sum
       sum2 = sqrt( max( 0.0_8,sum2-(sum*sum) ) )
 
-      if (dcoordmax-dcoordmin.lt.petit*(dcoordmax+dcoordmin)) then
+      if (dcoordmax-dcoordmin < epsilon1*(dcoordmax+dcoordmin)) then
+         ! ou bien (dcoordmax/dcoordmin) < [(1+epsilon1)/(1-epsilon1)] ~ 1 + 2*epsilon1
          nijla = nlen
 !!!      dcoord = 0.5*(dcoordmax+dcoordmin)
          dcons = .true.
@@ -1472,15 +1480,15 @@
 
       if (dcons .and. cid.eq.xid) then
 
-         if (abs( coordmin ) .lt. petit) then
+         if (abs( coordmin ) < epsilon1) then
 
 !           repetition du meridien de Greenwich (grille B) ?
 
-            if (abs( coordmax - 360. ) .lt. petit) bgrd = .true.
+            if (abs( coordmax - 360. ) < epsilon1) bgrd = .true.
 
 !           verifier si la coordonnee va de 0 a 360
 
-            if (bgrd .or. abs( coordmax + dcoord - 360. ) .lt. petit) &
+            if (bgrd .or. abs( coordmax + dcoord - 360. ) < epsilon1) &
                 glb = 0
 
          endif
@@ -1496,34 +1504,34 @@
 !     Si l'une de ces conditions est verifiee, il s'agit peut-etre
 !     d'une grille de type A ou B.
 
-            if ((abs( coordmin          +90. ).lt.petit  .and. &
-                 abs( coordmax          -90. ).lt.petit)        .or. &
-                (abs( coordmin-dcoord/2.+90. ).lt.petit  .and. &
-                 abs( coordmax+dcoord/2.-90. ).lt.petit))       then
+            if ((abs( coordmin          +90. ) < epsilon1  .and. &
+                 abs( coordmax          -90. ) < epsilon1)        .or. &
+                (abs( coordmin-dcoord/2.+90. ) < epsilon1  .and. &
+                 abs( coordmax+dcoord/2.-90. ) < epsilon1))       then
                glb = 0
             elseif &
-               ((abs( coordmin               ).lt.petit  .and. &
-                 abs( coordmax          -90. ).lt.petit)        .or. &
-                (abs( coordmin-dcoord/2.     ).lt.petit  .and. &
-                 abs( coordmax+dcoord/2.+90. ).lt.petit))       then
+               ((abs( coordmin               ) < epsilon1  .and. &
+                 abs( coordmax          -90. ) < epsilon1)        .or. &
+                (abs( coordmin-dcoord/2.     ) < epsilon1  .and. &
+                 abs( coordmax+dcoord/2.+90. ) < epsilon1))       then
                glb = 1
             elseif &
-               ((abs( coordmin          +90. ).lt.petit  .and. &
-                 abs( coordmax               ).lt.petit)        .or. &
-                (abs( coordmin-dcoord/2.+90. ).lt.petit  .and. &
-                 abs( coordmax+dcoord/2.     ).lt.petit))       then
+               ((abs( coordmin          +90. ) < epsilon1  .and. &
+                 abs( coordmax               ) < epsilon1)        .or. &
+                (abs( coordmin-dcoord/2.+90. ) < epsilon1  .and. &
+                 abs( coordmax+dcoord/2.     ) < epsilon1))       then
                glb = 2
             endif
 
             if ((glb.eq.0                                .and. &
-                 abs( coordmin          +90. ).lt.petit  .and. &
-                 abs( coordmax          -90. ).lt.petit)        .or. &
+                 abs( coordmin          +90. ) < epsilon1  .and. &
+                 abs( coordmax          -90. ) < epsilon1)        .or. &
                 (glb.eq.1                                .and. &
-                 abs( coordmin               ).lt.petit  .and. &
-                 abs( coordmax          -90. ).lt.petit)        .or. &
+                 abs( coordmin               ) < epsilon1  .and. &
+                 abs( coordmax          -90. ) < epsilon1)        .or. &
                 (glb.eq.2                                .and. &
-                 abs( coordmin          +90. ).lt.petit  .and. &
-                 abs( coordmax               ).lt.petit))  &  
+                 abs( coordmin          +90. ) < epsilon1  .and. &
+                 abs( coordmax               ) < epsilon1))  &  
                  bgrd = .true.
 
          else if (nlen.gt.1) then
@@ -1555,7 +1563,7 @@
 
             sum = sqrt( sum/nlen )
 
-            if (sum.lt.petit) then
+            if (sum < epsilon2) then
                glb = 0
                goto 100
             endif
@@ -1583,7 +1591,7 @@
 
             sum = sqrt( sum/nlen )
 
-            if (sum.lt.petit) then
+            if (sum < epsilon2) then
                glb = 1
                goto 100
             endif
@@ -1611,7 +1619,7 @@
 
             sum = sqrt( sum/nlen )
 
-            if (sum.lt.petit) glb   = 2
+            if (sum < epsilon2) glb   = 2
 
  100        if (glb.ge. 0   ) gauss = .true.
 
