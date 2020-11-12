@@ -102,6 +102,9 @@
 ***    Historique des modifications:
 ***   
 *      $Log: fsttri.ptn,v $
+*      Revision 4.52 2020/10/28 18:18  dugas
+*      Trier les IP3 selon leurs valeurs decodees (reelles).
+*
 *      Revision 4.51 2020/04/02 14:14  dugas
 *      Corrections du traitement des enregistrements de renvois.
 *
@@ -260,12 +263,12 @@
       real*8        heur8
 !**   integer       anne,mois,jour,heur
 
-      real          press,heures,HOLD
+      real          press,heures,HOLD,ip3reel
       integer       YYYYMMDD,YYYYMMDD0,HHMMSShh,valnum, kind,bidon
-      real,         allocatable,dimension(:) :: niveau1
+      real,         allocatable,dimension(:) :: niveau1,fset1
       integer,      allocatable,dimension(:) :: niveau2, 
      +              sindex, liste, heure, delt, listerenv,
-     +              fset1, fset2, kind1, pas1, pas2, date2
+     +              fset2, kind1, pas1, pas2, date2
       integer(8),   allocatable,dimension(:) :: date18 
 
       integer(8) :: dateo8 ,valnum8
@@ -825,11 +828,19 @@ C    +              valnum,kind
      +        nomvar /= '^^' .and.
      +        nomvar /= '^>' .and.
      +        nomvar /= '!!') then
-              call convpr(  ip1,press,kind,-1 )
-              if (press > 0. .and. (kind == 0 .or. kind == 4))
+            ! Decoder IP1
+              call convpr(  ip1,press,kind1(i),-1 )
+              if (press > 0. .and.
+     +           (kind1(i) == 0 .or. kind1(i) == 4))
      +            press = 1./press
+            ! Decoder IP3
+              call convpr( ip3,ip3reel,kind,-1 )
+              if (ip3reel > 0. .and.
+     +           (kind == 0 .or. kind == 4))
+     +            ip3reel = 1./ip3reel
           else
-              press = ip1 ; kind = -1
+              press   = ip1 ; kind1(i) = -1
+              ip3reel = ip3 ! kindip3(i) = -1
           end if
 
           niveau2(i)  = ip1
@@ -868,21 +879,20 @@ C    +              valnum,kind
 
           end if
 
-          if (noPAS) npas   = -1
-          if (noIP1) press  = -1.
-          if (noIP1) kind   = -1.
-          if (noIP3) ip3    = -1
+          if (noPAS) npas     = -1
+          if (noIP1) press    = -1.
+          if (noIP1) kind1(i) = -1.
+          if (noIP3) ip3reel  = -1
 
           if (noTYP) typvar = ' '
           if (noETI) etiket = ' '
           if (noNOM) nomvar = ' '
 
           write(chaine1(i),0001) typvar,etiket,nomvar
-          niveau1(i) = press
-          kind1  (i) = kind
-          pas1   (i) = npas
-          date18 (i) = dateo8
-          fset1  (i) = ip3
+          niveau1 (i) = press
+          pas1    (i) = npas
+          date18  (i) = dateo8
+          fset1   (i) = ip3reel
 
           if (.not.Minutes)                                    then
               Minutes = ( mod( npas*(deet*1_8),3600_8 ) /= 0_8 )
@@ -892,16 +902,16 @@ C    +              valnum,kind
 
 ***    Trier cette information. Commencer selon IP3.
 
-      call csorte( fset1,sindex,infon )
+      call csortr( fset1,sindex,infon )
 
       do while (ind01 < infon)
 
-         valnum = fset1(sindex(ind01))
+         ip3reel = fset1(sindex(ind01))
 
 ***       Passer au niveau suivant ...
 
          do  i0=ind02,infon
-            if (fset1(sindex(i0)) /= valnum) exit
+            if (fset1(sindex(i0)) /= ip3reel) exit
          end do
 
 ***       I0 contient le debut du prochain groupe IP3.

@@ -62,7 +62,7 @@ DIAGWEB = public_html
 
 # RMN and Vgrid_Descriptor library names
 
-RMNLIB  = rmn_016.3
+RMNLIB  = rmn_016.3.1
 VGDLIB  = descrip
 
 # LAPCK and BLAS libraries

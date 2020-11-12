@@ -163,6 +163,9 @@
 *     ------------------------------------------------
 
 *     $Log: timavg.ptn,v $
+*     Revision 4.47 2020/11/11 15:15  dugas
+*     - Corrections aux modes TIMIN et TIMAX.
+*
 *     Revision 4.46 2019/07/23 19:19  dugas
 *     - Corriger la detection erronee de donnees
 *       moyennees au tout debut d'un fichier d'entree.
@@ -382,7 +385,7 @@
       CHARACTER(4) TYPE,ACCSTAT,ACCMISS,PREMISS
       LOGICAL     MODTIM,MVALUE,MISSOUT,SQUARE,AVGDATA,
      +            OK,OK2,ACCUM,TIMAX,TIMIN,SAMPLES,ACCOK,
-     +            OLDIP3,NoModT,Vrai,Faux
+     +            OLDIP3,NoModT,Vrai,Faux,NotMinMax
       REAL(8)     FNI,HEURE,HEUREO,MISFLAG,
      +            EPSILON,EPS,tdiff,H0
       REAL        ZERO, HIVALi,LOVALi,
@@ -474,6 +477,8 @@
       IF (VERBE.EQ.'accumul') ACCUM = Vrai
       IF (VERBE.EQ.'timmin' ) TIMIN = Vrai
       IF (VERBE.EQ.'timmax' ) TIMAX = Vrai
+
+      NotMinMax = .not.(TIMAX .or. TIMIN)
 
       IF (RPBLOC( ' ',VALEUR ))                                THEN
 
@@ -1106,34 +1111,36 @@
 
           IF (.NOT.OK) GOTO 300
 
-          IF (NSETS == 0)                                      THEN
-              IF (MAXVAL( NSAMPB(1:NSET) ) > 1) AVGDATA = Vrai
-          ELSE
-     +    IF (AVGDATA .NEQV. MAXVAL( NSAMPB(1:NSET) ) > 1)     THEN
-              ! Possibly mixing averages and samples in input data
-              IF (ACCOK .OR. NSETS > 1 .OR. .NOT.AVGDATA)      THEN
-                  ! We cannot restore the AVG data in these cases
-                  WRITE(6,6012)
-                  CALL                             XIT( VERBE ,-12 )
+          IF (NotMinMax)                                       THEN
+              IF (NSETS == 0)                                  THEN
+                  IF (MAXVAL( NSAMPB(1:NSET) ) > 1) AVGDATA = Vrai
               ELSE
-                  ! We assume that the first sample was NOT
-                  ! an average. Restore AVG, assuming that
-                  ! the first NSAMP should have been == 1
-                  AVGDATA = .false.
-                  DO  K=1,NSET
-                      M0 = NWDS*SET(K-1)+1
-                      M1 = NWDS*SET(K)
-                      DO  I=M0,M1
-                          AVG(I) = AVG(I)/NSAMP(K)
+     +        IF (AVGDATA .NEQV. MAXVAL( NSAMPB(1:NSET) ) > 1) THEN
+                  ! Possibly mixing averages and samples in input data
+                  IF (ACCOK .OR. NSETS > 1 .OR. .NOT.AVGDATA)  THEN
+                      ! We cannot restore the AVG data in these cases
+                      WRITE(6,6012)
+                      CALL                         XIT( VERBE ,-12 )
+                  ELSE
+                      ! We assume that the first sample was NOT
+                      ! an average. Restore AVG, assuming that
+                      ! the first NSAMP should have been == 1
+                      AVGDATA = .false.
+                      DO  K=1,NSET
+                          M0 = NWDS*SET(K-1)+1
+                          M1 = NWDS*SET(K)
+                          DO  I=M0,M1
+                              AVG(I) = AVG(I)/NSAMP(K)
+                          END DO
                       END DO
-                  END DO
-                  NSAMP(1:NSET) = 1
+                      NSAMP(1:NSET) = 1
+                  END IF
               END IF
           END IF
-              
+    
           IPM = GETIPMODE( IBUF )
 
-          IF (IPM /= IPMi .AND. AVGDATA)                       THEN
+          IF (NotMinMax .AND. IPM /= IPMi .AND. AVGDATA)       THEN
               ! Mixing new- and old-mode IP1/2/3 coding in input file
               WRITE(6,6013) IPMi,IPM
               CALL                                 XIT( VERBE ,-13 )
@@ -1376,8 +1383,8 @@
           DO  I=1,MEM
               IF (MA(I).LE.EPSILON)                            THEN
                   AVG(I) = MISFLAG
-              ELSE
-                  IF (.NOT.(TIMIN.OR.TIMAX)) AVG(I) = AVG(I) / MA(I)
+              ELSE IF (NotMinMax)                              THEN
+                  AVG(I) = AVG(I) / MA(I)
               END IF
           END DO
       ELSE
@@ -1385,8 +1392,8 @@
               M0 = NWDS*SET(K-1)+1
               M1 = NWDS*SET(K)    
 
-                                         FNI = 1.0
-              IF (.NOT.(TIMIN.OR.TIMAX)) FNI = 1.0/DBLE( NSAMP(K) )
+                             FNI = 1.0
+              IF (NotMinMax) FNI = 1.0/DBLE( NSAMP(K) )
 
               DO  I=M0,M1
                   AVG(I) = AVG(I)*FNI
@@ -1396,10 +1403,10 @@
 
 ***    PUT THE RESULT ONTO FILE 12 (BY DEFAULT, NOT PACKED).
 
-      IF (.NOT.(TIMIN.OR.TIMAX)) IBUF(8) = -32
+      IF (NotMinMax)     IBUF(8) = MIN( -32, KPAK )
       IF (ACCUM .OR.
-     +    KPAK  .EQ.-64)         IBUF(8) = -64 
-      IF (NPG   .NE.999)         IBUF(8) = NPG
+     +    KPAK  .EQ.-64) IBUF(8) = -64 
+      IF (NPG   .NE.999) IBUF(8) = NPG
 
       IF (PKTYP.EQ.'SQ' .AND. MODTIM)                          THEN
 
