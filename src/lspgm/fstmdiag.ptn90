@@ -5,9 +5,9 @@
 !
 ! Sequence d'appel...
 !  fstmdiag -s source1 [source2 [sources3 ... ]]  \ 
-!          [-d destination] [-info [valeur]] [-f] \ 
-!          [-nobox] [-help] [-stats] [-noip3]     \ 
-!          [-novar] [-nomodtyp] [-strict] 
+!          [-d destination] [-info [valeur]] [-nobox] [-f] \ 
+!          [-help] [-stats] [-noip3] [-nomodtyp] [-strict] \ 
+!          [-nomean] [-novar] [-min] [-max]
 !
 !
 ! Auteur: B.Dugas, RPN - juillet 2011.
@@ -16,10 +16,12 @@
 !
 ! Objet:
 ! -----
-!  FSTMDIAG  Calcule les moyennes simples et variances des
-!            variables contenues dans une collection de fichiers.
-!            Aucune contrainte commune n'est imposee, et ce meme
-!            pour les grilles horizontales.
+!  FSTMDIAG  Calcule les moyennes simples et variances temporelles
+!            des variables contenues dans une collection de fichiers.
+!            Alternativement, les minimums et/ou maximums temporels
+!            de ces variables peuvent aussi etre calcules. Aucune
+!            contrainte commune n'est imposee, et ce meme pour les
+!            grilles horizontales.
 !
 !            Les variables 1) ayant les memes noms, 2) valides
 !            au meme niveau (i.e. IP1 identiques), 3) ayant les
@@ -31,21 +33,27 @@
 ! Parametres d'appel:
 ! ------------------
 !  s         Fichiers sources (jusqu'a nombre_maximal_de_fichiers fichiers)
-!  d         Entete commune des fichiers destinations. Ces deux
-!            fichiers (*_moyenne et *_variance) ne doivent pas
-!            exister a l'entree, sauf si la cle -f est egalement
-!            specifiee. Par defaut, d = s.
+!  d         Entete commune des fichiers destinations.
+!            Ces fichiers (*_moyenne et *_variance ou bien, alternativement
+!            *_minimum et/ou *_maximum) ne doivent pas exister a l'entree,
+!            sauf si la cle -f est egalement specifiee. Par defaut, d = s.
 !  info      Niveau des messages retournes (ERRORS/INFORM/DEBUG)
 !  f         Forcer la re-ecriture du (ou des) fichier(s) de sortie. 
 !  nobox     Ne pas imprimer de boites d'informations.
 !  help      Afficher ce texte sur stdout et quitter.
-!  stats     Imprimer des statistiques sur les resultats
+!  stats     Imprimer des statistiques sur les resultats.
+!
+!  Specifier l'une et/ou l'autre des deux variables suivantes implique
+!  que les maximums et/ou les minimums temporels seront calculees.
+!  max       Calculer que les maximums temporels.
+!  min       Calculer que les minimums temporels.
 !
 !  noip3     Ne pas utiliser IP3 pour lire et/ou sauver le nombre d'echantillons.
-!  novar     Ne pas calculer les variances, seulement les moyennes
-!  nomodtyp  Ne pas modifier TYPVAR avec des signatures de moyennes/variances
+!  novar     Ne pas calculer les variances
+!  nomean    Ne pas calculer les moyennes
+!  nomodtyp  Ne pas modifier TYPVAR avec des signatures mentionnees plus bas.
 !  strict    N'utiliser que les signatures TYPVAR connues pour identifier
-!            la presence de moyennes dans les fichiers d'entrees
+!            la presence de moyennes dans les fichiers d'entrees.
 !
 !
 !       Notons que les valeurs TYPVAR de sorties seront par defaut
@@ -53,7 +61,9 @@
 !       fichiers de sortie. Ces signatures reconnues sont placees dans
 !       le second caractere du parametre TYPVAR et pourront ainsi etre
 !         ...   '/', indicant que ce sont des moyennes temporelles
-!       ou bien '%', indicant que ce sont des variances temporelles.
+!         ...   '%', indicant que ce sont des variances temporelles
+!         ...   '1', indicant que ce sont des mimimums temporels
+!       ou bien '9', indicant que ce sont des maximums temporels.
 !
 !
 ! Codes de sortie:
@@ -98,6 +108,9 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  !  Revision 1.20 2020/11/17 17:17  dugas
+  !  Ajouter les options de calculs -nomean, -min et -max
+  !
   !  Revision 1.19 2020/09/29 16:16  dugas
   !  S'assurer de bien restorer les champs initiaux
   !  lorsqu'il y a un seul echantillon temporel
@@ -206,7 +219,7 @@
   character(4)  :: REV='1.16' ! FSTMDIAG internal revision level
   
   integer,      parameter :: NBRFICH = nombre_maximal_de_fichiers
-  integer,      parameter :: NBRARGS = 10, NBRCLE = NBRFICH+NBRARGS+1
+  integer,      parameter :: NBRARGS = 13, NBRCLE = NBRFICH+NBRARGS+1
 
   integer ::    NMAX=2000,start
 
@@ -237,7 +250,7 @@
   real(8)  :: tdiff, time_range, SECH = 0.000277777_8 ! 1 seconds en unite d'heures
 
   character(20)  uzbigt,bigtmp,tmpdir
-  character(512) evalue,diagext,tmpdirn, name1(NBRFICH),name2,name3
+  character(512) evalue,diagext,tmpdirn, name1(NBRFICH),name2,name3,name4,name5
   character(128) Format1
 
   logical              dexit,set_dexit,exist
@@ -249,14 +262,15 @@
   logical ::    info  ; common /zzverbo/ info
   logical ::    debug ; common /zzdebug/ debug
 
+  logical       DoMin, DoMax, DoMinMax, NoMean, NoVar
   logical       Complet, Complet1, Complet2, Sample, NoModT, StricT
-  logical       Vrai,Faux, box, Elim, Forc, NoIP3, NoVar, OldIP3, Stats
-  integer ::    i,ii,j,ier,io,iter, ipos,icle, ibuf(1), iu1(NBRFICH), &
-                iu2=0,iu3=0, datevi,datevf,dateosp, ip2tot, key, &
-                nil, mdiag, nr,nref,ns, nwds,nwds0=-1
+  logical       Vrai,Faux, box, Elim, Forc, NoIP3, OldIP3, Stats
+  integer ::    i,ii,j,ier,io,iter, ipos,icle, ibuf(1), iu1(NBRFICH),  &
+                iu2=0,iu3=0,iu4=0,iu5=0, datevi,datevf,dateosp,ip2tot, &
+                key, nil, mdiag, nr,nref,ns, nwds,nwds0=-1
 
   real,         dimension(:), allocatable :: buff
-  real(8),      dimension(:), allocatable :: buff8,moyenne,variance
+  real(8),      dimension(:), allocatable :: buff8,moyenne,variance,minimum8,maximum8
 
   ! *****
   ! Variables et fonctions necessaires a la lecture des fichiers.
@@ -274,8 +288,10 @@
 
   ! Declarations pour les fonctions FST.
 
-  integer :: nbr,inbr,inbr1=0,inbr2,inbr3,ierr1,ierr2,ierr3
-  integer :: ifrm,iecr,inf,infl,iopt,iprm,ilnk,ftyp0,ftyp1,ftyp2,ftyp3
+  integer :: inbr1=0,inbr2,inbr3,inbr4,inbr5, nbr,inbr
+  integer :: ierr1,  ierr2,ierr3,ierr4,ierr5
+  integer :: ftyp0,ftyp1,ftyp2,ftyp3,ftyp4,ftyp5
+  integer :: ifrm,iecr,inf,infl,iopt,iprm,ilnk
 
   integer,  external :: fstfrm, fstecr, fstlis, fstprm, fstinf, fstsui, &
                         fstluk, fstrwd, fstinl, fstnbr, fstouv, fstlnk, &
@@ -304,8 +320,11 @@
        cles(07)/'NOVAR'    /,def1(07)/'NON' /,def2(07)/'OUI'   /, &
        cles(08)/'NOIP3'    /,def1(08)/'NON' /,def2(08)/'OUI'   /, &
        cles(09)/'NOMODTYP' /,def1(09)/'NON' /,def2(09)/'OUI'   /, &
-       cles(10)/'STRICT'   /,def1(10)/'NON' /,def2(10)/'OUI'   /
-  !    cles(11)/'OLDIP3'   /,def1(11)/'NON' /,def2(11)/'OUI'   /
+       cles(10)/'STRICT'   /,def1(10)/'NON' /,def2(10)/'OUI'   /, &
+       cles(11)/'MIN'      /,def1(11)/'NON' /,def2(11)/'OUI'   /, &
+       cles(12)/'MAX'      /,def1(12)/'NON' /,def2(12)/'OUI'   /, &
+       cles(13)/'NOMEAN'   /,def1(13)/'NON' /,def2(13)/'OUI'   /
+  !    cles(14)/'OLDIP3'   /,def1(14)/'NON' /,def2(14)/'OUI'   /
  
   ! Ce qui suit ne fonctionne pas avec IFORT...
   ! data cles(NBRARGS+1:NBRARGS+NBRFICH)/ NBRFICH*'S.'   /, &
@@ -318,7 +337,7 @@
        def1(NBRCLE) / ' ' /,  &
        def2(NBRCLE) / ' ' /
 
-  data Force, Elim, box, Stats, NoModT /  5*.false. /, &
+  data Force, Elim, box, Stats, NoMean,NoModT, DoMin,DoMax / 8*.false. /, &
        Vrai,Faux, NoIP3,NoVar,StricT,OldIP3,ReWrit / .true.,6*.false. /
 
   !----------------------------------------------------------------
@@ -399,7 +418,7 @@
 
   if (tmpdirn == blanc)                                    then
       write(6,6010)
-       if (box) nil = exfin( 'FstMDiag','Erreur 10','NON' )
+      if (box) nil = exfin( 'FstMDiag','Erreur 10','NON' )
       call quit( 'FstMDiag',10 )
   end if
 
@@ -467,9 +486,21 @@
   if (is_on ( def1(8) )) NoIP3   = Vrai
   if (is_on ( def1(9) )) NoModT  = Vrai
   if (is_on ( def1(10))) StricT  = Vrai
-! if (is_on ( def1(11))) OldIP3  = Vrai
+  if (is_on ( def1(11))) DoMin   = Vrai
+  if (is_on ( def1(12))) DoMax   = Vrai
+  if (is_on ( def1(13))) NoMean  = Vrai
+! if (is_on ( def1(13))) OldIP3  = Vrai
 
-  if (Force)             ReWrit  = Vrai
+  if (Force) ReWrit   = Vrai
+
+  DoMinMax = (DoMin .or. DoMax)
+
+  if (NoMean .and. Novar .and. .not.(DoMin.or.DoMax))      then
+      if (box) nil = exdb ( 'Fstmdiag', 'Rev. '//REV, 'NON' )
+      write(6,6017)
+      if (box) nil = exfin( 'Fstmdiag', 'Erreur 0', 'NON' )
+      call quit( ' Fstmdiag ',0 )
+  end if
 
   if (def1(NBRARGS+1) == blanc)                            then
       if (box) nil = exdb ( 'Fstmdiag', 'Rev. '//REV, 'NON' )
@@ -488,11 +519,18 @@
   end if
 
   ! Par defaut, def1(1) est egal a def1(NBRARGS+1).
-  ! Definissons tous les name1, ainsi que name2.
+  ! Definissons tous les name1, ainsi que name2,3,4,5.
 
   name1(1:NBRFICH) = def1(NBRARGS+1:NBRARGS+NBRFICH)
 
-  if (def1(1) == blanc) def1(1) = def1(NBRARGS+1) ; name2 = def1(1)
+  if (def1(1) == blanc) def1(1) = def1(NBRARGS+1)
+
+  name2 = ' ' ; name3 = ' ' ; name4 = ' ' ; name5 = ' '
+
+  if (.not.NoMean) name2 = def1(1)
+  if (.not.NoVar)  name3 = def1(1)
+  if (DoMin)       name4 = def1(1)
+  if (DoMax)       name5 = def1(1)
 
   ! Verifier l'existence et le type des fichiers I/O.
 
@@ -526,8 +564,6 @@
 
       end if
 
-      if (nbr == 1 .and. def1(1) == def1(NBRARGS+1)) name2 = name1(nbr) ! Re-Definir name2
-
       if (ftyp1 /= 1 .and. ftyp1 /= 33)                    then
 
           ! Ce fichier n'est pas un fichier RND.
@@ -557,51 +593,108 @@
 
   if (nbr == NBRFICH+1) nbr = NBRFICH ! Nombre de fichiers d'Input
 
-  ! Definir name3 si on veut produire les variances. 
-  if (.not.NoVar) name3 = trim( name2 ) // '_variance'
+  ! Modifer les noms de fichiers de sortie s'il y en a plus d'un
+
+  if (.not.NoMean)                                         then
+      if (.not.NoVar)                                      then
+          name3 = trim( name2 ) // '_variance'
+          if (DoMin .or. DoMax)                            then
+              if (DoMin) name4 = trim( name2 ) // '_minimum'
+              if (DoMax) name5 = trim( name2 ) // '_maximum'
+          end if
+          name2 = trim( name2 ) // '_moyenne'
+      else if (DoMin .or. DoMax)                           then
+          if (DoMin) name4 = trim( name2 ) // '_minimum'
+          if (DoMax) name5 = trim( name2 ) // '_maximum'
+          name2 = trim( name2 ) // '_moyenne'
+      end if
+  else if (.not.NoVar)                                     then
+      if (DoMin .or. DoMax)                                then
+          if (DoMin) name4 = trim( name3 ) // '_minimum'
+          if (DoMax) name5 = trim( name3 ) // '_maximum'
+          name3 = trim( name3 ) // '_variance'
+      end if
+  else if (DoMin .or. DoMax)                               then
+      if (DoMin) name4 = trim( name4 ) // '_minimum'
+      if (DoMax) name5 = trim( name5 ) // '_maximum'
+  end if
 
   ! On modifie le nom du fichier des moyennes seulement
   ! si son nom est egal a celui du fichier d'entree ou
   ! que le calcul de la variance est requis.
 
-  if (def1(NBRARGS+1) == def1(1) .or. .not.NoVar) &
-      name2 = trim( name2 ) // '_moyenne'
+!  if (def1(NBRARGS+1) == def1(1))                          then
+!      if(.not.NoVar)                                       then
+!         name3 = trim( name2 ) // '_variance'
+!      else if (DoMin)                                      then
+!         name4 = trim( name2 ) // '_minimum'
+!      else if (DoMax)                                      then
+!         name5 = trim( name2 ) // '_maximum'
+!      end if
+!  end if
 
-  ftyp2 = wkoffit( '+' // trim( name2 ) )
+  ftyp2 = -3 ; ftyp3 = -3 ; ftyp4 = -3 ; ftyp5 = -3
 
-  if (ftyp2 > -2 .and. .not.Force)                         then
-
-      ! Le fichier 'moyenne' n'est pas vide.
-
-      write(6,6004) 'moyenne'
-      if (box) nil = exfin( 'Fstmdiag', 'Erreur 4', 'NON' )
-      call quit( ' Fstmdiag ',4 )
-
+  if (.not.NoMean)                                         then
+      ftyp2 = wkoffit( '+' // trim( name2 ) )
+      if (ftyp2 > -2 .and. .not.Force) write(6,6004) 'moyenne'
   end if
-
-  ftyp3 = wkoffit( '+' // trim( name3 ) )
-
-  if (ftyp3 > -2 .and. .not.Force)                         then
-
-      ! Le fichier n'est pas vide.
-
-      write(6,6004) 'variance'
+  if (.not.Novar)                                          then
+      ftyp3 = wkoffit( '+' // trim( name3 ) )
+      if (ftyp3 > -2 .and. .not.Force) write(6,6004) 'Variance'
+  end if
+  if (DoMin)                                               then
+      ftyp4 = wkoffit( '+' // trim( name4 ) )
+      if (ftyp4 > -2 .and. .not.Force) write(6,6004) 'Minimum'
+  end if
+  if (DoMax)                                               then
+      ftyp5 = wkoffit( '+' // trim( name5 ) )
+      if (ftyp5 > -2 .and. .not.Force) write(6,6004) 'Maximum'
+  end if
+  
+  if ((ftyp2 > -2 .or. ftyp3 > -2  .or. &
+       ftyp4 > -2 .or. ftyp5 > -2) .and. .not.Force)       then
+      ! Un des fichiers de sortie
+      ! 'moyenne/variance/minimum/maximum'
+      ! n'est pas vide.
       if (box) nil = exfin( 'Fstmdiag', 'Erreur 4', 'NON' )
       call quit( ' Fstmdiag ',4 )
-
   end if
 
   ! Associer des unites I/O aux noms de fichiers.
 
-  ierr2 = fnom( iu2, '+' // trim( name2 ), 'STD',    0 )
-  ierr3 = 0 ; if (.not.NoVar) &
-  ierr3 = fnom( iu3, '+' // trim( name3 ), 'STD',    0 )
+  ierr2 = 0 ; ierr3 = 0 ; ierr4 = 0 ; ierr5 = 0
 
-  do i=1,nbr
+  if (.not.NoMean)                                         then
+      ierr2 = fnom( iu2, '+' // trim( name2 ), 'STD',    0 )
+      inbr2 = fstouv( iu2,'RND' )
+  end if
+  if (.not.NoVar)                                          then
+      ierr3 = fnom( iu3, '+' // trim( name3 ), 'STD',    0 )
+      inbr3 = fstouv( iu3,'RND' )
+  end if
+  if (DoMin)                                               then
+      ierr4 = fnom( iu4, '+' // trim( name4 ), 'STD',    0 )
+      inbr4 = fstouv( iu4,'RND' )
+  end if
+  if (DoMax)                                               then
+      ierr5 = fnom( iu5, '+' // trim( name5 ), 'STD',    0 )
+      inbr5 = fstouv( iu5,'RND' )
+  end if
+
+  if (ierr2 /= 0 .or. ierr3 /= 0 .or. &
+      ierr4 /= 0 .or. ierr5 /= 0)                          then
+      write(6,6002)
+      if (box) nil = exfin( 'Fstmdiag', 'Erreur 2', 'NON' )
+      call quit( ' Fstmdiag ',2 )
+  end if
+
+
+  do  i=1,nbr
  
       ierr1 = fnom( iu1(i), '+' // trim( name1(i) ), 'STD+R/O',0 )
   
-      if (ierr1 /= 0)                                          then
+      if (ierr1 /= 0)                                      then
           write(6,6002)
           if (box) nil = exfin( 'Fstmdiag', 'Erreur 2', 'NON' )
           call quit( ' Fstmdiag ',2 )
@@ -611,54 +704,79 @@
 
       inbr  = fstouv( iu1(i),'RND' ) ; inbr1 = inbr + inbr1
 
-      if (inbr <= 0)                                           then
-      write(6,'(A,I6,A)') 'Erreur FSTOUV ',inbr,' sur unit ' // trim( name1(i) )
-      if (box) nil = exfin( 'Fstmdiag', 'Erreur 2', 'NON' )
-      call quit( ' Fstmdiag ',2 )
-
-  end if
-
-
+      if (inbr <= 0)                                       then
+          write(6,'(A,I6,A)') 'Erreur FSTOUV ',inbr,' sur unit ' // trim( name1(i) )
+          if (box) nil = exfin( 'Fstmdiag', 'Erreur 2', 'NON' )
+          call quit( ' Fstmdiag ',2 )
+      end if
 
   end do
-
-  inbr2  = fstouv( iu2,'RND' )
-  if (.not.NoVar) &
-  inbr3  = fstouv( iu3,'RND' )
-
-  if (ierr2 /= 0 .or. ierr3 /= 0)                              then
-      write(6,6002)
-      if (box) nil = exfin( 'Fstmdiag', 'Erreur 2', 'NON' )
-      call quit( ' Fstmdiag ',2 )
-  end if
 
   NMAX = max( NMAX, inbr1+1 )
 
   ilnk = 0 ; if (nbr > 1) ilnk = fstlnk( iu1,nbr )
 
-  if (ilnk > 0)                                                then
+  if (ilnk > 0)                                            then
       write(6,6013) nbr,ilnk
       if (box) nil = exfin( 'Fstmdiag', 'Erreur 13', 'NON' )
       call quit( ' Fstmdiag ',13 )
   end if
 
-  if (nbr == 1)                                                then
-      if (NoVar)                                               then
-         write(6,6102) trim( name1(1) ),trim( name2 )
+  if (nbr == 1)                                            then
+      if (.not.(DoMin .or. DoMax))                         then
+          if (NoVar)                                       then
+              write(6,6102) trim( name1(1) ),trim( name2 )
+          else if (NoMean)                                 then
+              write(6,6102) trim( name1(1) ),trim( name3 )
+          else
+              write(6,6102) trim( name1(1) ),trim( name2 ),trim( name3 )
+          end if
+      else if (NoMean .and. Novar)                         then
+          if (.not.DoMax)                                  then
+              write(6,6102) trim( name1(1) ),trim( name4 )
+          else if (.not.DoMin)                             then
+              write(6,6102) trim( name1(1) ),trim( name5 )
+          else
+              write(6,6102) trim( name1(1) ),trim( name4 ),trim( name5 )
+          end if
       else
-         write(6,6102) trim( name1(1) ),trim( name2 ),trim( name3 )
+          write(6,6105) nbr,trim( name1(1) ),.not.NoMean,.not.NoVar,DoMin,DoMax 
       end if
-  else if (nbr == 2)                                           then
-      if (NoVar)                                               then
-         write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 )
+  else if (nbr == 2)                                       then
+      if (.not.(DoMin .or. DoMax))                         then
+          if (NoVar)                                       then
+              write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 )
+          else
+              write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 ),trim( name3 )
+          end if
+      else if (NoMean .and. Novar)                         then
+          if (.not.DoMax)                                  then
+              write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name4 )
+          else if (.not.DoMin)                             then
+              write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name5 )
+          else
+              write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name4 ),trim( name5 )
+          end if
       else
-         write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 ),trim( name3 )
+          write(6,6106) nbr,trim( name1(1) ),trim( name1(nbr) ), .not.NoMean,.not.NoVar,DoMin,DoMax 
       end if
   else
-      if (NoVar)                                               then
-         write(6,6104) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 )
+      if (.not.(DoMin .or. DoMax))                         then
+          if (NoVar)                                       then
+              write(6,6104) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 )
+          else
+              write(6,6104) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 ),trim( name3 )
+          end if
+      else if (NoMean .and. Novar)                         then
+          if (.not.DoMax)                                  then
+              write(6,6104) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name4 )
+          else if (.not.DoMin)                             then
+              write(6,6104) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name5 )
+          else
+              write(6,6103) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name4 ),trim( name5 )
+          end if
       else
-         write(6,6104) nbr,trim( name1(1) ),trim( name1(nbr) ),trim( name2 ),trim( name3 )
+          write(6,6107) nbr,trim( name1(1) ),trim( name1(nbr) ), .not.NoMean,.not.NoVar,DoMin,DoMax 
       end if
   end if
 
@@ -671,7 +789,7 @@
 
   if (ier /= 0)                                            then 
       write(6,6009) 1,ier,NMAX
-      ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+      call fermer_fichiers( )
       if (box) nil = exfin( 'Fstmdiag', 'Erreur 9', 'NON' )
       call quit( ' Fstmdiag ',9 )
   end if
@@ -691,7 +809,7 @@
 
   if (ier /= 0)                                            then 
       write(6,6009) 2,ier,28*infont
-      ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+      call fermer_fichiers( )
       if (box) nil = exfin( 'Fstmdiag', 'Erreur 9', 'NON' )
       call quit( ' Fstmdiag ',9 )
   end if
@@ -730,17 +848,10 @@
               allocate( buff8(max( nwds,4096 )), stat=ier )
               if (ier /= 0)                                then
                   write(6,6009) 3,ier,2*max( nwds,4096 )
-                  ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+                  call fermer_fichiers( )
                   if (box) nil = exfin( 'Fstmdiag', 'Erreur 9', 'NON' )
                   call quit( ' Fstmdiag ',9 )
               end if
-              inf  = fstluk( buff8, key, ni,nj,nk )
-
-              iecr = fstecr( buff8,ibuf, &
-                            -nbits, iu2, dateo,deet,npas,          &
-                             ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
-                             etiket,grtyp, ig1,ig2,ig3,ig4,        &
-                             datyp, .TRUE. )
           else
               allocate( buff(max( nwds,4096 )), stat=ier )
               if (ier /= 0)                                then
@@ -749,46 +860,12 @@
                   if (box) nil = exfin( 'Fstmdiag', 'Erreur 9', 'NON' )
                   call quit( ' Fstmdiag ',9 )
               end if
-              inf  = fstluk( buff, key, ni,nj,nk )
-              
-              iecr = fstecr( buff,ibuf, &
-                            -nbits, iu2, dateo,deet,npas,          &
-                             ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
-                             etiket,grtyp, ig1,ig2,ig3,ig4,        &
-                             datyp, .TRUE. )
           end if
 
-          if (iecr < 0)                                    then
-              write(6,6005) iecr,'moyenne'
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
-              if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
-              call quit( ' Fstmdiag ',5 )
-          end if
-
-          if (.not.NoVar)                                  then
-
-              if (nbits > 32)                              then
-                  iecr = fstecr( buff8,ibuf, &
-                                -nbits, iu3, dateo,deet,npas,          &
-                                 ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
-                                 etiket,grtyp, ig1,ig2,ig3,ig4,        &
-                                 datyp, .TRUE. )
-              else
-                  iecr = fstecr( buff,ibuf, &
-                                -nbits, iu3, dateo,deet,npas,          &
-                                 ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
-                                 etiket,grtyp, ig1,ig2,ig3,ig4,        &
-                                 datyp, .TRUE. )
-              end if
-
-              if (iecr < 0)                                then
-                  write(6,6005) iecr,'variance'
-                  ifrm = fstfrm (iu2) ; ifrm = fstfrm (iu3)
-                  if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
-                  call quit( ' Fstmdiag ',5 )
-              end if
-
-          end if
+          if (.not.NoMean) call ecrire_fichier1( iu2,'moyenne'  )
+          if (.not.NoVar)  call ecrire_fichier1( iu3,'variance' )
+          if (DoMin)       call ecrire_fichier1( iu4,'minimum'  )
+          if (DoMax)       call ecrire_fichier1( iu5,'maximum'  )
 
           if (nbits > 32)                                  then
               deallocate( buff8, stat=ier )
@@ -944,14 +1021,16 @@
       if (nwds > nwds0)                                    then
 
           if (allocated( buff )) &
-              deallocate( buff,buff8, moyenne,variance, stat=ier )
+              deallocate( buff,buff8, moyenne,variance,maximum8,minimum8, stat=ier )
 
           ! Allouer l'espace de travail necessaire.
 
           if (ier == 0) allocate( buff    (max( 4096,nwds )), &
                                   buff8   (max( 4096,nwds )), &
                                   moyenne (max( 4096,nwds )), &
-                                  variance(max( 4096,nwds )),stat=ier )
+                                  variance(max( 4096,nwds )), &
+                                  maximum8(max( 4096,nwds )), &
+                                  minimum8(max( 4096,nwds )),stat=ier )
 
           if (ier /= 0)                                    then
               write(6,6009) 5,ier,7*max( nwds,4096 )
@@ -1040,7 +1119,7 @@
 
           if (inf.lt.0)                                    then
               write(6,6007) inf
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              call fermer_fichiers( )
               if (box) nil = exfin( 'Fstmdiag','Erreur 7','NON' )
               call quit( ' Fstmdiag ',7 )
           end if
@@ -1274,7 +1353,7 @@
 
               if (OldIP3 .and. rkind (i) >=0)              then
                   write(6,6016) start,i,trim( chaine(i) )
-                  ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+                  call fermer_fichiers( )
                   if (box) nil = exfin( 'Fstmdiag','Erreur 16','NON' )
                   call quit( ' Fstmdiag ',16 )
               end if
@@ -1420,10 +1499,17 @@
               end if
 
           end if
-          
-          if (.not.NoVar) &
+
           variance(1:nwds) = variance(1:nwds)+mdiag*(buff8(1:nwds)*buff8(1:nwds))
           moyenne (1:nwds) = moyenne (1:nwds)+mdiag* buff8(1:nwds)
+
+          if (nr == 0)                                      then
+              minimum8(1:nwds) = buff8(1:nwds)
+              maximum8(1:nwds) = buff8(1:nwds)
+          else
+              minimum8(1:nwds) = min( buff8(1:nwds),minimum8(1:nwds) )
+              maximum8(1:nwds) = max( buff8(1:nwds),maximum8(1:nwds) )
+          end if
 
           ns = ns+mdiag
           nr = nr+1
@@ -1439,7 +1525,7 @@
  
       if (iprm.lt.0)                                       then
           write(6,6008) iprm
-          ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+          call fermer_fichiers( )
           if (box) nil = exfin( 'Fstmdiag','Erreur 8','NON' )
           call quit( ' Fstmdiag ',8 )
       end if
@@ -1449,12 +1535,10 @@
 
       moyenne  = moyenne/ns
 
-      if (.not.NoVar)                                      then
-          variance = variance/ns
-          variance = variance-(moyenne*moyenne)
-          ! Eliminer les erreurs d'arrondissement
-          variance = max( 0.0_8,variance )
-      end if
+      variance = variance/ns
+      variance = variance-(moyenne*moyenne)
+      ! Eliminer les erreurs d'arrondissement
+      variance = max( 0.0_8,variance )
 
       if (nr == 1 .and. .not.OldIP3) goto 200 ! Sauver le champs d'entree tel quel !
 
@@ -1509,7 +1593,7 @@
               if (status == CONVERT_ERROR)                 then
                   write(6,6614) status,RP1%hi,RP1%lo,RP1%kind, &
                                        RP2%hi,RP2%lo,RP2%kind
-                  ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+                  call fermer_fichiers( )
                   if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
                   call quit( ' Fstmdiag ',14 )
               end if
@@ -1540,7 +1624,7 @@
                   IP3 = ns ; IP2 = 0
               else ! Trop d'echantillons. Erreur !
                   write(6,6015) ns
-                  ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+                  call fermer_fichiers( )
                   if (box) nil = exfin( 'Fstmdiag','Erreur 15','NON' )
                   call quit( ' Fstmdiag ',15 )
               end if
@@ -1559,7 +1643,7 @@
           if (status == CONVERT_ERROR)                     then
               write(6,6614) status,RP1%hi,RP1%lo,RP1%kind, &
                                  RP2%hi,RP2%lo,RP2%kind
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              call fermer_fichiers( )
               if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
               call quit( ' Fstmdiag ',14 )
           end if
@@ -1576,7 +1660,7 @@
           if (status == CONVERT_ERROR)                     then
               write(6,6614) status,RP1%hi,RP1%lo,RP1%kind, &
                                  RP2%hi,RP2%lo,RP2%kind
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              call fermer_fichiers( )
               if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
               call quit( ' Fstmdiag ',14 )
           end if
@@ -1590,7 +1674,7 @@
           if (status == CONVERT_ERROR)                     then
               write(6,6614) status,RP1%hi,RP1%lo,RP1%kind, &
                                  RP2%hi,RP2%lo,RP2%kind
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              call fermer_fichiers( )
               if (box) nil = exfin( 'Fstmdiag','Erreur 14','NON' )
               call quit( ' Fstmdiag ',14 )
           end if
@@ -1609,7 +1693,7 @@
               call diag_convip_plus( ip2,float( ns ),KIND_SAMPLES,+2,nuls,.false. )
           else
               write(6,'(/A/)') "   Incapable  de coder le nombre d'echantillons ..."
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              call fermer_fichiers( )
               if (box) nil = exfin( 'Fstmdiag','Erreur 15','NON' )
               call quit( ' Fstmdiag ',15 )
           end if
@@ -1632,14 +1716,14 @@
               IP3 = ns ; IP2 = 0
           else ! Trop d'echantillons. Erreur !
               write(6,6015) ns
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              call fermer_fichiers( )
               if (box) nil = exfin( 'Fstmdiag','Erreur 15','NON' )
               call quit( ' Fstmdiag ',15 )
           end if
 
       else
           write(6,'(/A/)') "   Incapable  de coder le nombre d'echantillons ..."
-          ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+          call fermer_fichiers( )
           if (box) nil = exfin( 'Fstmdiag','Erreur 15','NON' )
           call quit( ' Fstmdiag ',15 )
       endif
@@ -1654,7 +1738,7 @@
               deet = deet/60 ; npas = npas*60 ; iter = iter+1
           else
               write(6,6011) deet,npas,iter
-              ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
+              call fermer_fichiers( )
               if (box) nil = exfin( 'Fstmdiag','Erreur 11','NON' )
               call quit( ' Fstmdiag ',11 )
           end if
@@ -1662,56 +1746,62 @@
 
       ! Ecrire les resultats en commencant par les moyennes.
 
- 200  if (.not.NoModT) typvar(2:2) = time_mean_signature ! Signature de moyennes
+ 200  if (.not.NoMean)                                     then
 
-      if (nbits <= 32)                                     then
-          nbits = 32 ; datyp = 133 ; buff(1:nwds) = moyenne(1:nwds)
-          iecr = fstecr( buff,ibuf,                             &
-                        -nbits, iu2, dateo,deet,npas,           &
-                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
-                         etiket,grtyp, ig1,ig2,ig3,ig4,         &
-                         datyp, ReWrit )
-      else
-          iecr = fstecr( moyenne,ibuf,                          &
-                        -nbits, iu2, dateo,deet,npas,           &
-                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
-                         etiket,grtyp, ig1,ig2,ig3,ig4,         &
-                         datyp, ReWrit )
+          if (.not.NoModT) typvar(2:2) = time_mean_signature ! Signature de moyennes
+
+          call ecrire_fichier2( moyenne,iu2,'moyenne' )
+
+          if (Stats)                                           then
+              call xxx_fmmm8( amin8,amax8,amean8,avar8, moyenne, nwds )
+              call get_ip1_string( ip1,cip1 )
+              write(6,6101) 'MOY',nr,typvar,nomvar,etiket,cip1, &
+                             ni,nj,amin8,amax8,amean8,avar8
+          end if
+
       end if
 
-      if (iecr < 0)                                        then
-          write(6,6005) iecr,'moyenne'
-          ifrm = fstfrm (iu2) ; if (.not.NoVar) ifrm = fstfrm (iu3)
-          if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
-          call quit( ' Fstmdiag ',5 )
+      ! On ecrit maintenant les minimums..
+
+      if (DoMin)                                           then
+
+          if (.not.NoModT) typvar(2:2) = timmin_signature ! Signature de minimums
+
+          call ecrire_fichier2( minimum8,iu4,'minimum' )
+
+          if (Stats)                                        then
+              call xxx_fmmm8( amin8,amax8,amean8,avar8, minimum8, nwds )
+              call get_ip1_string( ip1,cip1 )
+              write(6,6101) 'MIN',nr,typvar,nomvar,etiket,cip1, &
+                            ni,nj,amin8,amax8,amean8,avar8
+          end if
+
       end if
 
-      if (Stats)                                           then
-          call xxx_fmmm8( amin8,amax8,amean8,avar8, moyenne, nwds )
-          call get_ip1_string( ip1,cip1 )
-          write(6,6101) 'MOY',nr,typvar,nomvar,etiket,cip1, &
-                        ni,nj,amin8,amax8,amean8,avar8
+      ! ... et maintenant les maximums.
+
+      if (DoMax)                                           then
+
+          if (.not.NoModT) typvar(2:2) = timmax_signature ! Signature de maximums
+
+          call ecrire_fichier2( maximum8,iu5,'maximum' )
+
+          if (Stats)                                        then
+              call xxx_fmmm8( amin8,amax8,amean8,avar8, maximum8, nwds )
+              call get_ip1_string( ip1,cip1 )
+              write(6,6101) 'MAX',nr,typvar,nomvar,etiket,cip1, &
+                            ni,nj,amin8,amax8,amean8,avar8
+          end if
+
       end if
 
-      ! Et maintewnant, ecrire les variances (toujours a 64 bits).
+      ! Et enfin, on ecrit les variances (toujours a 64 bits).
 
       if (.not.NoVar .and. nr > 1)                         then
 
           if (.not.NoModT) typvar(2:2) = variance_signature ! Signature de variances
 
-          nbits = 64 ; datyp = 133
-          iecr = fstecr( variance,ibuf,                         &
-                        -nbits, iu3, dateo,deet,npas,           &
-                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
-                         etiket,grtyp, ig1,ig2,ig3,ig4,         &
-                         datyp, ReWrit )
-
-          if (iecr < 0)                                    then
-              write(6,6005) iecr,'variance'
-              ifrm = fstfrm (iu2) ; ifrm = fstfrm (iu3)
-              if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
-              call quit( ' Fstmdiag ',5 )
-          end if
+          nbits = 64 ; call ecrire_fichier2( variance,iu3,'variance' )
 
           if (Stats)                                        then
               call xxx_fmmm8( amin8,amax8,amean8,avar8, variance, nwds )
@@ -1729,14 +1819,10 @@
   !------------------------------------------------------------------
   ! On fait le menage...
 
- 900 ifrm = fstfrm (iu2) ; ierr2 = fclos( iu2 )
-
-  if (nbr > 1) ilnk = fstunl( iu1,nbr )
+ 900 if (nbr > 1) ilnk = fstunl( iu1,nbr )
   do i=1,nbr ; ifrm = fstfrm (iu1(i)) ; ierr1 = fclos( iu1(i) ) ; end do
 
-  if (.not.NoVar)                                          then
-      ifrm = fstfrm (iu3) ; ierr3 = fclos( iu3 )
-  end if
+  call fermer_fichiers( )
 
   write(6,6000) infont-nref
   if (box) nil = exfin( 'Fstmdiag','*Reussite*','NON' )
@@ -1768,6 +1854,7 @@
  6015 format(/"   Trop grand nombre d'echantillons =",I11,' > 254903968'/)
  6016 format(/'   Melange de nouveau et ancien codage des IP1/2/3.'/ &
               '   Voir les enregistrements ',2I10,1x,A/)
+ 6017 format(/'   Rien a faire...')
 
  6100 format(//4x,' NR TV NAME ETIKET',19x,'LEV',5x,'NI',4x,'NJ', &
             11x,'MIN',11x,'MAX',10x,'MEAN',6x,'VARIANCE'//)
@@ -1778,8 +1865,99 @@
               6x,   ' Destination... ',5x,A/:27x,A/)
  6104 format(/3x,I3,' Fichiers Sources... ',A/27x,'...'/27x,A/ &
               6x,   ' Destination... ',5x,A/:27x,A/)
+ 6105 format(/3x,I3,' Source...      ',A/ &
+              7x,'Calculs des Moyennes =',L2,',  des Variances =',L2,','/ &
+              15x,       'des Minimums =',L2,' et des Maximums =',L2/)
+ 6106 format(/3x,I3,' Fichiers Sources... ',A/27x,A/                    &
+              7x,'Calculs des Moyennes =',L2,',  des Variances =',L2,','/ &
+              15x,       'des Minimums =',L2,' et des Maximums =',L2/)
+ 6107 format(/3x,I3,' Fichiers Sources... ',A/27x,'...'/27x,A/          &
+              7x,'Calculs des Moyennes =',L2,',  des Variances =',L2,','/ &
+              15x,       'des Minimums =',L2,' et des Maximums =',L2/)
 
  6201 format(/'Debug ',A,'=',A/)
 
-  end
+!========
+contains
+!========
+  subroutine fermer_fichiers( )
+
+     integer ifrm, ierr2,ierr3,ierr4,ierr5
+
+     if (.not.NoMean) then ; ifrm = fstfrm (iu2) ; ierr2 = fclos( iu2 ) ; end if
+     if (.not.NoVar)  then ; ifrm = fstfrm (iu3) ; ierr3 = fclos( iu3 ) ; end if
+     if (DoMin)       then ; ifrm = fstfrm (iu4) ; ierr4 = fclos( iu4 ) ; end if
+     if (DoMax)       then ; ifrm = fstfrm (iu5) ; ierr5 = fclos( iu5 ) ; end if
+
+     return
+
+  end subroutine fermer_fichiers
+  subroutine ecrire_fichier1( unite,texte )
+
+     integer unite
+     character *(*) texte
+
+     if (nbits > 32)                                  then
+         inf  = fstluk( buff8, key, ni,nj,nk )
+         iecr = fstecr( buff8,ibuf, &
+               -nbits, unite, dateo,deet,npas,        &
+                ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
+                etiket,grtyp, ig1,ig2,ig3,ig4,        &
+                datyp, .TRUE. )
+     else
+         inf  = fstluk( buff, key, ni,nj,nk )
+         iecr = fstecr( buff,ibuf, &
+               -nbits, unite, dateo,deet,npas,        &
+                ni,nj,nk, ip1,ip2,ip3, typvar,nomvar, &
+                etiket,grtyp, ig1,ig2,ig3,ig4,        &
+                datyp, .TRUE. )
+     end if
+
+     if (iecr < 0)                                    then
+         write(6,6605) iecr,texte
+         call fermer_fichiers()
+         if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
+         call quit( ' Fstmdiag ',5 )
+     end if
+
+     return
+
+ 6605 format(/'   Erreur ',i5,' durant ecriture (fstecr) de la variable ',A/)
+
+  end subroutine ecrire_fichier1
+  subroutine ecrire_fichier2( champs,unite,texte )
+
+     real(8) champs(nwds)
+     integer unite
+     character *(*) texte
+
+      if (nbits <= 32)                                     then
+          nbits = 32 ; datyp = 133 ; buff(1:nwds) = champs(1:nwds)
+          iecr = fstecr( buff,ibuf,                             &
+                        -nbits, unite, dateo,deet,npas,         &
+                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
+                         etiket,grtyp, ig1,ig2,ig3,ig4,         &
+                         datyp, ReWrit )
+      else
+          iecr = fstecr( champs,ibuf,                           &
+                        -nbits, unite, dateo,deet,npas,         &
+                         ni,nj,nk, ip1,ip2,ip3, typvar,nomvar,  &
+                         etiket,grtyp, ig1,ig2,ig3,ig4,         &
+                         datyp, ReWrit )
+      end if
+
+      if (iecr < 0)                                        then
+          write(6,6615) iecr,texte
+          call fermer_fichiers( )
+          if (box) nil = exfin( 'Fstmdiag','Erreur 5','NON' )
+          call quit( ' Fstmdiag ',5 )
+      end if
+
+      return
+
+ 6615 format(/'   Erreur ',i5,' durant ecriture (fstecr) de la variable ',A/)
+
+   end subroutine ecrire_fichier2
+!== end of private function =========================================
+end subroutine fstmdiag
 # endif
