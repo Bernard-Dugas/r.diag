@@ -69,9 +69,9 @@
 ! Codes de sortie:
 ! ----------------
 !       0 Pas d'erreur
-!       1 Nom de fichier d'entree requis a l'entree
+!       1 Au moins un nom de fichier source est requis
 !       2 Impossible d'associer un nom a une unite d'E/S
-!       3 Le fichier source doit exister au depart
+!       3 Au moins un fichier source doit exister au depart
 !       4 Un des fichiers destinations existe deja
 !       5 Erreur durant ecriture (fstecr)
 !       7 Erreur durant la lecture (fstluk)
@@ -83,7 +83,7 @@
 !      13 Incapable de lier les fichiers d'entree
 !      14 Erreur dans DECODE_ip/ENCODE_ip
 !      15 Incapable de coder le nombre d'echantillons
-!      16 Melange de nouveau et ancien codage des IP1/2/3
+!      16 Melange de nouveaux et anciens codages des IP1/2/3
 !
 # endif
 #     if defined (RDIAG_LICENCE)
@@ -108,6 +108,11 @@
   ! Historique des modifications:
   !
   ! $Log: fstmdiag.ptn90,v $
+  !  Revision 1.21 2020/11/20 14:14  dugas
+  !  Correction pour le cas ou il n'y a qu'un seul
+  !  fichier de sortie et que son nom n'a pas ete
+  !  specifie avec l'argument -d
+  !
   !  Revision 1.20 2020/11/17 17:17  dugas
   !  Ajouter les options de calculs -nomean, -min et -max
   !
@@ -529,8 +534,8 @@
 
   if (.not.NoMean) name2 = def1(1)
   if (.not.NoVar)  name3 = def1(1)
-  if (DoMin)       name4 = def1(1)
-  if (DoMax)       name5 = def1(1)
+  if (     DoMin)  name4 = def1(1)
+  if (     DoMax)  name5 = def1(1)
 
   ! Verifier l'existence et le type des fichiers I/O.
 
@@ -614,24 +619,21 @@
           if (DoMax) name5 = trim( name3 ) // '_maximum'
           name3 = trim( name3 ) // '_variance'
       end if
-  else if (DoMin .or. DoMax)                               then
+  else if (DoMin .and. DoMax)                              then
       if (DoMin) name4 = trim( name4 ) // '_minimum'
       if (DoMax) name5 = trim( name5 ) // '_maximum'
   end if
 
-  ! On modifie le nom du fichier des moyennes seulement
-  ! si son nom est egal a celui du fichier d'entree ou
-  ! que le calcul de la variance est requis.
+  ! Enfin, lorsqu'il n'a qu'un seul fichier de sortie et
+  ! que son nom est identique a celui du permier fichier
+  ! d'entree, modifier son nom selon ce qu'il contiendra
 
-!  if (def1(NBRARGS+1) == def1(1))                          then
-!      if(.not.NoVar)                                       then
-!         name3 = trim( name2 ) // '_variance'
-!      else if (DoMin)                                      then
-!         name4 = trim( name2 ) // '_minimum'
-!      else if (DoMax)                                      then
-!         name5 = trim( name2 ) // '_maximum'
-!      end if
-!  end if
+  if (def1(NBRARGS+1) == def1(1))                          then
+      if(.not.NoMean .and. name2 == def1(NBRARGS+1)) name2 = name2 // '_moyenne'
+      if(.not.NoVar  .and. name3 == def1(NBRARGS+1)) name3 = name3 // '_variance'
+      if(     DoMin  .and. name4 == def1(NBRARGS+1)) name4 = name4 // '_minimum'
+      if(     DoMax  .and. name5 == def1(NBRARGS+1)) name5 = name5 // '_maximum'
+  end if
 
   ftyp2 = -3 ; ftyp3 = -3 ; ftyp4 = -3 ; ftyp5 = -3
 
@@ -1833,13 +1835,13 @@
 
  6000 format(/'   Traitement de ',i6,' champs effectuee.'/)
 
- 6001 format(/'   Deux noms de fichiers sont requis a l''entree...'/)
+ 6001 format(/'   Au moins un nom de fichier source est requis a l''entree...'/)
  6002 format(/'   Impossible d''associer un nom a une unite d''E/S...'/)
- 6003 format(/'   Le fichier source doit exister au depart...'/3x,A/)
- 6004 format(/'   Le fichier destination "',A,'" existe deja'/ &
+ 6003 format(/'   Au moins un fichier source doit exister au depart...'/3x,A/)
+ 6004 format(/'   Un fichier destination "',A,'" existe deja'/ &
               "   Il faut l'effacer ou invoquer le parametre -f"/) 
  6005 format(/'   Erreur ',i5,' durant ecriture (fstecr) de la ',A/)
- 6006 format(/"   Le fichier source n'est pas de type RND."/)
+ 6006 format(/"   Un fichier source n'est pas de type RND."/)
  6007 format(/'   Erreur ',i5,' durant la lecture (fstluk).'/)
  6008 format(/'   Erreur ',i5,' durant la lecture (fstprm).'/)
  6009 format(/"   Erreur d'allocation de memoire, instance,ier,nwds =",3I6/)
@@ -1852,7 +1854,7 @@
  6614 format(/'   Erreur=',I3,' dans ENCODE_ip, RP1=',2p4e14.6,I3/ &
                                            31x,'RP2=',2p4e14.6,I3/)
  6015 format(/"   Trop grand nombre d'echantillons =",I11,' > 254903968'/)
- 6016 format(/'   Melange de nouveau et ancien codage des IP1/2/3.'/ &
+ 6016 format(/'   Melange de nouveaux et anciens codages des IP1/2/3.'/ &
               '   Voir les enregistrements ',2I10,1x,A/)
  6017 format(/'   Rien a faire...')
 
