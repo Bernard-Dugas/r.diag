@@ -9,6 +9,10 @@
 *                                  -c    VAL6 -d VAL7 -i VAL8 [VAL9] \ 
 *                                  -def [AABB] ]
 *
+*      vsinthl XIN LNSP XOUT [ GTOP ] INPUT OUTPUT \ 
+*            [ -kind VAL1 [ VAL2 ] -scal VAL3 -l VAL4 -a VAL5 \ 
+*                                  -c    VAL6 -d VAL7 -i VAL8 [VAL9] \ 
+*                                  -def [AABB][BOT2TOP]
 *
 *     DESCRIPTION...
 *      vsinth  - VERTICAL SIGMA INTEGRAL FOR DATA ON ETA COORDINATES
@@ -19,7 +23,7 @@
 *
 *
 *     PURPOSE - COMPUTES THE VERTICAL SIGMA INTEGRAL FOR DATA ON ETA
-*               (SIGMA/HYBRID/GEM) COORDINATES. THE PROGRAM IS UPWARD
+*    (vsinth)  (SIGMA/HYBRID/GEM) COORDINATES. THE PROGRAM IS UPWARD
 *               COMPATIBLE WITH THE FORMER VERSION (VSINT).
 *
 *               THE DIFFERENCES ARE THAT:
@@ -27,6 +31,10 @@
 *               2) SPECTRAL FIELDS CAN ONLY BE HANDLED IN SIGMA COORD;
 *               3) THE TOP PRESSURE CAN BE READ FOR GEM-TYPE COORDINATES
 *
+*     PURPOSE - AS vsinth, EXCEPT THAT 1) THE RESULTS ARE SAVED LEVEL BY
+*    (vsinthl)  LEVEL AND 2) THEY CAN BE CALCULATED IN THE TOP->SURF OR
+*               SURF->TOP ORDER.
+*     
 *
 *     INPUT FILE...
 *      XIN  = INPUT SERIES OF ETA LEVEL GRID FIELDS .
@@ -135,6 +143,7 @@
 *      22 WRONG NUMBER OF AA,BB IN AABB
 *      23 LNSP DOES NOT CONTAIN LN(SURFACE PRESSURES) FOR EARTH
 *      24 UNABLE TO ALLOCATE WORKING MEMORY
+*      25 UNRECOGNIZED -DEF ARGUMENT VALUE
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -162,6 +171,10 @@
 *     ------------------------------------------------------------------
 *
 *     $Log: vsinth.ptn,v $
+*     Revision 4.33  2021/01/10 14:14  dugas
+*     Introduire le mode VSINTHL ou les sorties
+*     se feront en mode 3D, niveaus par niveaux.
+*
 *     Revision 4.32  2020/02/10 11:11  dugas
 *     Declarer les variables R38,R48 utilisees dans toc_gest_1.cdk
 *     avec les coordoonnes hauteurs-hybride et sleve-hybride.
@@ -302,7 +315,7 @@
       REAL,       PARAMETER :: PTMIN  = pression_au_toit
  
       CHARACTER   GRTYP
-      LOGICAL     MODETA,TOCLU
+      LOGICAL     MODETA,TOCLU,BOT2TOP
       REAL(8)     PTOIT8,PREF8, R8,R28,R38,R48
       LOGICAL     OK,SPEC,FTOPP,MONOTON,DEF,AABB
       REAL        CPRES,NPRES,PREF,SIGTOP, BIGBIN
@@ -315,7 +328,8 @@
      +            MAXW4,LEN,LEN2,LEN4,NWDS,KPAK,ILEV,ILEVG,I,J,K,L,M,
      +            TIM,IER,HIGH,LOW,KEEP,IL,NSETS,IO,KIND,NOM,TOP,IN1,
      +            BOT,INC,LPAK,MPAK,MEM,VKIND,VKINDI,VK,NC,LEVS,NSL,
-     +            LL,L1,L2,TOC_NK,TOC_NBR,IG10,IG20,IG1,IG2,NI,NJ,IUN
+     +            LL,L1,L2,TOC_NK,TOC_NBR,IG10,IG20,IG1,IG2,NI,NJ,IUN,
+     +            ISTART,IEND,IDL
 
       INTEGER     LEV (MAXLEV)
       REAL        ETA (MAXLEV),ETAB (MAXLEV)
@@ -346,10 +360,11 @@
 
       INTEGER,    EXTERNAL :: FCLOS,FNOM
 
-      DATA        CHECK /  ' '    /
-      DATA        FTOPP / .FALSE. /
-      DATA        MODETA/ .FALSE. /
-      DATA        TOCLU / .FALSE. /
+      DATA        CHECK   /  ' '    /
+      DATA        FTOPP   / .FALSE. /
+      DATA        MODETA  / .FALSE. /
+      DATA        TOCLU   / .FALSE. /
+      DATA        BOT2TOP / .FALSE. /
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -359,6 +374,13 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vsinth.ptn,v $'
 
 *---------------------------------------------------------------------
+***    WHAT OPERATING MODE: VSINTH OU VSINTL ?
+
+      CALL GETVERB( VERBEX )
+      CALL LOW2UP( VERBEX,VERBEX )
+
+      IF (VERBEX == 'VSINTHL') VERBEX = 'VSINTHL'
+
       CALL SETRABT( '&NON' )
 
 ***    ACCEDER LES FICHIERS D'E/S.
@@ -366,8 +388,6 @@
       NFIL = 6 ; IN1 = 1
       CALL JCLPNT( NFIL, IN1,2,3,4, 5,6 )
  
-      VERBEX = ' Vsinth '
-
       PKTYP = GETYP( IN1 )
       NSETS = 0
 
@@ -416,8 +436,21 @@
               IF (OK) READ(LIGNE,0010, END=910,ERR=910,IOSTAT=IO ) R20
           END IF
 
-          DEF = RPBLOC('DEFAUT',LIGNE)
-          IF (DEF .AND. LIGNE == 'AABB') AABB = .TRUE.
+          OK = RPBLOC('DEFAUT',LIGNE)
+          IF (OK)                                              THEN
+              IF (LIGNE /= ' ') CALL LEADBLK( LIGNE )
+              IF (LIGNE == '-1')                               THEN
+                  DEF = OK
+              ELSE IF (LIGNE /= ' ')                           THEN
+                  CALL low2up( LIGNE,LIGNE )
+                  IF (index( LIGNE,'AABB'   )  > 0) AABB   = OK
+                  IF (index( LIGNE,'BOT2TOP' ) > 0) BOT2TOP= OK
+                  IF (.NOT.(AABB .OR. BOT2TOP))                THEN
+                      WRITE(6,6025) TRIM( LIGNE )
+                      CALL                         XIT( Verbex ,-25)
+                  END IF
+              END IF
+          END IF
 
       ELSE
 
@@ -434,6 +467,8 @@
           END IF
 
       END IF
+
+      IF (BOT2TOP .AND. VERBEX == 'VSINTH') BOT2TOP = .FALSE.
 
 ***    ACCOUNT FOR DEFAULT TREATMENT.
 
@@ -519,7 +554,7 @@
 
       IF (COORD(1:3).EQ.'GEM' .AND. LAY.EQ.0) LAY = 2
 
-      IF (COORD.NE.'GEM2' .AND. COORD.NE.'GEM3')               THEN
+      IF (COORD == 'GEM' .OR. COORD(1:3) /= 'GEM')               THEN
           WRITE(6,6100) LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT
           IF (COORD.EQ.'GEM2') WRITE(6,6101) PREF,R
       END IF
@@ -798,7 +833,15 @@
 
       END IF
 
-***    INITIALIZE THE CUMULATIVE ARRAY, AND DEFINE TOP SIGMA VALUE.
+      IF (.NOT.BOT2TOP)                                        THEN
+        ! FROM TOP TO BOTTOM.
+          ISTART = TOP ; IEND = BOT ; IDL = INC
+      ELSE
+        ! FROM BOTTOM TO TOP.
+          ISTART = BOT ; IEND = TOP ; IDL = -INC
+      END IF
+
+***    INITIALIZE THE CUMULATIVE ARRAY, AND DEFINE INITIAL SIGMA VALUE.
  
       HIGH = 0
       LOW  = NWDS
@@ -824,7 +867,7 @@
                   IF (COORD.EQ.'GEM'  .OR.
      +                COORD.EQ.'GEM2' .OR.
      +                COORD.EQ.'GEM3')                        THEN
-                      PLOCAL = AB(TOP) + BB(TOP) *  PRESS(I)
+                      PLOCAL = AB(ISTART) + BB(ISTART) * PRESS(I)
                   END IF
                   SIGB(I+HIGH) = PLOCAL / PRESS(I)
               END DO
@@ -836,7 +879,7 @@
               END DO
           ELSE
               DO  I=1,NWDS
-                  SIGB(I+HIGH) = ( ETA(TOP) * ETA(TOP) ) / ETAB(TOP)
+                  SIGB(I+HIGH) = ( ETA(ISTART) * ETA(ISTART) ) / ETAB(ISTART)
               END DO
           END IF
       ELSE
@@ -924,29 +967,29 @@
           DO  J=1,NJ
               DO  I=1,NI
                   K = K+1
-                  SIGB(K+HIGH) = pressure(I,J,TOP) / PRESS(K)
+                  SIGB(K+HIGH) = pressure(I,J,ISTART) / PRESS(K)
               END DO
           END DO
 
       END IF
 
-***    INTEGRATE FROM TOP TO BOTTOM.
+***    INTEGRATE
 
-      IF (COORD == 'GEM4') CPRESL(:,:) = pressure(:,:,TOP)
+      IF (COORD == 'GEM4') CPRESL(:,:) = pressure(:,:,ISTART)
 
-      DO  200 L=TOP,BOT,INC
+      DO  200 L=ISTART,IEND,IDL
 
 ***        BUT FIRST, CALCULATE LOCAL SIGMA VALUES.
 
           IF (COORD(1:3).EQ.'GEM')                             THEN
-              IF (L.NE.BOT)                                    THEN
+              IF (L /= IEND)                                   THEN
 
 ***                THE INTERFACE LEVELS ARE DEFINED AS THE GEOMETRIC
 ***                OR ARITHMETIC MEANS OF THE ADJACENT MODEL LEVELS.
 ***                NOTE THAT UNDER THE HYDROSTATIC HYPOTHESIS, THE
 ***                FORMER IS EQUIVALENT TO HEIGHT ARITHMETIC MEANS.
 
-                  IF (COORD == 'GEM4') NPRESL(:,:) = pressure(:,:,L+INC)
+                  IF (COORD == 'GEM4') NPRESL(:,:) = pressure(:,:,L+IDL)
 
                   I = 0
                   DO  J=1,NJ
@@ -958,7 +1001,7 @@
      +                    COORD.EQ.'GEM2' .OR.
      +                    COORD.EQ.'GEM3' )                    THEN
                           CPRES = AB(L    ) + BB(L    ) * PRESS(I)
-                          NPRES = AB(L+INC) + BB(L+INC) * PRESS(I)
+                          NPRES = AB(L+IDL) + BB(L+IDL) * PRESS(I)
                       ELSE
      +                IF (COORD.EQ.'GEM4')                     THEN
                           CPRES = CPRESL(K,J)
@@ -1007,22 +1050,45 @@
               ACC(I) = ACC(I)
      +               + GG(I+IL)*CONST*(SIGB(I+LOW)-SIGB(I+HIGH))
           END DO
+
+          IF (VERBEX == 'VSINTHL')                             THEN
+
+             ! PUT THE PARTIAL RESULT ONTO FILE XOUT.
  
+              IF (PKTYP == 'SQ')                               THEN
+                 IF (BOT2TOP)                                  THEN
+                     HIVAL = ETA(L+IDL)
+                 ELSE
+                     LOVAL = ETA(L+IDL)
+                 END IF
+                 CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
+              ELSE
+                 IBUF(4) = LEV(L)
+              END IF
+
+              CALL PUTFLD2( 3, ACC, IBUF,MAXW )
+
+          END IF
+
           KEEP = LOW
           LOW  = HIGH
           HIGH = KEEP
  
  200  CONTINUE
- 
-***    PUT THE RESULT ONTO FILE XOUT.
- 
-      IF (PKTYP.EQ.'SQ')                                       THEN
-          CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
-      ELSE
-          IBUF(4) = LEVS
-      END IF
 
-      CALL PUTFLD2( 3, ACC, IBUF,MAXW )
+      IF (VERBEX == 'VSINTH')                                  THEN
+
+***        PUT THE TOTAL RESULT ONTO FILE XOUT.
+ 
+          IF (PKTYP == 'SQ')                                   THEN
+              CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
+          ELSE
+              IBUF(4) = LOVAL
+          END IF
+
+          CALL PUTFLD2( 3, ACC, IBUF,MAXW )
+
+      END IF
 
       NSETS = NSETS+1
       GOTO 100
@@ -1050,6 +1116,7 @@
  6020 FORMAT('  Unable to read A,B in aabb.nml namelist file,',
      +       '  error no.',I5/)
 # include "set_a_b_formats.cdk"
+ 6025 FORMAT(' Unrecognized -def argument value... ',A/)
 
  6100 FORMAT('  Levtyp = ',A4,', const = ',1P,E12.4,
      +       ', lay = ',0P,I5,', coord=',1X,A4,', sigtop =',F15.10,

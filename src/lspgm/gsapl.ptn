@@ -48,6 +48,9 @@
 *                     DETERMINE THE RPN DEFAULTS ('GEM2','GEM3','GEM4' or 'GEM5').
 *                     ALL GEM* COORDINATES ARE PRESSURE-RELATED EXCEPT FOR
 *.                    GEM5 WHICH IS A HYBRID-HEIGHT COORDINATE.
+*
+*                 *** NOTE THAT GEM5 DATA IS NOT SUPPORTED AT THIS TIME BY GSAPL ***
+*
 *      PTOIT (c)    = PRESSURE (PA) AT THE LID OF MODEL. THIS PARAMETER
 *                     IS NOT USED WITH THE GAL-CHEN INPUT LEVELS. THE DEFAULT
 *                     VALUE DEPENDS ON COORD: 1000. FOR GEM AND 0.01 OTHERWISE.
@@ -153,6 +156,7 @@
 *      25 LEVP DOES NOT CONTAIN PRESSURE DATA
 *      26 GSLNSP DOES NOT CONTAIN LN( SURFP ) FOR EARTH
 *      27 UNRECOGNIZED -DEF ARGUMENT VALUE
+*      28 GEM5 DATA NOT SUPPORTED AT THIS TIME
 *
 #     endif
 #     if defined (RDIAG_LICENCE)
@@ -1087,6 +1091,9 @@
 
           ELSE IF (COORD == 'GEM5')                            THEN
 
+              WRITE(6,6028)
+              CALL                                 XIT( VERBEX ,-28 )
+
           ELSE
   
 ***            INTERPOLATE IN-PLACE FROM ETA TO PRESSURE.
@@ -1146,6 +1153,7 @@
      +       ' error no.',I5/)
 # include "set_a_b_formats.cdk"
  6027 FORMAT(' Unrecognized -def argument value... ',A/)
+ 6028 FORMAT(//' *** GEM5 DATA NOT SUPPORTED AT THIS TIME ***'//)
 
  6100 FORMAT('0 Gsapl interpolated',I5,' sets')
  6110 FORMAT(' Using A and B from file aabb.nml'/)
