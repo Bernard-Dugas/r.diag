@@ -685,7 +685,13 @@ SUBROUTINE ENCODE_RANGE( HIVAL,LOVAL,KIND, IBUF )
        v1 = 0.0   ; k1 = KIND_PRESSURE
        V2 = HIVAL ; k2 = lkind
        v3 = LOVAL ; k3 = lkind
-      stat = diag_encode_ip( ip1,ip2,ip3, v1,k1, v2,k2, v3,k3 )
+       stat = diag_encode_ip( ip1,ip2,ip3, v1,k1, v2,k2, v3,k3 )
+
+      ! Case: Old style IP1 and new style IP2.
+      !       As we are interested in the IP2,IP3 pair
+      ! ==>   Change the output status to OK
+      if (ip2 >= 32768 .and. stat == CONVERT_GOOD_GUESS) &
+          stat = CONVERT_OK 
 
       if (stat == CONVERT_ERROR) then
          write(6,'("ENCODE error = ",I3)') stat
@@ -703,6 +709,12 @@ SUBROUTINE ENCODE_RANGE( HIVAL,LOVAL,KIND, IBUF )
       v2 = 0.0   ; k2 = KIND_HOURS
       v3 = LOVAL ; k3 = lkind
       stat = diag_encode_ip( ip1,ip2,ip3, v1,k1, v2,k2, v3,k3 )
+
+      ! Case: New style IP1 and old style IP2.
+      !       As we are interested in the IP1,IP3 pair
+      ! ==>   Change the output status to OK
+      if (ip1 >= 32768 .and. stat == CONVERT_GOOD_GUESS) &
+          stat = CONVERT_OK 
 
       if (stat == CONVERT_ERROR) then
          write(6,'("ENCODE error = ",I3)') stat
@@ -746,7 +758,7 @@ SUBROUTINE DECODE_RANGE( IBUF, HIVAL,LOVAL,KIND )
 
    ! Get IP1,IP2,IP3 from IBUF.
    ip1 = ibuf(4) ! au lieu de gethigh('IP1',IBUF )
-   ip2 = gethigh('IP3',IBUF )
+   ip2 = gethigh('IP2',IBUF )
    ip3 = gethigh('IP3',IBUF )
 
    ! Decode/Check for ranges

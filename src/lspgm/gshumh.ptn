@@ -133,6 +133,10 @@
 *    3          TAPE9=GSRHUM, TAPE10=GSLNPT, TAPE5=INPUT,  TAPE6=OUTPUT) 
 *     ---------------------------------------------------------------
 *     $Log: gshumh.ptn,v $
+*     Revision 4.19  2021/01/22 19:19  dugas
+*     - Remplacer dintern.cdk par diag_dintern.cdk
+*     - Passer en mode I/O 64 bits (via SETIO64)
+*
 *     Revision 4.18  2019/08/12 18:18  dugas
 *     Introduire la coordonnee GEM5 (non supportee).
 *
@@ -227,25 +231,27 @@
      +            TOC_NBR,IG10,IG20,R20,R2
       REAL(8)     PTOIT8,PREF8,R8
       REAL        ADD,PREF,R,ETAH(MAXLEV),ETAS(MAXLEV),
-     +            AH(MAXLEV),BH(MAXLEV),PTOIT,SHUMREF,
-     +            SMIN,T,ES,TD,E,SHUM,SAT,QMIN,TOPASCL,
-     +            FUNMIN,PTOIT0,PREF0,R0
+     +            PTOIT,PTOIT0,PREF0,R0,AH(MAXLEV),BH(MAXLEV)
+      REAL(8)     SHUMREF,FUNMIN,SMIN,T,ES,TD,E,
+     +            SHUM,SAT,QMIN,TOPASCL
 
       INTEGER,    DIMENSION(:), ALLOCATABLE        :: IBUF 
-      REAL,       DIMENSION(:), ALLOCATABLE        :: F,G,SIGH
-      REAL,       DIMENSION(:), ALLOCATABLE,TARGET :: PRLNPT,PSMBLN
-      REAL,       DIMENSION(:), POINTER            :: PRESS,PRES
+      REAL,       DIMENSION(:), ALLOCATABLE        :: SIGH
+      REAL(8),    DIMENSION(:), ALLOCATABLE        :: F,G
+      REAL(8),    DIMENSION(:), ALLOCATABLE,TARGET :: PRLNPT,PSMBLN
+      REAL(8),    DIMENSION(:), POINTER            :: PRESS,PRES
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
 
+#     define INPUT_REAL8
 #     include "consdia.cdk"
-#     include "dintern.cdk"
+#     include "diag_dintern.cdk"
 #     include "fintern.cdk"
 C***  REAL             A,B,EPS1,EPS2
 C***  COMMON     /EPS/ A,B,EPS1,EPS2
 
-      LOGICAL,      EXTERNAL :: RPBLOC
+      LOGICAL,      EXTERNAL :: SETIO64,RPBLOC
       CHARACTER(16),EXTERNAL :: GETKINDC
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
       INTEGER,      EXTERNAL :: GETSIZ2,GETSIZ,GETKIND,GETHIGH
@@ -273,6 +279,10 @@ C***  COMMON     /EPS/ A,B,EPS1,EPS2
       CALL INCTDIA
   
       PKTYP = GETYP( 1 )
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
 
       VERBEX = ' Gshumh '
 

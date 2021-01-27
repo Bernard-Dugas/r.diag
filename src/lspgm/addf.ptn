@@ -94,6 +94,9 @@
       PROGRAM addf
 
 *     $Log: addf.ptn,v $
+*     Revision 4.34  2021/01/26 20:20  dugas
+*     Menage dans les declarations EXTERNAL
+*
 *     Revision 4.33  2020/02/26 15:15  dugas
 *     On appelle GETVERB avant JCLPNT.
 *
@@ -274,14 +277,13 @@
 
       COMMON      /ZZABORT/ NA
 
-      REAL*8       CALCEPS8
-      CHARACTER*4  GETHIC,GETYP
-      LOGICAL      SETIO64,RPBLOC
-      INTEGER      GETHIGH,GETSIZ2
-      EXTERNAL     GETSIZ2,GETSET2,PUTSET2,PUTLAB,
-     +             CMPLBL,XIT,SETIO64,PRECEDE,LOW2UP,
-     +             ROWORD,GETHIC,GETHIGH,GETYP,CIGAXG,
-     +             RPBLOC,CALCEPS8,GETNAM,MISPAR
+      REAL(8),     EXTERNAL :: CALCEPS8
+      CHARACTER(4),EXTERNAL :: GETHIC,GETYP
+      LOGICAL,     EXTERNAL :: SETIO64,RPBLOC
+      INTEGER,     EXTERNAL :: GETHIGH,GETSIZ2
+      EXTERNAL     GETSET2,PUTSET2,PUTLAB,
+     +             CMPLBL,XIT,PRECEDE,LOW2UP,
+     +             ROWORD,CIGAXG,GETNAM,MISPAR
 
       CHARACTER    NOMPRG*256
       COMMON      /PROGNAM/ NOMPRG

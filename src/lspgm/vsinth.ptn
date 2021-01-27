@@ -12,7 +12,7 @@
 *      vsinthl XIN LNSP XOUT [ GTOP ] INPUT OUTPUT \ 
 *            [ -kind VAL1 [ VAL2 ] -scal VAL3 -l VAL4 -a VAL5 \ 
 *                                  -c    VAL6 -d VAL7 -i VAL8 [VAL9] \ 
-*                                  -def [AABB][BOT2TOP]
+*                                  -def [AABB][TOP2BOT]
 *
 *     DESCRIPTION...
 *      vsinth  - VERTICAL SIGMA INTEGRAL FOR DATA ON ETA COORDINATES
@@ -31,10 +31,11 @@
 *               2) SPECTRAL FIELDS CAN ONLY BE HANDLED IN SIGMA COORD;
 *               3) THE TOP PRESSURE CAN BE READ FOR GEM-TYPE COORDINATES
 *
-*     PURPOSE - AS vsinth, EXCEPT THAT 1) THE RESULTS ARE SAVED LEVEL BY
-*    (vsinthl)  LEVEL AND 2) THEY CAN BE CALCULATED IN THE TOP->SURF OR
-*               SURF->TOP ORDER.
-*     
+*     PURPOSE - As vsinth, EXCEPT THAT 1) THE RESULTS ARE SAVED LEVEL
+*    (vsinthl)  BY LEVEL, 2) THEY CAN BE CALCULATED IN THE TOP->SURFACE
+*               OR SURFACE->TOP ORDER AND 3) THE DEFAULT vsinthl CALCULATION
+*               ORDER IS SURFACE->TOP WHILE vsinth OPERATES THE OTHER WAY
+*
 *
 *     INPUT FILE...
 *      XIN  = INPUT SERIES OF ETA LEVEL GRID FIELDS .
@@ -98,11 +99,14 @@
 *                  as to produce local pressures in Pa units, even though PS
 *                  is usually read in units of hPa (before being converted
 *                  to Pa units internally). In all cases, this approach then
-*                  by-passes the normal COORD-related calculations for PL(K).
+*                  bypasses the normal COORD-related calculations for PL(K).
 *                                        *************
 *                  Given the above, correctly using the AABB option with a
 *                  GEM4 file requires specifying the "-kind GEM4" argument.
 *                                        *************
+*               8) Specifying "-def TOP2BOT" while in vsinthl-mode will
+*                  force the top-to-surface calculation order. This has
+*                  no effect while in vsinth-mode.
 *
 *
 *      READ( 5,5000) LEVTYP,CONST,LAY,COORD,SIGTOP,PTOIT,PREF,R,R2
@@ -171,6 +175,11 @@
 *     ------------------------------------------------------------------
 *
 *     $Log: vsinth.ptn,v $
+*     Revision 4.34  2021/01/26 21:21  dugas
+*     Suite des modifs au mode VSINTHL. Ceci
+*      implique entre autres choses que tous les
+*      calculs sont maintenant en mode 64-bits.
+*
 *     Revision 4.33  2021/01/10 14:14  dugas
 *     Introduire le mode VSINTHL ou les sorties
 *     se feront en mode 3D, niveaus par niveaux.
@@ -316,12 +325,12 @@
  
       CHARACTER   GRTYP
       LOGICAL     MODETA,TOCLU,BOT2TOP
-      REAL(8)     PTOIT8,PREF8, R8,R28,R38,R48
+      REAL(8)     PTOIT8,PREF8, R8,R28,R38,R48,
+     +            CPRES,NPRES,PLOCAL,CORR1,CORR2
       LOGICAL     OK,SPEC,FTOPP,MONOTON,DEF,AABB
-      REAL        CPRES,NPRES,PREF,SIGTOP, BIGBIN
-      REAL        CONST,PTOIT,R,R2,R0,R20,LOVAL,
-     +            CORR2,AMIN,AMAX,AMEAN,HIVAL,
-     +            PLOCAL,PTOIT0,PREF0,CORR1
+      REAL        PREF,SIGTOP, BIGBIN, PTOIT0,PREF0
+      REAL        CONST,PTOIT,R,R2,R0,R20,LOVAL,HIVAL,
+     +            AMIN,AMAX,AMEAN
       CHARACTER*4 LEVTYP,COORD,COORDI,TYPE,NAME,CLNSP
       CHARACTER   LIGNE*80,CHECK*2,PKTYP*2,VERBEX*8
       INTEGER     NFIL,LAY,KBUF(HEAD),LBUF(HEAD),MBUF(HEAD),MAXW,MAXW2,
@@ -329,7 +338,7 @@
      +            TIM,IER,HIGH,LOW,KEEP,IL,NSETS,IO,KIND,NOM,TOP,IN1,
      +            BOT,INC,LPAK,MPAK,MEM,VKIND,VKINDI,VK,NC,LEVS,NSL,
      +            LL,L1,L2,TOC_NK,TOC_NBR,IG10,IG20,IG1,IG2,NI,NJ,IUN,
-     +            ISTART,IEND,IDL
+     +            ISTART,IEND,IDEL
 
       INTEGER     LEV (MAXLEV)
       REAL        ETA (MAXLEV),ETAB (MAXLEV)
@@ -342,14 +351,14 @@
       real,       dimension(:,:,:), save, pointer :: pressure=>null()
       real,       dimension(:,:),   pointer :: ps
 
-
+      REAL,       DIMENSION(:), ALLOCATABLE        :: SIGB
       INTEGER,    DIMENSION(:), ALLOCATABLE        :: IBUF,JBUF
-      REAL,       DIMENSION(:), ALLOCATABLE        :: ACC,GG,TOPP,SIGB
-      REAL,       DIMENSION(:,:), ALLOCATABLE      :: CPRESL,NPRESL
-      REAL,       DIMENSION(:), POINTER            :: PSMBLN
-      REAL,       DIMENSION(:), ALLOCATABLE,TARGET :: PRESS
+      REAL(8),    DIMENSION(:), ALLOCATABLE        :: ACC,GG,TOPP
+      REAL(8),    DIMENSION(:,:), ALLOCATABLE      :: CPRESL,NPRESL
+      REAL(8),    DIMENSION(:), POINTER            :: PSMBLN
+      REAL(8),    DIMENSION(:), ALLOCATABLE,TARGET :: PRESS
 
-      LOGICAL,      EXTERNAL :: RPBLOC
+      LOGICAL,      EXTERNAL :: SETIO64,RPBLOC
       CHARACTER(16),EXTERNAL :: GETKINDC
       CHARACTER(4), EXTERNAL :: GETYP,GETHIC
       INTEGER,      EXTERNAL :: GETSIZ2,GETSIZ,GETKIND,GETHIGH
@@ -364,7 +373,6 @@
       DATA        FTOPP   / .FALSE. /
       DATA        MODETA  / .FALSE. /
       DATA        TOCLU   / .FALSE. /
-      DATA        BOT2TOP / .FALSE. /
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -374,13 +382,6 @@
      +'$Source: /home/cvs/RMNLIB/utils/rdiag/lspgm/vsinth.ptn,v $'
 
 *---------------------------------------------------------------------
-***    WHAT OPERATING MODE: VSINTH OU VSINTL ?
-
-      CALL GETVERB( VERBEX )
-      CALL LOW2UP( VERBEX,VERBEX )
-
-      IF (VERBEX == 'VSINTHL') VERBEX = 'VSINTHL'
-
       CALL SETRABT( '&NON' )
 
 ***    ACCEDER LES FICHIERS D'E/S.
@@ -390,6 +391,21 @@
  
       PKTYP = GETYP( IN1 )
       NSETS = 0
+
+***    WHAT OPERATING MODE: VSINTH OU VSINTL ?
+
+      CALL GETVERB( VERBEX )
+      CALL LOW2UP( VERBEX,VERBEX )
+
+      IF (VERBEX == 'VSINTH')                                  THEN
+          BOT2TOP = .FALSE. ! Default calculations are TOP->BOT in VSINTH
+      ELSE
+          BOT2TOP = .TRUE.  ! While they are done BOT->TOP in VSINTHL
+      END IF
+
+***    SETUP FOR 64-BIT I/O.
+
+      OK = SETIO64(.TRUE.)
 
       COORD  = 'DEF'
       LEVTYP = 'HALF'
@@ -443,9 +459,12 @@
                   DEF = OK
               ELSE IF (LIGNE /= ' ')                           THEN
                   CALL low2up( LIGNE,LIGNE )
-                  IF (index( LIGNE,'AABB'   )  > 0) AABB   = OK
-                  IF (index( LIGNE,'BOT2TOP' ) > 0) BOT2TOP= OK
-                  IF (.NOT.(AABB .OR. BOT2TOP))                THEN
+                  IF (index( LIGNE,'AABB'    ) > 0) AABB    = OK
+                  IF (index( LIGNE,'TOP2BOT' ) > 0 .AND.
+     +                VERBEX == 'VSINTHL'    )      BOT2TOP =.FALSE.
+                  IF (.NOT.AABB .AND.
+     +               (BOT2TOP   .AND. VERBEX == 'VSINTHL')) THEN
+                    ! Option line not empty but value not recognized
                       WRITE(6,6025) TRIM( LIGNE )
                       CALL                         XIT( Verbex ,-25)
                   END IF
@@ -467,8 +486,6 @@
           END IF
 
       END IF
-
-      IF (BOT2TOP .AND. VERBEX == 'VSINTH') BOT2TOP = .FALSE.
 
 ***    ACCOUNT FOR DEFAULT TREATMENT.
 
@@ -539,7 +556,7 @@
 
       END IF
 
-      CORR1 = LOG( 100. )
+      CORR1 = LOG( 100.D0 )
       IF (COORD == 'GEM4') CORR2 = LOG( PREF8 ) ! Used in AABB-mode
 
 ***    IS THERE A TOP PRESSURE FILE AVAILABLE.
@@ -733,9 +750,7 @@
 
 ***        INITIALIZE TOPP WITH PTOIT.
 
-          DO  I=1,NWDS
-              TOPP(I) = PTOIT
-          END DO
+          TOPP(:) = PTOIT
 
       END IF
 
@@ -744,11 +759,7 @@
  
       IF (SPEC)                                                THEN
 
-          TIM = -1
-
-          DO  I=1,NWDS
-              PRESS(I) = 0.0
-          END DO
+          TIM = -1 ; PRESS(:) = 0.0
 
       ELSE
 
@@ -825,9 +836,7 @@
                   CALL                             XIT( VERBEX ,-14) 
               END IF
 
-              DO  I=1,NWDS
-                  TOPP(I) = 100.*TOPP(I)
-              END DO
+              TOPP = 100.*TOPP
 
           END IF
 
@@ -835,20 +844,15 @@
 
       IF (.NOT.BOT2TOP)                                        THEN
         ! FROM TOP TO BOTTOM.
-          ISTART = TOP ; IEND = BOT ; IDL = INC
+          ISTART = TOP ; IEND = BOT ; IDEL = INC
       ELSE
         ! FROM BOTTOM TO TOP.
-          ISTART = BOT ; IEND = TOP ; IDL = -INC
+          ISTART = BOT ; IEND = TOP ; IDEL = -INC
       END IF
 
 ***    INITIALIZE THE CUMULATIVE ARRAY, AND DEFINE INITIAL SIGMA VALUE.
  
-      HIGH = 0
-      LOW  = NWDS
-
-      DO  I=1,NWDS
-          ACC(I) = 0.
-      END DO
+      HIGH = 0 ; LOW  = NWDS ; ACC = 0.
  
       IF (COORD(1:3).EQ.'GEM')                                 THEN
           IF (COORD == 'GEM4')                                 THEN
@@ -867,7 +871,7 @@
                   IF (COORD.EQ.'GEM'  .OR.
      +                COORD.EQ.'GEM2' .OR.
      +                COORD.EQ.'GEM3')                        THEN
-                      PLOCAL = AB(ISTART) + BB(ISTART) * PRESS(I)
+                      PLOCAL = AB(ISTART) + DBLE( BB(ISTART) )*PRESS(I)
                   END IF
                   SIGB(I+HIGH) = PLOCAL / PRESS(I)
               END DO
@@ -879,7 +883,8 @@
               END DO
           ELSE
               DO  I=1,NWDS
-                  SIGB(I+HIGH) = ( ETA(ISTART) * ETA(ISTART) ) / ETAB(ISTART)
+                  SIGB(I+HIGH) = ( ETA(ISTART) * ETA(ISTART) )
+     +                         /         ETAB(ISTART)
               END DO
           END IF
       ELSE
@@ -977,7 +982,7 @@
 
       IF (COORD == 'GEM4') CPRESL(:,:) = pressure(:,:,ISTART)
 
-      DO  200 L=ISTART,IEND,IDL
+      INTEGRATE: DO L=ISTART,IEND,IDEL
 
 ***        BUT FIRST, CALCULATE LOCAL SIGMA VALUES.
 
@@ -989,7 +994,7 @@
 ***                NOTE THAT UNDER THE HYDROSTATIC HYPOTHESIS, THE
 ***                FORMER IS EQUIVALENT TO HEIGHT ARITHMETIC MEANS.
 
-                  IF (COORD == 'GEM4') NPRESL(:,:) = pressure(:,:,L+IDL)
+                  IF (COORD == 'GEM4') NPRESL(:,:)= pressure(:,:,L+IDEL)
 
                   I = 0
                   DO  J=1,NJ
@@ -1000,8 +1005,8 @@
                       IF (COORD.EQ.'GEM'  .OR.
      +                    COORD.EQ.'GEM2' .OR.
      +                    COORD.EQ.'GEM3' )                    THEN
-                          CPRES = AB(L    ) + BB(L    ) * PRESS(I)
-                          NPRES = AB(L+IDL) + BB(L+IDL) * PRESS(I)
+                          CPRES = AB(L    )  + BB(L    )  * PRESS(I)
+                          NPRES = AB(L+IDEL) + BB(L+IDEL) * PRESS(I)
                       ELSE
      +                IF (COORD.EQ.'GEM4')                     THEN
                           CPRES = CPRESL(K,J)
@@ -1048,20 +1053,23 @@
           IL = (L-1)*NWDS
           DO  I=1,NWDS
               ACC(I) = ACC(I)
-     +               + GG(I+IL)*CONST*(SIGB(I+LOW)-SIGB(I+HIGH))
+     +               + GG(I+IL)*CONST*(SIGB(I+LOW)-DBLE(SIGB(I+HIGH)))
           END DO
 
-          IF (VERBEX == 'VSINTHL')                             THEN
+          IF (VERBEX == 'VSINTHL' .AND. L /= ISTART)            THEN
 
              ! PUT THE PARTIAL RESULT ONTO FILE XOUT.
  
               IF (PKTYP == 'SQ')                               THEN
                  IF (BOT2TOP)                                  THEN
-                     HIVAL = ETA(L+IDL)
+                     HIVAL = ETA(L)
+                  !  HIVAL = ETA(L+IDEL)
                  ELSE
-                     LOVAL = ETA(L+IDL)
+                     LOVAL = ETA(L)
+                  !  LOVAL = ETA(L+IDEL)
                  END IF
                  CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
+                 CALL PUTHIGH( VKIND,'RKIND', IBUF )
               ELSE
                  IBUF(4) = LEV(L)
               END IF
@@ -1074,7 +1082,7 @@
           LOW  = HIGH
           HIGH = KEEP
  
- 200  CONTINUE
+      END DO INTEGRATE
 
       IF (VERBEX == 'VSINTH')                                  THEN
 
@@ -1082,6 +1090,7 @@
  
           IF (PKTYP == 'SQ')                                   THEN
               CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
+              CALL PUTHIGH( VKIND,'RKIND', IBUF )
           ELSE
               IBUF(4) = LOVAL
           END IF

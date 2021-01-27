@@ -42,6 +42,9 @@
       PROGRAM invntry
 
 *     $Log: invntry.ptn,v $
+*     Revision 4.16  2021/01/25 10:10  dugas
+*     CBUF passe de 100 a 132 caracteres.
+*
 *     Revision 4.15  2019/07/12 13:13  dugas
 *     Mise-a-jour 'a la f90' des declarations.
 *
@@ -135,7 +138,7 @@
       LOGICAL      OK
       CHARACTER*8  CHAINE(MAXC)
       CHARACTER*4  LABL,TYPE,PKTYP
-      CHARACTER*80 NEWETIK,OLDETIK,CBUF*100
+      CHARACTER*80 NEWETIK,OLDETIK,CBUF*132
       INTEGER      IPAK, NFF,NR, NW,LR,LF, NIO,IER,ZERO
       INTEGER      I,HEAD,JBUF(taille_entete),JPAK, LEN,NWDS,MAXW
 

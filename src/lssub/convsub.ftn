@@ -24,6 +24,14 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 !     $Log: convsub.ftn,v $
+!     Revision 3.135  2021/01/26  dugas
+!     - Modifier le code qui identifie les intervals
+!       verticaux dans IBUFILL i.e. accepter que le
+!       statut de diag_decode_ip puisse alors aussi
+!       etre CONVERT_GOOD_GUESS
+!     - Inverser l'ordre des appels a DIAG_CONVIP_PLUS
+!       et a DIAG_DECODE_IP dans IBUFILL
+!
 !     Revision 3.134  2020/06/01  dugas
 !     - Ajouter le point d'entree getUres a savUref
 !
@@ -607,7 +615,38 @@
      +              grtyp,ig1,ig2,ig3,ig4, swa,lng,dltf,ubc,
      +              extra1,extra2,extra3 )
 
-      if (ip2*720_8 == nint( deet*dble( npas )/5,8 ))          then
+***    Evaluer RANGE_KIND,HIVAL,LOVAL tout de suite.
+***    Ils seront saives dans les mots 29,30,31 de IBUF.
+
+      stat = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
+
+      if (debug .and. stat == CONVERT_ERROR)                   then
+          write(6,6002) stat,ip1,ip2,ip3
+          call                                     xit(' Ibufill',-2 )
+      end if
+
+      k1 = RP1%kind ; k2 = RP2%kind ; k3 = RP3%kind
+
+***    Interval vertical ou de temps (avec combinaison des IP1/2/3) ?
+
+      if (RP3%kind == -1 .and.
+     +   (stat == CONVERT_OK .or. stat == CONVERT_GOOD_GUESS)) then
+
+          if (RP1%hi /= RP1%lo) then   ! Interval vertical
+              HIVAL = RP1%hi ; LOVAL = RP1%lo ; RANGE_KIND = k1
+          else
+     +    if (RP2%hi /= RP2%lo .and.
+     +        stat == CONVERT_OK) then ! Interval de temps
+          !!! Il est preferable de ne pas utiliser CONVERT_GOOD_GUESS
+          !!! pour un interval de temps parce que ceci pourrait entrer
+          !!! en conflit avec le codage precedent des IP2/IP3. On
+          !!! utilisera alors explicetement GETSAMPLZ
+              HIVAL = RP2%hi ; LOVAL = RP2%lo ; RANGE_KIND = k2
+          else                         ! Aucun interval
+              HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
+          end if
+
+      else if (ip2*720_8 == nint( deet*dble( npas )/5,8 ))     then
 
           ! ip2 = npas*deet a 5 secondes pres ==>
           ! Codage "Old-Style". On suppose alors
@@ -621,39 +660,7 @@
 
           stat = CONVERT_OK
 
-      else
-
-***        Evaluer RANGE_KIND,HIVAL,LOVAL tout de suite.
-***        Ils seront saives dans les mots 29,30,31 de IBUF.
-
-          stat = diag_decode_ip( RP1,RP2,RP3,ip1,ip2,ip3 )
-
-          if (debug .and. stat == CONVERT_ERROR)               then
-             write(6,6002) stat,ip1,ip2,ip3
-             call                                  xit(' Ibufill',-2 )
-          end if
-
-          k1 = RP1%kind ; k2 = RP2%kind ; k3 = RP3%kind
-
-      end if
-
-***    Interval vertical ou de temps (avec combinaisob des IP1/2/3) ?
-
-!!!   if (RP3%kind == -1 .and.
-!!!  +   (stat == CONVERT_OK .or. stat == CONVERT_GOOD_GUESS)) then
-!!!     Ces lignes sont en commentaire parce que CONVERT_GOOD_GUESS
-!!!     peut entrer en conflit avec le codage precedent des IP2/IP3.
-!!!     C'est pourquoi le traitement doit etre fait dans GETSAMPLSZ.
-
-      if (stat == CONVERT_OK .and. k3 == -1)                   then
-          if (RP1%hi /= RP1%lo) then ! Interval vertical
-              HIVAL = RP1%hi ; LOVAL = RP1%lo ; RANGE_KIND = k1
-          else if (RP2%hi /= RP2%lo) then ! Interval de temps
-              HIVAL = RP2%hi ; LOVAL = RP2%lo ; RANGE_KIND = k2
-          else                  ! Aucun interval
-              HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
-          end if
-      else
+      else                             ! Aucun interval
           HIVAL = -1.0   ; LOVAL = -1.0   ; RANGE_KIND = -1
       end if
 

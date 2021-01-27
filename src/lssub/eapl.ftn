@@ -15,6 +15,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: eapl.ftn,v $
+C     Revision 3.16  2021/01/22 16:16  dugas
+C     Argument PS de NIVCAL dans EPAEL et ETAPHI en 64 bits.
+C
 C     Revision 3.15  2018/11/12 17:17  dugas
 C     Correction pour le cas ou tous les niveaux
 C     seraient sous la surface dans TGZEX/2
@@ -123,7 +126,8 @@ C
       LOGICAL  MONOTON, REVERSE
       INTEGER  I,K,L,N, INTVL, TOPS,BOTS,INCS, TOPP,BOTP,INCP
       REAL     FSC(NSL),DFDLNS(0:NSL1),DLNS(NSL),SIG(NSL),X
-      REAL     PSJ(1),  HOLD,  LOCSIG(NSL)
+      REAL     HOLD,  LOCSIG(NSL)
+      REAL*8   PSJ(1)
 
       LOGICAL           INFO
       COMMON  /ZZVERBO/ INFO
@@ -154,7 +158,7 @@ C
 ***        COMPUTE LOCAL SIGMA VALUES AND INVERSE OF DELTA LN SIGMA.
   
           PSJ(1) = 100.*EXP( PSLOG(I) )
-          CALL NIVCAL( LOCSIG, A,B,PSJ, NSL,1,1 )
+          CALL NIVCAL( LOCSIG, A,B, PSJ, NSL,1,1 )
 
           IF (I.EQ.1)                                          THEN
 
@@ -260,9 +264,9 @@ C
       IMPLICIT none
 
       INTEGER  NK,ILG,LON, I,K
-      REAL     SJ(NK ,ILG),PSJ(ILG)
-      REAL     A (NK),     B  (NK)
-
+      REAL     SJ(NK ,ILG)
+      REAL     A (NK), B (NK)
+      REAL*8   PSJ(ILG)
 *-------------------------------------------------------------------- 
       DO 500 I=1,LON
           DO 100 K=1,NK 
@@ -350,7 +354,7 @@ C
       INTEGER  LEN,NSLP,NSL,N,L
       REAL     PHI(LEN,NSLP),T(LEN,NSL),PSMBLN(LEN)
       REAL     AG(NSL),BG(NSL),SIG(NSLP), RGAS
-      REAL     PSJ(1)
+      REAL*8   PSJ(1)
 
       EXTERNAL NIVCAL
 

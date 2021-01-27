@@ -1,0 +1,32 @@
+# if defined (CDK_DOC)
+!copyright (C) 2001  MSC-RPN COMM  %%%RPNPHY%%%
+
+! DINTERN.CDK
+! Revision 3.4 2021/01/22 16:16  dugas
+! Declarations optionnelles des intrants
+! en REAL*8
+!
+! Revision 3.3 2016/10/29 21:14  dugas
+! Ajouter les declarations des fonctions 
+! FOEWF,FESIF,FQSMXX,FESMXX,FDLESMXX
+# endif
+# if defined(INPUT_REAL8)
+      REAL*8 TTT, PRS, QQQ, EEE, TVI, QST, QQH
+      REAL*8 T00, PR0, TF, PF,FFF , DDFF
+      REAL*8 QSM , DLEMX
+# else
+      REAL   TTT, PRS, QQQ, EEE, TVI, QST, QQH
+      REAL   T00, PR0, TF, PF,FFF , DDFF
+      REAL   QSM , DLEMX
+# endif
+      REAL*8 DDD
+      REAL*8 FOEW,FODLE,FOQST,FODQS,FOEFQ,FOQFE,FOTVT,FOTTV,FOHR
+      REAL*8 FOLV,FOLS,FOPOIT,FOPOIP,FOTTVH,FOTVHT
+      REAL*8 FOEWA,FODLA,FOQSA,FODQA,FOHRA
+      REAL*8 FOEWF,FOMULT
+      REAL*8 FOEWAF,FESIF
+      REAL*8 FOQSTX,FOHRX
+      REAL*8 FESI,FDLESI,FESMX,FDLESMX,FQSMX,FDQSMX
+      REAL*8 FOEWA8,FESI8,FESMX8,FQSMXX,FESMXX,FDLESMXX
+
+      INTRINSIC DSIGN

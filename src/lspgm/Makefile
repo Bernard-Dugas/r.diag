@@ -3,6 +3,9 @@
 
 # Description: Makefile de LSPGM
 
+# revision 4.164 2021/01/22 19:19  dugas
+# - Remplacer dintern.cdk par diag_dintern.cdk dans GSHUMH
+#
 # revision 4.163 2019/11/20 15:15  dugas
 # - Ajouter le programme OilFill de MFV
 #
@@ -357,7 +360,7 @@ $(LIBP)(gsathl.o) : gsathl.ptn \
 	$(INCLUDE)/toc_gest_formats.cdk	$(INCLUDE)/set_a_b_from_AABB.cdk \
 	$(INCLUDE)/set_a_b_formats.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(gshumh.o) : gshumh.ptn \
-	$(INCLUDE)/consdia.cdk $(INCLUDE)/dintern.cdk \
+	$(INCLUDE)/consdia.cdk $(INCLUDE)/diag_dintern.cdk \
 	$(INCLUDE)/fintern.cdk	$(INCLUDE)/toc_gest_1.cdk \
 	$(INCLUDE)/toc_gest_formats.cdk	$(MODDIR)/diag_toc.mod
 $(LIBP)(gsmslph.o) : gsmslph.ptn \
