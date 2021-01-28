@@ -65,6 +65,10 @@
 *    +       TAPE1= XIN, TAPE2= XOUT, TAPE6=OUTPUT)
  
 *     $Log: vpintl.ptn,v $
+*     Revision 4.15  2021/01/28 06:06  dugas
+*     Sauver la description de l'interval vertical
+*      dans IBUF pour les fichiers CMC/RPN.
+*
 *     Revision 4.14  2017/10/05 20:20:20  dugas
 *     Correction des sorties en mode ZONL pour fichiers CMC/RPN.
 *
@@ -340,8 +344,10 @@
   200     CONTINUE
 
           IF (PKTYP == 'SQ' .AND. TYPE /= 'ZONL')              THEN
-              IF (HIVAL == 0.0)
-     +        CALL ENCODE_RANGE( HIVAL,LOVAL(TOP),VKIND, IBUF )
+              IF (HIVAL == 0.0)                                THEN
+                  CALL ENCODE_RANGE( HIVAL,LOVAL(TOP),VKIND, IBUF )
+                  CALL PUTHIGH( VKIND,'RKIND', IBUF )
+              END IF
               CALL PUTFLD2( 2, ACC, IBUF,MAXW )
           END IF
 
@@ -358,6 +364,7 @@
 
               IF (PKTYP == 'SQ' .AND. TYPE /= 'ZONL')          THEN
                   CALL ENCODE_RANGE( HIVAL,LOVAL(L),VKIND, IBUF )
+                  CALL PUTHIGH( VKIND,'RKIND', IBUF )
                   CALL PUTFLD2( 2, ACC, IBUF,MAXW )
               END IF
 
@@ -367,8 +374,10 @@
  
           IF (NR.EQ.0) CALL PRTLAB( IBUF )
           IF (PKTYP /= 'SQ' .OR. TYPE == 'ZONL')               THEN
-              IF (PKTYP == 'SQ')
-     +            CALL ENCODE_RANGE( HIVAL,LOVAL(BOT),VKIND, IBUF )
+              IF (PKTYP == 'SQ')                               THEN
+                  CALL ENCODE_RANGE( HIVAL,LOVAL(BOT),VKIND, IBUF )
+                  CALL PUTHIGH( VKIND,'RKIND', IBUF )
+              END IF
               CALL PUTSET2( 2, ACC, LEV,NLEVG, IBUF,MAXW )
           END IF
 

@@ -80,6 +80,10 @@
 *     ----------------------------------------------------------
 
 *     $Log: vsint.ptn,v $
+*     Revision 4.13  2021/01/28 06:06  dugas
+*     Sauver la description de l'interval vertical
+*      dans IBUF pour les fichiers CMC/RPN.
+*
 *     Revision 4.12  2014/09/25 20:20:56  dugas
 *     Inserer le texte de la licence LPGPL 2.1 pour R.DIAG.
 *
@@ -428,6 +432,7 @@
 
           IF (PKTYP.EQ.'SQ')                                   THEN
               CALL ENCODE_RANGE( HIVAL,LOVAL,VKIND, IBUF )
+              CALL PUTHIGH( VKIND,'RKIND', IBUF )
           ELSE
               IBUF(4) = LEVS
           END IF

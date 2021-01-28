@@ -175,6 +175,9 @@
 *     ------------------------------------------------------------------
 *
 *     $Log: vsinth.ptn,v $
+*     Revision 4.35  2028/01/28 06:06  dugas
+*     Definir le signe du delta integral selon TOP2BOT
+*
 *     Revision 4.34  2021/01/26 21:21  dugas
 *     Suite des modifs au mode VSINTHL. Ceci
 *      implique entre autres choses que tous les
@@ -1051,10 +1054,17 @@
           END IF
  
           IL = (L-1)*NWDS
-          DO  I=1,NWDS
-              ACC(I) = ACC(I)
-     +               + GG(I+IL)*CONST*(SIGB(I+LOW)-DBLE(SIGB(I+HIGH)))
-          END DO
+          IF (BOT2TOP)                                         THEN
+              DO  I=1,NWDS
+                  ACC(I) = ACC(I)
+     +                 + GG(I+IL)*CONST*(SIGB(I+HIGH)-DBLE(SIGB(I+LOW)))
+              END DO
+          ELSE
+              DO  I=1,NWDS
+                  ACC(I) = ACC(I)
+     +                 + GG(I+IL)*CONST*(SIGB(I+LOW)-DBLE(SIGB(I+HIGH)))
+              END DO
+          END IF
 
           IF (VERBEX == 'VSINTHL' .AND. L /= ISTART)            THEN
 
