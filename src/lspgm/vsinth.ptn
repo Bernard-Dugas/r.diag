@@ -31,10 +31,13 @@
 *               2) SPECTRAL FIELDS CAN ONLY BE HANDLED IN SIGMA COORD;
 *               3) THE TOP PRESSURE CAN BE READ FOR GEM-TYPE COORDINATES
 *
-*     PURPOSE - As vsinth, EXCEPT THAT 1) THE RESULTS ARE SAVED LEVEL
-*    (vsinthl)  BY LEVEL, 2) THEY CAN BE CALCULATED IN THE TOP->SURFACE
-*               OR SURFACE->TOP ORDER AND 3) THE DEFAULT vsinthl CALCULATION
-*               ORDER IS SURFACE->TOP WHILE vsinth OPERATES THE OTHER WAY
+*     PURPOSE - As vsinth, EXCEPT THAT
+*    (vsinthl)  1) THE RESULTS ARE SAVED LEVEL BY LEVEL
+*               2) THESE RESULTS CAN BE CALCULATED IN THE
+*                  TOP->SURFACE OR SURFACE->TOP ORDER
+*               3) THE DEFAULT vsinthl CALCULATION ORDER
+*                  IS SURFACE->TOP WHILE vsinth OPERATES
+*                  IN THE OTHER DIRECTION
 *
 *
 *     INPUT FILE...
@@ -176,7 +179,8 @@
 *
 *     $Log: vsinth.ptn,v $
 *     Revision 4.35  2028/01/28 06:06  dugas
-*     Definir le signe du delta integral selon TOP2BOT
+*     - Definir le signe du delta integral selon TOP2BOT
+*     - Modifications a la doc du mode VSINTHL
 *
 *     Revision 4.34  2021/01/26 21:21  dugas
 *     Suite des modifs au mode VSINTHL. Ceci
