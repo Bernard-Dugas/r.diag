@@ -12,7 +12,7 @@
 *      vsinthl XIN LNSP XOUT [ GTOP ] INPUT OUTPUT \ 
 *            [ -kind VAL1 [ VAL2 ] -scal VAL3 -l VAL4 -a VAL5 \ 
 *                                  -c    VAL6 -d VAL7 -i VAL8 [VAL9] \ 
-*                                  -def [AABB][TOP2BOT]
+*                                  -def [AABB][TOP2BOT][DLNP]
 *
 *     DESCRIPTION...
 *      vsinth  - VERTICAL SIGMA INTEGRAL FOR DATA ON ETA COORDINATES
@@ -33,11 +33,13 @@
 *
 *     PURPOSE - As vsinth, EXCEPT THAT
 *    (vsinthl)  1) THE RESULTS ARE SAVED LEVEL BY LEVEL
-*               2) THESE RESULTS CAN BE CALCULATED IN THE
-*                  TOP->SURFACE OR SURFACE->TOP ORDER
-*               3) THE DEFAULT vsinthl CALCULATION ORDER
-*                  IS SURFACE->TOP WHILE vsinth OPERATES
-*                  IN THE OTHER DIRECTION
+*               2) THESE RESULTS CAN BE CALCULATED IN THE TOP->SURFACE
+*                  OR SURFACE->TOP ORDER
+*               3) NOTE THAT THE DEFAULT vsinthl CALCULATION ORDER IS
+*                  SURFACE->TOP. vsinth CAN ONLY OPERATE TOP->SURFACE
+*               4) RATHER THAN DO THE INTEGRAL IN DELTA(SIGMA), INTEGRATE
+*                  IN DELTA(LN PRESSURE) WHEN THE COMMAND-LINE "DLNP"
+*                  OPTION IS SPECIFIED
 *
 *
 *     INPUT FILE...
@@ -178,6 +180,10 @@
 *     ------------------------------------------------------------------
 *
 *     $Log: vsinth.ptn,v $
+*     Revision 4.36  2028/01/29 14:14  dugas
+*     Ajouter l'option d'integration selon
+*     d(lnp) au mode VSINTHL
+*
 *     Revision 4.35  2028/01/28 06:06  dugas
 *     - Definir le signe du delta integral selon TOP2BOT
 *     - Modifications a la doc du mode VSINTHL
@@ -189,7 +195,7 @@
 *
 *     Revision 4.33  2021/01/10 14:14  dugas
 *     Introduire le mode VSINTHL ou les sorties
-*     se feront en mode 3D, niveaus par niveaux.
+*     se feront en mode 3D, niveaux par niveaux.
 *
 *     Revision 4.32  2020/02/10 11:11  dugas
 *     Declarer les variables R38,R48 utilisees dans toc_gest_1.cdk
@@ -331,7 +337,7 @@
       REAL,       PARAMETER :: PTMIN  = pression_au_toit
  
       CHARACTER   GRTYP
-      LOGICAL     MODETA,TOCLU,BOT2TOP
+      LOGICAL     MODETA,TOCLU,BOT2TOP,DLNP
       REAL(8)     PTOIT8,PREF8, R8,R28,R38,R48,
      +            CPRES,NPRES,PLOCAL,CORR1,CORR2
       LOGICAL     OK,SPEC,FTOPP,MONOTON,DEF,AABB
@@ -380,6 +386,7 @@
       DATA        FTOPP   / .FALSE. /
       DATA        MODETA  / .FALSE. /
       DATA        TOCLU   / .FALSE. /
+      DATA        DLNP    / .FALSE. /
 
       CHARACTER   NOMPRG*256
       COMMON     /PROGNAM/ NOMPRG
@@ -469,8 +476,12 @@
                   IF (index( LIGNE,'AABB'    ) > 0) AABB    = OK
                   IF (index( LIGNE,'TOP2BOT' ) > 0 .AND.
      +                VERBEX == 'VSINTHL'    )      BOT2TOP =.FALSE.
-                  IF (.NOT.AABB .AND.
-     +               (BOT2TOP   .AND. VERBEX == 'VSINTHL')) THEN
+                  IF (index( LIGNE,'DLNP'    ) > 0 .AND.
+     +                VERBEX == 'VSINTHL'    )      DLNP    = OK
+                  IF (.NOT.AABB
+     +           .AND. (VERBEX == 'VSINTHL'
+     +           .AND.      BOT2TOP
+     +           .AND. .NOT.DLNP))                             THEN
                     ! Option line not empty but value not recognized
                       WRITE(6,6025) TRIM( LIGNE )
                       CALL                         XIT( Verbex ,-25)
@@ -1058,24 +1069,41 @@
           END IF
  
           IL = (L-1)*NWDS
-          IF (BOT2TOP)                                         THEN
-              DO  I=1,NWDS
-                  ACC(I) = ACC(I)
-     +                 + GG(I+IL)*CONST*(SIGB(I+HIGH)-DBLE(SIGB(I+LOW)))
-              END DO
+          IF (DLNP)                                            THEN
+            ! Replace d(Sigma) by d(p)/p in the accumulation
+              IF (BOT2TOP)                                     THEN
+                  DO  I=1,NWDS
+                      CPRES = CONST*(PRESS(I)/pressure(I,1,L))
+                      ACC(I) = ACC(I)
+     +                 + GG(I+IL)*CPRES*(SIGB(I+HIGH)-DBLE(SIGB(I+LOW)))
+                  END DO
+              ELSE
+                  DO  I=1,NWDS
+                      CPRES = CONST*(PRESS(I)/pressure(I,1,L))
+                      ACC(I) = ACC(I)
+     +                 + GG(I+IL)*CPRES*(SIGB(I+LOW)-DBLE(SIGB(I+HIGH)))
+                  END DO
+              END IF
           ELSE
-              DO  I=1,NWDS
-                  ACC(I) = ACC(I)
+              IF (BOT2TOP)                                         THEN
+                  DO  I=1,NWDS
+                      ACC(I) = ACC(I)
+     +                 + GG(I+IL)*CONST*(SIGB(I+HIGH)-DBLE(SIGB(I+LOW)))
+                  END DO
+              ELSE
+                  DO  I=1,NWDS
+                      ACC(I) = ACC(I)
      +                 + GG(I+IL)*CONST*(SIGB(I+LOW)-DBLE(SIGB(I+HIGH)))
-              END DO
+                  END DO
+              END IF
           END IF
 
           IF (VERBEX == 'VSINTHL' .AND. L /= ISTART)            THEN
 
              ! PUT THE PARTIAL RESULT ONTO FILE XOUT.
  
-              IF (PKTYP == 'SQ')                               THEN
-                 IF (BOT2TOP)                                  THEN
+              IF (PKTYP == 'SQ')                                THEN
+                 IF (BOT2TOP)                                   THEN
                      HIVAL = ETA(L)
                   !  HIVAL = ETA(L+IDEL)
                  ELSE

@@ -24,6 +24,10 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: label.ftn,v $
+C     Revision 3.35  2021/01/30 17:17  dugas
+C     Les enregistrements de renvois ne sont pas
+C     pris en charge par les routines PRTLAB*
+C
 C     Revision 3.34  2019/07/12 13:13  dugas
 C     S'assurer que SLEV est toujours defini dans PRTLAB3
 C
@@ -903,6 +907,7 @@ CCC           call swapa4( ibuf(1) )
 ***      3) Add ENTRY PRTLAB for cases without prefix arguments
 
       INTEGER   I,J,J2,NPAS,err,IP3,RKIND, HIV,LOV, ikind
+      CHARACTER(LEN=4)  :: NOM
       CHARACTER(LEN=6)  :: HICA,LOCA
       CHARACTER(LEN=12) :: SLEV,SLEV2
       CHARACTER(LEN=36) :: SDAT
@@ -919,6 +924,14 @@ CCC           call swapa4( ibuf(1) )
       LEN_PREFIX = LEN( PREFIX )
 
       ENTRY prtlab (IBUF)
+
+      Write(NOM,'(A4)') IBUF(3)
+
+      If (NOM == '>>' .or. ! Do NOT print the labels of
+     +    NOM == '^^' .or. ! these reference records !
+     +    NOM == '^>' .or.
+     +    NOM == '!!' .or.
+     +    NOM == 'HY' ) RETURN
 
       call GET_DCF( DATE_CONVERSION_FACTOR )
 
@@ -1031,6 +1044,7 @@ CCC           call swapa4( ibuf(1) )
       LOGICAL :: lMeanVar,is_a_level
       INTEGER :: I,J, deet,npas, iKind, RKIND,HIV,LOV, status
       CHARACTER(LEN=2)  :: typvr
+      CHARACTER(LEN=4)  :: NOM
       CHARACTER(LEN=6)  :: HICA,LOCA
       CHARACTER(LEN=15) :: SLEV1,SLEV2
       CHARACTER(LEN=36) :: SDAT,SLEV,nuls
@@ -1048,6 +1062,14 @@ CCC           call swapa4( ibuf(1) )
       COMMON     /ZZVERBO/ INFO
 
 *-------------------------------------------------------------------- 
+      Write(NOM,'(A4)') IBUF(3)
+
+      If (NOM == '>>' .or. ! Do NOT print the labels of
+     +    NOM == '^^' .or. ! these reference records !
+     +    NOM == '^>' .or.
+     +    NOM == '!!' .or.
+     +    NOM == 'HY' ) RETURN
+
 ***    DECODE IBUF(2).
 
       typvr = GETHIC ('TYPVAR',IBUF )
