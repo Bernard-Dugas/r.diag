@@ -24,6 +24,9 @@
 !---------------------------------- LICENCE END ---------------------------------
 #     endif
 C     $Log: label.ftn,v $
+C     Revision 3.36  2021/02/10 22:22  dugas
+C     Verifier que SLEV2 est non-nul dans PRTLAB/2/3
+C
 C     Revision 3.35  2021/01/30 17:17  dugas
 C     Les enregistrements de renvois ne sont pas
 C     pris en charge par les routines PRTLAB*
@@ -998,11 +1001,13 @@ CCC           call swapa4( ibuf(1) )
           ELSE
               IP3 = GETHIGH( 'IP3',IBUF )
               CALL GET_IP1_STRING( IP3,SLEV2 )
-              DO  J2=LEN_TRIM( SLEV2 ),1,-1
-                 IF (SLEV2(J2:J2) == ' ') EXIT
-              END DO
-              IF (J2 == 0) J2 = LEN_TRIM( SLEV2 )
-              SLEV = SLEV(1:J) // '-> ' // SLEV2(1:J2)
+              IF (SLEV2 /= ' ')                                THEN
+                  DO  J2=1,LEN_TRIM( SLEV2 )
+                     IF (SLEV2(J2:J2) == ' ') EXIT
+                  END DO
+                  SLEV2 = SLEV2(J2:LEN_TRIM( SLEV2 ))
+                  SLEV  = SLEV(1:J) // '-> ' // TRIM( SLEV2 )
+              END IF
               J = LEN_TRIM( SLEV )
           END IF
       END IF
@@ -1116,13 +1121,15 @@ CCC           call swapa4( ibuf(1) )
                       IF (SLEV2(J:J) /= ' ') EXIT
                   END DO
                   SLEV2 = SLEV2(J:LEN_TRIM( SLEV2 ))
+                  DO  J=LEN_TRIM( SLEV1 ),1,-1
+                      ! Remove trailing units
+                      IF (SLEV1(J:J) == ' ') EXIT
+                  END DO
+                  IF (J == 0) J = LEN_TRIM( SLEV1 )
+                  SLEV = SLEV1(1:J) // '-> ' // TRIM( SLEV2 )
+              ELSE
+                  SLEV = SLEV1
               END IF
-              DO  J=LEN_TRIM( SLEV1 ),1,-1
-                  ! Remove trailing units
-                  IF (SLEV1(J:J) == ' ') EXIT
-              END DO
-              IF (J == 0) J = LEN_TRIM( SLEV1 )
-              SLEV = SLEV1(1:J) // '-> ' // TRIM( SLEV2 )
           ELSE IF (rkind == KIND_HOURS .and. .not.lMeanVar)    THEN
               ! Time pair
               HIV = NINT( GETHIR( 'HIVAL',IBUF ) )
